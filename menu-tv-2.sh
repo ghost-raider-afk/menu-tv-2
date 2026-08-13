@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
 INSTALL_DIR="/opt/menu-tv-2.0"
-REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
+REPO_URL="git@github.com:ghost-raider-afk/menu-tv-2.git"
 BRANCH="main"
 COMPOSE_PROJECT="menu-tv-2"
 APP_SERVICE="app"
@@ -13,8 +13,8 @@ APP_CONTAINER="menu-tv-2.0"
 DB_CONTAINER="menu-tv-2-db"
 DB_VOLUME="menu-tv-2-db-data"
 PROXY_NETWORK="proxy"
-DEFAULT_DOMAIN="menutv.bf27.ru"
 LAUNCHER_PATH="/usr/local/bin/menu-tv-2.0"
+PROJECT_OWNER_FILE="$INSTALL_DIR/.installer-owner"
 TEMP_BACKUP_DIR=""
 KEEP_TEMP_BACKUP=false
 
@@ -55,13 +55,32 @@ require_root() {
 
 command_exists() { command -v "$1" >/dev/null 2>&1; }
 
+project_owner() {
+  if [[ -f "$PROJECT_OWNER_FILE" ]]; then
+    head -n 1 "$PROJECT_OWNER_FILE"
+  else
+    printf '%s\n' "${SUDO_USER:-root}"
+  fi
+}
+
+git_as_project_owner() {
+  local owner
+  owner="$(project_owner)"
+  id "$owner" >/dev/null 2>&1 || die "Не найден пользователь владельца проекта: $owner"
+  if [[ "$owner" == root ]]; then
+    git "$@"
+  else
+    runuser -u "$owner" -- git "$@"
+  fi
+}
+
 compose() {
   docker compose --project-name "$COMPOSE_PROJECT" --project-directory "$INSTALL_DIR" --env-file "$INSTALL_DIR/.env" "$@"
 }
 
 check_dependencies() {
   local tool
-  for tool in docker git tar openssl awk sed find install mktemp; do
+  for tool in docker git tar openssl awk sed find install mktemp runuser od tr fold shuf; do
     command_exists "$tool" || die "Не найдена команда: $tool"
   done
   docker info >/dev/null 2>&1 || die "Docker daemon недоступен."
@@ -97,15 +116,39 @@ ask_for_domain() {
   local input domain
   [[ -t 0 ]] || die "Для первой установки нужен интерактивный терминал."
   while true; do
-    read -r -p "Введите домен Menu TV 2.0 [$DEFAULT_DOMAIN]: " input
-    input="${input:-$DEFAULT_DOMAIN}"
+    read -r -p "Введите домен Menu TV 2.0: " input
     domain="$(validate_domain "$input" || true)"
     [[ -n "$domain" ]] && { printf '%s\n' "$domain"; return; }
-    warn "Введите домен без https://, например menutv.bf27.ru."
+    warn "Введите домен без https://, например menu.example.com."
   done
 }
 
 random_secret() { openssl rand -hex "$1"; }
+
+random_character() {
+  local character_set="$1" character_count="${#1}" limit byte
+  limit=$((256 - (256 % character_count)))
+  while true; do
+    byte="$(od -An -N1 -tu1 /dev/urandom)"
+    byte="${byte//[[:space:]]/}"
+    [[ "$byte" -lt "$limit" ]] && break
+  done
+  printf '%s' "${character_set:byte % character_count:1}"
+}
+
+random_admin_password() {
+  local upper="ABCDEFGHJKLMNPQRSTUVWXYZ" lower="abcdefghjkmnpqrstuvwxyz"
+  local digits="23456789" special="!%+,.:@^_~-" alphabet password
+  alphabet="${upper}${lower}${digits}${special}"
+  password="$(random_character "$upper")"
+  password+="$(random_character "$lower")"
+  password+="$(random_character "$digits")"
+  password+="$(random_character "$special")"
+  for _ in $(seq 1 6); do
+    password+="$(random_character "$alphabet")"
+  done
+  printf '%s' "$password" | fold -w1 | shuf | tr -d '\n'
+}
 
 write_new_env() {
   local domain="$1" env_file="$INSTALL_DIR/.env"
@@ -117,7 +160,7 @@ write_new_env() {
   set_env_value "$env_file" POSTGRES_USER "menu_tv_2"
   set_env_value "$env_file" POSTGRES_PASSWORD "$(random_secret 24)"
   set_env_value "$env_file" ADMIN_USERNAME "admin"
-  set_env_value "$env_file" ADMIN_PASSWORD "$(random_secret 24)"
+  set_env_value "$env_file" ADMIN_PASSWORD "$(random_admin_password)"
   set_env_value "$env_file" SESSION_SECRET "$(random_secret 48)"
   chmod 600 "$env_file"
 }
@@ -135,12 +178,22 @@ validate_env() {
 }
 
 repair_permissions() {
+  local owner
   [[ -d "$INSTALL_DIR" ]] || return 0
-  chown -R root:root "$INSTALL_DIR"
+  owner="$(project_owner)"
+  id "$owner" >/dev/null 2>&1 || die "Не найден пользователь владельца проекта: $owner"
+  chown -R "$owner:$owner" "$INSTALL_DIR"
   find "$INSTALL_DIR" -type d -exec chmod 750 {} +
   find "$INSTALL_DIR" -type f -exec chmod 640 {} +
   chmod 750 "$INSTALL_DIR/menu-tv-2.sh"
-  [[ ! -f "$INSTALL_DIR/.env" ]] || chmod 600 "$INSTALL_DIR/.env"
+  if [[ -f "$INSTALL_DIR/.env" ]]; then
+    chown root:root "$INSTALL_DIR/.env"
+    chmod 600 "$INSTALL_DIR/.env"
+  fi
+  if [[ -f "$PROJECT_OWNER_FILE" ]]; then
+    chown root:root "$PROJECT_OWNER_FILE"
+    chmod 640 "$PROJECT_OWNER_FILE"
+  fi
 }
 
 install_launcher() {
@@ -206,9 +259,9 @@ restore_temporary_backup() {
 }
 
 sync_existing_source() {
-  git -C "$INSTALL_DIR" fetch --depth 1 origin "$BRANCH"
-  git -C "$INSTALL_DIR" reset --hard "origin/$BRANCH"
-  git -C "$INSTALL_DIR" clean -fd -e .env
+  git_as_project_owner -C "$INSTALL_DIR" fetch --depth 1 origin "$BRANCH"
+  git_as_project_owner -C "$INSTALL_DIR" reset --hard "origin/$BRANCH"
+  git_as_project_owner -C "$INSTALL_DIR" clean -fd -e .env -e .installer-owner
   repair_permissions
   install_launcher
 }
@@ -233,11 +286,18 @@ show_credentials() {
 install_app() {
   require_root
   check_dependencies
-  local domain
+  local domain owner stage_dir
   [[ ! -e "$INSTALL_DIR" ]] || die "Каталог $INSTALL_DIR уже существует. Для установленного приложения используйте обновление."
   domain="$(ask_for_domain)"
+  owner="$(project_owner)"
+  id "$owner" >/dev/null 2>&1 || die "Не найден пользователь, запустивший sudo: $owner"
   log "Загрузка независимого репозитория"
-  git clone --depth 1 --branch "$BRANCH" --single-branch "$REPO_URL" "$INSTALL_DIR"
+  stage_dir="$(mktemp -d -t "${PROGRAM_NAME}.install.XXXXXX")"
+  chown "$owner:$owner" "$stage_dir"
+  git_as_project_owner clone --depth 1 --branch "$BRANCH" --single-branch "$REPO_URL" "$stage_dir/source"
+  printf '%s\n' "$owner" > "$stage_dir/source/.installer-owner"
+  mv "$stage_dir/source" "$INSTALL_DIR"
+  rmdir "$stage_dir"
   write_new_env "$domain"
   repair_permissions
   install_launcher
