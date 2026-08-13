@@ -36,17 +36,20 @@ example, never copy the old TV Menu `.env`.
 ## Installer
 
 `menu-tv-2.sh` manages only this application. It has no paths, volumes or
-configuration names in common with the older TV Menu.
+configuration names in common with the older TV Menu. It installs the project
+only into `/opt/menu-tv-2.0` and creates the launcher
+`/usr/local/bin/menu-tv-2.0`.
 
 ```bash
-export MENU_TV_2_REPO_URL=git@github.com:OWNER/menu-tv-2.git
-export MENU_TV_2_DEPLOY_KEY=/root/.ssh/menu-tv-2_deploy  # only for a private repo
-sudo ./menu-tv-2.sh install
-
-sudo menu-tv-2.0 doctor
-sudo menu-tv-2.0 status
-sudo menu-tv-2.0 update
+curl -fsSLO https://raw.githubusercontent.com/ghost-raider-afk/menu-tv-2/main/menu-tv-2.sh
+sudo bash ./menu-tv-2.sh
 ```
+
+The interactive menu contains four actions: install, update, remove the
+project, and remove the project together with the system launcher. Both remove
+actions require an explicit confirmation. Removal affects only Menu TV 2.0:
+its `/opt/menu-tv-2.0` directory, two named containers, local image and the
+`menu-tv-2-db-data` PostgreSQL volume.
 
 The very first question is the public domain (for example `menutv.bf27.ru`).
 Then the installer creates a private `.env` (mode `0600`), an independent
