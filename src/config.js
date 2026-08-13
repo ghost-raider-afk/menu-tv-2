@@ -32,7 +32,7 @@ export function loadConfig(env = process.env) {
     host: env.HOST?.trim() || '0.0.0.0',
     port: integer('PORT', env.PORT, '8080'),
     adminUsername,
-    adminPassword: generatedValue('ADMIN_PASSWORD', env.ADMIN_PASSWORD, 16),
+    adminPassword: generatedValue('ADMIN_PASSWORD', env.ADMIN_PASSWORD, 10),
     sessionSecret: generatedValue('SESSION_SECRET', env.SESSION_SECRET, 32),
     sessionTtlHours: integer('SESSION_TTL_HOURS', env.SESSION_TTL_HOURS, '12', { minimum: 1, maximum: 168 }),
     secureCookies: env.SECURE_COOKIES !== 'false',
@@ -42,6 +42,14 @@ export function loadConfig(env = process.env) {
       database: required('POSTGRES_DB', env.POSTGRES_DB),
       user: required('POSTGRES_USER', env.POSTGRES_USER),
       password: generatedValue('POSTGRES_PASSWORD', env.POSTGRES_PASSWORD, 16)
+    }),
+    sftp: Object.freeze({
+      apiUrl: env.SFTP_API_URL?.trim() || 'http://sftp:8080',
+      adminUsername: required('SFTP_ADMIN_USERNAME', env.SFTP_ADMIN_USERNAME),
+      adminPassword: generatedValue('SFTP_ADMIN_PASSWORD', env.SFTP_ADMIN_PASSWORD, 32),
+      storageRoot: env.SFTP_STORAGE_ROOT?.trim() || '/srv/menu-tv-sftp',
+      publicHost: required('SFTP_PUBLIC_HOST', env.SFTP_PUBLIC_HOST || env.MENU_TV_2_DOMAIN),
+      port: integer('SFTP_PORT', env.SFTP_PORT, '2022')
     }),
     seedDemoData: env.SEED_DEMO_DATA === 'true'
   });
