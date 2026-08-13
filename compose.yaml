@@ -36,7 +36,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
-      - traefik.http.routers.menu-tv-2.rule=Host(`${MENU_TV_2_DOMAIN:-menutv.bf27.ru}`)
+      - traefik.http.routers.menu-tv-2.rule=Host(`${MENU_TV_2_DOMAIN}`)
       - traefik.http.routers.menu-tv-2.entrypoints=websecure
       - traefik.http.routers.menu-tv-2.tls=true
       - traefik.http.services.menu-tv-2.loadbalancer.server.port=8080
