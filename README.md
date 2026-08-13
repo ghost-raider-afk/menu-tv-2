@@ -26,7 +26,7 @@ Open `http://localhost:8080` and sign in with `ADMIN_USERNAME` and
 - Image: `menu-tv-2.0:local`
 - PostgreSQL data volume: `menu-tv-2-db-data`
 - Internal network: `menu-tv-2-internal`
-- Domain: `menutv.bf27.ru`
+- Domain: set during the first installation
 - Public proxy network: external `proxy`
 
 The `compose.yaml` expects the VPS-wide Traefik `proxy` network to exist. Its
@@ -41,9 +41,14 @@ only into `/opt/menu-tv-2.0` and creates the launcher
 `/usr/local/bin/menu-tv-2.0`.
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/ghost-raider-afk/menu-tv-2/main/menu-tv-2.sh
-sudo bash ./menu-tv-2.sh
+git clone --depth 1 git@github.com:ghost-raider-afk/menu-tv-2.git /tmp/menu-tv-2-bootstrap
+sudo bash /tmp/menu-tv-2-bootstrap/menu-tv-2.sh
+rm -rf /tmp/menu-tv-2-bootstrap
 ```
+
+The repository remains private. Before the first launch, the VPS user's SSH key
+must have read access to `ghost-raider-afk/menu-tv-2`. The installer uses that
+key only for Git operations; it does not copy the key into `/opt` or `.env`.
 
 The interactive menu contains four actions: install, update, remove the
 project, and remove the project together with the system launcher. Both remove
@@ -51,10 +56,13 @@ actions require an explicit confirmation. Removal affects only Menu TV 2.0:
 its `/opt/menu-tv-2.0` directory, two named containers, local image and the
 `menu-tv-2-db-data` PostgreSQL volume.
 
-The very first question is the public domain (for example `menutv.bf27.ru`).
+The very first question is the public domain (for example `menu.example.com`).
 Then the installer creates a private `.env` (mode `0600`), an independent
 PostgreSQL user/password and an administrator password. At the end it shows one
 terminal card with the URL and all credentials; save it in a password manager.
+The administrator password has exactly 10 characters and contains uppercase and
+lowercase Latin letters, a digit and a safe special character. Ambiguous
+characters (`0`, `O`, `1`, `l`, `I`) are excluded.
 
 Before an update it makes a permission-restricted temporary copy of its source,
 `.env`, and PostgreSQL dump under the system temporary directory. The copy is
