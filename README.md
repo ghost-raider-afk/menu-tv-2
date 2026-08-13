@@ -27,11 +27,11 @@ Open `http://localhost:8080` and sign in with `ADMIN_USERNAME` and
 - PostgreSQL data volume: `menu-tv-2-db-data`
 - Internal network: `menu-tv-2-internal`
 - Domain: set during the first installation
-- Public proxy network: external `proxy`
+- Public proxy network: dedicated `menu-tv-2-proxy`
 
-The `compose.yaml` expects the VPS-wide Traefik `proxy` network to exist. Its
-environment is intentionally separate: create `/opt/menu-tv-2.0/.env` from the
-example, never copy the old TV Menu `.env`.
+The installer creates a dedicated Traefik container and the
+`menu-tv-2-proxy` network. Its environment is intentionally separate: create
+`/opt/menu-tv-2.0/.env` from the example, never copy the old TV Menu `.env`.
 
 ## Installer
 
@@ -50,6 +50,11 @@ The repository remains private. Before the first launch, configure the separate
 `github.com-menu-tv-2` SSH host with a read-only deploy key for
 `ghost-raider-afk/menu-tv-2`. The installer uses that key only for Git
 operations; it does not copy the key into `/opt` or `.env`.
+
+On a clean Ubuntu VPS the installer automatically installs Docker Engine and
+Docker Compose, then creates the dedicated HTTPS proxy in
+`/opt/menu-tv-2-proxy`. Ports 80 and 443 must be free, and the domain must
+already point to the VPS IP address before installation.
 
 The interactive menu contains four actions: install, update, remove the
 project, and remove the project together with the system launcher. Both remove
