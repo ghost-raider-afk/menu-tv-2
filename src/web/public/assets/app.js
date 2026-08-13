@@ -85,7 +85,7 @@ function shell(content) {
         <div class="mt-8 rounded-2xl bg-slate-950 p-4 text-white"><p class="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Изоляция</p><p class="mt-2 text-sm font-semibold">Отдельные данные</p><p class="mt-1 text-xs leading-5 text-slate-400">Собственная база, контейнер и окружение.</p></div>
       </aside>
       <div class="min-w-0">
-        <header class="flex h-20 items-center justify-between border-b border-slate-200 bg-white px-5 sm:px-8"><div><p class="text-xs font-medium text-slate-400">MENUTV.BF27.RU</p><p class="mt-0.5 text-sm font-semibold text-slate-800">Панель управления</p></div><button data-action="logout" class="btn-secondary !px-3">${icon('exit', 'h-4 w-4')}<span class="hidden sm:inline">Выйти</span></button></header>
+        <header class="flex h-20 items-center justify-between border-b border-slate-200 bg-white px-5 sm:px-8"><div><p class="text-xs font-medium text-slate-400">MENU TV 2.0</p><p class="mt-0.5 text-sm font-semibold text-slate-800">Панель управления</p></div><button data-action="logout" class="btn-secondary !px-3">${icon('exit', 'h-4 w-4')}<span class="hidden sm:inline">Выйти</span></button></header>
         <main class="p-5 sm:p-8">${content}</main>
       </div>
     </div>`;
