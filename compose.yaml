@@ -35,7 +35,7 @@ services:
       - proxy
     labels:
       - traefik.enable=true
-      - traefik.docker.network=proxy
+      - traefik.docker.network=menu-tv-2-proxy
       - traefik.http.routers.menu-tv-2.rule=Host(`${MENU_TV_2_DOMAIN}`)
       - traefik.http.routers.menu-tv-2.entrypoints=websecure
       - traefik.http.routers.menu-tv-2.tls=true
@@ -51,4 +51,4 @@ networks:
     internal: true
   proxy:
     external: true
-    name: proxy
+    name: menu-tv-2-proxy
