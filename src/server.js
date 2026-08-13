@@ -5,10 +5,11 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { loadConfig } from './config.js';
 import { MenuTvStore } from './db.js';
+import { generateSftpPassword, SftpService } from './sftp.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, 'web', 'public');
-const VALID_STATUSES = new Set(['draft', 'ready', 'published']);
+const VALID_STATUSES = new Set(['draft', 'ready']);
 const SESSION_COOKIE = 'menu_tv_2_session';
 
 function requireText(value, field, { max = 120 } = {}) {
@@ -46,6 +47,12 @@ function recordNotFound() {
   return error;
 }
 
+function conflict(message) {
+  const error = new Error(message);
+  error.status = 409;
+  return error;
+}
+
 function locationInput(body) {
   return { name: requireText(body.name, 'name'), address: optionalText(body.address, 'address'), active: body.active !== false };
 }
@@ -68,6 +75,26 @@ function screenInput(body) {
 
 function templateInput(body) {
   return { name: requireText(body.name, 'name'), description: optionalText(body.description, 'description', { max: 500 }), active: body.active !== false };
+}
+
+function sftpDirectoryInput(body) {
+  const name = requireText(body.name, 'name', { max: 64 });
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/.test(name) || name === '.' || name === '..') {
+    const error = new Error('Имя SFTP-каталога: латинские буквы, цифры, точка, дефис или подчёркивание');
+    error.status = 400;
+    throw error;
+  }
+  return { name };
+}
+
+function sftpBindingInput(body) {
+  const username = requireText(body.username, 'username', { max: 32 });
+  if (!/^[a-zA-Z][a-zA-Z0-9_-]{2,31}$/.test(username)) {
+    const error = new Error('Логин SFTP: 3–32 латинских символа, цифры, дефис или подчёркивание');
+    error.status = 400;
+    throw error;
+  }
+  return { directoryId: positiveId(body.directory_id, 'directory_id'), username };
 }
 
 function constantTimeEqual(left, right) {
@@ -107,8 +134,9 @@ function sessionCookie(token, config, maxAge = config.sessionTtlHours * 3600) {
   return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Strict${config.secureCookies ? '; Secure' : ''}`;
 }
 
-export async function createApp(config = loadConfig(), { store: suppliedStore } = {}) {
+export async function createApp(config = loadConfig(), { store: suppliedStore, sftp: suppliedSftp } = {}) {
   const store = suppliedStore ?? new MenuTvStore(config.db, { seedDemoData: config.seedDemoData });
+  const sftp = suppliedSftp ?? new SftpService(config.sftp);
   await store.init();
   const app = express();
   app.disable('x-powered-by');
@@ -152,7 +180,10 @@ export async function createApp(config = loadConfig(), { store: suppliedStore } 
     response.json(record);
   });
   app.delete('/api/locations/:id', async (request, response) => {
-    if (!await store.deleteLocation(positiveId(request.params.id, 'id'))) throw recordNotFound();
+    const location = await store.getLocation(positiveId(request.params.id, 'id'));
+    if (!location) throw recordNotFound();
+    if (location.sftp_directory_id) throw conflict('Сначала явно отключите SFTP-доступ точки. Каталог и файлы останутся без изменений.');
+    if (!await store.deleteLocation(location.id)) throw recordNotFound();
     response.status(204).end();
   });
 
@@ -165,7 +196,13 @@ export async function createApp(config = loadConfig(), { store: suppliedStore } 
   app.put('/api/screens/:id', async (request, response) => {
     const input = screenInput(request.body);
     if (!await store.getLocation(input.location_id)) throw recordNotFound();
-    const record = await store.updateScreen(positiveId(request.params.id, 'id'), input);
+    const id = positiveId(request.params.id, 'id');
+    const current = await store.getScreen(id);
+    if (!current) throw recordNotFound();
+    if (current.published_at && current.location_id !== input.location_id) {
+      throw conflict('Опубликованный телевизор нельзя перенести в другую точку: его SFTP-путь должен остаться стабильным.');
+    }
+    const record = await store.updateScreen(id, input);
     if (!record) throw recordNotFound();
     response.json(record);
   });
@@ -184,6 +221,96 @@ export async function createApp(config = loadConfig(), { store: suppliedStore } 
   app.delete('/api/templates/:id', async (request, response) => {
     if (!await store.deleteTemplate(positiveId(request.params.id, 'id'))) throw recordNotFound();
     response.status(204).end();
+  });
+
+  async function sftpDirectoriesWithStatus() {
+    const directories = await store.listSftpDirectories();
+    return Promise.all(directories.map(async (directory) => ({
+      ...directory,
+      storage_status: await sftp.directoryStatus(directory.name)
+    })));
+  }
+
+  app.get('/api/sftp/connection', (_request, response) => response.json({ host: config.sftp.publicHost, port: config.sftp.port }));
+  app.get('/api/sftp/directories', async (_request, response) => response.json(await sftpDirectoriesWithStatus()));
+  app.post('/api/sftp/directories', async (request, response) => {
+    response.status(201).json(await store.createSftpDirectory(sftpDirectoryInput(request.body)));
+  });
+  app.post('/api/sftp/directories/:id/provision', async (request, response) => {
+    const id = positiveId(request.params.id, 'id');
+    const directory = await store.getSftpDirectory(id);
+    if (!directory) throw recordNotFound();
+    await sftp.provisionDirectory(directory.name);
+    const updated = await store.markSftpDirectoryProvisioned(id);
+    response.json({ ...updated, storage_status: await sftp.directoryStatus(updated.name) });
+  });
+  app.delete('/api/sftp/directories/:id', async (request, response) => {
+    if (!await store.deleteSftpDirectory(positiveId(request.params.id, 'id'))) throw recordNotFound();
+    response.status(204).end();
+  });
+
+  app.post('/api/locations/:id/sftp-binding', async (request, response) => {
+    const locationId = positiveId(request.params.id, 'id');
+    const input = sftpBindingInput(request.body);
+    const location = await store.getLocation(locationId);
+    if (!location) throw recordNotFound();
+    if (location.sftp_directory_id) throw conflict('Для изменения SFTP-каталога сначала явно отключите текущую привязку.');
+    const directory = await store.getSftpDirectory(input.directoryId);
+    if (!directory) throw recordNotFound();
+    if (directory.bound_location_id) throw conflict('Этот SFTP-каталог уже привязан к другой точке.');
+    const password = generateSftpPassword();
+    await sftp.createReadOnlyUser({ username: input.username, password, directoryName: directory.name });
+    let bound;
+    try {
+      bound = await store.bindLocationSftp(locationId, input);
+    } catch (error) {
+      await sftp.removeUser(input.username).catch(() => undefined);
+      throw error;
+    }
+    if (!bound) {
+      await sftp.removeUser(input.username).catch(() => undefined);
+      throw conflict('Точка уже получила SFTP-привязку. Обновите страницу.');
+    }
+    response.status(201).json({
+      location: bound,
+      credentials: { host: config.sftp.publicHost, port: config.sftp.port, username: input.username, password }
+    });
+  });
+  app.post('/api/locations/:id/sftp-password', async (request, response) => {
+    const location = await store.getLocation(positiveId(request.params.id, 'id'));
+    if (!location) throw recordNotFound();
+    if (!location.sftp_username) throw conflict('У точки нет SFTP-доступа.');
+    const password = generateSftpPassword();
+    await sftp.resetPassword({ username: location.sftp_username, password });
+    await store.touchLocationSftpPassword(location.id);
+    response.json({ credentials: { host: config.sftp.publicHost, port: config.sftp.port, username: location.sftp_username, password } });
+  });
+  app.delete('/api/locations/:id/sftp-binding', async (request, response) => {
+    const location = await store.getLocation(positiveId(request.params.id, 'id'));
+    if (!location) throw recordNotFound();
+    if (!location.sftp_username) throw conflict('У точки нет SFTP-доступа.');
+    await sftp.removeUser(location.sftp_username);
+    await store.unbindLocationSftp(location.id);
+    response.status(204).end();
+  });
+
+  app.put('/api/screens/:id/source', express.raw({ type: 'image/jpeg', limit: '12mb' }), async (request, response) => {
+    const screen = await store.getScreen(positiveId(request.params.id, 'id'));
+    if (!screen) throw recordNotFound();
+    const asset = await sftp.stageJpeg(screen.id, request.body);
+    response.json(await store.savePreparedAsset(screen.id, asset));
+  });
+  app.post('/api/screens/:id/publish', async (request, response) => {
+    const screen = await store.getScreen(positiveId(request.params.id, 'id'));
+    if (!screen) throw recordNotFound();
+    if (!screen.sftp_directory_name) throw conflict('Сначала вручную привяжите SFTP-каталог к точке.');
+    if (!screen.prepared_asset_key) throw conflict('Сначала загрузите подготовленный JPEG.');
+    await sftp.publish({
+      directoryName: screen.sftp_directory_name,
+      deliveryFilename: screen.delivery_filename,
+      stagedKey: screen.prepared_asset_key
+    });
+    response.json(await store.markScreenPublished(screen.id));
   });
 
   app.use(express.static(publicDir, { extensions: ['html'], index: 'index.html', maxAge: '1h' }));
