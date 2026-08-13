@@ -10,7 +10,9 @@ function normaliseRow(row) {
     ...row,
     id: Number(row.id),
     ...(row.location_id === undefined ? {} : { location_id: Number(row.location_id) }),
-    ...(row.screen_count === undefined ? {} : { screen_count: Number(row.screen_count) })
+    ...(row.screen_count === undefined ? {} : { screen_count: Number(row.screen_count) }),
+    ...(row.sftp_directory_id === undefined || row.sftp_directory_id === null ? {} : { sftp_directory_id: Number(row.sftp_directory_id) }),
+    ...(row.bound_location_id === undefined || row.bound_location_id === null ? {} : { bound_location_id: Number(row.bound_location_id) })
   };
 }
 
@@ -31,11 +33,21 @@ export class MenuTvStore {
 
   async init() {
     await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS sftp_directories (
+        id BIGSERIAL PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        provisioned_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS locations (
         id BIGSERIAL PRIMARY KEY,
         name TEXT NOT NULL UNIQUE,
         address TEXT NOT NULL DEFAULT '',
         active BOOLEAN NOT NULL DEFAULT TRUE,
+        sftp_directory_id BIGINT UNIQUE REFERENCES sftp_directories(id) ON DELETE RESTRICT,
+        sftp_username TEXT UNIQUE,
+        sftp_password_issued_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL
       );
@@ -46,6 +58,12 @@ export class MenuTvStore {
         resolution TEXT NOT NULL DEFAULT '1920×1080',
         status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'ready', 'published')),
         active BOOLEAN NOT NULL DEFAULT TRUE,
+        delivery_filename TEXT,
+        prepared_asset_key TEXT,
+        prepared_asset_sha256 TEXT,
+        prepared_asset_size BIGINT,
+        published_sha256 TEXT,
+        published_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL,
         UNIQUE(location_id, name)
@@ -58,6 +76,18 @@ export class MenuTvStore {
         created_at TIMESTAMPTZ NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL
       );
+      ALTER TABLE locations ADD COLUMN IF NOT EXISTS sftp_directory_id BIGINT REFERENCES sftp_directories(id) ON DELETE RESTRICT;
+      ALTER TABLE locations ADD COLUMN IF NOT EXISTS sftp_username TEXT;
+      ALTER TABLE locations ADD COLUMN IF NOT EXISTS sftp_password_issued_at TIMESTAMPTZ;
+      ALTER TABLE screens ADD COLUMN IF NOT EXISTS delivery_filename TEXT;
+      ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_key TEXT;
+      ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_sha256 TEXT;
+      ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_size BIGINT;
+      ALTER TABLE screens ADD COLUMN IF NOT EXISTS published_sha256 TEXT;
+      ALTER TABLE screens ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
+      CREATE UNIQUE INDEX IF NOT EXISTS locations_sftp_directory_id_unique ON locations(sftp_directory_id) WHERE sftp_directory_id IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS locations_sftp_username_unique ON locations(sftp_username) WHERE sftp_username IS NOT NULL;
+      UPDATE screens SET delivery_filename = 'monitor-' || id::text || '.jpg' WHERE delivery_filename IS NULL;
     `);
     if (this.seedDemoData) await this.#seed();
   }
@@ -92,12 +122,20 @@ export class MenuTvStore {
   }
 
   async listLocations() {
-    const { rows } = await this.pool.query('SELECT * FROM locations ORDER BY name');
+    const { rows } = await this.pool.query(`
+      SELECT l.*, d.name AS sftp_directory_name
+      FROM locations l LEFT JOIN sftp_directories d ON d.id = l.sftp_directory_id
+      ORDER BY l.name
+    `);
     return Promise.all(rows.map((row) => this.#withScreenCount(row)));
   }
 
   async getLocation(id) {
-    const { rows } = await this.pool.query('SELECT * FROM locations WHERE id = $1', [id]);
+    const { rows } = await this.pool.query(`
+      SELECT l.*, d.name AS sftp_directory_name
+      FROM locations l LEFT JOIN sftp_directories d ON d.id = l.sftp_directory_id
+      WHERE l.id = $1
+    `, [id]);
     return this.#withScreenCount(rows[0]);
   }
 
@@ -132,8 +170,10 @@ export class MenuTvStore {
 
   async listScreens() {
     const { rows } = await this.pool.query(`
-      SELECT s.*, l.name AS location_name
+      SELECT s.*, l.name AS location_name, d.name AS sftp_directory_name,
+        CASE WHEN d.name IS NULL THEN NULL ELSE '/' || d.name || '/' || s.delivery_filename END AS sftp_path
       FROM screens s JOIN locations l ON l.id = s.location_id
+      LEFT JOIN sftp_directories d ON d.id = l.sftp_directory_id
       ORDER BY l.name, s.name
     `);
     return rows.map(normaliseRow);
@@ -141,8 +181,11 @@ export class MenuTvStore {
 
   async getScreen(id) {
     const { rows } = await this.pool.query(`
-      SELECT s.*, l.name AS location_name
-      FROM screens s JOIN locations l ON l.id = s.location_id WHERE s.id = $1
+      SELECT s.*, l.name AS location_name, d.name AS sftp_directory_name,
+        CASE WHEN d.name IS NULL THEN NULL ELSE '/' || d.name || '/' || s.delivery_filename END AS sftp_path
+      FROM screens s JOIN locations l ON l.id = s.location_id
+      LEFT JOIN sftp_directories d ON d.id = l.sftp_directory_id
+      WHERE s.id = $1
     `, [id]);
     return normaliseRow(rows[0]);
   }
@@ -153,6 +196,7 @@ export class MenuTvStore {
       INSERT INTO screens (location_id, name, resolution, status, active, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, $6) RETURNING id
     `, [location_id, name, resolution, status, active, now]);
+    await this.pool.query('UPDATE screens SET delivery_filename = $1 WHERE id = $2', [`monitor-${rows[0].id}.jpg`, rows[0].id]);
     return this.getScreen(rows[0].id);
   }
 
@@ -166,6 +210,93 @@ export class MenuTvStore {
   async deleteScreen(id) {
     const { rowCount } = await this.pool.query('DELETE FROM screens WHERE id = $1', [id]);
     return rowCount > 0;
+  }
+
+  async listSftpDirectories() {
+    const { rows } = await this.pool.query(`
+      SELECT d.*, l.id AS bound_location_id, l.name AS bound_location_name
+      FROM sftp_directories d
+      LEFT JOIN locations l ON l.sftp_directory_id = d.id
+      ORDER BY d.name
+    `);
+    return rows.map(normaliseRow);
+  }
+
+  async getSftpDirectory(id) {
+    const { rows } = await this.pool.query(`
+      SELECT d.*, l.id AS bound_location_id, l.name AS bound_location_name
+      FROM sftp_directories d
+      LEFT JOIN locations l ON l.sftp_directory_id = d.id
+      WHERE d.id = $1
+    `, [id]);
+    return normaliseRow(rows[0]);
+  }
+
+  async createSftpDirectory({ name }) {
+    const now = isoNow();
+    const { rows } = await this.pool.query(
+      'INSERT INTO sftp_directories (name, created_at, updated_at) VALUES ($1, $2, $2) RETURNING id',
+      [name, now]
+    );
+    return this.getSftpDirectory(rows[0].id);
+  }
+
+  async markSftpDirectoryProvisioned(id) {
+    const { rowCount } = await this.pool.query(
+      'UPDATE sftp_directories SET provisioned_at = $1, updated_at = $1 WHERE id = $2',
+      [isoNow(), id]
+    );
+    return rowCount ? this.getSftpDirectory(id) : null;
+  }
+
+  async deleteSftpDirectory(id) {
+    const { rowCount } = await this.pool.query('DELETE FROM sftp_directories WHERE id = $1', [id]);
+    return rowCount > 0;
+  }
+
+  async bindLocationSftp(locationId, { directoryId, username }) {
+    const { rowCount } = await this.pool.query(`
+      UPDATE locations
+      SET sftp_directory_id = $1, sftp_username = $2, sftp_password_issued_at = $3, updated_at = $3
+      WHERE id = $4 AND sftp_directory_id IS NULL
+    `, [directoryId, username, isoNow(), locationId]);
+    return rowCount ? this.getLocation(locationId) : null;
+  }
+
+  async touchLocationSftpPassword(locationId) {
+    const { rowCount } = await this.pool.query(
+      'UPDATE locations SET sftp_password_issued_at = $1, updated_at = $1 WHERE id = $2 AND sftp_username IS NOT NULL',
+      [isoNow(), locationId]
+    );
+    return rowCount ? this.getLocation(locationId) : null;
+  }
+
+  async unbindLocationSftp(locationId) {
+    const { rowCount } = await this.pool.query(`
+      UPDATE locations
+      SET sftp_directory_id = NULL, sftp_username = NULL, sftp_password_issued_at = NULL, updated_at = $1
+      WHERE id = $2 AND sftp_directory_id IS NOT NULL
+    `, [isoNow(), locationId]);
+    return rowCount ? this.getLocation(locationId) : null;
+  }
+
+  async savePreparedAsset(screenId, asset) {
+    const { rowCount } = await this.pool.query(`
+      UPDATE screens
+      SET prepared_asset_key = $1, prepared_asset_sha256 = $2, prepared_asset_size = $3,
+        status = 'ready', updated_at = $4
+      WHERE id = $5
+    `, [asset.key, asset.sha256, asset.size, isoNow(), screenId]);
+    return rowCount ? this.getScreen(screenId) : null;
+  }
+
+  async markScreenPublished(screenId) {
+    const { rowCount } = await this.pool.query(`
+      UPDATE screens
+      SET status = 'published', published_sha256 = prepared_asset_sha256, published_at = $1, updated_at = $1
+      WHERE id = $2 AND prepared_asset_key IS NOT NULL
+    `, [isoNow(), screenId]);
+    return rowCount ? this.getScreen(screenId) : null;
   }
 
   async listTemplates() {
