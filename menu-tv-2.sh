@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-INSTALL_DIR="${MENU_TV_2_INSTALL_DIR:-/opt/menu-tv-2.0}"
-REPO_URL="${MENU_TV_2_REPO_URL:-}"
-BRANCH="${MENU_TV_2_BRANCH:-main}"
-DEPLOY_KEY="${MENU_TV_2_DEPLOY_KEY:-}"
+INSTALL_DIR="/opt/menu-tv-2.0"
+REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
+BRANCH="main"
 COMPOSE_PROJECT="menu-tv-2"
 APP_SERVICE="app"
 DB_SERVICE="db"
 APP_CONTAINER="menu-tv-2.0"
 DB_CONTAINER="menu-tv-2-db"
 DB_VOLUME="menu-tv-2-db-data"
-PROXY_NETWORK="${MENU_TV_2_PROXY_NETWORK:-proxy}"
+PROXY_NETWORK="proxy"
 DEFAULT_DOMAIN="menutv.bf27.ru"
+LAUNCHER_PATH="/usr/local/bin/menu-tv-2.0"
 TEMP_BACKUP_DIR=""
 KEEP_TEMP_BACKUP=false
 
@@ -31,26 +32,20 @@ trap cleanup_temporary_backup EXIT
 
 usage() {
   cat <<USAGE
-Menu TV 2.0 — installer and lifecycle manager
+Menu TV 2.0 — управление независимым приложением
 
-Usage:
+Запуск меню после установки:
+  sudo $PROGRAM_NAME
+
+Команды:
   sudo $PROGRAM_NAME install
   sudo $PROGRAM_NAME update
+  sudo $PROGRAM_NAME remove
+  sudo $PROGRAM_NAME purge
   sudo $PROGRAM_NAME status
-  sudo $PROGRAM_NAME doctor
 
-First installation requires:
-  MENU_TV_2_REPO_URL=git@github.com:OWNER/menu-tv-2.git
-
-Optional settings:
-  MENU_TV_2_INSTALL_DIR=/opt/menu-tv-2.0
-  MENU_TV_2_BRANCH=main
-  MENU_TV_2_DEPLOY_KEY=/root/.ssh/menu-tv-2_deploy
-  MENU_TV_2_PROXY_NETWORK=proxy
-
-The installer asks for the public domain first, then generates a dedicated
-PostgreSQL account and an administrator password. Update backups exist only in
-a private temporary directory and are removed after success or auto-rollback.
+Проект устанавливается только в: $INSTALL_DIR
+Контейнеры: $APP_CONTAINER, $DB_CONTAINER
 USAGE
 }
 
@@ -62,15 +57,6 @@ command_exists() { command -v "$1" >/dev/null 2>&1; }
 
 compose() {
   docker compose --project-name "$COMPOSE_PROJECT" --project-directory "$INSTALL_DIR" --env-file "$INSTALL_DIR/.env" "$@"
-}
-
-git_command() {
-  if [[ -n "$DEPLOY_KEY" ]]; then
-    [[ -r "$DEPLOY_KEY" ]] || die "Нет доступа к ключу Git: $DEPLOY_KEY"
-    GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" git "$@"
-  else
-    git "$@"
-  fi
 }
 
 check_dependencies() {
@@ -109,7 +95,7 @@ validate_domain() {
 
 ask_for_domain() {
   local input domain
-  [[ -t 0 ]] || die "Для первой установки нужен интерактивный терминал, чтобы ввести домен."
+  [[ -t 0 ]] || die "Для первой установки нужен интерактивный терминал."
   while true; do
     read -r -p "Введите домен Menu TV 2.0 [$DEFAULT_DOMAIN]: " input
     input="${input:-$DEFAULT_DOMAIN}"
@@ -148,8 +134,17 @@ validate_env() {
   [[ $(env_value SESSION_SECRET | wc -c) -ge 33 ]] || die "SESSION_SECRET должен содержать не менее 32 символов."
 }
 
+repair_permissions() {
+  [[ -d "$INSTALL_DIR" ]] || return 0
+  chown -R root:root "$INSTALL_DIR"
+  find "$INSTALL_DIR" -type d -exec chmod 750 {} +
+  find "$INSTALL_DIR" -type f -exec chmod 640 {} +
+  chmod 750 "$INSTALL_DIR/menu-tv-2.sh"
+  [[ ! -f "$INSTALL_DIR/.env" ]] || chmod 600 "$INSTALL_DIR/.env"
+}
+
 install_launcher() {
-  install -m 0755 "$INSTALL_DIR/menu-tv-2.sh" "/usr/local/bin/$PROGRAM_NAME"
+  install -o root -g root -m 0755 "$INSTALL_DIR/menu-tv-2.sh" "$LAUNCHER_PATH"
 }
 
 wait_for_database() {
@@ -170,6 +165,7 @@ verify_application() {
 build_and_start() {
   validate_env
   assert_proxy_network
+  repair_permissions
   log "Проверка конфигурации Docker Compose"
   compose config -q
   log "Сборка и запуск независимых контейнеров"
@@ -200,6 +196,7 @@ restore_temporary_backup() {
   cp "$TEMP_BACKUP_DIR/.env" "$INSTALL_DIR/.env"
   chmod 600 "$INSTALL_DIR/.env"
   git -C "$INSTALL_DIR" reset --hard "$(<"$TEMP_BACKUP_DIR/git-revision")"
+  repair_permissions
   install_launcher
   compose up -d "$DB_SERVICE"
   wait_for_database
@@ -209,9 +206,10 @@ restore_temporary_backup() {
 }
 
 sync_existing_source() {
-  git_command -C "$INSTALL_DIR" fetch --depth 1 origin "$BRANCH"
+  git -C "$INSTALL_DIR" fetch --depth 1 origin "$BRANCH"
   git -C "$INSTALL_DIR" reset --hard "origin/$BRANCH"
   git -C "$INSTALL_DIR" clean -fd -e .env
+  repair_permissions
   install_launcher
 }
 
@@ -229,20 +227,19 @@ show_credentials() {
   printf '║ БД пароль:    %-68s ║\n' "$(env_value POSTGRES_PASSWORD "$env_file")"
   printf '║ Env-файл:     %-68s ║\n' "$env_file"
   printf '╚══════════════════════════════════════════════════════════════════════════════════╝\n'
-  printf 'Пароли больше не выводятся командами status/doctor. Сохраните их в менеджер паролей.\n'
+  printf 'Пароли больше не выводятся командами status. Сохраните их в менеджер паролей.\n'
 }
 
 install_app() {
   require_root
   check_dependencies
   local domain
+  [[ ! -e "$INSTALL_DIR" ]] || die "Каталог $INSTALL_DIR уже существует. Для установленного приложения используйте обновление."
   domain="$(ask_for_domain)"
-  [[ -n "$REPO_URL" ]] || die "Для установки задайте MENU_TV_2_REPO_URL — URL отдельного репозитория Menu TV 2.0."
-  [[ ! -e "$INSTALL_DIR" ]] || die "Каталог $INSTALL_DIR уже существует. Для установленного приложения используйте update."
-  log "Загрузка отдельного репозитория"
-  mkdir -p "$(dirname "$INSTALL_DIR")"
-  git_command clone --branch "$BRANCH" --single-branch "$REPO_URL" "$INSTALL_DIR"
+  log "Загрузка независимого репозитория"
+  git clone --depth 1 --branch "$BRANCH" --single-branch "$REPO_URL" "$INSTALL_DIR"
   write_new_env "$domain"
+  repair_permissions
   install_launcher
   build_and_start
   show_credentials
@@ -264,6 +261,38 @@ update_app() {
   info "Обновление прошло проверку. Временная копия удалена."
 }
 
+confirm_removal() {
+  local phrase="$1" input
+  printf '\nБудут затронуты только Menu TV 2.0: %s, %s, %s и %s.\n' "$INSTALL_DIR" "$APP_CONTAINER" "$DB_CONTAINER" "$DB_VOLUME"
+  read -r -p "Для подтверждения введите ${phrase}: " input
+  [[ "$input" == "$phrase" ]]
+}
+
+remove_project() {
+  require_root
+  [[ -d "$INSTALL_DIR" ]] || die "Menu TV 2.0 не установлен."
+  confirm_removal "УДАЛИТЬ" || { info "Удаление отменено."; return; }
+  log "Остановка и удаление контейнеров Menu TV 2.0"
+  compose down --volumes --rmi local --remove-orphans || true
+  docker volume rm "$DB_VOLUME" >/dev/null 2>&1 || true
+  rm -rf -- "$INSTALL_DIR"
+  info "Проект удалён. Скрипт оставлен: sudo $PROGRAM_NAME"
+}
+
+purge_project() {
+  require_root
+  [[ -d "$INSTALL_DIR" || -e "$LAUNCHER_PATH" ]] || die "Menu TV 2.0 не установлен."
+  confirm_removal "УДАЛИТЬ_ВСЁ" || { info "Удаление отменено."; return; }
+  if [[ -d "$INSTALL_DIR" ]]; then
+    log "Полное удаление Menu TV 2.0"
+    compose down --volumes --rmi local --remove-orphans || true
+    docker volume rm "$DB_VOLUME" >/dev/null 2>&1 || true
+    rm -rf -- "$INSTALL_DIR"
+  fi
+  rm -f -- "$LAUNCHER_PATH"
+  info "Проект, данные и системный скрипт удалены. Старый TV Menu не затронут."
+}
+
 status_app() {
   require_root
   [[ -d "$INSTALL_DIR" ]] || die "Menu TV 2.0 не установлен."
@@ -276,23 +305,35 @@ status_app() {
   verify_application >/dev/null 2>&1 && printf 'OK\n' || printf 'FAILED\n'
 }
 
-doctor_app() {
-  require_root
-  check_dependencies
-  printf 'Docker: OK\n'
-  docker network inspect "$PROXY_NETWORK" >/dev/null 2>&1 && printf 'Proxy network: OK\n' || printf 'Proxy network: MISSING\n'
-  if [[ -d "$INSTALL_DIR" ]]; then
-    [[ -f "$INSTALL_DIR/.env" ]] && printf 'Independent env: OK\n' || printf 'Independent env: MISSING\n'
-    docker volume inspect "$DB_VOLUME" >/dev/null 2>&1 && printf 'Independent PostgreSQL volume: OK\n' || printf 'Independent PostgreSQL volume: MISSING\n'
-  fi
+menu() {
+  while true; do
+    printf '\n╔══════════════════ Menu TV 2.0 ══════════════════╗\n'
+    printf '║  1. Установить                                   ║\n'
+    printf '║  2. Обновить                                     ║\n'
+    printf '║  3. Удалить проект                               ║\n'
+    printf '║  4. Удалить проект и скрипт                      ║\n'
+    printf '║  0. Выход                                        ║\n'
+    printf '╚══════════════════════════════════════════════════╝\n'
+    read -r -p 'Выберите действие: ' action
+    case "$action" in
+      1) install_app ;;
+      2) update_app ;;
+      3) remove_project ;;
+      4) purge_project; return ;;
+      0) return ;;
+      *) warn "Выберите пункт от 0 до 4." ;;
+    esac
+  done
 }
 
 main() {
-  case "${1:-help}" in
+  case "${1:-menu}" in
+    menu) menu ;;
     install) install_app ;;
     update) update_app ;;
+    remove) remove_project ;;
+    purge) purge_project ;;
     status) status_app ;;
-    doctor) doctor_app ;;
     help|-h|--help) usage ;;
     *) die "Неизвестная команда: ${1:-}" ;;
   esac
