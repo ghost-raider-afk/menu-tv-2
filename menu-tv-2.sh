@@ -9,9 +9,12 @@ BRANCH="main"
 COMPOSE_PROJECT="menu-tv-2"
 APP_SERVICE="app"
 DB_SERVICE="db"
+SFTP_SERVICE="sftp"
 APP_CONTAINER="menu-tv-2.0"
 DB_CONTAINER="menu-tv-2-db"
+SFTP_CONTAINER="menu-tv-2-sftp"
 DB_VOLUME="menu-tv-2-db-data"
+SFTP_VOLUME="menu-tv-2-sftp-data"
 PROXY_NETWORK="menu-tv-2-proxy"
 PROXY_DIR="/opt/menu-tv-2-proxy"
 PROXY_COMPOSE_FILE="$PROXY_DIR/compose.yaml"
@@ -49,7 +52,7 @@ Menu TV 2.0 — управление независимым приложение
   sudo $PROGRAM_NAME status
 
 Проект устанавливается только в: $INSTALL_DIR
-Контейнеры: $APP_CONTAINER, $DB_CONTAINER
+Контейнеры: $APP_CONTAINER, $DB_CONTAINER, $SFTP_CONTAINER
 USAGE
 }
 
@@ -223,19 +226,44 @@ write_new_env() {
   set_env_value "$env_file" ADMIN_USERNAME "admin"
   set_env_value "$env_file" ADMIN_PASSWORD "$(random_admin_password)"
   set_env_value "$env_file" SESSION_SECRET "$(random_secret 48)"
+  set_env_value "$env_file" SFTP_PUBLIC_HOST "$domain"
+  set_env_value "$env_file" SFTP_PORT "2022"
+  set_env_value "$env_file" SFTP_API_URL "http://sftp:8080"
+  set_env_value "$env_file" SFTP_STORAGE_ROOT "/srv/menu-tv-sftp"
+  set_env_value "$env_file" SFTP_ADMIN_USERNAME "menu_tv_2_service"
+  set_env_value "$env_file" SFTP_ADMIN_PASSWORD "$(random_secret 32)"
+  chmod 600 "$env_file"
+}
+
+ensure_sftp_env() {
+  local env_file="$INSTALL_DIR/.env" domain
+  [[ -f "$env_file" ]] || die "Отсутствует $env_file"
+  domain="$(env_value MENU_TV_2_DOMAIN "$env_file")"
+  [[ -n "$domain" ]] || die "MENU_TV_2_DOMAIN в .env не настроен."
+  [[ -n "$(env_value SFTP_PUBLIC_HOST "$env_file")" ]] || set_env_value "$env_file" SFTP_PUBLIC_HOST "$domain"
+  [[ -n "$(env_value SFTP_PORT "$env_file")" ]] || set_env_value "$env_file" SFTP_PORT "2022"
+  [[ -n "$(env_value SFTP_API_URL "$env_file")" ]] || set_env_value "$env_file" SFTP_API_URL "http://sftp:8080"
+  [[ -n "$(env_value SFTP_STORAGE_ROOT "$env_file")" ]] || set_env_value "$env_file" SFTP_STORAGE_ROOT "/srv/menu-tv-sftp"
+  [[ -n "$(env_value SFTP_ADMIN_USERNAME "$env_file")" ]] || set_env_value "$env_file" SFTP_ADMIN_USERNAME "menu_tv_2_service"
+  if [[ -z "$(env_value SFTP_ADMIN_PASSWORD "$env_file")" || "$(env_value SFTP_ADMIN_PASSWORD "$env_file")" == replace-with-* ]]; then
+    set_env_value "$env_file" SFTP_ADMIN_PASSWORD "$(random_secret 32)"
+    info "Для нового внутреннего SFTP-сервиса создан отдельный служебный секрет."
+  fi
+  chown root:root "$env_file"
   chmod 600 "$env_file"
 }
 
 validate_env() {
   local key value
   [[ -f "$INSTALL_DIR/.env" ]] || die "Отсутствует $INSTALL_DIR/.env"
-  for key in MENU_TV_2_DOMAIN POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD ADMIN_USERNAME ADMIN_PASSWORD SESSION_SECRET; do
+  for key in MENU_TV_2_DOMAIN POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD ADMIN_USERNAME ADMIN_PASSWORD SESSION_SECRET SFTP_PUBLIC_HOST SFTP_PORT SFTP_ADMIN_USERNAME SFTP_ADMIN_PASSWORD; do
     value="$(env_value "$key")"
     [[ -n "$value" && "$value" != replace-with-* ]] || die "$key в .env не настроен."
   done
   [[ $(env_value POSTGRES_PASSWORD | wc -c) -ge 17 ]] || die "POSTGRES_PASSWORD должен содержать не менее 16 символов."
-  [[ $(env_value ADMIN_PASSWORD | wc -c) -ge 17 ]] || die "ADMIN_PASSWORD должен содержать не менее 16 символов."
+  [[ $(env_value ADMIN_PASSWORD | wc -c) -ge 11 ]] || die "ADMIN_PASSWORD должен содержать не менее 10 символов."
   [[ $(env_value SESSION_SECRET | wc -c) -ge 33 ]] || die "SESSION_SECRET должен содержать не менее 32 символов."
+  [[ $(env_value SFTP_ADMIN_PASSWORD | wc -c) -ge 33 ]] || die "SFTP_ADMIN_PASSWORD должен содержать не менее 32 символов."
 }
 
 repair_permissions() {
@@ -276,6 +304,10 @@ verify_application() {
   compose exec -T "$APP_SERVICE" node -e "fetch('http://127.0.0.1:8080/healthz').then((r) => { if (!r.ok) process.exit(1); return r.json(); }).then((body) => process.exit(body.service === 'menu-tv-2.0' ? 0 : 1)).catch(() => process.exit(1))"
 }
 
+verify_sftp() {
+  compose exec -T "$SFTP_SERVICE" sftpgo ping
+}
+
 build_and_start() {
   validate_env
   assert_proxy_network
@@ -286,6 +318,8 @@ build_and_start() {
   compose up -d --build --wait
   log "Проверка готовности приложения"
   verify_application
+  log "Проверка SFTP-сервера"
+  verify_sftp
 }
 
 create_temporary_backup() {
@@ -374,6 +408,7 @@ update_app() {
   prepare_host
   check_dependencies
   [[ -d "$INSTALL_DIR/.git" ]] || die "Menu TV 2.0 не установлен: $INSTALL_DIR"
+  ensure_sftp_env
   validate_env
   create_temporary_backup
   if ! sync_existing_source || ! build_and_start; then
@@ -388,7 +423,8 @@ update_app() {
 
 confirm_removal() {
   local phrase="$1" input
-  printf '\nБудут затронуты только Menu TV 2.0: %s, %s, %s и %s.\n' "$INSTALL_DIR" "$APP_CONTAINER" "$DB_CONTAINER" "$DB_VOLUME"
+  printf '\nБудут затронуты только Menu TV 2.0: %s, %s, %s, %s и %s.\n' "$INSTALL_DIR" "$APP_CONTAINER" "$DB_CONTAINER" "$SFTP_CONTAINER" "$DB_VOLUME"
+  printf 'Также будет удален SFTP-том: %s.\n' "$SFTP_VOLUME"
   read -r -p "Для подтверждения введите ${phrase}: " input
   [[ "$input" == "$phrase" ]]
 }
@@ -400,6 +436,7 @@ remove_project() {
   log "Остановка и удаление контейнеров Menu TV 2.0"
   compose down --volumes --rmi local --remove-orphans || true
   docker volume rm "$DB_VOLUME" >/dev/null 2>&1 || true
+  docker volume rm "$SFTP_VOLUME" >/dev/null 2>&1 || true
   rm -rf -- "$INSTALL_DIR"
   info "Проект удалён. Скрипт оставлен: sudo $PROGRAM_NAME"
 }
@@ -412,6 +449,7 @@ purge_project() {
     log "Полное удаление Menu TV 2.0"
     compose down --volumes --rmi local --remove-orphans || true
     docker volume rm "$DB_VOLUME" >/dev/null 2>&1 || true
+    docker volume rm "$SFTP_VOLUME" >/dev/null 2>&1 || true
     rm -rf -- "$INSTALL_DIR"
   fi
   rm -f -- "$LAUNCHER_PATH"
@@ -430,9 +468,11 @@ status_app() {
   printf 'Revision: '
   git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || printf 'unknown'
   printf '\nContainers:\n'
-  docker ps --filter "name=^/${APP_CONTAINER}$" --filter "name=^/${DB_CONTAINER}$" --format '  {{.Names}}  {{.Status}}  {{.Image}}'
+  docker ps --filter "name=^/${APP_CONTAINER}$" --filter "name=^/${DB_CONTAINER}$" --filter "name=^/${SFTP_CONTAINER}$" --format '  {{.Names}}  {{.Status}}  {{.Image}}'
   printf 'Health: '
   verify_application >/dev/null 2>&1 && printf 'OK\n' || printf 'FAILED\n'
+  printf 'SFTP: '
+  verify_sftp >/dev/null 2>&1 && printf 'OK\n' || printf 'FAILED\n'
 }
 
 menu() {
