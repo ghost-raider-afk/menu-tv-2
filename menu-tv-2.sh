@@ -12,7 +12,11 @@ DB_SERVICE="db"
 APP_CONTAINER="menu-tv-2.0"
 DB_CONTAINER="menu-tv-2-db"
 DB_VOLUME="menu-tv-2-db-data"
-PROXY_NETWORK="proxy"
+PROXY_NETWORK="menu-tv-2-proxy"
+PROXY_DIR="/opt/menu-tv-2-proxy"
+PROXY_COMPOSE_FILE="$PROXY_DIR/compose.yaml"
+PROXY_ENV_FILE="$PROXY_DIR/.env"
+PROXY_CONTAINER="menu-tv-2-proxy"
 LAUNCHER_PATH="/usr/local/bin/menu-tv-2.0"
 PROJECT_OWNER_FILE="$INSTALL_DIR/.installer-owner"
 TEMP_BACKUP_DIR=""
@@ -55,6 +59,40 @@ require_root() {
 
 command_exists() { command -v "$1" >/dev/null 2>&1; }
 
+require_ubuntu() {
+  [[ -r /etc/os-release ]] || die "Не удалось определить операционную систему."
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  [[ "${ID:-}" == ubuntu ]] || die "Установщик поддерживает Ubuntu. Обнаружена: ${PRETTY_NAME:-неизвестно}."
+}
+
+install_base_packages() {
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update
+  apt-get install -y ca-certificates curl git openssl
+}
+
+install_docker() {
+  command_exists docker && docker compose version >/dev/null 2>&1 && return 0
+  log "Установка Docker Engine и Docker Compose"
+  install_base_packages
+  local docker_installer
+  docker_installer="$(mktemp -t menu-tv-2-docker.XXXXXX)"
+  curl -fsSL https://get.docker.com -o "$docker_installer"
+  sh "$docker_installer"
+  rm -f -- "$docker_installer"
+  systemctl enable --now docker
+}
+
+prepare_host() {
+  require_root
+  require_ubuntu
+  if ! command_exists git || ! command_exists curl || ! command_exists openssl; then
+    install_base_packages
+  fi
+  install_docker
+}
+
 project_owner() {
   if [[ -f "$PROJECT_OWNER_FILE" ]]; then
     head -n 1 "$PROJECT_OWNER_FILE"
@@ -87,8 +125,31 @@ check_dependencies() {
   docker compose version >/dev/null 2>&1 || die "Нужен Docker Compose v2."
 }
 
+ask_for_acme_email() {
+  local input
+  [[ -t 0 ]] || die "Для первой установки нужен интерактивный терминал."
+  while true; do
+    read -r -p "Введите e-mail для сертификатов Let's Encrypt: " input
+    [[ "$input" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] && { printf '%s\n' "$input"; return; }
+    warn "Введите корректный e-mail."
+  done
+}
+
 assert_proxy_network() {
   docker network inspect "$PROXY_NETWORK" >/dev/null 2>&1 || die "Не найдена внешняя Docker-сеть '$PROXY_NETWORK'."
+}
+
+setup_proxy() {
+  local acme_email="$1"
+  [[ -f "$INSTALL_DIR/infra/traefik-compose.yaml" ]] || die "В репозитории отсутствует конфигурация Traefik."
+  install -d -o root -g root -m 0750 "$PROXY_DIR"
+  install -o root -g root -m 0640 "$INSTALL_DIR/infra/traefik-compose.yaml" "$PROXY_COMPOSE_FILE"
+  printf 'TRAEFIK_ACME_EMAIL=%s\n' "$acme_email" > "$PROXY_ENV_FILE"
+  chown root:root "$PROXY_ENV_FILE"
+  chmod 600 "$PROXY_ENV_FILE"
+  install -o root -g root -m 0600 /dev/null "$PROXY_DIR/acme.json"
+  log "Запуск собственного HTTPS-прокси Menu TV 2.0"
+  docker compose --project-name menu-tv-2-proxy --project-directory "$PROXY_DIR" --env-file "$PROXY_ENV_FILE" up -d --wait
 }
 
 env_value() {
@@ -285,10 +346,12 @@ show_credentials() {
 
 install_app() {
   require_root
-  check_dependencies
-  local domain owner stage_dir
+  local domain acme_email owner stage_dir
   [[ ! -e "$INSTALL_DIR" ]] || die "Каталог $INSTALL_DIR уже существует. Для установленного приложения используйте обновление."
   domain="$(ask_for_domain)"
+  acme_email="$(ask_for_acme_email)"
+  prepare_host
+  check_dependencies
   owner="$(project_owner)"
   id "$owner" >/dev/null 2>&1 || die "Не найден пользователь, запустивший sudo: $owner"
   log "Загрузка независимого репозитория"
@@ -301,12 +364,14 @@ install_app() {
   write_new_env "$domain"
   repair_permissions
   install_launcher
+  setup_proxy "$acme_email"
   build_and_start
   show_credentials
 }
 
 update_app() {
   require_root
+  prepare_host
   check_dependencies
   [[ -d "$INSTALL_DIR/.git" ]] || die "Menu TV 2.0 не установлен: $INSTALL_DIR"
   validate_env
@@ -350,6 +415,11 @@ purge_project() {
     rm -rf -- "$INSTALL_DIR"
   fi
   rm -f -- "$LAUNCHER_PATH"
+  if [[ -d "$PROXY_DIR" ]]; then
+    docker compose --project-name menu-tv-2-proxy --project-directory "$PROXY_DIR" --env-file "$PROXY_ENV_FILE" down --volumes --remove-orphans || true
+    docker network rm "$PROXY_NETWORK" >/dev/null 2>&1 || true
+    rm -rf -- "$PROXY_DIR"
+  fi
   info "Проект, данные и системный скрипт удалены. Старый TV Menu не затронут."
 }
 
