@@ -19,6 +19,60 @@ services:
       retries: 5
       start_period: 10s
 
+  sftp-storage-init:
+    image: busybox:1.37.0
+    container_name: menu-tv-2-sftp-storage-init
+    command: >-
+      sh -ec 'mkdir -p /srv/menu-tv-sftp && chown 1000:11000 /srv/menu-tv-sftp && chmod 2770 /srv/menu-tv-sftp'
+    volumes:
+      - menu-tv-2-sftp-data:/srv/menu-tv-sftp
+    restart: "no"
+    networks:
+      - menu-tv-2-internal
+
+  sftp:
+    image: drakkan/sftpgo:v2.7.5-slim
+    container_name: menu-tv-2-sftp
+    user: "1000:11000"
+    env_file:
+      - .env
+    environment:
+      SFTPGO_DATA_PROVIDER__DRIVER: postgresql
+      SFTPGO_DATA_PROVIDER__HOST: db
+      SFTPGO_DATA_PROVIDER__PORT: 5432
+      SFTPGO_DATA_PROVIDER__NAME: ${POSTGRES_DB}
+      SFTPGO_DATA_PROVIDER__USERNAME: ${POSTGRES_USER}
+      SFTPGO_DATA_PROVIDER__PASSWORD: ${POSTGRES_PASSWORD}
+      SFTPGO_DATA_PROVIDER__CREATE_DEFAULT_ADMIN: "true"
+      SFTPGO_DATA_PROVIDER__USERS_BASE_DIR: /srv/menu-tv-sftp
+      SFTPGO_DEFAULT_ADMIN_USERNAME: ${SFTP_ADMIN_USERNAME}
+      SFTPGO_DEFAULT_ADMIN_PASSWORD: ${SFTP_ADMIN_PASSWORD}
+      SFTPGO_SFTPD__BINDINGS__0__PORT: 2022
+      SFTPGO_HTTPD__BINDINGS__0__ADDRESS: 0.0.0.0
+      SFTPGO_HTTPD__BINDINGS__0__PORT: 8080
+      SFTPGO_HTTPD__BINDINGS__0__ENABLE_WEB_ADMIN: "false"
+      SFTPGO_HTTPD__BINDINGS__0__ENABLE_WEB_CLIENT: "false"
+      SFTPGO_HTTPD__BINDINGS__0__ENABLE_REST_API: "true"
+      SFTPGO_TELEMETRY__BIND_PORT: 10000
+    ports:
+      - "${SFTP_PORT}:2022"
+    volumes:
+      - menu-tv-2-sftp-data:/srv/menu-tv-sftp
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      sftp-storage-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "sftpgo", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    networks:
+      - menu-tv-2-internal
+
   app:
     build:
       context: .
@@ -30,6 +84,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      sftp:
+        condition: service_healthy
+      sftp-storage-init:
+        condition: service_completed_successfully
+    volumes:
+      - menu-tv-2-sftp-data:/srv/menu-tv-sftp
     networks:
       - menu-tv-2-internal
       - proxy
@@ -44,6 +104,8 @@ services:
 volumes:
   menu-tv-2-db-data:
     name: menu-tv-2-db-data
+  menu-tv-2-sftp-data:
+    name: menu-tv-2-sftp-data
 
 networks:
   menu-tv-2-internal:
