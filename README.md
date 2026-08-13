@@ -41,14 +41,15 @@ only into `/opt/menu-tv-2.0` and creates the launcher
 `/usr/local/bin/menu-tv-2.0`.
 
 ```bash
-git clone --depth 1 git@github.com:ghost-raider-afk/menu-tv-2.git /tmp/menu-tv-2-bootstrap
+git clone --depth 1 git@github.com-menu-tv-2:ghost-raider-afk/menu-tv-2.git /tmp/menu-tv-2-bootstrap
 sudo bash /tmp/menu-tv-2-bootstrap/menu-tv-2.sh
 rm -rf /tmp/menu-tv-2-bootstrap
 ```
 
-The repository remains private. Before the first launch, the VPS user's SSH key
-must have read access to `ghost-raider-afk/menu-tv-2`. The installer uses that
-key only for Git operations; it does not copy the key into `/opt` or `.env`.
+The repository remains private. Before the first launch, configure the separate
+`github.com-menu-tv-2` SSH host with a read-only deploy key for
+`ghost-raider-afk/menu-tv-2`. The installer uses that key only for Git
+operations; it does not copy the key into `/opt` or `.env`.
 
 The interactive menu contains four actions: install, update, remove the
 project, and remove the project together with the system launcher. Both remove
