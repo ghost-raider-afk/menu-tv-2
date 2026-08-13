@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:17-bookworm
+    container_name: menu-tv-2-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: --auth=scram-sha-256
+    volumes:
+      - menu-tv-2-db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - menu-tv-2-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  app:
+    build:
+      context: .
+    image: menu-tv-2.0:local
+    container_name: menu-tv-2.0
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - menu-tv-2-internal
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.menu-tv-2.rule=Host(`${MENU_TV_2_DOMAIN:-menutv.bf27.ru}`)
+      - traefik.http.routers.menu-tv-2.entrypoints=websecure
+      - traefik.http.routers.menu-tv-2.tls=true
+      - traefik.http.services.menu-tv-2.loadbalancer.server.port=8080
+
+volumes:
+  menu-tv-2-db-data:
+    name: menu-tv-2-db-data
+
+networks:
+  menu-tv-2-internal:
+    name: menu-tv-2-internal
+    internal: true
+  proxy:
+    external: true
+    name: proxy
