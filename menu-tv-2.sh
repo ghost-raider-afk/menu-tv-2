@@ -496,6 +496,22 @@ show_credentials() {
   printf 'Пароли больше не выводятся командами status. Сохраните их в менеджер паролей.\n'
 }
 
+cleanup_failed_install() {
+  warn "Установка не завершилась. Удаляются только созданные ресурсы Menu TV 2.0."
+  if [[ -f "$INSTALL_DIR/.env" ]]; then
+    docker compose --project-name "$COMPOSE_PROJECT" --project-directory "$INSTALL_DIR" --env-file "$INSTALL_DIR/.env" down --volumes --rmi local --remove-orphans || true
+  fi
+  docker volume rm "$DB_VOLUME" >/dev/null 2>&1 || true
+  docker volume rm "$SFTP_VOLUME" >/dev/null 2>&1 || true
+  rm -rf -- "$INSTALL_DIR"
+  if [[ -d "$PROXY_DIR" ]]; then
+    docker compose --project-name menu-tv-2-proxy --project-directory "$PROXY_DIR" --env-file "$PROXY_ENV_FILE" down --volumes --remove-orphans || true
+    docker network rm "$PROXY_NETWORK" >/dev/null 2>&1 || true
+    rm -rf -- "$PROXY_DIR"
+  fi
+  info "Ресурсы неудачной установки удалены. Другие Docker-контейнеры и проекты VPS не затронуты."
+}
+
 install_app() {
   require_root
   local domain acme_email owner stage_dir
@@ -516,8 +532,10 @@ install_app() {
   write_new_env "$domain"
   repair_permissions
   install_launcher
-  setup_proxy "$acme_email"
-  build_and_start
+  if ! setup_proxy "$acme_email" || ! build_and_start; then
+    cleanup_failed_install
+    die "Установка не завершилась. Исправьте ошибку и запустите установку заново."
+  fi
   show_credentials
 }
 
