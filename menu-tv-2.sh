@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
 INSTALL_DIR="/opt/menu-tv-2.0"
-REPO_URL="git@github.com-menu-tv-2:ghost-raider-afk/menu-tv-2.git"
+REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 BRANCH="main"
 COMPOSE_PROJECT="menu-tv-2"
 APP_SERVICE="app"
