@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.1.1"
+SCRIPT_VERSION="1.1.2"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 BRANCH="main"
@@ -479,20 +479,62 @@ sync_existing_source() {
   install_launcher
 }
 
+credentials_box_text() {
+  local LC_ALL=C.UTF-8 text="$1" padding
+  padding=$((78 - ${#text}))
+  (( padding >= 0 )) || padding=0
+  printf '|%s%*s|\n' "$text" "$padding" ''
+}
+
+credentials_box_value() {
+  local LC_ALL=C.UTF-8 label="$1" value="$2" color="$3" prefix chunk padding
+  prefix="  ${label}: "
+  if (( ${#prefix} + ${#value} <= 78 )); then
+    padding=$((78 - ${#prefix} - ${#value}))
+    printf '|%s' "$prefix"
+    printf '%b%s%b' "$color" "$value" "$CREDENTIALS_COLOR_RESET"
+    printf '%*s|\n' "$padding" ''
+    return
+  fi
+
+  credentials_box_text "  ${label}:"
+  while [[ -n "$value" ]]; do
+    chunk="${value:0:74}"
+    value="${value:${#chunk}}"
+    padding=$((74 - ${#chunk}))
+    printf '|    '
+    printf '%b%s%b' "$color" "$chunk" "$CREDENTIALS_COLOR_RESET"
+    printf '%*s|\n' "$padding" ''
+  done
+}
+
 show_credentials() {
-  local env_file="$INSTALL_DIR/.env" domain
+  local env_file="$INSTALL_DIR/.env" domain credentials_color_url credentials_color_login credentials_color_password
   domain="$(env_value MENU_TV_2_DOMAIN "$env_file")"
-  printf '\n'
-  printf '╔════════════════════════ MENU TV 2.0: СОХРАНИТЕ ПАРАМЕТРЫ ════════════════════════╗\n'
-  printf '║ Адрес:        https://%-58s ║\n' "$domain"
-  printf '║ Администратор: %-68s ║\n' "$(env_value ADMIN_USERNAME "$env_file")"
-  printf '║ Пароль:       %-68s ║\n' "$(env_value ADMIN_PASSWORD "$env_file")"
-  printf '║ БД хост:      %-68s ║\n' "db (доступен только внутри сети menu-tv-2-internal)"
-  printf '║ БД имя:       %-68s ║\n' "$(env_value POSTGRES_DB "$env_file")"
-  printf '║ БД пользователь: %-65s ║\n' "$(env_value POSTGRES_USER "$env_file")"
-  printf '║ БД пароль:    %-68s ║\n' "$(env_value POSTGRES_PASSWORD "$env_file")"
-  printf '║ Env-файл:     %-68s ║\n' "$env_file"
-  printf '╚══════════════════════════════════════════════════════════════════════════════════╝\n'
+  CREDENTIALS_COLOR_RESET=''
+  credentials_color_url=''
+  credentials_color_login=''
+  credentials_color_password=''
+  if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+    CREDENTIALS_COLOR_RESET=$'\033[0m'
+    credentials_color_url=$'\033[1;36m'
+    credentials_color_login=$'\033[1;32m'
+    credentials_color_password=$'\033[1;33m'
+  fi
+
+  printf '\n+------------------------------------------------------------------------------+\n'
+  credentials_box_text '  MENU TV 2.0 — СОХРАНИТЕ ПАРАМЕТРЫ'
+  printf '|------------------------------------------------------------------------------|\n'
+  credentials_box_value 'Веб-адрес' "https://$domain" "$credentials_color_url"
+  credentials_box_value 'Логин администратора' "$(env_value ADMIN_USERNAME "$env_file")" "$credentials_color_login"
+  credentials_box_value 'Пароль администратора' "$(env_value ADMIN_PASSWORD "$env_file")" "$credentials_color_password"
+  printf '|------------------------------------------------------------------------------|\n'
+  credentials_box_value 'Хост БД' 'db (доступен только внутри сети menu-tv-2-internal)' ''
+  credentials_box_value 'Имя БД' "$(env_value POSTGRES_DB "$env_file")" ''
+  credentials_box_value 'Пользователь БД' "$(env_value POSTGRES_USER "$env_file")" ''
+  credentials_box_value 'Пароль БД' "$(env_value POSTGRES_PASSWORD "$env_file")" ''
+  credentials_box_value 'Env-файл' "$env_file" ''
+  printf '+------------------------------------------------------------------------------+\n'
   printf 'Пароли больше не выводятся командами status. Сохраните их в менеджер паролей.\n'
 }
 
