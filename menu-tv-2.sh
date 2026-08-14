@@ -3,9 +3,11 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
+SCRIPT_VERSION="1.1.0"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 BRANCH="main"
+SCRIPT_RAW_URL="https://raw.githubusercontent.com/ghost-raider-afk/menu-tv-2/main/menu-tv-2.sh"
 COMPOSE_PROJECT="menu-tv-2"
 APP_SERVICE="app"
 DB_SERVICE="db"
@@ -47,11 +49,14 @@ Menu TV 2.0 — управление независимым приложение
 Команды:
   sudo $PROGRAM_NAME install
   sudo $PROGRAM_NAME update
+  sudo $PROGRAM_NAME check-script-update
+  sudo $PROGRAM_NAME update-script
   sudo $PROGRAM_NAME remove
   sudo $PROGRAM_NAME remove-script
   sudo $PROGRAM_NAME purge
   sudo $PROGRAM_NAME status
 
+Версия скрипта: $SCRIPT_VERSION
 Проект устанавливается только в: $INSTALL_DIR
 Контейнеры: $APP_CONTAINER, $DB_CONTAINER, $SFTP_CONTAINER
 USAGE
@@ -62,6 +67,87 @@ require_root() {
 }
 
 command_exists() { command -v "$1" >/dev/null 2>&1; }
+
+script_version_from_file() {
+  local file="$1" version
+  version="$(sed -nE 's/^SCRIPT_VERSION="([0-9]+(\.[0-9]+){2})"$/\1/p' "$file" | head -n 1)"
+  [[ -n "$version" ]] || return 1
+  printf '%s\n' "$version"
+}
+
+fetch_latest_script() {
+  local destination="$1"
+  command_exists curl || { warn "Для проверки обновлений нужен curl."; return 1; }
+  curl -fsSL --connect-timeout 10 --max-time 60 "$SCRIPT_RAW_URL" -o "$destination" || return 1
+  bash -n "$destination" && script_version_from_file "$destination" >/dev/null
+}
+
+script_version_is_newer() {
+  local current="$1" latest="$2"
+  [[ "$current" != "$latest" ]] || return 1
+  [[ "$(printf '%s\n%s\n' "$current" "$latest" | sort -V | tail -n 1)" == "$latest" ]]
+}
+
+check_script_update() {
+  local latest_file latest_version
+  latest_file="$(mktemp -t "${PROGRAM_NAME}.script.XXXXXX")"
+  if ! fetch_latest_script "$latest_file"; then
+    rm -f -- "$latest_file"
+    die "Не удалось загрузить или проверить основной скрипт из GitHub."
+  fi
+  latest_version="$(script_version_from_file "$latest_file")"
+  rm -f -- "$latest_file"
+
+  printf 'Текущая версия скрипта: %s\n' "$SCRIPT_VERSION"
+  printf 'Версия в GitHub:        %s\n' "$latest_version"
+  if script_version_is_newer "$SCRIPT_VERSION" "$latest_version"; then
+    info "Доступно обновление скрипта."
+  elif [[ "$SCRIPT_VERSION" == "$latest_version" ]]; then
+    info "Установлена актуальная версия скрипта."
+  else
+    info "Локальная версия скрипта новее версии в GitHub."
+  fi
+}
+
+update_script() {
+  local latest_file latest_version input owner
+  require_root
+  latest_file="$(mktemp -t "${PROGRAM_NAME}.script.XXXXXX")"
+  if ! fetch_latest_script "$latest_file"; then
+    rm -f -- "$latest_file"
+    die "Не удалось загрузить или проверить основной скрипт из GitHub."
+  fi
+  latest_version="$(script_version_from_file "$latest_file")"
+
+  printf 'Текущая версия скрипта: %s\n' "$SCRIPT_VERSION"
+  printf 'Версия в GitHub:        %s\n' "$latest_version"
+  if ! script_version_is_newer "$SCRIPT_VERSION" "$latest_version"; then
+    rm -f -- "$latest_file"
+    if [[ "$SCRIPT_VERSION" == "$latest_version" ]]; then
+      info "Установлена актуальная версия скрипта."
+    else
+      info "Локальная версия скрипта новее версии в GitHub."
+    fi
+    return
+  fi
+
+  read -r -p 'Установить обновление скрипта? [YES/NO]: ' input
+  if [[ "${input^^}" != YES ]]; then
+    rm -f -- "$latest_file"
+    info "Обновление скрипта отменено."
+    return
+  fi
+
+  install -o root -g root -m 0755 "$latest_file" "$LAUNCHER_PATH"
+  if [[ -d "$INSTALL_DIR" ]]; then
+    owner="$(project_owner)"
+    id "$owner" >/dev/null 2>&1 || die "Не найден пользователь владельца проекта: $owner"
+    install -o "$owner" -g "$owner" -m 0750 "$latest_file" "$INSTALL_DIR/menu-tv-2.sh"
+  fi
+  rm -f -- "$latest_file"
+  info "Скрипт обновлён до версии $latest_version. Запускается новая версия."
+  exec "$LAUNCHER_PATH"
+}
 
 require_ubuntu() {
   [[ -r /etc/os-release ]] || die "Не удалось определить операционную систему."
@@ -519,14 +605,18 @@ status_app() {
 
 menu() {
   while true; do
-    printf '\n========== Menu TV 2.0 ==========\n'
+    printf '\n============================================\n'
+    printf ' Menu TV 2.0\n'
+    printf ' Версия скрипта: %s\n' "$SCRIPT_VERSION"
+    printf '============================================\n'
     printf '  1. Установить\n'
     printf '  2. Обновить\n'
     printf '  3. Удалить проект\n'
     printf '  4. Удалить скрипт\n'
     printf '  5. Удалить проект и скрипт\n'
+    printf '  6. Проверить обновления скрипта\n'
     printf '  0. Выход\n'
-    printf '=================================\n'
+    printf '============================================\n'
     read -r -p 'Выберите действие: ' action
     case "$action" in
       1) install_app ;;
@@ -534,8 +624,9 @@ menu() {
       3) remove_project ;;
       4) remove_script; return ;;
       5) purge_project; return ;;
+      6) update_script ;;
       0) return ;;
-      *) warn "Выберите пункт от 0 до 5." ;;
+      *) warn "Выберите пункт от 0 до 6." ;;
     esac
   done
 }
@@ -545,6 +636,8 @@ main() {
     menu) menu ;;
     install) install_app ;;
     update) update_app ;;
+    check-script-update) check_script_update ;;
+    update-script) update_script ;;
     remove) remove_project ;;
     remove-script) remove_script ;;
     purge) purge_project ;;
