@@ -73,7 +73,7 @@ require_ubuntu() {
 install_base_packages() {
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
-  apt-get install -y ca-certificates curl git openssl
+  apt-get install -y ca-certificates curl dnsutils git openssl
 }
 
 install_docker() {
@@ -91,7 +91,7 @@ install_docker() {
 prepare_host() {
   require_root
   require_ubuntu
-  if ! command_exists git || ! command_exists curl || ! command_exists openssl; then
+  if ! command_exists git || ! command_exists curl || ! command_exists dig || ! command_exists openssl; then
     install_base_packages
   fi
   install_docker
@@ -122,7 +122,7 @@ compose() {
 
 check_dependencies() {
   local tool
-  for tool in docker git tar openssl awk sed find install mktemp runuser od tr fold shuf; do
+  for tool in docker git tar openssl awk sed find install mktemp runuser od tr fold shuf dig; do
     command_exists "$tool" || die "Не найдена команда: $tool"
   done
   docker info >/dev/null 2>&1 || die "Docker daemon недоступен."
@@ -177,14 +177,45 @@ validate_domain() {
   printf '%s\n' "$domain"
 }
 
+public_ip() {
+  local family="$1" endpoint ip
+  for endpoint in https://api.ipify.org https://ifconfig.me/ip; do
+    ip="$(curl "-$family" -fsS --connect-timeout 5 --max-time 10 "$endpoint" 2>/dev/null || true)"
+    [[ -n "$ip" ]] && { printf '%s\n' "$ip"; return 0; }
+  done
+  return 1
+}
+
+domain_points_to_this_vps() {
+  local domain="$1" ipv4 ipv6 records
+  ipv4="$(public_ip 4 || true)"
+  if [[ -n "$ipv4" ]]; then
+    records="$(dig +short A "$domain" | sort -u)"
+    grep -Fxq "$ipv4" <<< "$records" && return 0
+  fi
+  ipv6="$(public_ip 6 || true)"
+  if [[ -n "$ipv6" ]]; then
+    records="$(dig +short AAAA "$domain" | sort -u)"
+    grep -Fxq "$ipv6" <<< "$records" && return 0
+  fi
+  return 1
+}
+
 ask_for_domain() {
   local input domain
   [[ -t 0 ]] || die "Для первой установки нужен интерактивный терминал."
   while true; do
     read -r -p "Введите домен Menu TV 2.0: " input
     domain="$(validate_domain "$input" || true)"
-    [[ -n "$domain" ]] && { printf '%s\n' "$domain"; return; }
-    warn "Введите домен без https://, например menu.example.com."
+    if [[ -z "$domain" ]]; then
+      warn "Введите домен без https://, например menu.example.com."
+      continue
+    fi
+    if domain_points_to_this_vps "$domain"; then
+      printf '%s\n' "$domain"
+      return
+    fi
+    warn "DNS-запись $domain не указывает на публичный IP этого VPS. Проверьте A/AAAA-запись и повторите ввод."
   done
 }
 
@@ -383,10 +414,10 @@ install_app() {
   require_root
   local domain acme_email owner stage_dir
   [[ ! -e "$INSTALL_DIR" ]] || die "Каталог $INSTALL_DIR уже существует. Для установленного приложения используйте обновление."
-  domain="$(ask_for_domain)"
-  acme_email="$(ask_for_acme_email)"
   prepare_host
   check_dependencies
+  domain="$(ask_for_domain)"
+  acme_email="$(ask_for_acme_email)"
   owner="$(project_owner)"
   id "$owner" >/dev/null 2>&1 || die "Не найден пользователь, запустивший sudo: $owner"
   log "Загрузка независимого репозитория"
