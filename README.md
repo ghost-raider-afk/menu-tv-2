@@ -1,126 +1,141 @@
 # Menu TV 2.0
 
-Independent application for managing locations, televisions, menu templates and
-SFTP delivery to Android TVs.
+Независимое приложение для управления торговыми точками, телевизорами, меню и
+доставкой изображений на Android TV по SFTP. Устанавливается только в
+`/opt/menu-tv-2.0` и не использует контейнеры, тома, сеть или настройки других
+проектов на VPS.
 
-It does not share source code, configuration, database, Docker volume, network,
-container or routes with the existing TV Menu deployment.
+## Установка на Ubuntu VPS
 
-## Local start
+До установки подготовьте:
+
+- домен с A- или AAAA-записью, указывающей прямо на публичный IP VPS;
+- открытые входящие порты `80`, `443` и `2022`;
+- свободные порты `80` и `443` для HTTPS-прокси Menu TV 2.0.
+
+На чистом Ubuntu VPS выполните одну команду:
+
+```bash
+curl -fsSLo /tmp/menu-tv-2.sh https://raw.githubusercontent.com/ghost-raider-afk/menu-tv-2/main/menu-tv-2.sh && sudo bash /tmp/menu-tv-2.sh
+```
+
+Если вы уже работаете под `root`, `sudo` не нужен:
+
+```bash
+curl -fsSLo /tmp/menu-tv-2.sh https://raw.githubusercontent.com/ghost-raider-afk/menu-tv-2/main/menu-tv-2.sh && bash /tmp/menu-tv-2.sh
+```
+
+Не используйте `sudo bash <(curl ...)`: `sudo` закрывает временный файловый
+дескриптор, из-за чего Bash может вывести ошибку `/dev/fd/...: No such file or
+directory`.
+
+Установщик сам ставит Docker Engine и Docker Compose, запрашивает домен и
+e-mail для Let's Encrypt, проверяет соответствие DNS-записи публичному IP VPS,
+затем запускает приложение и отдельный HTTPS-прокси.
+
+## Один установочный скрипт
+
+Единственный установщик находится в
+[`main/menu-tv-2.sh`](menu-tv-2.sh). Постоянная ссылка всегда одна:
+
+`https://raw.githubusercontent.com/ghost-raider-afk/menu-tv-2/main/menu-tv-2.sh`
+
+Номер версии показан в меню. Пункт **6. Проверить обновления скрипта** сверяет
+эту версию с основной версией в GitHub и, если она новее, предлагает установить
+её. После согласия системный скрипт обновляется и сразу запускается заново.
+
+После первой установки меню запускается командой:
+
+```bash
+sudo menu-tv-2.0
+```
+
+В меню доступны:
+
+1. Установить;
+2. Обновить приложение;
+3. Удалить проект;
+4. Удалить только системный скрипт;
+5. Удалить проект и системный скрипт;
+6. Проверить обновления скрипта;
+0. Выйти.
+
+Также доступны команды:
+
+```bash
+sudo menu-tv-2.0 update
+sudo menu-tv-2.0 check-script-update
+sudo menu-tv-2.0 update-script
+sudo menu-tv-2.0 status
+```
+
+Обновление приложения сохраняет существующий `.env`, базу данных, пароли,
+секреты, SFTP-директории и привязки к торговым точкам. Новые значения не
+генерируются повторно. Перед обновлением создаётся временная резервная копия;
+при неудачной проверке скрипт автоматически восстанавливает предыдущую версию.
+
+## Доступы и секреты
+
+При первой установке в `/opt/menu-tv-2.0/.env` создаются:
+
+- пароль PostgreSQL — 48 шестнадцатеричных символов;
+- `SESSION_SECRET` — 96 шестнадцатеричных символов;
+- внутренний пароль SFTP-сервиса — 64 шестнадцатеричных символа;
+- пароль администратора — ровно 10 символов: строчные и прописные латинские
+  буквы, цифра и специальный символ.
+
+В конце установки скрипт один раз показывает адрес и доступы администратора и
+базы данных. Сохраните их в менеджере паролей. Файл `.env` имеет права `0600`.
+
+## SFTP для телевизоров
+
+SFTP-сервер доступен на порту `2022`. Он предназначен для CX File Explorer на
+Android TV; интерфейс управления SFTP наружу не публикуется.
+
+Для каждой торговой точки администратор вручную выполняет в интерфейсе два
+действия:
+
+1. Регистрирует и создаёт техническую SFTP-директорию.
+2. Явно привязывает готовую директорию и логин к торговой точке.
+
+Все телевизоры одной торговой точки используют один логин и пароль и видят
+файлы одной директории. SFTP-пароль имеет ровно 10 символов, содержит строчные
+и прописные буквы и цифру. Он показывается один раз и не хранится в базе
+данных. Учётная запись имеет доступ только на чтение: просмотр списка и
+скачивание.
+
+Имена файлов телевизоров стабильны, например `monitor-12.jpg`. При публикации
+JPEG сначала записывается во временный файл, а затем атомарно заменяет основной
+файл, поэтому телевизор не скачает незавершённое изображение.
+
+## Изоляция и удаление
+
+Для проекта используются отдельные ресурсы:
+
+- каталог: `/opt/menu-tv-2.0`;
+- контейнеры: `menu-tv-2.0`, `menu-tv-2-db`, `menu-tv-2-sftp`;
+- тома: `menu-tv-2-db-data`, `menu-tv-2-sftp-data`;
+- HTTPS-прокси: `menu-tv-2-proxy` в `/opt/menu-tv-2-proxy`.
+
+Перед удалением нужно ввести `YES`. Удаление проекта затрагивает только
+перечисленные ресурсы Menu TV 2.0. Другие Docker-контейнеры и проекты VPS не
+затрагиваются.
+
+## Локальный запуск для разработки
 
 ```bash
 cp .env.example .env
-# Set unique POSTGRES_PASSWORD, ADMIN_PASSWORD and SESSION_SECRET values.
-# For plain http://localhost only, set SECURE_COOKIES=false.
 npm ci
 npm run check
 npm start
 ```
 
-Open `http://localhost:8080` and sign in with `ADMIN_USERNAME` and
-`ADMIN_PASSWORD` from `.env`.
+Для локального HTTP-запуска установите в `.env` `SECURE_COOKIES=false` и
+задайте собственные безопасные значения для всех паролей и секретов. После
+запуска откройте `http://localhost:8080`.
 
-## Deployment isolation
+## Лицензия
 
-- Container: `menu-tv-2.0`
-- Database container: `menu-tv-2-db`
-- SFTP container: `menu-tv-2-sftp`
-- Image: `menu-tv-2.0:local`
-- PostgreSQL data volume: `menu-tv-2-db-data`
-- SFTP data volume: `menu-tv-2-sftp-data`
-- Internal network: `menu-tv-2-internal`
-- Domain: set during the first installation
-- Public proxy network: dedicated `menu-tv-2-proxy`
-
-The installer creates a dedicated Traefik container and the
-`menu-tv-2-proxy` network. Its environment is intentionally separate: create
-`/opt/menu-tv-2.0/.env` from the example, never copy the old TV Menu `.env`.
-
-## Installer
-
-`menu-tv-2.sh` manages only this application. It has no paths, volumes or
-configuration names in common with the older TV Menu. It installs the project
-only into `/opt/menu-tv-2.0` and creates the launcher
-`/usr/local/bin/menu-tv-2.0`.
-
-```bash
-git clone --depth 1 git@github.com-menu-tv-2:ghost-raider-afk/menu-tv-2.git /tmp/menu-tv-2-bootstrap
-sudo bash /tmp/menu-tv-2-bootstrap/menu-tv-2.sh
-rm -rf /tmp/menu-tv-2-bootstrap
-```
-
-The repository remains private. Before the first launch, configure the separate
-`github.com-menu-tv-2` SSH host with a read-only deploy key for
-`ghost-raider-afk/menu-tv-2`. The installer uses that key only for Git
-operations; it does not copy the key into `/opt` or `.env`.
-
-On a clean Ubuntu VPS the installer automatically installs Docker Engine and
-Docker Compose, then creates the dedicated HTTPS proxy in
-`/opt/menu-tv-2-proxy`. Ports 80 and 443 must be free, and the domain must
-already point to the VPS IP address before installation.
-
-The installer also starts the SFTP service on TCP port `2022`. Allow this port
-in the VPS firewall/security group; it is for Android TV clients, not for the
-web interface. SFTPGo's management API has no published port and remains only
-inside the project's private Docker network.
-
-The interactive menu contains four actions: install, update, remove the
-project, and remove the project together with the system launcher. Both remove
-actions require an explicit confirmation. Removal affects only Menu TV 2.0:
-its `/opt/menu-tv-2.0` directory, three named containers, local image, the
-`menu-tv-2-db-data` PostgreSQL volume and the `menu-tv-2-sftp-data` SFTP
-volume.
-
-The very first question is the public domain (for example `menu.example.com`).
-Then the installer creates a private `.env` (mode `0600`), an independent
-PostgreSQL user/password and an administrator password. At the end it shows one
-terminal card with the URL and all credentials; save it in a password manager.
-The administrator password has exactly 10 characters and contains uppercase and
-lowercase Latin letters, a digit and a safe special character. Ambiguous
-characters (`0`, `O`, `1`, `l`, `I`) are excluded.
-
-## SFTP delivery for TVs
-
-Every location has at most one SFTP directory and one read-only SFTP account.
-All TVs of that location use the same login and password in CX File Explorer.
-The password is generated with exactly 10 Latin letters/digits, including at
-least one uppercase letter, lowercase letter and digit; it is shown once and is
-not stored in the application database. Use **New password** in the SFTP panel
-to replace it.
-
-The SFTP panel deliberately uses two manual steps:
-
-1. Register a technical directory name and explicitly create that directory on
-   the SFTP disk.
-2. Select that ready directory for a location and specify the SFTP login.
-
-No location rename, screen rename, reinstall or ordinary update changes an
-existing directory binding, login, password or screen file name. To change a
-binding, an administrator must explicitly disable the current access and bind a
-different directory. Disabling access never deletes the physical directory or
-its menu files.
-
-For each TV the application creates a stable file name such as
-`monitor-12.jpg`. The panel displays the complete server path, for example
-`/store-01/monitor-12.jpg`, and the path visible from that TV account:
-`/monitor-12.jpg`. Upload a prepared JPEG first, then use **В эфир**. The file
-is copied to a temporary file and atomically renamed, so CX File Explorer never
-downloads a partially written menu.
-
-In CX File Explorer create an SFTP connection using the server and port shown
-in **SFTP-доступ**, then the login/password of that location. The account has
-only `list` and `download` permissions: it cannot upload, rename or delete
-files.
-
-Before an update it makes a permission-restricted temporary copy of its source,
-`.env`, and PostgreSQL dump under the system temporary directory. The copy is
-removed after a successful update or a successful automatic rollback. There is
-no permanent backup folder and no manual rollback command. If automatic
-recovery itself fails, the script prints the temporary path instead of deleting
-the only recoverable copy.
-
-## License
-
-The interface is built as a new application using the TailAdmin HTML dashboard
-approach (Tailwind CSS and Alpine-style progressive interaction). TailAdmin is
-available under the MIT License: https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template
+Интерфейс создан с использованием подхода TailAdmin (Tailwind CSS и
+прогрессивное взаимодействие). TailAdmin распространяется по MIT License:
+https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template
