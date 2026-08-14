@@ -17,7 +17,7 @@ COPY --from=build /app/src ./src
 
 RUN groupadd --gid 11000 sftp-storage \
   && useradd --uid 10001 --gid sftp-storage --create-home menu-tv \
-  && chown -R menu-tv:menu-tv /app
+  && chown -R menu-tv:sftp-storage /app
 
 USER menu-tv
 EXPOSE 8080
