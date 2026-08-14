@@ -171,7 +171,7 @@ set_env_value() {
 
 validate_domain() {
   local domain="${1,,}"
-  [[ "$domain" =~ ^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]] || return 1
+  [[ "$domain" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]] || return 1
   [[ "$domain" != *..* ]] || return 1
   printf '%s\n' "$domain"
 }
