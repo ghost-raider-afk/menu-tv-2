@@ -48,6 +48,7 @@ Menu TV 2.0 — управление независимым приложение
   sudo $PROGRAM_NAME install
   sudo $PROGRAM_NAME update
   sudo $PROGRAM_NAME remove
+  sudo $PROGRAM_NAME remove-script
   sudo $PROGRAM_NAME purge
   sudo $PROGRAM_NAME status
 
@@ -461,6 +462,16 @@ purge_project() {
   info "Проект, его данные и системный скрипт удалены. Другие Docker-контейнеры и проекты VPS не затронуты."
 }
 
+remove_script() {
+  local input
+  require_root
+  [[ -e "$LAUNCHER_PATH" ]] || die "Системный скрипт Menu TV 2.0 не найден."
+  read -r -p 'Удалить только системный скрипт, не затрагивая проект и данные? [YES/NO]: ' input
+  [[ "${input^^}" == YES ]] || { info "Удаление отменено."; return; }
+  rm -f -- "$LAUNCHER_PATH"
+  info "Системный скрипт удалён. Проект, данные и другие Docker-контейнеры не затронуты."
+}
+
 status_app() {
   require_root
   [[ -d "$INSTALL_DIR" ]] || die "Menu TV 2.0 не установлен."
@@ -477,21 +488,23 @@ status_app() {
 
 menu() {
   while true; do
-    printf '\n╔══════════════════ Menu TV 2.0 ══════════════════╗\n'
-    printf '║  1. Установить                                   ║\n'
-    printf '║  2. Обновить                                     ║\n'
-    printf '║  3. Удалить проект                               ║\n'
-    printf '║  4. Удалить проект и скрипт                      ║\n'
-    printf '║  0. Выход                                        ║\n'
-    printf '╚══════════════════════════════════════════════════╝\n'
+    printf '\n========== Menu TV 2.0 ==========\n'
+    printf '  1. Установить\n'
+    printf '  2. Обновить\n'
+    printf '  3. Удалить проект\n'
+    printf '  4. Удалить скрипт\n'
+    printf '  5. Удалить проект и скрипт\n'
+    printf '  0. Выход\n'
+    printf '=================================\n'
     read -r -p 'Выберите действие: ' action
     case "$action" in
       1) install_app ;;
       2) update_app ;;
       3) remove_project ;;
-      4) purge_project; return ;;
+      4) remove_script; return ;;
+      5) purge_project; return ;;
       0) return ;;
-      *) warn "Выберите пункт от 0 до 4." ;;
+      *) warn "Выберите пункт от 0 до 5." ;;
     esac
   done
 }
@@ -502,6 +515,7 @@ main() {
     install) install_app ;;
     update) update_app ;;
     remove) remove_project ;;
+    remove-script) remove_script ;;
     purge) purge_project ;;
     status) status_app ;;
     help|-h|--help) usage ;;
