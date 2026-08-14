@@ -458,7 +458,7 @@ purge_project() {
     docker network rm "$PROXY_NETWORK" >/dev/null 2>&1 || true
     rm -rf -- "$PROXY_DIR"
   fi
-  info "Проект, данные и системный скрипт удалены. Старый TV Menu не затронут."
+  info "Проект, его данные и системный скрипт удалены. Другие Docker-контейнеры и проекты VPS не затронуты."
 }
 
 status_app() {
