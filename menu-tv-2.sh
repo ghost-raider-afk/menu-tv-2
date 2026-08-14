@@ -422,17 +422,17 @@ update_app() {
 }
 
 confirm_removal() {
-  local phrase="$1" input
+  local input
   printf '\nБудут затронуты только Menu TV 2.0: %s, %s, %s, %s и %s.\n' "$INSTALL_DIR" "$APP_CONTAINER" "$DB_CONTAINER" "$SFTP_CONTAINER" "$DB_VOLUME"
   printf 'Также будет удален SFTP-том: %s.\n' "$SFTP_VOLUME"
-  read -r -p "Для подтверждения введите ${phrase}: " input
-  [[ "$input" == "$phrase" ]]
+  read -r -p 'Подтвердить удаление? [YES/NO]: ' input
+  [[ "${input^^}" == YES ]]
 }
 
 remove_project() {
   require_root
   [[ -d "$INSTALL_DIR" ]] || die "Menu TV 2.0 не установлен."
-  confirm_removal "УДАЛИТЬ" || { info "Удаление отменено."; return; }
+  confirm_removal || { info "Удаление отменено."; return; }
   log "Остановка и удаление контейнеров Menu TV 2.0"
   compose down --volumes --rmi local --remove-orphans || true
   docker volume rm "$DB_VOLUME" >/dev/null 2>&1 || true
@@ -444,7 +444,7 @@ remove_project() {
 purge_project() {
   require_root
   [[ -d "$INSTALL_DIR" || -e "$LAUNCHER_PATH" ]] || die "Menu TV 2.0 не установлен."
-  confirm_removal "УДАЛИТЬ_ВСЁ" || { info "Удаление отменено."; return; }
+  confirm_removal || { info "Удаление отменено."; return; }
   if [[ -d "$INSTALL_DIR" ]]; then
     log "Полное удаление Menu TV 2.0"
     compose down --volumes --rmi local --remove-orphans || true
