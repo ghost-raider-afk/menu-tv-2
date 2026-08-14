@@ -16,7 +16,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/src ./src
 
 RUN groupadd --gid 11000 sftp-storage \
-  && useradd --system --uid 10001 --gid sftp-storage --create-home menu-tv \
+  && useradd --uid 10001 --gid sftp-storage --create-home menu-tv \
   && chown -R menu-tv:menu-tv /app
 
 USER menu-tv
