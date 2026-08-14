@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.1.3"
+SCRIPT_VERSION="1.1.4"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 BRANCH="main"
@@ -576,7 +576,7 @@ cleanup_failed_install() {
     docker network rm "$PROXY_NETWORK" >/dev/null 2>&1 || true
     rm -rf -- "$PROXY_DIR"
   fi
-  info "Ресурсы неудачной установки удалены. Другие Docker-контейнеры и проекты VPS не затронуты."
+  info "Ресурсы неудачной установки удалены."
 }
 
 install_app() {
@@ -661,7 +661,7 @@ purge_project() {
     docker network rm "$PROXY_NETWORK" >/dev/null 2>&1 || true
     rm -rf -- "$PROXY_DIR"
   fi
-  info "Проект, его данные и системный скрипт удалены. Другие Docker-контейнеры и проекты VPS не затронуты."
+  info "Проект, его данные и системный скрипт удалены."
 }
 
 remove_script() {
