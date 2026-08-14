@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.1.2"
+SCRIPT_VERSION="1.1.3"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 BRANCH="main"
@@ -426,8 +426,31 @@ verify_sftp() {
   compose exec -T "$SFTP_SERVICE" sftpgo ping
 }
 
+verify_https_certificate() {
+  local domain="$1" attempt issuer
+  for attempt in $(seq 1 24); do
+    if curl --resolve "$domain:443:127.0.0.1" --fail --silent --show-error --max-time 10 "https://$domain/healthz" >/dev/null 2>&1; then
+      issuer="$(openssl s_client -connect 127.0.0.1:443 -servername "$domain" </dev/null 2>/dev/null | openssl x509 -noout -issuer 2>/dev/null || true)"
+      info "HTTPS-сертификат для $domain успешно получен и проверен."
+      [[ -z "$issuer" ]] || info "$issuer"
+      return 0
+    fi
+    if (( attempt < 24 )); then
+      info "Ожидание выпуска HTTPS-сертификата для $domain: попытка $attempt/24."
+      sleep 5
+    fi
+  done
+
+  warn "HTTPS-сертификат для $domain не получен за 2 минуты."
+  warn "Последние сообщения Traefik:"
+  docker logs --tail 20 "$PROXY_CONTAINER" 2>&1 | sed 's/^/    /' >&2 || true
+  return 1
+}
+
 build_and_start() {
+  local domain
   validate_env
+  domain="$(env_value MENU_TV_2_DOMAIN)"
   assert_proxy_network
   repair_permissions
   log "Проверка конфигурации Docker Compose"
@@ -438,6 +461,8 @@ build_and_start() {
   verify_application
   log "Проверка SFTP-сервера"
   verify_sftp
+  log "Выпуск и проверка HTTPS-сертификата Let's Encrypt"
+  verify_https_certificate "$domain"
 }
 
 create_temporary_backup() {
