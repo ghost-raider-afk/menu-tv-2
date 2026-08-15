@@ -1,5 +1,4 @@
 const path = require("path");
-const glob = require("glob");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const sourceDir = __dirname;
@@ -21,23 +20,15 @@ const processNestedHtml = (content, loaderContext, dir = null) =>
         );
       });
 
-// HTML generation
-const paths = [];
-const generateHTMLPlugins = () =>
-  glob.sync(path.join(sourceDir, "*.html")).map((dir) => {
-    const filename = path.basename(dir);
-
-    if (filename !== "404.html") {
-      paths.push(filename);
-    }
-
-    return new HtmlWebpackPlugin({
-      filename,
-      template: path.join(sourceDir, filename),
-      favicon: path.join(sourceDir, "images/favicon.ico"),
-      inject: "body",
-    });
-  });
+// Only the TV MENU application shell is published. The remaining upstream
+// template examples stay out of the production build.
+const generateHTMLPlugins = () => [
+  new HtmlWebpackPlugin({
+    filename: "index.html",
+    template: path.join(sourceDir, "index.html"),
+    inject: "body",
+  }),
+];
 
 module.exports = {
   mode: "development",
