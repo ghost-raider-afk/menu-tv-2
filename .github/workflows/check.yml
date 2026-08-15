@@ -29,7 +29,7 @@ jobs:
 
   clean-install-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,7 +45,66 @@ jobs:
           sed -i 's|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=ci-postgres-password-0123456789|' .env.ci
           sed -i 's|^SESSION_SECRET=.*|SESSION_SECRET=ci-session-secret-0123456789012345678901234567890123456789|' .env.ci
           sed -i 's|^SFTP_ADMIN_PASSWORD=.*|SFTP_ADMIN_PASSWORD=ci-sftp-secret-0123456789012345678901234567890123456789|' .env.ci
+          sed -i 's|^BOOTSTRAP_ADMIN_USERNAME=.*|BOOTSTRAP_ADMIN_USERNAME=admin|' .env.ci
+          sed -i 's|^BOOTSTRAP_ADMIN_PASSWORD=.*|BOOTSTRAP_ADMIN_PASSWORD=Ci-Admin-Password1!|' .env.ci
+          sed -i 's|^SECURE_COOKIES=.*|SECURE_COOKIES=false|' .env.ci
       - name: Validate Docker Compose
         run: docker compose --env-file .env.ci config -q
       - name: Build production application image
         run: docker build --pull -t menu-tv-2-ci .
+      - name: Start clean runtime stack
+        run: |
+          docker network create menu-tv-2-proxy
+          docker compose --project-name menu-tv-2-ci --env-file .env.ci up -d --build --wait
+      - name: Smoke test application workflow
+        run: |
+          docker compose --project-name menu-tv-2-ci --env-file .env.ci exec -T app node --input-type=module <<'NODE'
+          const base = 'http://127.0.0.1:8080';
+          const health = await fetch(`${base}/healthz`);
+          if (!health.ok || (await health.json()).service !== 'menu-tv-2.0') throw new Error('health check failed');
+
+          const login = await fetch(`${base}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: 'admin', password: 'Ci-Admin-Password1!' })
+          });
+          if (login.status !== 204) throw new Error(`login failed: ${login.status}`);
+          const setCookies = typeof login.headers.getSetCookie === 'function' ? login.headers.getSetCookie() : [login.headers.get('set-cookie')];
+          const sessionCookie = setCookies.flatMap((value) => String(value || '').split(/,(?=\s*menu_tv_)/)).find((value) => value.trim().startsWith('menu_tv_2_session='));
+          if (!sessionCookie) throw new Error('session cookie missing');
+          const cookie = sessionCookie.split(';', 1)[0].trim();
+          const jsonHeaders = { 'Content-Type': 'application/json', Cookie: cookie };
+
+          const locationResponse = await fetch(`${base}/api/locations`, {
+            method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name: 'CI точка', address: 'CI' })
+          });
+          if (locationResponse.status !== 201) throw new Error(`location create failed: ${locationResponse.status}`);
+          const location = await locationResponse.json();
+
+          const screenResponse = await fetch(`${base}/api/locations/${location.id}/screens`, {
+            method: 'POST', headers: { Cookie: cookie }
+          });
+          if (screenResponse.status !== 201) throw new Error(`screen create failed: ${screenResponse.status}`);
+          const screen = await screenResponse.json();
+
+          const editorResponse = await fetch(`${base}/api/screens/${screen.id}/editor`, { headers: { Cookie: cookie } });
+          if (!editorResponse.ok) throw new Error(`editor load failed: ${editorResponse.status}`);
+          const editor = await editorResponse.json();
+          if (!Array.isArray(editor.products) || !Array.isArray(editor.packaging) || !Array.isArray(editor.templates)) throw new Error('editor payload invalid');
+
+          const pageResponse = await fetch(`${base}/screen-editor.html?id=${screen.id}`, { headers: { Cookie: cookie } });
+          if (!pageResponse.ok || !(await pageResponse.text()).includes('Редактор меню')) throw new Error('editor page failed');
+          NODE
+      - name: Smoke test SFTP service
+        run: docker compose --project-name menu-tv-2-ci --env-file .env.ci exec -T sftp sftpgo ping
+      - name: Show runtime status
+        if: always()
+        run: docker compose --project-name menu-tv-2-ci --env-file .env.ci ps || true
+      - name: Show runtime logs on failure
+        if: failure()
+        run: docker compose --project-name menu-tv-2-ci --env-file .env.ci logs --no-color --tail=200 || true
+      - name: Clean runtime stack
+        if: always()
+        run: |
+          docker compose --project-name menu-tv-2-ci --env-file .env.ci down -v --remove-orphans || true
+          docker network rm menu-tv-2-proxy >/dev/null 2>&1 || true
