@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadConfig } from '../src/config.js';
+import { loadConfig } from '../src/config/index.js';
 import { generateSftpPassword } from '../src/sftp.js';
 
 function validEnv(overrides = {}) {
