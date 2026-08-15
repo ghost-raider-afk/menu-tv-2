@@ -85,7 +85,7 @@ export function initialiseScreenEditor() {
     const submit = element('editor-save');
     setPending(submit, true, 'Сохраняем…');
     try {
-      updateSettings(editorState, readEditorSettings());
+      updateSettings(editorState, readEditorSettings(editorState.settings));
       screen = await api.put(`${API.screens}/${screenId}`, {
         ...readScreenProperties(screen),
         template_id: editorState.templateId
