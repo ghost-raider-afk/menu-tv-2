@@ -28,6 +28,7 @@ async function toggleTheme() {
 
 export function initialiseChrome() {
   updateProfileMenu(state.user);
+  applyTheme(state.user?.theme || 'system');
   const menu = document.querySelector('.profile-menu');
   const trigger = document.querySelector('.profile-trigger');
   const panel = document.querySelector('.profile-panel');
@@ -44,9 +45,6 @@ export function initialiseChrome() {
       }
     });
   }
-  document.querySelectorAll('[data-sidebar-toggle]').forEach((button) => button.addEventListener('click', () => {
-    document.querySelector('[data-sidebar]')?.classList.toggle('is-open');
-  }));
   document.querySelectorAll('[data-logout]').forEach((button) => {
     if (button.dataset.logoutBound === '1') return;
     button.dataset.logoutBound = '1';
