@@ -122,7 +122,9 @@ function screenInput(body, { defaultScreenResolution = '1920×1080' } = {}) {
     name: requireText(body.name, 'name'),
     resolution: requireText(body.resolution ?? defaultScreenResolution, 'resolution', { max: 32 }),
     status,
-    active: body.active !== false
+    active: body.active !== false,
+    template_id: body.template_id === undefined || body.template_id === null || body.template_id === ''
+      ? null : positiveId(body.template_id, 'template_id')
   };
 }
 
@@ -259,6 +261,11 @@ function sessionCookie(token, config, maxAge = config.sessionTtlHours * 3600) {
   return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Strict${config.secureCookies ? '; Secure' : ''}`;
 }
 
+function themeCookie(theme, config, maxAge = config.sessionTtlHours * 3600) {
+  const value = VALID_THEMES.has(theme) ? theme : 'system';
+  return `menu_tv_theme=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; SameSite=Strict${config.secureCookies ? '; Secure' : ''}`;
+}
+
 export async function createApp(config = loadConfig(), { store: suppliedStore, sftp: suppliedSftp } = {}) {
   const store = suppliedStore ?? new MenuTvStore(config.db, { seedDemoData: config.seedDemoData });
   const sftp = suppliedSftp ?? new SftpService(config.sftp);
@@ -298,7 +305,11 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
       entity_type: 'session',
       message: 'Выполнен вход в панель управления.'
     });
-    response.setHeader('Set-Cookie', sessionCookie(issueSession(config.adminUsername, config), config));
+    const preferences = await store.getUserPreferences(config.adminUsername);
+    response.setHeader('Set-Cookie', [
+      sessionCookie(issueSession(config.adminUsername, config), config),
+      themeCookie(preferences.theme, config)
+    ]);
     return response.status(204).end();
   });
   app.post('/api/auth/logout', async (request, response) => {
@@ -311,7 +322,7 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
         message: 'Выполнен выход из панели управления.'
       });
     }
-    response.setHeader('Set-Cookie', sessionCookie('', config, 0));
+    response.setHeader('Set-Cookie', [sessionCookie('', config, 0), themeCookie('system', config, 0)]);
     response.status(204).end();
   });
 
@@ -333,6 +344,7 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
 
   app.get('/api/session', async (request, response) => {
     const [preferences, settings] = await Promise.all([store.getUserPreferences(request.session.sub), store.getSiteSettings()]);
+    response.setHeader('Set-Cookie', themeCookie(preferences.theme, config));
     response.json({
       status: 'ok',
       app_name: settings.application_name || config.appName,
@@ -353,6 +365,7 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
       entity_id: request.session.sub,
       message: 'Обновлены личные настройки пользователя.'
     });
+    response.setHeader('Set-Cookie', themeCookie(preferences.theme, config));
     response.json(preferences);
   });
   app.get('/api/settings/site', async (_request, response) => {
@@ -420,10 +433,35 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
   });
 
   app.get('/api/screens', async (_request, response) => response.json(await store.listScreens()));
+  app.get('/api/screens/:id', async (request, response) => {
+    const screen = await store.getScreen(positiveId(request.params.id, 'id'));
+    if (!screen) throw recordNotFound();
+    response.json(screen);
+  });
+  app.post('/api/locations/:id/screens', async (request, response) => {
+    const locationId = positiveId(request.params.id, 'id');
+    const location = await store.getLocation(locationId);
+    if (!location) throw recordNotFound();
+    const siteSettings = await store.getSiteSettings();
+    const screen = await store.createScreen({
+      location_id: locationId,
+      name: await store.nextScreenName(locationId),
+      resolution: siteSettings.default_screen_resolution,
+      status: 'draft',
+      active: true,
+      template_id: null
+    });
+    await activity(request, {
+      action: 'screen.created', entity_type: 'screen', entity_id: screen.id,
+      message: `Добавлен монитор «${screen.name}» в точке «${location.name}».`
+    });
+    response.status(201).json(screen);
+  });
   app.post('/api/screens', async (request, response) => {
     const siteSettings = await store.getSiteSettings();
     const input = screenInput(request.body, { defaultScreenResolution: siteSettings.default_screen_resolution });
     if (!await store.getLocation(input.location_id)) throw recordNotFound();
+    if (input.template_id && !await store.getTemplate(input.template_id)) throw recordNotFound();
     const screen = await store.createScreen(input);
     await activity(request, {
       action: 'screen.created',
@@ -437,6 +475,7 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     const siteSettings = await store.getSiteSettings();
     const input = screenInput(request.body, { defaultScreenResolution: siteSettings.default_screen_resolution });
     if (!await store.getLocation(input.location_id)) throw recordNotFound();
+    if (input.template_id && !await store.getTemplate(input.template_id)) throw recordNotFound();
     const id = positiveId(request.params.id, 'id');
     const current = await store.getScreen(id);
     if (!current) throw recordNotFound();
@@ -648,7 +687,9 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
   app.get('/index.html', requirePageSession, (_request, _response, next) => next());
   app.get('/locations.html', requirePageSession, (_request, _response, next) => next());
   app.get('/screens.html', requirePageSession, (_request, _response, next) => next());
+  app.get('/screen-editor.html', requirePageSession, (_request, _response, next) => next());
   app.get('/templates.html', requirePageSession, (_request, _response, next) => next());
+  app.get('/profile.html', requirePageSession, (_request, _response, next) => next());
   app.get('/settings.html', requirePageSession, (_request, _response, next) => next());
   app.use(express.static(publicDir, {
     extensions: ['html'],

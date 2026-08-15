@@ -10,6 +10,7 @@ function normaliseRow(row) {
     ...row,
     ...(row.id === undefined ? {} : { id: Number(row.id) }),
     ...(row.location_id === undefined ? {} : { location_id: Number(row.location_id) }),
+    ...(row.template_id === undefined || row.template_id === null ? {} : { template_id: Number(row.template_id) }),
     ...(row.screen_count === undefined ? {} : { screen_count: Number(row.screen_count) }),
     ...(row.sftp_directory_id === undefined || row.sftp_directory_id === null ? {} : { sftp_directory_id: Number(row.sftp_directory_id) }),
     ...(row.bound_location_id === undefined || row.bound_location_id === null ? {} : { bound_location_id: Number(row.bound_location_id) })
@@ -64,6 +65,7 @@ export class MenuTvStore {
       CREATE TABLE IF NOT EXISTS screens (
         id BIGSERIAL PRIMARY KEY,
         location_id BIGINT NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+        template_id BIGINT,
         name TEXT NOT NULL,
         resolution TEXT NOT NULL DEFAULT '1920×1080',
         status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'ready', 'published')),
@@ -126,6 +128,7 @@ export class MenuTvStore {
       ALTER TABLE locations ADD COLUMN IF NOT EXISTS sftp_username TEXT;
       ALTER TABLE locations ADD COLUMN IF NOT EXISTS sftp_password_issued_at TIMESTAMPTZ;
       ALTER TABLE screens ADD COLUMN IF NOT EXISTS delivery_filename TEXT;
+      ALTER TABLE screens ADD COLUMN IF NOT EXISTS template_id BIGINT;
       ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_key TEXT;
       ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_sha256 TEXT;
       ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_size BIGINT;
@@ -311,9 +314,10 @@ export class MenuTvStore {
 
   async listScreens() {
     const { rows } = await this.pool.query(`
-      SELECT s.*, l.name AS location_name, d.name AS sftp_directory_name,
-        CASE WHEN d.name IS NULL THEN NULL ELSE '/' || d.name || '/' || s.delivery_filename END AS sftp_path
+      SELECT s.*, l.name AS location_name, t.name AS template_name, d.name AS sftp_directory_name,
+      CASE WHEN d.name IS NULL THEN NULL ELSE '/' || d.name || '/' || s.delivery_filename END AS sftp_path
       FROM screens s JOIN locations l ON l.id = s.location_id
+      LEFT JOIN templates t ON t.id = s.template_id
       LEFT JOIN sftp_directories d ON d.id = l.sftp_directory_id
       ORDER BY l.name, s.name
     `);
@@ -322,29 +326,30 @@ export class MenuTvStore {
 
   async getScreen(id) {
     const { rows } = await this.pool.query(`
-      SELECT s.*, l.name AS location_name, d.name AS sftp_directory_name,
-        CASE WHEN d.name IS NULL THEN NULL ELSE '/' || d.name || '/' || s.delivery_filename END AS sftp_path
+      SELECT s.*, l.name AS location_name, t.name AS template_name, d.name AS sftp_directory_name,
+      CASE WHEN d.name IS NULL THEN NULL ELSE '/' || d.name || '/' || s.delivery_filename END AS sftp_path
       FROM screens s JOIN locations l ON l.id = s.location_id
+      LEFT JOIN templates t ON t.id = s.template_id
       LEFT JOIN sftp_directories d ON d.id = l.sftp_directory_id
       WHERE s.id = $1
     `, [id]);
     return normaliseRow(rows[0]);
   }
 
-  async createScreen({ location_id, name, resolution = '1920×1080', status = 'draft', active = true }) {
+  async createScreen({ location_id, name, resolution = '1920×1080', status = 'draft', active = true, template_id = null }) {
     const now = isoNow();
     const { rows } = await this.pool.query(`
-      INSERT INTO screens (location_id, name, resolution, status, active, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $6) RETURNING id
-    `, [location_id, name, resolution, status, active, now]);
+      INSERT INTO screens (location_id, name, resolution, status, active, template_id, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $7) RETURNING id
+    `, [location_id, name, resolution, status, active, template_id, now]);
     await this.pool.query('UPDATE screens SET delivery_filename = $1 WHERE id = $2', [`monitor-${rows[0].id}.jpg`, rows[0].id]);
     return this.getScreen(rows[0].id);
   }
 
-  async updateScreen(id, { location_id, name, resolution = '1920×1080', status = 'draft', active = true }) {
+  async updateScreen(id, { location_id, name, resolution = '1920×1080', status = 'draft', active = true, template_id = null }) {
     const { rowCount } = await this.pool.query(`
-      UPDATE screens SET location_id = $1, name = $2, resolution = $3, status = $4, active = $5, updated_at = $6 WHERE id = $7
-    `, [location_id, name, resolution, status, active, isoNow(), id]);
+      UPDATE screens SET location_id = $1, name = $2, resolution = $3, status = $4, active = $5, template_id = $6, updated_at = $7 WHERE id = $8
+    `, [location_id, name, resolution, status, active, template_id, isoNow(), id]);
     return rowCount ? this.getScreen(id) : null;
   }
 
@@ -440,8 +445,17 @@ export class MenuTvStore {
     return rowCount ? this.getScreen(screenId) : null;
   }
 
+  async nextScreenName(locationId) {
+    const { rows } = await this.pool.query('SELECT COUNT(*)::int AS count FROM screens WHERE location_id = $1', [locationId]);
+    return `ТВ ${Number(rows[0].count) + 1}`;
+  }
+
   async listTemplates() {
-    const { rows } = await this.pool.query('SELECT * FROM templates ORDER BY name');
+    const { rows } = await this.pool.query(`
+      SELECT t.*, COUNT(s.id)::int AS assigned_screens
+      FROM templates t LEFT JOIN screens s ON s.template_id = t.id
+      GROUP BY t.id ORDER BY t.name
+    `);
     return rows.map(normaliseRow);
   }
 
@@ -468,6 +482,7 @@ export class MenuTvStore {
   }
 
   async deleteTemplate(id) {
+    await this.pool.query('UPDATE screens SET template_id = NULL, updated_at = $1 WHERE template_id = $2', [isoNow(), id]);
     const { rowCount } = await this.pool.query('DELETE FROM templates WHERE id = $1', [id]);
     return rowCount > 0;
   }

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ТВ МЕНЮ</title>
+    <script src="/theme-bootstrap.js"></script>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body data-page="profile">
+    <div class="app-shell">
+      <aside class="sidebar" data-sidebar>
+        <a class="brand" href="/" aria-label="ТВ МЕНЮ"><span class="brand-mark">ТВ</span><span data-app-name>ТВ МЕНЮ</span></a>
+        <nav class="navigation" aria-label="Основная навигация">
+          <a class="nav-link" href="/"><span class="nav-icon">▦</span>Обзор</a>
+          <a class="nav-link" href="/locations.html"><span class="nav-icon">⌖</span>Торговые точки</a>
+          <a class="nav-link" href="/screens.html"><span class="nav-icon">▣</span>Мониторы</a>
+          <a class="nav-link" href="/templates.html"><span class="nav-icon">▤</span>Шаблоны мониторов</a>
+          <a class="nav-link" href="/settings.html"><span class="nav-icon">⚙</span>Настройки сайта</a>
+        </nav>
+        <p class="sidebar-note">Управление экранным меню</p>
+      </aside>
+      <div class="app-content">
+        <header class="topbar">
+          <button class="icon-button mobile-only" type="button" data-sidebar-toggle aria-label="Открыть меню">☰</button>
+          <div class="topbar-title"><strong data-app-name>ТВ МЕНЮ</strong><span>Настройки пользователя</span></div>
+          <div class="topbar-actions">
+            <a class="profile-link" href="/profile.html" data-session-user></a>
+            <div class="notification-wrap">
+              <button class="icon-button notification-button" id="notifications-button" type="button" aria-label="Уведомления" aria-expanded="false">♢<span class="notification-badge is-hidden" data-notification-count></span></button>
+              <section class="notification-panel is-hidden" id="notifications-panel" aria-label="Уведомления">
+                <div class="panel-heading"><strong>Уведомления</strong><button class="text-button" id="mark-notifications-read" type="button">Прочитать все</button></div>
+                <div data-notification-list></div><p class="empty-state is-hidden" data-notification-empty>Новых уведомлений нет.</p>
+                <a class="panel-footer" href="/settings.html#activity">Открыть журнал действий</a>
+              </section>
+            </div>
+            <button class="icon-button" id="theme-toggle" type="button" aria-label="Переключить тему">◐</button>
+            <button class="button button-secondary logout-button" id="logout-button" type="button">Выйти</button>
+          </div>
+        </header>
+        <main class="main-content profile-content">
+          <div class="page-heading"><p class="eyebrow">ПРОФИЛЬ</p><h1>Настройки пользователя</h1><p>Личные данные, тема интерфейса и уведомления.</p></div>
+          <section class="settings-card profile-card" aria-labelledby="profile-title">
+            <div class="card-heading"><div><p class="eyebrow">УЧЁТНАЯ ЗАПИСЬ</p><h2 id="profile-title">Ваш профиль</h2></div></div>
+            <form id="user-settings-form" class="form-grid">
+              <label class="field"><span>Логин</span><input id="profile-username" type="text" disabled /></label>
+              <label class="field"><span>Имя для отображения</span><input id="display-name" name="display_name" type="text" maxlength="80" required /></label>
+              <label class="field"><span>E-mail</span><input id="profile-email" name="email" type="email" maxlength="160" /></label>
+              <label class="field"><span>Телефон</span><input id="profile-phone" name="phone" type="tel" maxlength="40" /></label>
+              <label class="field field-full"><span>Должность</span><input id="profile-job-title" name="job_title" type="text" maxlength="80" /></label>
+              <div class="field field-full"><span>Тема интерфейса</span><div class="theme-options" role="radiogroup" aria-label="Тема интерфейса"><label><input type="radio" name="theme" value="system" />Системная</label><label><input type="radio" name="theme" value="light" />Светлая</label><label><input type="radio" name="theme" value="dark" />Тёмная</label></div></div>
+              <label class="toggle-row field-full"><span><strong>Уведомления</strong><small>Показывать новые действия в колокольчике.</small></span><input id="notifications-enabled" name="notifications_enabled" type="checkbox" /><i aria-hidden="true"></i></label>
+              <p class="form-message is-hidden field-full" id="user-settings-message" role="status" aria-live="polite"></p>
+              <div class="form-actions field-full"><button class="button button-primary" id="user-settings-submit" type="submit">Сохранить настройки пользователя</button></div>
+            </form>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

@@ -98,7 +98,10 @@ test('health is public and authentication requires the generated administrator c
   const cookie = await adminCookie();
   const settingsPage = await fetch(`${baseUrl}/settings.html`, { headers: { Cookie: cookie } });
   assert.equal(settingsPage.status, 200);
-  assert.match(await settingsPage.text(), /Настройки пользователя/);
+  assert.match(await settingsPage.text(), /Настройки сайта/);
+  const profilePage = await fetch(`${baseUrl}/profile.html`, { headers: { Cookie: cookie } });
+  assert.equal(profilePage.status, 200);
+  assert.match(await profilePage.text(), /Настройки пользователя/);
   const locationsPage = await fetch(`${baseUrl}/locations.html`, { headers: { Cookie: cookie } });
   assert.equal(locationsPage.status, 200);
 });
@@ -121,8 +124,35 @@ test('location and screen data remain in the separate PostgreSQL store', async (
   assert.equal(createdScreen.status, 201);
   assert.equal((await createdScreen.json()).location_name, 'Точка 2.0');
 
+  const createdInsideLocation = await fetch(`${baseUrl}/api/locations/${location.id}/screens`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({})
+  });
+  assert.equal(createdInsideLocation.status, 201);
+  const screen = await createdInsideLocation.json();
+  assert.equal(screen.location_id, location.id);
+  assert.equal(screen.template_id, null);
+  assert.match(screen.name, /^ТВ /);
+
   const overview = await fetch(`${baseUrl}/api/overview`, { headers: jsonHeaders(cookie) });
-  assert.deepEqual(await overview.json(), { locations: 1, screens: 1, published: 0, templates: 0 });
+  assert.deepEqual(await overview.json(), { locations: 1, screens: 2, published: 0, templates: 0 });
+
+  const createdTemplate = await fetch(`${baseUrl}/api/templates`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'Основной шаблон', description: 'Тестовый', active: true })
+  });
+  assert.equal(createdTemplate.status, 201);
+  const template = await createdTemplate.json();
+  const assigned = await fetch(`${baseUrl}/api/screens/${screen.id}`, {
+    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify({
+      location_id: location.id, name: screen.name, resolution: screen.resolution,
+      status: screen.status, active: screen.active, template_id: template.id
+    })
+  });
+  assert.equal(assigned.status, 200);
+  assert.equal((await assigned.json()).template_id, template.id);
+  const deletedTemplate = await fetch(`${baseUrl}/api/templates/${template.id}`, { method: 'DELETE', headers: jsonHeaders(cookie) });
+  assert.equal(deletedTemplate.status, 204);
+  const unassigned = await fetch(`${baseUrl}/api/screens/${screen.id}`, { headers: jsonHeaders(cookie) });
+  assert.equal((await unassigned.json()).template_id, null);
 });
 
 test('profile and site settings persist separately and create administrator notifications', async () => {
@@ -252,7 +282,8 @@ test('SFTP catalogues, point access and JPEG publication follow the manual deliv
     method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ location_id: location.id, name: 'Основной экран' })
   });
   const screen = await screenResponse.json();
-  assert.equal(screen.sftp_path, '/point-alpha/monitor-2.jpg');
+  const deliveryPath = `/point-alpha/monitor-${screen.id}.jpg`;
+  assert.equal(screen.sftp_path, deliveryPath);
 
   const source = await fetch(`${baseUrl}/api/screens/${screen.id}/source`, {
     method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/jpeg' }, body: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0xff, 0xd9])
@@ -263,7 +294,7 @@ test('SFTP catalogues, point access and JPEG publication follow the manual deliv
   const publish = await fetch(`${baseUrl}/api/screens/${screen.id}/publish`, { method: 'POST', headers: jsonHeaders(cookie) });
   assert.equal(publish.status, 200);
   assert.equal((await publish.json()).status, 'published');
-  assert.ok(sftp.publications.has('point-alpha/monitor-2.jpg'));
+  assert.ok(sftp.publications.has(deliveryPath.slice(1)));
 
   const resetPassword = await fetch(`${baseUrl}/api/locations/${location.id}/sftp-password`, { method: 'POST', headers: jsonHeaders(cookie) });
   assert.equal(resetPassword.status, 200);

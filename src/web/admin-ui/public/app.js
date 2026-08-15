@@ -27,6 +27,27 @@ const state = {
   editingTemplateId: null
 };
 
+const ICONS = Object.freeze({
+  overview: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>',
+  location: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 5.2-8 11-8 11S4 15.2 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.6"/></svg>',
+  screen: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>',
+  template: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg>',
+  settings: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.04 1.55V20.3h-3v-.09a1.7 1.7 0 0 0-1.04-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7 15a1.7 1.7 0 0 0-1.55-1.04h-.09v-3h.09A1.7 1.7 0 0 0 7 9.92a1.7 1.7 0 0 0-.34-1.88L6.6 7.98l2.12-2.12.06.06a1.7 1.7 0 0 0 1.88.34 1.7 1.7 0 0 0 1.04-1.55v-.09h3v.09a1.7 1.7 0 0 0 1.04 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.12 2.12-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.55 1.04h.09v3h-.09A1.7 1.7 0 0 0 19.4 15Z"/></svg>',
+  bell: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 10a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/></svg>',
+  moon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.1 15.5A8.4 8.4 0 0 1 8.5 3.9a8.4 8.4 0 1 0 11.6 11.6Z"/></svg>',
+  sun: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>',
+  user: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg>',
+  logout: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H5v14h5M14 8l4 4-4 4m4-4H9"/></svg>',
+  chevron: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>'
+});
+
+function icon(name) { return ICONS[name] || ''; }
+
+function setIcon(target, name) {
+  if (!target) return;
+  target.innerHTML = icon(name);
+}
+
 function pageName() {
   return document.body.dataset.page || "";
 }
@@ -122,6 +143,12 @@ function applyTheme(theme) {
     : requested;
   document.documentElement.dataset.theme = actual;
   document.documentElement.dataset.themePreference = requested;
+  try { window.localStorage.setItem("menu-tv-theme", requested); } catch { /* Storage can be disabled by the browser. */ }
+  const toggle = element("theme-toggle");
+  if (toggle) {
+    setIcon(toggle, actual === "dark" ? "sun" : "moon");
+    toggle.setAttribute("aria-label", actual === "dark" ? "Включить светлую тему" : "Включить тёмную тему");
+  }
 }
 
 function formatDate(value) {
@@ -216,15 +243,78 @@ function initialiseNotifications() {
   });
 }
 
-function initialiseChrome() {
+function initials(value) {
+  const parts = String(value || "ТВ").trim().split(/\s+/).filter(Boolean);
+  return (parts.slice(0, 2).map((part) => part[0]).join("") || "ТВ").toUpperCase();
+}
+
+function updateProfileMenu(user) {
+  const displayName = user?.display_name || user?.username || state.session?.display_name || state.session?.username || "Пользователь";
+  document.querySelectorAll("[data-profile-name], [data-session-user]").forEach((node) => { node.textContent = displayName; });
+  document.querySelectorAll("[data-profile-email]").forEach((node) => { node.textContent = user?.email || "Настройки учётной записи"; });
+  document.querySelectorAll("[data-profile-initials]").forEach((node) => { node.textContent = initials(displayName); });
+}
+
+function prepareChrome() {
+  document.querySelectorAll(".nav-link").forEach((link) => {
+    const name = link.getAttribute("href") === "/locations.html" ? "location"
+      : link.getAttribute("href") === "/screens.html" ? "screen"
+        : link.getAttribute("href") === "/templates.html" ? "template"
+          : link.getAttribute("href") === "/settings.html" ? "settings" : "overview";
+    setIcon(link.querySelector(".nav-icon"), name);
+    if (name === "settings") {
+      const text = [...link.childNodes].find((node) => node.nodeType === Node.TEXT_NODE && node.nodeValue.trim());
+      if (text) text.nodeValue = "Настройки сайта";
+    }
+  });
+  const notificationButton = element("notifications-button");
+  const notificationBadge = notificationButton?.querySelector("[data-notification-count]");
+  setIcon(notificationButton, "bell");
+  if (notificationButton && notificationBadge) notificationButton.append(notificationBadge);
+  setIcon(element("theme-toggle"), currentTheme() === "dark" ? "sun" : "moon");
+
+  const legacyProfile = document.querySelector(".profile-link[data-session-user]");
+  const legacyLogout = element("logout-button");
+  if (legacyProfile && !document.querySelector(".profile-menu")) {
+    const menu = document.createElement("div");
+    menu.className = "profile-menu";
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "profile-trigger";
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.setAttribute("aria-haspopup", "menu");
+    trigger.innerHTML = `<span class="profile-avatar" data-profile-initials>ТВ</span><span class="profile-trigger-name" data-session-user>Пользователь</span><span class="profile-caret">${icon("chevron")}</span>`;
+    const panel = document.createElement("section");
+    panel.className = "profile-panel is-hidden";
+    panel.setAttribute("role", "menu");
+    panel.innerHTML = `<div class="profile-summary"><span class="profile-avatar profile-avatar-large" data-profile-initials>ТВ</span><span><strong data-profile-name>Пользователь</strong><small data-profile-email>Настройки учётной записи</small></span></div><a class="profile-menu-item" role="menuitem" href="/profile.html">${icon("user")}<span>Настройки пользователя</span></a><div class="profile-menu-divider"></div><button class="profile-menu-item" data-logout type="button" role="menuitem">${icon("logout")}<span>Выйти</span></button>`;
+    menu.append(trigger, panel);
+    legacyProfile.replaceWith(menu);
+    trigger.addEventListener("click", () => {
+      const open = panel.classList.contains("is-hidden");
+      panel.classList.toggle("is-hidden", !open);
+      trigger.setAttribute("aria-expanded", String(open));
+    });
+    document.addEventListener("click", (event) => {
+      if (!menu.contains(event.target)) {
+        panel.classList.add("is-hidden");
+        trigger.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+  legacyLogout?.remove();
   document.querySelectorAll("[data-sidebar-toggle]").forEach((button) => button.addEventListener("click", () => {
     document.querySelector("[data-sidebar]")?.classList.toggle("is-open");
   }));
-  element("logout-button")?.addEventListener("click", async () => {
+  document.querySelectorAll("[data-logout]").forEach((button) => button.addEventListener("click", async () => {
     try { await fetch(API.logout, { method: "POST", credentials: "same-origin" }); }
     finally { window.location.replace("/signin.html"); }
-  });
+  }));
   element("theme-toggle")?.addEventListener("click", () => { void toggleTheme(); });
+}
+
+function initialiseChrome() {
+  // Event handlers are installed synchronously before API requests start.
 }
 
 async function toggleTheme() {
@@ -241,7 +331,7 @@ async function toggleTheme() {
 
 function applySession(session) {
   state.session = session;
-  document.querySelectorAll("[data-session-user]").forEach((node) => { node.textContent = session.display_name || session.username; });
+  updateProfileMenu(session);
 }
 
 function populateOverview(data) {
@@ -366,7 +456,7 @@ function renderTemplates() {
   if (!list || !empty) return;
   const rows = state.templates.map((template) => recordRow(
     template.name,
-    `${template.description || "Без описания"} · ${template.active ? "активен" : "неактивен"}`,
+    `${template.description || "Без описания"} · ${template.active ? "активен" : "неактивен"} · мониторов: ${template.assigned_screens || 0}`,
     [makeButton("Изменить", "", () => editTemplate(template)), makeButton("Удалить", "danger", () => void deleteTemplate(template))]
   ));
   refreshList(list, empty, rows);
@@ -427,121 +517,167 @@ async function loadScreens() {
   const [locations, screens] = await Promise.all([api(API.locations), api(API.screens)]);
   state.locations = locations;
   state.screens = screens;
-  populateScreenLocations();
   renderScreens();
   return screens;
 }
 
-function populateScreenLocations() {
-  const select = element("screen-location");
-  if (!(select instanceof HTMLSelectElement)) return;
-  const selected = select.value;
-  select.replaceChildren(...state.locations.map((location) => {
-    const option = document.createElement("option");
-    option.value = String(location.id);
-    option.textContent = location.name;
-    return option;
-  }));
-  if (selected && [...select.options].some((option) => option.value === selected)) select.value = selected;
-}
-
 function renderScreens() {
-  const list = document.querySelector("[data-screens-list]");
+  const list = document.querySelector("[data-screen-hierarchy]");
   const empty = document.querySelector("[data-screens-empty]");
   if (!list || !empty) return;
-  const rows = state.screens.map((screen) => {
-    const actions = [];
-    if (screen.status !== "published") actions.push(makeButton("Изменить", "", () => editScreen(screen)));
-    actions.push(makeButton("Изображение", "", () => uploadScreenImage(screen)));
-    if (screen.status === "ready" || screen.status === "published") actions.push(makeButton("Опубликовать", "", () => void publishScreen(screen)));
-    actions.push(makeButton("Удалить", "danger", () => void deleteScreen(screen)));
-    return recordRow(screen.name, `${screen.location_name} · ${screen.resolution} · ${screen.status === "published" ? "опубликовано" : screen.status === "ready" ? "готово" : "черновик"}`, actions);
+  const groups = state.locations.map((location) => {
+    const group = document.createElement("article");
+    group.className = "screen-location-group";
+    const header = document.createElement("header");
+    header.className = "screen-location-header";
+    const title = document.createElement("div");
+    const heading = document.createElement("h2");
+    heading.textContent = location.name;
+    const details = document.createElement("p");
+    details.textContent = location.address || "Адрес не указан";
+    title.append(heading, details);
+    const add = makeButton("+ Добавить ТВ", "", () => void createScreenAtLocation(location));
+    header.append(title, add);
+    const screens = state.screens.filter((screen) => screen.location_id === location.id);
+    const items = document.createElement("div");
+    items.className = "screen-location-items";
+    screens.forEach((screen) => {
+      const row = document.createElement("div");
+      row.className = "screen-location-item";
+      const link = document.createElement("a");
+      link.href = `/screen-editor.html?id=${screen.id}`;
+      const name = document.createElement("strong");
+      name.textContent = screen.name;
+      const info = document.createElement("span");
+      const status = screen.status === "published" ? "опубликовано" : screen.status === "ready" ? "готово" : "черновик";
+      info.textContent = `${screen.resolution} · ${status}${screen.template_name ? ` · ${screen.template_name}` : " · без шаблона"}`;
+      link.append(name, info);
+      row.append(link, makeButton("Удалить", "danger", () => void deleteScreen(screen)));
+      items.append(row);
+    });
+    if (screens.length === 0) {
+      const hint = document.createElement("p");
+      hint.className = "empty-state compact-empty";
+      hint.textContent = "Мониторов пока нет. Добавьте ТВ для этой точки.";
+      items.append(hint);
+    }
+    group.append(header, items);
+    return group;
   });
-  refreshList(list, empty, rows);
-}
-
-function resetScreenForm() {
-  const form = element("screen-form");
-  if (!(form instanceof HTMLFormElement)) return;
-  state.editingScreenId = null;
-  form.reset();
-  element("screen-resolution").value = state.site?.default_screen_resolution || "1920×1080";
-  element("screen-active").checked = true;
-  element("screen-form-title").textContent = "Новый монитор";
-  element("screen-submit").textContent = "Создать монитор";
-  element("cancel-screen-edit")?.classList.add("is-hidden");
-  clearMessage("screen-message");
-}
-
-function editScreen(screen) {
-  state.editingScreenId = screen.id;
-  element("screen-location").value = String(screen.location_id);
-  element("screen-name").value = screen.name;
-  element("screen-resolution").value = screen.resolution;
-  element("screen-status").value = screen.status === "published" ? "ready" : screen.status;
-  element("screen-active").checked = screen.active;
-  element("screen-form-title").textContent = "Редактирование монитора";
-  element("screen-submit").textContent = "Сохранить монитор";
-  element("cancel-screen-edit")?.classList.remove("is-hidden");
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-function uploadScreenImage(screen) {
-  const picker = document.createElement("input");
-  picker.type = "file";
-  picker.accept = "image/jpeg";
-  picker.className = "inline-upload";
-  document.body.append(picker);
-  picker.addEventListener("change", async () => {
-    const file = picker.files?.[0];
-    picker.remove();
-    if (!file) return;
-    try {
-      await api(`${API.screens}/${screen.id}/source`, { method: "PUT", headers: { "Content-Type": "image/jpeg" }, body: file });
-      await loadScreens();
-      await loadNotifications();
-    } catch (error) { setMessage("screen-message", error.message); }
-  }, { once: true });
-  picker.click();
-}
-
-async function publishScreen(screen) {
-  try {
-    await api(`${API.screens}/${screen.id}/publish`, { method: "POST" });
-    await loadScreens();
-    await loadNotifications();
-  } catch (error) { setMessage("screen-message", error.message); }
+  list.replaceChildren(...groups);
+  empty.classList.toggle("is-hidden", state.locations.length !== 0);
 }
 
 async function deleteScreen(screen) {
   if (!window.confirm(`Удалить монитор «${screen.name}»?`)) return;
   try { await api(`${API.screens}/${screen.id}`, { method: "DELETE" }); await loadScreens(); }
-  catch (error) { setMessage("screen-message", error.message); }
+  catch (error) { setMessage("screens-message", error.message); }
+}
+
+async function createScreenAtLocation(location) {
+  try {
+    const screen = await api(`${API.locations}/${location.id}/screens`, { method: "POST" });
+    window.location.assign(`/screen-editor.html?id=${screen.id}`);
+  } catch (error) { setMessage("screens-message", error.message); }
 }
 
 function initialiseScreens() {
-  const form = element("screen-form");
-  if (!(form instanceof HTMLFormElement)) return;
-  void loadScreens().then(resetScreenForm).catch((error) => setMessage("screen-message", error.message));
+  if (!document.querySelector("[data-screen-hierarchy]")) return;
+  void loadScreens().catch((error) => setMessage("screens-message", error.message));
   element("refresh-screens")?.addEventListener("click", () => { void loadScreens(); });
-  element("cancel-screen-edit")?.addEventListener("click", resetScreenForm);
+}
+
+function editorScreenId() {
+  const id = Number(new URLSearchParams(window.location.search).get("id"));
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function setEditorMessage(message, kind = "error") { setMessage("screen-editor-message", message, kind); }
+
+function populateScreenEditor(screen, templates) {
+  element("editor-location").value = screen.location_name;
+  element("editor-name").value = screen.name;
+  element("editor-resolution").value = screen.resolution;
+  element("editor-status").value = screen.status;
+  element("editor-active").checked = screen.active !== false;
+  element("editor-sftp-path").textContent = screen.sftp_path || "SFTP-каталог пока не привязан к торговой точке";
+  const select = element("editor-template");
+  select.replaceChildren(...[
+    new Option("Без шаблона", ""),
+    ...templates.filter((template) => template.active || Number(template.id) === Number(screen.template_id)).map((template) => new Option(template.name, String(template.id)))
+  ]);
+  select.value = screen.template_id ? String(screen.template_id) : "";
+  element("editor-template-current").textContent = screen.template_name || "Без шаблона";
+  element("editor-publish").disabled = !screen.prepared_asset_key || !screen.sftp_directory_name;
+}
+
+function initialiseScreenEditor() {
+  const form = element("screen-editor-form");
+  const screenId = editorScreenId();
+  if (!(form instanceof HTMLFormElement) || !screenId) {
+    window.location.replace("/screens.html");
+    return;
+  }
+  let screen = null;
+  let templates = [];
+  let pendingTemplateId = null;
+  const load = async () => {
+    [screen, templates] = await Promise.all([api(`${API.screens}/${screenId}`), api(API.templates)]);
+    pendingTemplateId = screen.template_id || null;
+    populateScreenEditor(screen, templates);
+  };
+  void load().catch((error) => setEditorMessage(error.message));
+  element("editor-template-apply")?.addEventListener("click", () => {
+    const selected = Number(element("editor-template").value) || null;
+    const template = templates.find((item) => Number(item.id) === selected);
+    pendingTemplateId = template?.id || null;
+    element("editor-template-current").textContent = template?.name || "Без шаблона";
+    setEditorMessage(template ? `Шаблон «${template.name}» применён в редакторе. Нажмите «Сохранить монитор», чтобы закрепить изменения.` : "Шаблон отключён в редакторе. Нажмите «Сохранить монитор».", "success");
+  });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const submit = element("screen-submit");
+    const submit = element("editor-save");
     setPending(submit, true, "Сохраняем…");
     try {
-      const payload = {
-        location_id: Number(element("screen-location").value), name: element("screen-name").value,
-        resolution: element("screen-resolution").value, status: element("screen-status").value,
-        active: element("screen-active").checked
-      };
-      const url = state.editingScreenId ? `${API.screens}/${state.editingScreenId}` : API.screens;
-      await api(url, { method: state.editingScreenId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      resetScreenForm();
-      await loadScreens();
+      const updated = await api(`${API.screens}/${screenId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        location_id: screen.location_id,
+        name: element("editor-name").value,
+        resolution: element("editor-resolution").value,
+        status: element("editor-status").value,
+        active: element("editor-active").checked,
+        template_id: pendingTemplateId
+      }) });
+      screen = updated;
+      pendingTemplateId = updated.template_id || null;
+      populateScreenEditor(screen, templates);
+      setEditorMessage("Монитор сохранён.", "success");
       await loadNotifications();
-    } catch (error) { setMessage("screen-message", error.message); }
+    } catch (error) { setEditorMessage(error.message); }
     finally { setPending(submit, false, "Сохраняем…"); }
+  });
+  element("editor-upload")?.addEventListener("click", async () => {
+    const file = element("editor-source-file")?.files?.[0];
+    if (!file) return setEditorMessage("Выберите JPEG-файл меню.");
+    const button = element("editor-upload");
+    setPending(button, true, "Загружаем…");
+    try {
+      screen = await api(`${API.screens}/${screenId}/source`, { method: "PUT", headers: { "Content-Type": "image/jpeg" }, body: file });
+      populateScreenEditor(screen, templates);
+      setEditorMessage("JPEG подготовлен. После проверки опубликуйте его на телевизор.", "success");
+      await loadNotifications();
+    } catch (error) { setEditorMessage(error.message); }
+    finally { setPending(button, false, "Загружаем…"); }
+  });
+  element("editor-publish")?.addEventListener("click", async () => {
+    const button = element("editor-publish");
+    setPending(button, true, "Публикуем…");
+    try {
+      screen = await api(`${API.screens}/${screenId}/publish`, { method: "POST" });
+      populateScreenEditor(screen, templates);
+      setEditorMessage("Меню опубликовано в каталоге торговой точки.", "success");
+      await loadNotifications();
+    } catch (error) { setEditorMessage(error.message); }
+    finally { setPending(button, false, "Публикуем…"); }
   });
 }
 
@@ -554,6 +690,31 @@ function populateUserForm(user) {
   const theme = document.querySelector(`input[name="theme"][value="${user.theme}"]`);
   if (theme) theme.checked = true;
   element("notifications-enabled").checked = user.notifications_enabled;
+}
+
+function initialiseProfile() {
+  const userForm = element("user-settings-form");
+  if (!(userForm instanceof HTMLFormElement)) return;
+  populateUserForm(state.user);
+  userForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submit = element("user-settings-submit");
+    setPending(submit, true, "Сохраняем…");
+    try {
+      const theme = document.querySelector("input[name='theme']:checked")?.value || "system";
+      const user = await api(API.userSettings, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        display_name: element("display-name").value, email: element("profile-email").value,
+        phone: element("profile-phone").value, job_title: element("profile-job-title").value,
+        theme, notifications_enabled: element("notifications-enabled").checked
+      }) });
+      state.user = user;
+      applyTheme(user.theme);
+      updateProfileMenu(user);
+      setMessage("user-settings-message", "Настройки пользователя сохранены.", "success");
+      await loadNotifications();
+    } catch (error) { setMessage("user-settings-message", error.message); }
+    finally { setPending(submit, false, "Сохраняем…"); }
+  });
 }
 
 function populateSiteForm(site) {
@@ -587,36 +748,13 @@ function uploadSiteAsset(kind) {
 }
 
 function initialiseSettings() {
-  const userForm = element("user-settings-form");
   const siteForm = element("site-settings-form");
-  if (!(userForm instanceof HTMLFormElement) || !(siteForm instanceof HTMLFormElement)) return;
-  populateUserForm(state.user);
+  if (!(siteForm instanceof HTMLFormElement)) return;
   populateSiteForm(state.site);
   void loadActivity().catch(() => undefined);
   element("refresh-activity")?.addEventListener("click", () => { void loadActivity(); });
   element("upload-logo")?.addEventListener("click", () => uploadSiteAsset("logo"));
   element("upload-favicon")?.addEventListener("click", () => uploadSiteAsset("favicon"));
-
-  userForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const submit = element("user-settings-submit");
-    setPending(submit, true, "Сохраняем…");
-    try {
-      const theme = document.querySelector("input[name='theme']:checked")?.value || "system";
-      const user = await api(API.userSettings, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-        display_name: element("display-name").value, email: element("profile-email").value,
-        phone: element("profile-phone").value, job_title: element("profile-job-title").value,
-        theme, notifications_enabled: element("notifications-enabled").checked
-      }) });
-      state.user = user;
-      applyTheme(user.theme);
-      document.querySelectorAll("[data-session-user]").forEach((node) => { node.textContent = user.display_name; });
-      setMessage("user-settings-message", "Настройки пользователя сохранены.", "success");
-      await loadNotifications();
-      await loadActivity();
-    } catch (error) { setMessage("user-settings-message", error.message); }
-    finally { setPending(submit, false, "Сохраняем…"); }
-  });
 
   siteForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -666,19 +804,23 @@ function initialiseSignIn() {
 
 async function initialiseApplication() {
   if (pageName() === "signin") return initialiseSignIn();
+  prepareChrome();
   try {
     const [session, user, site] = await Promise.all([api(API.session), api(API.userSettings), api(API.siteSettings)]);
     applySession(session);
     state.user = user;
     state.site = site;
+    updateProfileMenu(user);
     applyTheme(user.theme);
     applyPresentation(site);
     initialiseChrome();
     initialiseNotifications();
     if (pageName() === "overview") void api(API.overview).then(populateOverview).catch(() => undefined);
     if (pageName() === "settings") initialiseSettings();
+    if (pageName() === "profile") initialiseProfile();
     if (pageName() === "locations") initialiseLocations();
     if (pageName() === "screens") initialiseScreens();
+    if (pageName() === "screen-editor") initialiseScreenEditor();
     if (pageName() === "templates") initialiseTemplates();
   } catch {
     window.location.replace("/signin.html");
