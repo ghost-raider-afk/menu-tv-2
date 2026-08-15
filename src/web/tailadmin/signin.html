@@ -21,17 +21,16 @@
 
         <div class="mt-8">
           <h1 id="signin-title" class="text-2xl font-semibold text-gray-900 dark:text-white">Вход в систему</h1>
-          <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Используйте логин и пароль администратора из файла <code class="rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-white/10">.env</code>.</p>
         </div>
 
         <form id="signin-form" class="mt-6 space-y-5" novalidate>
           <div>
             <label for="username" class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Логин</label>
-            <input id="username" name="username" type="text" autocomplete="username" required autofocus class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 outline-hidden transition placeholder:text-gray-400 focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:text-white/90" placeholder="admin" />
+            <input id="username" name="username" type="text" autocomplete="username" required autofocus class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 outline-hidden transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:text-white/90" />
           </div>
           <div>
             <label for="password" class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Пароль</label>
-            <input id="password" name="password" type="password" autocomplete="current-password" required class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 outline-hidden transition placeholder:text-gray-400 focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:text-white/90" placeholder="Введите пароль" />
+            <input id="password" name="password" type="password" autocomplete="current-password" required class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 outline-hidden transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:text-white/90" />
           </div>
 
           <p id="signin-message" class="hidden rounded-lg border px-3 py-2 text-sm" role="alert" aria-live="polite"></p>
