@@ -3,11 +3,16 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.1.10"
+SCRIPT_VERSION="1.1.11"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
-BRANCH="main"
-SCRIPT_RAW_URL="https://raw.githubusercontent.com/ghost-raider-afk/menu-tv-2/main/menu-tv-2.sh"
+PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
+BRANCH="${MENU_TV_REF:-}"
+if [[ -z "$BRANCH" && -r "$PROJECT_REF_FILE" ]]; then
+  BRANCH="$(head -n 1 "$PROJECT_REF_FILE")"
+fi
+BRANCH="${BRANCH:-main}"
+SCRIPT_RAW_URL="https://raw.githubusercontent.com/ghost-raider-afk/menu-tv-2/$BRANCH/menu-tv-2.sh"
 COMPOSE_PROJECT="menu-tv-2"
 APP_SERVICE="app"
 DB_SERVICE="db"
@@ -60,6 +65,7 @@ Menu TV 2.0 — управление независимым приложение
   sudo $PROGRAM_NAME status
 
 Версия скрипта: $SCRIPT_VERSION
+Ветка/реф: $BRANCH
 Проект устанавливается только в: $INSTALL_DIR
 Контейнеры: $APP_CONTAINER, $DB_CONTAINER, $SFTP_CONTAINER
 USAGE
@@ -379,6 +385,17 @@ ensure_sftp_env() {
   [[ -n "$(env_value SITE_ASSETS_ROOT "$env_file")" ]] || set_env_value "$env_file" SITE_ASSETS_ROOT "/srv/menu-tv-site-assets"
   [[ -n "$(env_value SITE_LOGO_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" SITE_LOGO_MAX_BYTES "2097152"
   [[ -n "$(env_value SITE_FAVICON_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" SITE_FAVICON_MAX_BYTES "524288"
+  [[ -n "$(env_value GENERATED_PASSWORD_LENGTH "$env_file")" ]] || set_env_value "$env_file" GENERATED_PASSWORD_LENGTH "10"
+  [[ -n "$(env_value LOGIN_MAX_ATTEMPTS "$env_file")" ]] || set_env_value "$env_file" LOGIN_MAX_ATTEMPTS "8"
+  [[ -n "$(env_value LOGIN_WINDOW_MINUTES "$env_file")" ]] || set_env_value "$env_file" LOGIN_WINDOW_MINUTES "15"
+  [[ -n "$(env_value LOGIN_LIMITER_MAX_ENTRIES "$env_file")" ]] || set_env_value "$env_file" LOGIN_LIMITER_MAX_ENTRIES "500"
+  [[ -n "$(env_value JSON_BODY_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" JSON_BODY_MAX_BYTES "65536"
+  [[ -n "$(env_value MENU_DRAFT_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" MENU_DRAFT_MAX_BYTES "49152"
+  [[ -n "$(env_value SCREEN_SOURCE_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" SCREEN_SOURCE_MAX_BYTES "12582912"
+  [[ -n "$(env_value DASHBOARD_REFRESH_MIN_SECONDS "$env_file")" ]] || set_env_value "$env_file" DASHBOARD_REFRESH_MIN_SECONDS "15"
+  [[ -n "$(env_value DASHBOARD_REFRESH_MAX_SECONDS "$env_file")" ]] || set_env_value "$env_file" DASHBOARD_REFRESH_MAX_SECONDS "300"
+  [[ -n "$(env_value SCREEN_MAX_WIDTH "$env_file")" ]] || set_env_value "$env_file" SCREEN_MAX_WIDTH "1920"
+  [[ -n "$(env_value SCREEN_MAX_HEIGHT "$env_file")" ]] || set_env_value "$env_file" SCREEN_MAX_HEIGHT "1080"
   [[ -n "$(env_value SFTP_ADMIN_USERNAME "$env_file")" ]] || set_env_value "$env_file" SFTP_ADMIN_USERNAME "menu_tv_2_service"
   if [[ -z "$(env_value SFTP_ADMIN_PASSWORD "$env_file")" || "$(env_value SFTP_ADMIN_PASSWORD "$env_file")" == replace-with-* ]]; then
     set_env_value "$env_file" SFTP_ADMIN_PASSWORD "$(random_secret 32)"
@@ -562,7 +579,7 @@ source_requires_database_backup() {
   local files="$1" file
   while IFS= read -r file; do
     case "$file" in
-      compose.yaml|src/db.js|migrations/*) return 0 ;;
+      compose.yaml|src/db.js|src/db/*|migrations/*) return 0 ;;
     esac
   done <<< "$files"
   return 1
@@ -624,7 +641,7 @@ recover_failed_update() {
 sync_existing_source() {
   local revision="$1"
   git_as_project_owner -C "$INSTALL_DIR" reset --hard "$revision"
-  git_as_project_owner -C "$INSTALL_DIR" clean -fd -e .env -e .installer-owner
+  git_as_project_owner -C "$INSTALL_DIR" clean -fd -e .env -e .installer-owner -e .installer-ref
   repair_permissions
   install_launcher
 }
@@ -684,6 +701,7 @@ show_credentials() {
   credentials_box_value 'Пользователь БД' "$(env_value POSTGRES_USER "$env_file")" ''
   credentials_box_value 'Пароль БД' "$(env_value POSTGRES_PASSWORD "$env_file")" ''
   credentials_box_value 'Env-файл' "$env_file" ''
+  credentials_box_value 'Ветка/реф' "$BRANCH" ''
   printf '+------------------------------------------------------------------------------+\n'
   printf 'Пароли больше не выводятся командами status. Сохраните их в менеджер паролей.\n'
 }
@@ -715,11 +733,12 @@ install_app() {
   acme_email="$(ask_for_acme_email)"
   owner="$(project_owner)"
   id "$owner" >/dev/null 2>&1 || die "Не найден пользователь, запустивший sudo: $owner"
-  log "Загрузка независимого репозитория"
+  log "Загрузка независимого репозитория ($BRANCH)"
   stage_dir="$(mktemp -d -t "${PROGRAM_NAME}.install.XXXXXX")"
   chown "$owner:$owner" "$stage_dir"
   git_as_project_owner clone --depth 1 --branch "$BRANCH" --single-branch "$REPO_URL" "$stage_dir/source"
   printf '%s\n' "$owner" > "$stage_dir/source/.installer-owner"
+  printf '%s\n' "$BRANCH" > "$stage_dir/source/.installer-ref"
   mv "$stage_dir/source" "$INSTALL_DIR"
   rmdir "$stage_dir"
   write_new_env "$domain"
@@ -747,7 +766,7 @@ update_app() {
   fi
   rm -f -- "$env_before"
 
-  log "Проверка изменений в репозитории"
+  log "Проверка изменений в репозитории ($BRANCH)"
   remote_revision="$(fetch_remote_revision)"
   if ! git_as_project_owner -C "$INSTALL_DIR" diff --quiet HEAD "$remote_revision"; then
     source_changed=true
@@ -845,6 +864,7 @@ status_app() {
   require_root
   [[ -d "$INSTALL_DIR" ]] || die "Menu TV 2.0 не установлен."
   printf 'Installation: %s\n' "$INSTALL_DIR"
+  printf 'Ref: %s\n' "$BRANCH"
   printf 'Revision: '
   git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || printf 'unknown'
   printf '\nContainers:\n'
@@ -860,6 +880,7 @@ menu() {
     printf '\n============================================\n'
     printf ' Menu TV 2.0\n'
     printf ' Версия скрипта: %s\n' "$SCRIPT_VERSION"
+    printf ' Ветка/реф: %s\n' "$BRANCH"
     printf '============================================\n'
     printf '  1. Установить\n'
     printf '  2. Обновить\n'
