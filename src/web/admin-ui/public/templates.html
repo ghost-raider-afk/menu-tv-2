@@ -20,7 +20,17 @@
                 <label class="field field-full"><span>Название шаблона</span><input id="template-name" maxlength="120" required /></label>
                 <label class="field field-full"><span>Описание</span><input id="template-description" maxlength="500" /></label>
                 <label class="field field-full"><span>Заголовок меню</span><input id="template-menu-title" maxlength="80" placeholder="Например, Меню бара" /></label>
-                <label class="field"><span>Фон</span><input id="template-background-color" type="color" value="#101828" /></label>
+                <div class="field field-full template-background-field">
+                  <span>Фон всего экрана · 1920 × 1080</span>
+                  <div class="template-background-preview" id="template-background-preview" aria-label="Предпросмотр фона"><span>Стандартный фон</span></div>
+                  <input id="template-background-file" type="file" accept="image/jpeg,image/png,image/webp" />
+                  <div class="template-background-actions">
+                    <button class="button button-secondary" id="template-background-upload" type="button">Загрузить фон</button>
+                    <button class="text-button" id="template-background-remove" type="button">Убрать фон</button>
+                  </div>
+                  <small id="template-background-status">Для нового шаблона можно выбрать файл сейчас — он загрузится после создания.</small>
+                </div>
+                <label class="field"><span>Цвет фона без изображения</span><input id="template-background-color" type="color" value="#101828" /></label>
                 <label class="field"><span>Акцент</span><input id="template-accent-color" type="color" value="#F4C915" /></label>
                 <label class="field"><span>Основной текст</span><input id="template-text-color" type="color" value="#F8FAFC" /></label>
                 <label class="field"><span>Размер текста</span><select id="template-font-scale"><option value="small">Компактный</option><option value="medium" selected>Обычный</option><option value="large">Крупный</option></select></label>
