@@ -30,6 +30,19 @@ services:
     networks:
       - menu-tv-2-internal
 
+  site-assets-init:
+    image: busybox:1.37.0
+    container_name: menu-tv-2-site-assets-init
+    env_file:
+      - .env
+    command: >-
+      sh -ec 'mkdir -p "$$SITE_ASSETS_ROOT" && chown 10001:11000 "$$SITE_ASSETS_ROOT" && chmod 2770 "$$SITE_ASSETS_ROOT"'
+    volumes:
+      - menu-tv-2-site-assets:${SITE_ASSETS_ROOT}
+    restart: "no"
+    networks:
+      - menu-tv-2-internal
+
   sftp:
     image: drakkan/sftpgo:v2.7.5-slim
     container_name: menu-tv-2-sftp
@@ -88,8 +101,11 @@ services:
         condition: service_healthy
       sftp-storage-init:
         condition: service_completed_successfully
+      site-assets-init:
+        condition: service_completed_successfully
     volumes:
       - menu-tv-2-sftp-data:/srv/menu-tv-sftp
+      - menu-tv-2-site-assets:${SITE_ASSETS_ROOT}
     networks:
       - menu-tv-2-internal
       - proxy
@@ -107,6 +123,8 @@ volumes:
     name: menu-tv-2-db-data
   menu-tv-2-sftp-data:
     name: menu-tv-2-sftp-data
+  menu-tv-2-site-assets:
+    name: menu-tv-2-site-assets
 
 networks:
   menu-tv-2-internal:
