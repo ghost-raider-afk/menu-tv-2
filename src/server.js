@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import express from 'express';
 import helmet from 'helmet';
 import { fileURLToPath } from 'node:url';
@@ -8,9 +9,61 @@ import { MenuTvStore } from './db.js';
 import { generateSftpPassword, SftpService } from './sftp.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const publicDir = path.join(__dirname, 'web', 'public');
+const publicDir = path.join(__dirname, 'web', 'admin-ui', 'public');
 const VALID_STATUSES = new Set(['draft', 'ready']);
+const VALID_THEMES = new Set(['system', 'light', 'dark']);
+const VALID_DATE_FORMATS = new Set(['DD.MM.YYYY', 'YYYY-MM-DD']);
 const SESSION_COOKIE = 'menu_tv_2_session';
+
+function siteSettingsResponse(settings, config) {
+  const version = encodeURIComponent(settings.updated_at || '0');
+  return {
+    ...settings,
+    app_name: settings.application_name || config.appName,
+    domain: config.sftp.publicHost,
+    session_ttl_hours: config.sessionTtlHours,
+    sftp_port: config.sftp.port,
+    logo_url: settings.logo_filename ? `/site-assets/${settings.logo_filename}?v=${version}` : '',
+    favicon_url: settings.favicon_filename ? `/site-assets/${settings.favicon_filename}?v=${version}` : ''
+  };
+}
+
+function fileExtensionForSiteImage(kind, bytes) {
+  const isPng = bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  const isJpeg = bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const isWebp = bytes.length > 12 && bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP';
+  const isIco = bytes.length > 4 && bytes.subarray(0, 4).equals(Buffer.from([0x00, 0x00, 0x01, 0x00]));
+  if (kind === 'logo') return isPng ? 'png' : isJpeg ? 'jpg' : isWebp ? 'webp' : null;
+  return isPng ? 'png' : isIco ? 'ico' : null;
+}
+
+async function replaceSiteImage({ kind, bytes, config, store, username }) {
+  const maxBytes = kind === 'logo' ? config.siteLogoMaxBytes : config.siteFaviconMaxBytes;
+  if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > maxBytes) {
+    const error = new Error(`Размер ${kind === 'logo' ? 'логотипа' : 'favicon'} недопустим.`);
+    error.status = 400;
+    throw error;
+  }
+  const extension = fileExtensionForSiteImage(kind, bytes);
+  if (!extension) {
+    const error = new Error(kind === 'logo' ? 'Логотип должен быть PNG, JPEG или WebP.' : 'Favicon должен быть PNG или ICO.');
+    error.status = 400;
+    throw error;
+  }
+  const filename = `site-${kind}.${extension}`;
+  const temporary = `${config.siteAssetsRoot}/.${filename}.${crypto.randomUUID()}.tmp`;
+  await mkdir(config.siteAssetsRoot, { recursive: true, mode: 0o770 });
+  await writeFile(temporary, bytes, { mode: 0o640 });
+  await rename(temporary, `${config.siteAssetsRoot}/${filename}`);
+
+  const previous = await store.getSiteSettings();
+  const updated = await store.setSiteAsset(kind, filename, username);
+  const previousFilename = kind === 'logo' ? previous.logo_filename : previous.favicon_filename;
+  if (previousFilename && previousFilename !== filename) {
+    await unlink(`${config.siteAssetsRoot}/${previousFilename}`).catch(() => undefined);
+  }
+  return updated;
+}
 
 function requireText(value, field, { max = 120 } = {}) {
   if (typeof value !== 'string' || value.trim().length === 0 || value.trim().length > max) {
@@ -57,7 +110,7 @@ function locationInput(body) {
   return { name: requireText(body.name, 'name'), address: optionalText(body.address, 'address'), active: body.active !== false };
 }
 
-function screenInput(body) {
+function screenInput(body, { defaultScreenResolution = '1920×1080' } = {}) {
   const status = body.status ?? 'draft';
   if (!VALID_STATUSES.has(status)) {
     const error = new Error('Статус может быть только «черновик», «готово» или «опубликовано».');
@@ -67,7 +120,7 @@ function screenInput(body) {
   return {
     location_id: positiveId(body.location_id, 'location_id'),
     name: requireText(body.name, 'name'),
-    resolution: requireText(body.resolution ?? '1920×1080', 'resolution', { max: 32 }),
+    resolution: requireText(body.resolution ?? defaultScreenResolution, 'resolution', { max: 32 }),
     status,
     active: body.active !== false
   };
@@ -103,13 +156,36 @@ function userPreferencesInput(body) {
     error.status = 400;
     throw error;
   }
+  const email = optionalText(body.email, 'email', { max: 160 });
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    const error = new Error('Укажите корректный e-mail.');
+    error.status = 400;
+    throw error;
+  }
+  const theme = requireText(body.theme, 'theme', { max: 16 });
+  if (!VALID_THEMES.has(theme)) {
+    const error = new Error('Тема интерфейса выбрана неверно.');
+    error.status = 400;
+    throw error;
+  }
   return {
     display_name: requireText(body.display_name, 'display_name', { max: 80 }),
+    email,
+    phone: optionalText(body.phone, 'phone', { max: 40 }),
+    job_title: optionalText(body.job_title, 'job_title', { max: 80 }),
+    theme,
     notifications_enabled: body.notifications_enabled
   };
 }
 
 function siteSettingsInput(body) {
+  const application_name = requireText(body.application_name, 'application_name', { max: 80 });
+  const accent_color = requireText(body.accent_color, 'accent_color', { max: 7 });
+  if (!/^#[0-9a-fA-F]{6}$/.test(accent_color)) {
+    const error = new Error('Основной цвет должен быть в формате #2563EB.');
+    error.status = 400;
+    throw error;
+  }
   const timezone = requireText(body.timezone, 'timezone', { max: 80 });
   try {
     Intl.DateTimeFormat('ru-RU', { timeZone: timezone });
@@ -118,7 +194,32 @@ function siteSettingsInput(body) {
     error.status = 400;
     throw error;
   }
-  return { timezone };
+  const date_format = requireText(body.date_format, 'date_format', { max: 16 });
+  if (!VALID_DATE_FORMATS.has(date_format)) {
+    const error = new Error('Формат даты выбран неверно.');
+    error.status = 400;
+    throw error;
+  }
+  const dashboard_refresh_seconds = Number.parseInt(body.dashboard_refresh_seconds, 10);
+  if (!Number.isInteger(dashboard_refresh_seconds) || dashboard_refresh_seconds < 15 || dashboard_refresh_seconds > 300) {
+    const error = new Error('Интервал обновления должен быть от 15 до 300 секунд.');
+    error.status = 400;
+    throw error;
+  }
+  const default_screen_resolution = requireText(body.default_screen_resolution, 'default_screen_resolution', { max: 32 });
+  if (!/^\d{3,5}[×x]\d{3,5}$/.test(default_screen_resolution)) {
+    const error = new Error('Укажите разрешение в формате 1920×1080.');
+    error.status = 400;
+    throw error;
+  }
+  return {
+    application_name,
+    accent_color: accent_color.toUpperCase(),
+    timezone,
+    date_format,
+    dashboard_refresh_seconds,
+    default_screen_resolution: default_screen_resolution.replace('x', '×')
+  };
 }
 
 function constantTimeEqual(left, right) {
@@ -162,15 +263,14 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
   const store = suppliedStore ?? new MenuTvStore(config.db, { seedDemoData: config.seedDemoData });
   const sftp = suppliedSftp ?? new SftpService(config.sftp);
   await store.init();
+  await store.setInitialSiteName(config.appName);
   const app = express();
   app.disable('x-powered-by');
   app.use(helmet({ contentSecurityPolicy: { directives: {
     defaultSrc: ["'self'"],
-    // Alpine changes element visibility while the interface starts.
-    // Its transient inline styles are required for the preloader and theme switch.
-    styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-    fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
-    scriptSrc: ["'self'", "'unsafe-eval'"],
+    styleSrc: ["'self'"],
+    fontSrc: ["'self'", 'data:'],
+    scriptSrc: ["'self'"],
     imgSrc: ["'self'", 'data:']
   } } }));
   app.use(express.json({ limit: '64kb' }));
@@ -179,7 +279,12 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     await store.pool.query('SELECT 1');
     response.json({ status: 'ok', service: 'menu-tv-2.0' });
   });
-  app.get('/api/public/config', (_request, response) => response.json({ app_name: config.appName }));
+  app.use('/site-assets', express.static(config.siteAssetsRoot, { etag: true, maxAge: '1d', immutable: true }));
+  app.get('/api/public/config', async (_request, response) => {
+    const settings = await store.getSiteSettings();
+    const site = siteSettingsResponse(settings, config);
+    response.json({ app_name: site.app_name, logo_url: site.logo_url, favicon_url: site.favicon_url, accent_color: site.accent_color });
+  });
 
   app.post('/api/auth/login', async (request, response) => {
     const username = typeof request.body?.username === 'string' ? request.body.username : '';
@@ -227,12 +332,13 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
   const activity = (request, entry) => store.recordActivity({ actor_username: request.session.sub, ...entry });
 
   app.get('/api/session', async (request, response) => {
-    const preferences = await store.getUserPreferences(request.session.sub);
+    const [preferences, settings] = await Promise.all([store.getUserPreferences(request.session.sub), store.getSiteSettings()]);
     response.json({
       status: 'ok',
-      app_name: config.appName,
+      app_name: settings.application_name || config.appName,
       username: request.session.sub,
       display_name: preferences.display_name,
+      theme: preferences.theme,
       notifications_enabled: preferences.notifications_enabled
     });
   });
@@ -251,7 +357,7 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
   });
   app.get('/api/settings/site', async (_request, response) => {
     const settings = await store.getSiteSettings();
-    response.json({ ...settings, app_name: config.appName, domain: config.sftp.publicHost });
+    response.json(siteSettingsResponse(settings, config));
   });
   app.put('/api/settings/site', async (request, response) => {
     const settings = await store.updateSiteSettings({ ...siteSettingsInput(request.body), updated_by: request.session.sub });
@@ -261,7 +367,17 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
       entity_id: settings.id,
       message: 'Обновлены настройки сайта.'
     });
-    response.json({ ...settings, app_name: config.appName, domain: config.sftp.publicHost });
+    response.json(siteSettingsResponse(settings, config));
+  });
+  app.put('/api/settings/site/logo', express.raw({ type: '*/*', limit: config.siteLogoMaxBytes }), async (request, response) => {
+    const settings = await replaceSiteImage({ kind: 'logo', bytes: request.body, config, store, username: request.session.sub });
+    await activity(request, { action: 'settings.site.logo_updated', entity_type: 'site_settings', entity_id: settings.id, message: 'Обновлён логотип сайта.' });
+    response.json(siteSettingsResponse(settings, config));
+  });
+  app.put('/api/settings/site/favicon', express.raw({ type: '*/*', limit: config.siteFaviconMaxBytes }), async (request, response) => {
+    const settings = await replaceSiteImage({ kind: 'favicon', bytes: request.body, config, store, username: request.session.sub });
+    await activity(request, { action: 'settings.site.favicon_updated', entity_type: 'site_settings', entity_id: settings.id, message: 'Обновлён favicon сайта.' });
+    response.json(siteSettingsResponse(settings, config));
   });
 
   app.get('/api/notifications', async (request, response) => response.json(await store.listNotifications(request.query.limit)));
@@ -305,7 +421,8 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
 
   app.get('/api/screens', async (_request, response) => response.json(await store.listScreens()));
   app.post('/api/screens', async (request, response) => {
-    const input = screenInput(request.body);
+    const siteSettings = await store.getSiteSettings();
+    const input = screenInput(request.body, { defaultScreenResolution: siteSettings.default_screen_resolution });
     if (!await store.getLocation(input.location_id)) throw recordNotFound();
     const screen = await store.createScreen(input);
     await activity(request, {
@@ -317,7 +434,8 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     response.status(201).json(screen);
   });
   app.put('/api/screens/:id', async (request, response) => {
-    const input = screenInput(request.body);
+    const siteSettings = await store.getSiteSettings();
+    const input = screenInput(request.body, { defaultScreenResolution: siteSettings.default_screen_resolution });
     if (!await store.getLocation(input.location_id)) throw recordNotFound();
     const id = positiveId(request.params.id, 'id');
     const current = await store.getScreen(id);
@@ -528,6 +646,9 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
 
   app.get('/', requirePageSession, (_request, _response, next) => next());
   app.get('/index.html', requirePageSession, (_request, _response, next) => next());
+  app.get('/locations.html', requirePageSession, (_request, _response, next) => next());
+  app.get('/screens.html', requirePageSession, (_request, _response, next) => next());
+  app.get('/templates.html', requirePageSession, (_request, _response, next) => next());
   app.get('/settings.html', requirePageSession, (_request, _response, next) => next());
   app.use(express.static(publicDir, {
     extensions: ['html'],
