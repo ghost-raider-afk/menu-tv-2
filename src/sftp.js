@@ -19,14 +19,16 @@ function safePath(root, directoryName) {
   return candidate;
 }
 
-export function generateSftpPassword() {
+export function generateSftpPassword(length = 10) {
+  const requestedLength = Number.parseInt(length, 10);
+  const targetLength = Number.isInteger(requestedLength) ? Math.max(10, Math.min(64, requestedLength)) : 10;
   const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const lower = 'abcdefghjkmnpqrstuvwxyz';
   const digits = '23456789';
   const alphabet = `${upper}${lower}${digits}`;
   const take = (characters) => characters[crypto.randomInt(characters.length)];
   const password = [take(upper), take(lower), take(digits)];
-  while (password.length < 10) password.push(take(alphabet));
+  while (password.length < targetLength) password.push(take(alphabet));
   for (let index = password.length - 1; index > 0; index -= 1) {
     const swapIndex = crypto.randomInt(index + 1);
     [password[index], password[swapIndex]] = [password[swapIndex], password[index]];
