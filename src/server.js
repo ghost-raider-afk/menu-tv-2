@@ -97,6 +97,30 @@ function sftpBindingInput(body) {
   return { directoryId: positiveId(body.directory_id, 'directory_id'), username };
 }
 
+function userPreferencesInput(body) {
+  if (typeof body.notifications_enabled !== 'boolean') {
+    const error = new Error('Поле «notifications_enabled» должно быть логическим значением.');
+    error.status = 400;
+    throw error;
+  }
+  return {
+    display_name: requireText(body.display_name, 'display_name', { max: 80 }),
+    notifications_enabled: body.notifications_enabled
+  };
+}
+
+function siteSettingsInput(body) {
+  const timezone = requireText(body.timezone, 'timezone', { max: 80 });
+  try {
+    Intl.DateTimeFormat('ru-RU', { timeZone: timezone });
+  } catch {
+    const error = new Error('Укажите существующий часовой пояс в формате Europe/Moscow.');
+    error.status = 400;
+    throw error;
+  }
+  return { timezone };
+}
+
 function constantTimeEqual(left, right) {
   const leftBuffer = Buffer.from(String(left));
   const rightBuffer = Buffer.from(String(right));
@@ -155,17 +179,33 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     await store.pool.query('SELECT 1');
     response.json({ status: 'ok', service: 'menu-tv-2.0' });
   });
+  app.get('/api/public/config', (_request, response) => response.json({ app_name: config.appName }));
 
-  app.post('/api/auth/login', (request, response) => {
+  app.post('/api/auth/login', async (request, response) => {
     const username = typeof request.body?.username === 'string' ? request.body.username : '';
     const password = typeof request.body?.password === 'string' ? request.body.password : '';
     if (!constantTimeEqual(username, config.adminUsername) || !constantTimeEqual(password, config.adminPassword)) {
       return response.status(401).json({ error: 'Неверный логин или пароль.' });
     }
+    await store.recordActivity({
+      actor_username: config.adminUsername,
+      action: 'auth.login',
+      entity_type: 'session',
+      message: 'Выполнен вход в панель управления.'
+    });
     response.setHeader('Set-Cookie', sessionCookie(issueSession(config.adminUsername, config), config));
     return response.status(204).end();
   });
-  app.post('/api/auth/logout', (_request, response) => {
+  app.post('/api/auth/logout', async (request, response) => {
+    const session = verifySession(parseCookies(request)[SESSION_COOKIE], config);
+    if (session) {
+      await store.recordActivity({
+        actor_username: session.sub,
+        action: 'auth.logout',
+        entity_type: 'session',
+        message: 'Выполнен выход из панели управления.'
+      });
+    }
     response.setHeader('Set-Cookie', sessionCookie('', config, 0));
     response.status(204).end();
   });
@@ -184,14 +224,69 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     return next();
   });
 
-  app.get('/api/session', (request, response) => response.json({ status: 'ok', app_name: config.appName, username: request.session.sub }));
+  const activity = (request, entry) => store.recordActivity({ actor_username: request.session.sub, ...entry });
+
+  app.get('/api/session', async (request, response) => {
+    const preferences = await store.getUserPreferences(request.session.sub);
+    response.json({
+      status: 'ok',
+      app_name: config.appName,
+      username: request.session.sub,
+      display_name: preferences.display_name,
+      notifications_enabled: preferences.notifications_enabled
+    });
+  });
   app.get('/api/overview', async (_request, response) => response.json(await store.overview()));
 
+  app.get('/api/settings/user', async (request, response) => response.json(await store.getUserPreferences(request.session.sub)));
+  app.put('/api/settings/user', async (request, response) => {
+    const preferences = await store.updateUserPreferences(request.session.sub, userPreferencesInput(request.body));
+    await activity(request, {
+      action: 'settings.user.updated',
+      entity_type: 'user_preferences',
+      entity_id: request.session.sub,
+      message: 'Обновлены личные настройки пользователя.'
+    });
+    response.json(preferences);
+  });
+  app.get('/api/settings/site', async (_request, response) => {
+    const settings = await store.getSiteSettings();
+    response.json({ ...settings, app_name: config.appName, domain: config.sftp.publicHost });
+  });
+  app.put('/api/settings/site', async (request, response) => {
+    const settings = await store.updateSiteSettings({ ...siteSettingsInput(request.body), updated_by: request.session.sub });
+    await activity(request, {
+      action: 'settings.site.updated',
+      entity_type: 'site_settings',
+      entity_id: settings.id,
+      message: 'Обновлены настройки сайта.'
+    });
+    response.json({ ...settings, app_name: config.appName, domain: config.sftp.publicHost });
+  });
+
+  app.get('/api/notifications', async (request, response) => response.json(await store.listNotifications(request.query.limit)));
+  app.post('/api/notifications/read', async (_request, response) => response.json({ marked_read: await store.markNotificationsRead() }));
+
   app.get('/api/locations', async (_request, response) => response.json(await store.listLocations()));
-  app.post('/api/locations', async (request, response) => response.status(201).json(await store.createLocation(locationInput(request.body))));
+  app.post('/api/locations', async (request, response) => {
+    const location = await store.createLocation(locationInput(request.body));
+    await activity(request, {
+      action: 'location.created',
+      entity_type: 'location',
+      entity_id: location.id,
+      message: `Создана торговая точка «${location.name}».`
+    });
+    response.status(201).json(location);
+  });
   app.put('/api/locations/:id', async (request, response) => {
     const record = await store.updateLocation(positiveId(request.params.id, 'id'), locationInput(request.body));
     if (!record) throw recordNotFound();
+    await activity(request, {
+      action: 'location.updated',
+      entity_type: 'location',
+      entity_id: record.id,
+      message: `Обновлена торговая точка «${record.name}».`
+    });
     response.json(record);
   });
   app.delete('/api/locations/:id', async (request, response) => {
@@ -199,6 +294,12 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     if (!location) throw recordNotFound();
     if (location.sftp_directory_id) throw conflict('Сначала явно отключите SFTP-доступ точки. Каталог и файлы останутся без изменений.');
     if (!await store.deleteLocation(location.id)) throw recordNotFound();
+    await activity(request, {
+      action: 'location.deleted',
+      entity_type: 'location',
+      entity_id: location.id,
+      message: `Удалена торговая точка «${location.name}».`
+    });
     response.status(204).end();
   });
 
@@ -206,7 +307,14 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
   app.post('/api/screens', async (request, response) => {
     const input = screenInput(request.body);
     if (!await store.getLocation(input.location_id)) throw recordNotFound();
-    response.status(201).json(await store.createScreen(input));
+    const screen = await store.createScreen(input);
+    await activity(request, {
+      action: 'screen.created',
+      entity_type: 'screen',
+      entity_id: screen.id,
+      message: `Добавлен монитор «${screen.name}».`
+    });
+    response.status(201).json(screen);
   });
   app.put('/api/screens/:id', async (request, response) => {
     const input = screenInput(request.body);
@@ -219,22 +327,59 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     }
     const record = await store.updateScreen(id, input);
     if (!record) throw recordNotFound();
+    await activity(request, {
+      action: 'screen.updated',
+      entity_type: 'screen',
+      entity_id: record.id,
+      message: `Обновлён монитор «${record.name}».`
+    });
     response.json(record);
   });
   app.delete('/api/screens/:id', async (request, response) => {
-    if (!await store.deleteScreen(positiveId(request.params.id, 'id'))) throw recordNotFound();
+    const id = positiveId(request.params.id, 'id');
+    const screen = await store.getScreen(id);
+    if (!screen || !await store.deleteScreen(id)) throw recordNotFound();
+    await activity(request, {
+      action: 'screen.deleted',
+      entity_type: 'screen',
+      entity_id: screen.id,
+      message: `Удалён монитор «${screen.name}».`
+    });
     response.status(204).end();
   });
 
   app.get('/api/templates', async (_request, response) => response.json(await store.listTemplates()));
-  app.post('/api/templates', async (request, response) => response.status(201).json(await store.createTemplate(templateInput(request.body))));
+  app.post('/api/templates', async (request, response) => {
+    const template = await store.createTemplate(templateInput(request.body));
+    await activity(request, {
+      action: 'template.created',
+      entity_type: 'template',
+      entity_id: template.id,
+      message: `Создан шаблон «${template.name}».`
+    });
+    response.status(201).json(template);
+  });
   app.put('/api/templates/:id', async (request, response) => {
     const record = await store.updateTemplate(positiveId(request.params.id, 'id'), templateInput(request.body));
     if (!record) throw recordNotFound();
+    await activity(request, {
+      action: 'template.updated',
+      entity_type: 'template',
+      entity_id: record.id,
+      message: `Обновлён шаблон «${record.name}».`
+    });
     response.json(record);
   });
   app.delete('/api/templates/:id', async (request, response) => {
-    if (!await store.deleteTemplate(positiveId(request.params.id, 'id'))) throw recordNotFound();
+    const id = positiveId(request.params.id, 'id');
+    const template = await store.getTemplate(id);
+    if (!template || !await store.deleteTemplate(id)) throw recordNotFound();
+    await activity(request, {
+      action: 'template.deleted',
+      entity_type: 'template',
+      entity_id: template.id,
+      message: `Удалён шаблон «${template.name}».`
+    });
     response.status(204).end();
   });
 
@@ -249,7 +394,14 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
   app.get('/api/sftp/connection', (_request, response) => response.json({ host: config.sftp.publicHost, port: config.sftp.port }));
   app.get('/api/sftp/directories', async (_request, response) => response.json(await sftpDirectoriesWithStatus()));
   app.post('/api/sftp/directories', async (request, response) => {
-    response.status(201).json(await store.createSftpDirectory(sftpDirectoryInput(request.body)));
+    const directory = await store.createSftpDirectory(sftpDirectoryInput(request.body));
+    await activity(request, {
+      action: 'sftp_directory.created',
+      entity_type: 'sftp_directory',
+      entity_id: directory.id,
+      message: `Добавлен SFTP-каталог «${directory.name}».`
+    });
+    response.status(201).json(directory);
   });
   app.post('/api/sftp/directories/:id/provision', async (request, response) => {
     const id = positiveId(request.params.id, 'id');
@@ -257,10 +409,24 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     if (!directory) throw recordNotFound();
     await sftp.provisionDirectory(directory.name);
     const updated = await store.markSftpDirectoryProvisioned(id);
+    await activity(request, {
+      action: 'sftp_directory.provisioned',
+      entity_type: 'sftp_directory',
+      entity_id: updated.id,
+      message: `Создан физический SFTP-каталог «${updated.name}».`
+    });
     response.json({ ...updated, storage_status: await sftp.directoryStatus(updated.name) });
   });
   app.delete('/api/sftp/directories/:id', async (request, response) => {
-    if (!await store.deleteSftpDirectory(positiveId(request.params.id, 'id'))) throw recordNotFound();
+    const id = positiveId(request.params.id, 'id');
+    const directory = await store.getSftpDirectory(id);
+    if (!directory || !await store.deleteSftpDirectory(id)) throw recordNotFound();
+    await activity(request, {
+      action: 'sftp_directory.deleted',
+      entity_type: 'sftp_directory',
+      entity_id: directory.id,
+      message: `Удалён SFTP-каталог «${directory.name}».`
+    });
     response.status(204).end();
   });
 
@@ -286,6 +452,12 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
       await sftp.removeUser(input.username).catch(() => undefined);
       throw conflict('Точка уже получила SFTP-привязку. Обновите страницу.');
     }
+    await activity(request, {
+      action: 'sftp_binding.created',
+      entity_type: 'location',
+      entity_id: bound.id,
+      message: `Для точки «${bound.name}» настроен SFTP-доступ.`
+    });
     response.status(201).json({
       location: bound,
       credentials: { host: config.sftp.publicHost, port: config.sftp.port, username: input.username, password }
@@ -298,6 +470,12 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     const password = generateSftpPassword();
     await sftp.resetPassword({ username: location.sftp_username, password });
     await store.touchLocationSftpPassword(location.id);
+    await activity(request, {
+      action: 'sftp_password.reset',
+      entity_type: 'location',
+      entity_id: location.id,
+      message: `Обновлён пароль SFTP для точки «${location.name}».`
+    });
     response.json({ credentials: { host: config.sftp.publicHost, port: config.sftp.port, username: location.sftp_username, password } });
   });
   app.delete('/api/locations/:id/sftp-binding', async (request, response) => {
@@ -306,6 +484,12 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     if (!location.sftp_username) throw conflict('У точки нет SFTP-доступа.');
     await sftp.removeUser(location.sftp_username);
     await store.unbindLocationSftp(location.id);
+    await activity(request, {
+      action: 'sftp_binding.deleted',
+      entity_type: 'location',
+      entity_id: location.id,
+      message: `Отключён SFTP-доступ для точки «${location.name}».`
+    });
     response.status(204).end();
   });
 
@@ -313,7 +497,14 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     const screen = await store.getScreen(positiveId(request.params.id, 'id'));
     if (!screen) throw recordNotFound();
     const asset = await sftp.stageJpeg(screen.id, request.body);
-    response.json(await store.savePreparedAsset(screen.id, asset));
+    const updated = await store.savePreparedAsset(screen.id, asset);
+    await activity(request, {
+      action: 'screen.source_uploaded',
+      entity_type: 'screen',
+      entity_id: updated.id,
+      message: `Загружено изображение для монитора «${updated.name}».`
+    });
+    response.json(updated);
   });
   app.post('/api/screens/:id/publish', async (request, response) => {
     const screen = await store.getScreen(positiveId(request.params.id, 'id'));
@@ -325,11 +516,19 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
       deliveryFilename: screen.delivery_filename,
       stagedKey: screen.prepared_asset_key
     });
-    response.json(await store.markScreenPublished(screen.id));
+    const updated = await store.markScreenPublished(screen.id);
+    await activity(request, {
+      action: 'screen.published',
+      entity_type: 'screen',
+      entity_id: updated.id,
+      message: `Опубликовано меню для монитора «${updated.name}».`
+    });
+    response.json(updated);
   });
 
   app.get('/', requirePageSession, (_request, _response, next) => next());
   app.get('/index.html', requirePageSession, (_request, _response, next) => next());
+  app.get('/settings.html', requirePageSession, (_request, _response, next) => next());
   app.use(express.static(publicDir, {
     extensions: ['html'],
     index: 'index.html',
