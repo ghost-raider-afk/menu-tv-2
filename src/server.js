@@ -7,6 +7,9 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { loadConfig } from './config.js';
 import { MenuTvStore } from './db.js';
+import { errorHandler } from './middleware/errors.js';
+import { createLoginLimiter } from './middleware/login-limiter.js';
+import { ConflictError, NotFoundError } from './shared/errors.js';
 import { generateSftpPassword, SftpService } from './sftp.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -57,13 +60,10 @@ async function replaceSiteImage({ kind, bytes, config, store, username }) {
   await mkdir(config.siteAssetsRoot, { recursive: true, mode: 0o770 });
   await writeFile(temporary, bytes, { mode: 0o640 });
   await rename(temporary, `${config.siteAssetsRoot}/${filename}`);
-
   const previous = await store.getSiteSettings();
   const updated = await store.setSiteAsset(kind, filename, username);
   const previousFilename = kind === 'logo' ? previous.logo_filename : previous.favicon_filename;
-  if (previousFilename && previousFilename !== filename) {
-    await unlink(`${config.siteAssetsRoot}/${previousFilename}`).catch(() => undefined);
-  }
+  if (previousFilename && previousFilename !== filename) await unlink(`${config.siteAssetsRoot}/${previousFilename}`).catch(() => undefined);
   return updated;
 }
 
@@ -141,22 +141,36 @@ function positiveId(value, field) {
 }
 
 function recordNotFound() {
-  const error = new Error('Запись не найдена.');
-  error.status = 404;
-  return error;
+  return new NotFoundError();
 }
 
 function conflict(message) {
-  const error = new Error(message);
-  error.status = 409;
-  return error;
+  return new ConflictError(message);
 }
 
 function locationInput(body) {
   return { name: requireText(body.name, 'name'), address: optionalText(body.address, 'address'), active: body.active !== false };
 }
 
-function screenInput(body, { defaultScreenResolution = '1920×1080' } = {}) {
+function resolutionInput(value, field, { maxWidth = 1920, maxHeight = 1080 } = {}) {
+  const resolution = requireText(value, field, { max: 32 });
+  const match = resolution.match(/^(\d{3,5})[×x](\d{3,5})$/);
+  if (!match) {
+    const error = new Error('Укажите разрешение в формате 1920×1080.');
+    error.status = 400;
+    throw error;
+  }
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (width > maxWidth || height > maxHeight) {
+    const error = new Error(`Максимальное разрешение — ${maxWidth}×${maxHeight}.`);
+    error.status = 400;
+    throw error;
+  }
+  return `${width}×${height}`;
+}
+
+function screenInput(body, { defaultScreenResolution = '1920×1080', maxWidth = 1920, maxHeight = 1080 } = {}) {
   const status = body.status ?? 'draft';
   if (!VALID_STATUSES.has(status)) {
     const error = new Error('Статус может быть только «черновик», «готово» или «опубликовано».');
@@ -166,11 +180,10 @@ function screenInput(body, { defaultScreenResolution = '1920×1080' } = {}) {
   return {
     location_id: positiveId(body.location_id, 'location_id'),
     name: requireText(body.name, 'name'),
-    resolution: requireText(body.resolution ?? defaultScreenResolution, 'resolution', { max: 32 }),
+    resolution: resolutionInput(body.resolution ?? defaultScreenResolution, 'resolution', { maxWidth, maxHeight }),
     status,
     active: body.active !== false,
-    template_id: body.template_id === undefined || body.template_id === null || body.template_id === ''
-      ? null : positiveId(body.template_id, 'template_id')
+    template_id: body.template_id === undefined || body.template_id === null || body.template_id === '' ? null : positiveId(body.template_id, 'template_id')
   };
 }
 
@@ -229,14 +242,10 @@ function productInput(body) {
 }
 
 function packagingInput(body) {
-  return {
-    name: requireText(body.name, 'Название тары'),
-    unit_price: normalisePrice(body.unit_price, 'Цена тары'),
-    active: body.active !== false
-  };
+  return { name: requireText(body.name, 'Название тары'), unit_price: normalisePrice(body.unit_price, 'Цена тары'), active: body.active !== false };
 }
 
-async function menuDraftInput(body, store) {
+async function menuDraftInput(body, store, maxBytes = 49152) {
   if (!Array.isArray(body.rows)) {
     const error = new Error('Меню должно содержать список строк.');
     error.status = 400;
@@ -247,9 +256,7 @@ async function menuDraftInput(body, store) {
   const rows = body.rows.map((row, index) => {
     const kind = row?.kind;
     const id = typeof row?.id === 'string' && row.id.length <= 120 ? row.id : `row-${index + 1}`;
-    if (kind === 'section') return {
-      id, kind, name: requireText(row.name, 'Название раздела', { max: 100 }), enabled: row.enabled !== false
-    };
+    if (kind === 'section') return { id, kind, name: requireText(row.name, 'Название раздела', { max: 100 }), enabled: row.enabled !== false };
     if (kind === 'item') {
       const product = products.get(positiveId(row.product_id ?? row.productId, 'Продукция'));
       if (!product || !product.active) {
@@ -282,7 +289,7 @@ async function menuDraftInput(body, store) {
     throw error;
   });
   const settings = body.settings && typeof body.settings === 'object' && !Array.isArray(body.settings) ? body.settings : {};
-  if (Buffer.byteLength(JSON.stringify({ rows, settings }), 'utf8') > 48 * 1024) {
+  if (Buffer.byteLength(JSON.stringify({ rows, settings }), 'utf8') > maxBytes) {
     const error = new Error('Черновик меню слишком большой.');
     error.status = 400;
     throw error;
@@ -329,62 +336,38 @@ function userPreferencesInput(body) {
     throw error;
   }
   return {
-    display_name: requireText(body.display_name, 'display_name', { max: 80 }),
-    email,
-    phone: optionalText(body.phone, 'phone', { max: 40 }),
-    job_title: optionalText(body.job_title, 'job_title', { max: 80 }),
-    theme,
-    notifications_enabled: body.notifications_enabled
+    display_name: requireText(body.display_name, 'display_name', { max: 80 }), email,
+    phone: optionalText(body.phone, 'phone', { max: 40 }), job_title: optionalText(body.job_title, 'job_title', { max: 80 }),
+    theme, notifications_enabled: body.notifications_enabled
   };
 }
 
-function siteSettingsInput(body) {
+function siteSettingsInput(body, config) {
   const application_name = requireText(body.application_name, 'application_name', { max: 80 });
   const accent_color = requireText(body.accent_color, 'accent_color', { max: 7 });
   if (!/^#[0-9a-fA-F]{6}$/.test(accent_color)) {
-    const error = new Error('Основной цвет должен быть в формате #2563EB.');
-    error.status = 400;
-    throw error;
+    const error = new Error('Основной цвет должен быть в формате #2563EB.'); error.status = 400; throw error;
   }
   const timezone = requireText(body.timezone, 'timezone', { max: 80 });
-  try {
-    Intl.DateTimeFormat('ru-RU', { timeZone: timezone });
-  } catch {
-    const error = new Error('Укажите существующий часовой пояс в формате Europe/Moscow.');
-    error.status = 400;
-    throw error;
-  }
+  try { Intl.DateTimeFormat('ru-RU', { timeZone: timezone }); }
+  catch { const error = new Error('Укажите существующий часовой пояс в формате Europe/Moscow.'); error.status = 400; throw error; }
   const date_format = requireText(body.date_format, 'date_format', { max: 16 });
-  if (!VALID_DATE_FORMATS.has(date_format)) {
-    const error = new Error('Формат даты выбран неверно.');
-    error.status = 400;
-    throw error;
-  }
+  if (!VALID_DATE_FORMATS.has(date_format)) { const error = new Error('Формат даты выбран неверно.'); error.status = 400; throw error; }
+  const minRefresh = config.dashboardRefreshMinSeconds ?? 15;
+  const maxRefresh = config.dashboardRefreshMaxSeconds ?? 300;
   const dashboard_refresh_seconds = Number.parseInt(body.dashboard_refresh_seconds, 10);
-  if (!Number.isInteger(dashboard_refresh_seconds) || dashboard_refresh_seconds < 15 || dashboard_refresh_seconds > 300) {
-    const error = new Error('Интервал обновления должен быть от 15 до 300 секунд.');
-    error.status = 400;
-    throw error;
+  if (!Number.isInteger(dashboard_refresh_seconds) || dashboard_refresh_seconds < minRefresh || dashboard_refresh_seconds > maxRefresh) {
+    const error = new Error(`Интервал обновления должен быть от ${minRefresh} до ${maxRefresh} секунд.`); error.status = 400; throw error;
   }
-  const default_screen_resolution = requireText(body.default_screen_resolution, 'default_screen_resolution', { max: 32 });
-  if (!/^\d{3,5}[×x]\d{3,5}$/.test(default_screen_resolution)) {
-    const error = new Error('Укажите разрешение в формате 1920×1080.');
-    error.status = 400;
-    throw error;
-  }
-  return {
-    application_name,
-    accent_color: accent_color.toUpperCase(),
-    timezone,
-    date_format,
-    dashboard_refresh_seconds,
-    default_screen_resolution: default_screen_resolution.replace('x', '×')
-  };
+  const default_screen_resolution = resolutionInput(body.default_screen_resolution, 'default_screen_resolution', {
+    maxWidth: config.screenMaxWidth ?? 1920,
+    maxHeight: config.screenMaxHeight ?? 1080
+  });
+  return { application_name, accent_color: accent_color.toUpperCase(), timezone, date_format, dashboard_refresh_seconds, default_screen_resolution };
 }
 
 function constantTimeEqual(left, right) {
-  const leftBuffer = Buffer.from(String(left));
-  const rightBuffer = Buffer.from(String(right));
+  const leftBuffer = Buffer.from(String(left)); const rightBuffer = Buffer.from(String(right));
   return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
@@ -396,11 +379,7 @@ function parseCookies(request) {
 }
 
 function issueSession(user, config) {
-  const payload = Buffer.from(JSON.stringify({
-    sub: user.username,
-    version: user.session_version,
-    exp: Math.floor(Date.now() / 1000) + config.sessionTtlHours * 3600
-  })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ sub: user.username, version: user.session_version, exp: Math.floor(Date.now() / 1000) + config.sessionTtlHours * 3600 })).toString('base64url');
   const signature = crypto.createHmac('sha256', config.sessionSecret).update(payload).digest('base64url');
   return `${payload}.${signature}`;
 }
@@ -413,11 +392,8 @@ function verifySession(token, config) {
   if (!constantTimeEqual(signature, expected)) return null;
   try {
     const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    return typeof session.sub === 'string' && Number.isInteger(session.version) && session.version > 0
-      && Number.isInteger(session.exp) && session.exp > Math.floor(Date.now() / 1000) ? session : null;
-  } catch {
-    return null;
-  }
+    return typeof session.sub === 'string' && Number.isInteger(session.version) && session.version > 0 && Number.isInteger(session.exp) && session.exp > Math.floor(Date.now() / 1000) ? session : null;
+  } catch { return null; }
 }
 
 function sessionCookie(token, config, maxAge = config.sessionTtlHours * 3600) {
@@ -432,64 +408,47 @@ function themeCookie(theme, config, maxAge = config.sessionTtlHours * 3600) {
 export async function createApp(config = loadConfig(), { store: suppliedStore, sftp: suppliedSftp } = {}) {
   const store = suppliedStore ?? new MenuTvStore(config.db, { seedDemoData: config.seedDemoData });
   const sftp = suppliedSftp ?? new SftpService(config.sftp);
+  const loginLimiter = createLoginLimiter({
+    maxAttempts: config.loginMaxAttempts ?? 8,
+    windowMinutes: config.loginWindowMinutes ?? 15,
+    maxEntries: config.loginLimiterMaxEntries ?? 500
+  });
   await store.init();
-  const bootstrapAdmin = config.bootstrapAdmin
-    ? { username: config.bootstrapAdmin.username, passwordHash: await hashPassword(config.bootstrapAdmin.password) }
-    : null;
+  const bootstrapAdmin = config.bootstrapAdmin ? { username: config.bootstrapAdmin.username, passwordHash: await hashPassword(config.bootstrapAdmin.password) } : null;
   await store.ensureInitialAdministrator(bootstrapAdmin || undefined);
   await store.setInitialSiteName(config.appName);
   const app = express();
   app.disable('x-powered-by');
+  app.set('trust proxy', 1);
   app.use(helmet({ contentSecurityPolicy: { directives: {
-    defaultSrc: ["'self'"],
-    styleSrc: ["'self'"],
-    fontSrc: ["'self'", 'data:'],
-    scriptSrc: ["'self'"],
-    imgSrc: ["'self'", 'data:']
+    defaultSrc: ["'self'"], styleSrc: ["'self'"], fontSrc: ["'self'", 'data:'], scriptSrc: ["'self'"], imgSrc: ["'self'", 'data:']
   } } }));
-  app.use(express.json({ limit: '64kb' }));
+  app.use(express.json({ limit: config.jsonBodyMaxBytes ?? 65536 }));
 
-  app.get('/healthz', async (_request, response) => {
-    await store.pool.query('SELECT 1');
-    response.json({ status: 'ok', service: 'menu-tv-2.0' });
-  });
+  app.get('/healthz', async (_request, response) => { await store.pool.query('SELECT 1'); response.json({ status: 'ok', service: 'menu-tv-2.0' }); });
   app.use('/site-assets', express.static(config.siteAssetsRoot, { etag: true, maxAge: '1d', immutable: true }));
   app.get('/api/public/config', async (_request, response) => {
-    const settings = await store.getSiteSettings();
-    const site = siteSettingsResponse(settings, config);
+    const settings = await store.getSiteSettings(); const site = siteSettingsResponse(settings, config);
     response.json({ app_name: site.app_name, logo_url: site.logo_url, favicon_url: site.favicon_url, accent_color: site.accent_color });
   });
 
-  app.post('/api/auth/login', async (request, response) => {
+  app.post('/api/auth/login', loginLimiter.middleware, async (request, response) => {
     const username = typeof request.body?.username === 'string' ? request.body.username : '';
     const password = typeof request.body?.password === 'string' ? request.body.password : '';
     const user = await store.getActiveUser(username);
     if (!user || !await verifyPassword(password, user.password_hash)) {
+      loginLimiter.recordFailure(request);
       return response.status(401).json({ error: 'Неверный логин или пароль.' });
     }
-    await store.recordActivity({
-      actor_username: user.username,
-      action: 'auth.login',
-      entity_type: 'session',
-      message: 'Выполнен вход в панель управления.'
-    });
+    loginLimiter.recordSuccess(request);
+    await store.recordActivity({ actor_username: user.username, action: 'auth.login', entity_type: 'session', message: 'Выполнен вход в панель управления.' });
     const preferences = await store.getUserPreferences(user.username);
-    response.setHeader('Set-Cookie', [
-      sessionCookie(issueSession(user, config), config),
-      themeCookie(preferences.theme, config)
-    ]);
+    response.setHeader('Set-Cookie', [sessionCookie(issueSession(user, config), config), themeCookie(preferences.theme, config)]);
     return response.status(204).end();
   });
   app.post('/api/auth/logout', async (request, response) => {
     const session = verifySession(parseCookies(request)[SESSION_COOKIE], config);
-    if (session) {
-      await store.recordActivity({
-        actor_username: session.sub,
-        action: 'auth.logout',
-        entity_type: 'session',
-        message: 'Выполнен выход из панели управления.'
-      });
-    }
+    if (session) await store.recordActivity({ actor_username: session.sub, action: 'auth.logout', entity_type: 'session', message: 'Выполнен выход из панели управления.' });
     response.setHeader('Set-Cookie', [sessionCookie('', config, 0), themeCookie('system', config, 0)]);
     response.status(204).end();
   });
@@ -501,469 +460,146 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     if (!user || user.session_version !== session.version) return null;
     return { ...session, user };
   };
-
   const requirePageSession = async (request, response, next) => {
-    try {
-      const session = await resolveSession(request);
-      if (!session) return response.redirect(302, '/signin.html');
-      request.session = session;
-      return next();
-    } catch (error) {
-      return next(error);
-    }
+    try { const session = await resolveSession(request); if (!session) return response.redirect(302, '/signin.html'); request.session = session; return next(); }
+    catch (error) { return next(error); }
   };
-
   app.use('/api', async (request, response, next) => {
-    try {
-      const session = await resolveSession(request);
-      if (!session) return response.status(401).json({ error: 'Требуется вход в систему.' });
-      request.session = session;
-      return next();
-    } catch (error) {
-      return next(error);
-    }
+    try { const session = await resolveSession(request); if (!session) return response.status(401).json({ error: 'Требуется вход в систему.' }); request.session = session; return next(); }
+    catch (error) { return next(error); }
   });
-
   const activity = (request, entry) => store.recordActivity({ actor_username: request.session.sub, ...entry });
 
   app.get('/api/session', async (request, response) => {
     const [preferences, settings] = await Promise.all([store.getUserPreferences(request.session.sub), store.getSiteSettings()]);
     response.setHeader('Set-Cookie', themeCookie(preferences.theme, config));
-    response.json({
-      status: 'ok',
-      app_name: settings.application_name || config.appName,
-      username: request.session.sub,
-      display_name: preferences.display_name,
-      theme: preferences.theme,
-      notifications_enabled: preferences.notifications_enabled
-    });
+    response.json({ status: 'ok', app_name: settings.application_name || config.appName, username: request.session.sub, display_name: preferences.display_name, theme: preferences.theme, notifications_enabled: preferences.notifications_enabled });
   });
   app.get('/api/overview', async (_request, response) => response.json(await store.overview()));
-
   app.get('/api/settings/user', async (request, response) => response.json(await store.getUserPreferences(request.session.sub)));
   app.put('/api/settings/user', async (request, response) => {
     const preferences = await store.updateUserPreferences(request.session.sub, userPreferencesInput(request.body));
-    await activity(request, {
-      action: 'settings.user.updated',
-      entity_type: 'user_preferences',
-      entity_id: request.session.sub,
-      message: 'Обновлены личные настройки пользователя.'
-    });
-    response.setHeader('Set-Cookie', themeCookie(preferences.theme, config));
-    response.json(preferences);
+    await activity(request, { action: 'settings.user.updated', entity_type: 'user_preferences', entity_id: request.session.sub, message: 'Обновлены личные настройки пользователя.' });
+    response.setHeader('Set-Cookie', themeCookie(preferences.theme, config)); response.json(preferences);
   });
   app.put('/api/settings/user/password', async (request, response) => {
     const { currentPassword, newPassword } = passwordChangeInput(request.body, config);
-    if (!await verifyPassword(currentPassword, request.session.user.password_hash)) {
-      return response.status(400).json({ error: 'Текущий пароль введён неверно.' });
-    }
-    const user = await store.updateUserPassword(request.session.sub, await hashPassword(newPassword));
-    if (!user) throw recordNotFound();
+    if (!await verifyPassword(currentPassword, request.session.user.password_hash)) return response.status(400).json({ error: 'Текущий пароль введён неверно.' });
+    const user = await store.updateUserPassword(request.session.sub, await hashPassword(newPassword)); if (!user) throw recordNotFound();
     const preferences = await store.getUserPreferences(user.username);
-    await activity(request, {
-      action: 'settings.user.password_updated',
-      entity_type: 'user',
-      entity_id: user.username,
-      message: 'Изменён пароль пользователя.'
-    });
-    response.setHeader('Set-Cookie', [
-      sessionCookie(issueSession(user, config), config),
-      themeCookie(preferences.theme, config)
-    ]);
-    response.status(204).end();
+    await activity(request, { action: 'settings.user.password_updated', entity_type: 'user', entity_id: user.username, message: 'Изменён пароль пользователя.' });
+    response.setHeader('Set-Cookie', [sessionCookie(issueSession(user, config), config), themeCookie(preferences.theme, config)]); response.status(204).end();
   });
-  app.get('/api/settings/site', async (_request, response) => {
-    const settings = await store.getSiteSettings();
-    response.json(siteSettingsResponse(settings, config));
-  });
+  app.get('/api/settings/site', async (_request, response) => { const settings = await store.getSiteSettings(); response.json(siteSettingsResponse(settings, config)); });
   app.put('/api/settings/site', async (request, response) => {
-    const settings = await store.updateSiteSettings({ ...siteSettingsInput(request.body), updated_by: request.session.sub });
-    await activity(request, {
-      action: 'settings.site.updated',
-      entity_type: 'site_settings',
-      entity_id: settings.id,
-      message: 'Обновлены настройки сайта.'
-    });
+    const settings = await store.updateSiteSettings({ ...siteSettingsInput(request.body, config), updated_by: request.session.sub });
+    await activity(request, { action: 'settings.site.updated', entity_type: 'site_settings', entity_id: settings.id, message: 'Обновлены настройки сайта.' });
     response.json(siteSettingsResponse(settings, config));
   });
   app.put('/api/settings/site/logo', express.raw({ type: '*/*', limit: config.siteLogoMaxBytes }), async (request, response) => {
     const settings = await replaceSiteImage({ kind: 'logo', bytes: request.body, config, store, username: request.session.sub });
-    await activity(request, { action: 'settings.site.logo_updated', entity_type: 'site_settings', entity_id: settings.id, message: 'Обновлён логотип сайта.' });
-    response.json(siteSettingsResponse(settings, config));
+    await activity(request, { action: 'settings.site.logo_updated', entity_type: 'site_settings', entity_id: settings.id, message: 'Обновлён логотип сайта.' }); response.json(siteSettingsResponse(settings, config));
   });
   app.put('/api/settings/site/favicon', express.raw({ type: '*/*', limit: config.siteFaviconMaxBytes }), async (request, response) => {
     const settings = await replaceSiteImage({ kind: 'favicon', bytes: request.body, config, store, username: request.session.sub });
-    await activity(request, { action: 'settings.site.favicon_updated', entity_type: 'site_settings', entity_id: settings.id, message: 'Обновлён favicon сайта.' });
-    response.json(siteSettingsResponse(settings, config));
+    await activity(request, { action: 'settings.site.favicon_updated', entity_type: 'site_settings', entity_id: settings.id, message: 'Обновлён favicon сайта.' }); response.json(siteSettingsResponse(settings, config));
   });
 
   app.get('/api/notifications', async (request, response) => response.json(await store.listNotifications(request.query.limit)));
   app.post('/api/notifications/read', async (_request, response) => response.json({ marked_read: await store.markNotificationsRead() }));
 
   app.get('/api/catalog/products', async (_request, response) => response.json(await store.listProducts()));
-  app.post('/api/catalog/products', async (request, response) => {
-    const product = await store.createProduct(productInput(request.body));
-    await activity(request, { action: 'catalog.product.created', entity_type: 'catalog_product', entity_id: product.id, message: `Добавлена продукция «${product.name}».` });
-    response.status(201).json(product);
-  });
-  app.put('/api/catalog/products/:id', async (request, response) => {
-    const product = await store.updateProduct(positiveId(request.params.id, 'id'), productInput(request.body));
-    if (!product) throw recordNotFound();
-    await activity(request, { action: 'catalog.product.updated', entity_type: 'catalog_product', entity_id: product.id, message: `Обновлена продукция «${product.name}».` });
-    response.json(product);
-  });
+  app.post('/api/catalog/products', async (request, response) => { const product = await store.createProduct(productInput(request.body)); await activity(request, { action: 'catalog.product.created', entity_type: 'catalog_product', entity_id: product.id, message: `Добавлена продукция «${product.name}».` }); response.status(201).json(product); });
+  app.put('/api/catalog/products/:id', async (request, response) => { const product = await store.updateProduct(positiveId(request.params.id, 'id'), productInput(request.body)); if (!product) throw recordNotFound(); await activity(request, { action: 'catalog.product.updated', entity_type: 'catalog_product', entity_id: product.id, message: `Обновлена продукция «${product.name}».` }); response.json(product); });
   app.delete('/api/catalog/products/:id', async (request, response) => {
-    const id = positiveId(request.params.id, 'id');
-    const product = await store.getProduct(id);
-    if (!product) throw recordNotFound();
-    const affected = await store.screensUsingCatalog('product', id);
-    if (affected.length) {
-      const error = conflict('Продукция используется в меню мониторов и не может быть удалена.');
-      error.details = affected;
-      throw error;
-    }
-    await store.deleteProduct(id);
-    await activity(request, { action: 'catalog.product.deleted', entity_type: 'catalog_product', entity_id: id, message: `Удалена продукция «${product.name}».` });
-    response.status(204).end();
+    const id = positiveId(request.params.id, 'id'); const product = await store.getProduct(id); if (!product) throw recordNotFound(); const affected = await store.screensUsingCatalog('product', id);
+    if (affected.length) { const error = conflict('Продукция используется в меню мониторов и не может быть удалена.'); error.details = affected; throw error; }
+    await store.deleteProduct(id); await activity(request, { action: 'catalog.product.deleted', entity_type: 'catalog_product', entity_id: id, message: `Удалена продукция «${product.name}».` }); response.status(204).end();
   });
-
   app.get('/api/catalog/packaging', async (_request, response) => response.json(await store.listPackaging()));
-  app.post('/api/catalog/packaging', async (request, response) => {
-    const packaging = await store.createPackaging(packagingInput(request.body));
-    await activity(request, { action: 'catalog.packaging.created', entity_type: 'catalog_packaging', entity_id: packaging.id, message: `Добавлена тара «${packaging.name}».` });
-    response.status(201).json(packaging);
-  });
-  app.put('/api/catalog/packaging/:id', async (request, response) => {
-    const packaging = await store.updatePackaging(positiveId(request.params.id, 'id'), packagingInput(request.body));
-    if (!packaging) throw recordNotFound();
-    await activity(request, { action: 'catalog.packaging.updated', entity_type: 'catalog_packaging', entity_id: packaging.id, message: `Обновлена тара «${packaging.name}».` });
-    response.json(packaging);
-  });
+  app.post('/api/catalog/packaging', async (request, response) => { const packaging = await store.createPackaging(packagingInput(request.body)); await activity(request, { action: 'catalog.packaging.created', entity_type: 'catalog_packaging', entity_id: packaging.id, message: `Добавлена тара «${packaging.name}».` }); response.status(201).json(packaging); });
+  app.put('/api/catalog/packaging/:id', async (request, response) => { const packaging = await store.updatePackaging(positiveId(request.params.id, 'id'), packagingInput(request.body)); if (!packaging) throw recordNotFound(); await activity(request, { action: 'catalog.packaging.updated', entity_type: 'catalog_packaging', entity_id: packaging.id, message: `Обновлена тара «${packaging.name}».` }); response.json(packaging); });
   app.delete('/api/catalog/packaging/:id', async (request, response) => {
-    const id = positiveId(request.params.id, 'id');
-    const packaging = await store.getPackaging(id);
-    if (!packaging) throw recordNotFound();
-    const affected = await store.screensUsingCatalog('packaging', id);
-    if (affected.length) {
-      const error = conflict('Тара используется в меню мониторов и не может быть удалена.');
-      error.details = affected;
-      throw error;
-    }
-    await store.deletePackaging(id);
-    await activity(request, { action: 'catalog.packaging.deleted', entity_type: 'catalog_packaging', entity_id: id, message: `Удалена тара «${packaging.name}».` });
-    response.status(204).end();
+    const id = positiveId(request.params.id, 'id'); const packaging = await store.getPackaging(id); if (!packaging) throw recordNotFound(); const affected = await store.screensUsingCatalog('packaging', id);
+    if (affected.length) { const error = conflict('Тара используется в меню мониторов и не может быть удалена.'); error.details = affected; throw error; }
+    await store.deletePackaging(id); await activity(request, { action: 'catalog.packaging.deleted', entity_type: 'catalog_packaging', entity_id: id, message: `Удалена тара «${packaging.name}».` }); response.status(204).end();
   });
 
   app.get('/api/locations', async (_request, response) => response.json(await store.listLocations()));
-  app.post('/api/locations', async (request, response) => {
-    const location = await store.createLocation(locationInput(request.body));
-    await activity(request, {
-      action: 'location.created',
-      entity_type: 'location',
-      entity_id: location.id,
-      message: `Создана торговая точка «${location.name}».`
-    });
-    response.status(201).json(location);
-  });
-  app.put('/api/locations/:id', async (request, response) => {
-    const record = await store.updateLocation(positiveId(request.params.id, 'id'), locationInput(request.body));
-    if (!record) throw recordNotFound();
-    await activity(request, {
-      action: 'location.updated',
-      entity_type: 'location',
-      entity_id: record.id,
-      message: `Обновлена торговая точка «${record.name}».`
-    });
-    response.json(record);
-  });
+  app.post('/api/locations', async (request, response) => { const location = await store.createLocation(locationInput(request.body)); await activity(request, { action: 'location.created', entity_type: 'location', entity_id: location.id, message: `Создана торговая точка «${location.name}».` }); response.status(201).json(location); });
+  app.put('/api/locations/:id', async (request, response) => { const record = await store.updateLocation(positiveId(request.params.id, 'id'), locationInput(request.body)); if (!record) throw recordNotFound(); await activity(request, { action: 'location.updated', entity_type: 'location', entity_id: record.id, message: `Обновлена торговая точка «${record.name}».` }); response.json(record); });
   app.delete('/api/locations/:id', async (request, response) => {
-    const location = await store.getLocation(positiveId(request.params.id, 'id'));
-    if (!location) throw recordNotFound();
-    if (location.sftp_directory_id) throw conflict('Сначала явно отключите SFTP-доступ точки. Каталог и файлы останутся без изменений.');
-    if (!await store.deleteLocation(location.id)) throw recordNotFound();
-    await activity(request, {
-      action: 'location.deleted',
-      entity_type: 'location',
-      entity_id: location.id,
-      message: `Удалена торговая точка «${location.name}».`
-    });
-    response.status(204).end();
+    const location = await store.getLocation(positiveId(request.params.id, 'id')); if (!location) throw recordNotFound(); if (location.sftp_directory_id) throw conflict('Сначала явно отключите SFTP-доступ точки. Каталог и файлы останутся без изменений.'); if (!await store.deleteLocation(location.id)) throw recordNotFound();
+    await activity(request, { action: 'location.deleted', entity_type: 'location', entity_id: location.id, message: `Удалена торговая точка «${location.name}».` }); response.status(204).end();
   });
 
   app.get('/api/screens', async (_request, response) => response.json(await store.listScreens()));
-  app.get('/api/screens/:id', async (request, response) => {
-    const screen = await store.getScreen(positiveId(request.params.id, 'id'));
-    if (!screen) throw recordNotFound();
-    response.json(screen);
-  });
+  app.get('/api/screens/:id', async (request, response) => { const screen = await store.getScreen(positiveId(request.params.id, 'id')); if (!screen) throw recordNotFound(); response.json(screen); });
   app.get('/api/screens/:id/editor', async (request, response) => {
-    const id = positiveId(request.params.id, 'id');
-    const screen = await store.getScreen(id);
-    if (!screen) throw recordNotFound();
-    const [draft, products, packaging, templates] = await Promise.all([
-      store.getScreenDraft(id), store.listProducts(), store.listPackaging(), store.listTemplates()
-    ]);
-    response.json({ screen, draft, products, packaging, templates });
+    const id = positiveId(request.params.id, 'id'); const screen = await store.getScreen(id); if (!screen) throw recordNotFound();
+    const [draft, products, packaging, templates] = await Promise.all([store.getScreenDraft(id), store.listProducts(), store.listPackaging(), store.listTemplates()]); response.json({ screen, draft, products, packaging, templates });
   });
   app.put('/api/screens/:id/draft', async (request, response) => {
-    const id = positiveId(request.params.id, 'id');
-    const screen = await store.getScreen(id);
-    if (!screen) throw recordNotFound();
-    const draft = await menuDraftInput(request.body, store);
-    const templateId = request.body.template_id === undefined ? screen.template_id
-      : request.body.template_id === null || request.body.template_id === '' ? null : positiveId(request.body.template_id, 'template_id');
+    const id = positiveId(request.params.id, 'id'); const screen = await store.getScreen(id); if (!screen) throw recordNotFound(); const draft = await menuDraftInput(request.body, store, config.menuDraftMaxBytes ?? 49152);
+    const templateId = request.body.template_id === undefined ? screen.template_id : request.body.template_id === null || request.body.template_id === '' ? null : positiveId(request.body.template_id, 'template_id');
     if (templateId && !await store.getTemplate(templateId)) throw recordNotFound();
-    const updatedScreen = await store.updateScreen(id, {
-      location_id: screen.location_id, name: screen.name, resolution: screen.resolution,
-      status: screen.status, active: screen.active, template_id: templateId
-    });
-    const saved = await store.saveScreenDraft(id, draft);
-    await activity(request, { action: 'screen.draft.saved', entity_type: 'screen', entity_id: id, message: `Сохранён черновик меню монитора «${screen.name}».` });
-    response.json({ screen: updatedScreen, draft: saved });
+    const updatedScreen = await store.updateScreen(id, { location_id: screen.location_id, name: screen.name, resolution: screen.resolution, status: screen.status, active: screen.active, template_id: templateId });
+    const saved = await store.saveScreenDraft(id, draft); await activity(request, { action: 'screen.draft.saved', entity_type: 'screen', entity_id: id, message: `Сохранён черновик меню монитора «${screen.name}».` }); response.json({ screen: updatedScreen, draft: saved });
   });
   app.post('/api/locations/:id/screens', async (request, response) => {
-    const locationId = positiveId(request.params.id, 'id');
-    const location = await store.getLocation(locationId);
-    if (!location) throw recordNotFound();
-    const siteSettings = await store.getSiteSettings();
-    const screen = await store.createScreen({
-      location_id: locationId,
-      name: await store.nextScreenName(locationId),
-      resolution: siteSettings.default_screen_resolution,
-      status: 'draft',
-      active: true,
-      template_id: null
-    });
-    await activity(request, {
-      action: 'screen.created', entity_type: 'screen', entity_id: screen.id,
-      message: `Добавлен монитор «${screen.name}» в точке «${location.name}».`
-    });
-    response.status(201).json(screen);
+    const locationId = positiveId(request.params.id, 'id'); const location = await store.getLocation(locationId); if (!location) throw recordNotFound(); const siteSettings = await store.getSiteSettings();
+    const screen = await store.createScreen({ location_id: locationId, name: await store.nextScreenName(locationId), resolution: siteSettings.default_screen_resolution, status: 'draft', active: true, template_id: null });
+    await activity(request, { action: 'screen.created', entity_type: 'screen', entity_id: screen.id, message: `Добавлен монитор «${screen.name}» в точке «${location.name}».` }); response.status(201).json(screen);
   });
   app.post('/api/screens', async (request, response) => {
-    const siteSettings = await store.getSiteSettings();
-    const input = screenInput(request.body, { defaultScreenResolution: siteSettings.default_screen_resolution });
-    if (!await store.getLocation(input.location_id)) throw recordNotFound();
-    if (input.template_id && !await store.getTemplate(input.template_id)) throw recordNotFound();
-    const screen = await store.createScreen(input);
-    await activity(request, {
-      action: 'screen.created',
-      entity_type: 'screen',
-      entity_id: screen.id,
-      message: `Добавлен монитор «${screen.name}».`
-    });
-    response.status(201).json(screen);
+    const siteSettings = await store.getSiteSettings(); const input = screenInput(request.body, { defaultScreenResolution: siteSettings.default_screen_resolution, maxWidth: config.screenMaxWidth ?? 1920, maxHeight: config.screenMaxHeight ?? 1080 });
+    if (!await store.getLocation(input.location_id)) throw recordNotFound(); if (input.template_id && !await store.getTemplate(input.template_id)) throw recordNotFound(); const screen = await store.createScreen(input);
+    await activity(request, { action: 'screen.created', entity_type: 'screen', entity_id: screen.id, message: `Добавлен монитор «${screen.name}».` }); response.status(201).json(screen);
   });
   app.put('/api/screens/:id', async (request, response) => {
-    const siteSettings = await store.getSiteSettings();
-    const input = screenInput(request.body, { defaultScreenResolution: siteSettings.default_screen_resolution });
-    if (!await store.getLocation(input.location_id)) throw recordNotFound();
-    if (input.template_id && !await store.getTemplate(input.template_id)) throw recordNotFound();
-    const id = positiveId(request.params.id, 'id');
-    const current = await store.getScreen(id);
-    if (!current) throw recordNotFound();
-    if (current.published_at && current.location_id !== input.location_id) {
-      throw conflict('Опубликованный телевизор нельзя перенести в другую точку: его SFTP-путь должен остаться стабильным.');
-    }
-    const record = await store.updateScreen(id, input);
-    if (!record) throw recordNotFound();
-    await activity(request, {
-      action: 'screen.updated',
-      entity_type: 'screen',
-      entity_id: record.id,
-      message: `Обновлён монитор «${record.name}».`
-    });
-    response.json(record);
+    const siteSettings = await store.getSiteSettings(); const input = screenInput(request.body, { defaultScreenResolution: siteSettings.default_screen_resolution, maxWidth: config.screenMaxWidth ?? 1920, maxHeight: config.screenMaxHeight ?? 1080 });
+    if (!await store.getLocation(input.location_id)) throw recordNotFound(); if (input.template_id && !await store.getTemplate(input.template_id)) throw recordNotFound(); const id = positiveId(request.params.id, 'id'); const current = await store.getScreen(id); if (!current) throw recordNotFound();
+    if (current.published_at && current.location_id !== input.location_id) throw conflict('Опубликованный телевизор нельзя перенести в другую точку: его SFTP-путь должен остаться стабильным.');
+    const record = await store.updateScreen(id, input); if (!record) throw recordNotFound(); await activity(request, { action: 'screen.updated', entity_type: 'screen', entity_id: record.id, message: `Обновлён монитор «${record.name}».` }); response.json(record);
   });
-  app.delete('/api/screens/:id', async (request, response) => {
-    const id = positiveId(request.params.id, 'id');
-    const screen = await store.getScreen(id);
-    if (!screen || !await store.deleteScreen(id)) throw recordNotFound();
-    await activity(request, {
-      action: 'screen.deleted',
-      entity_type: 'screen',
-      entity_id: screen.id,
-      message: `Удалён монитор «${screen.name}».`
-    });
-    response.status(204).end();
-  });
+  app.delete('/api/screens/:id', async (request, response) => { const id = positiveId(request.params.id, 'id'); const screen = await store.getScreen(id); if (!screen || !await store.deleteScreen(id)) throw recordNotFound(); await activity(request, { action: 'screen.deleted', entity_type: 'screen', entity_id: screen.id, message: `Удалён монитор «${screen.name}».` }); response.status(204).end(); });
 
   app.get('/api/templates', async (_request, response) => response.json(await store.listTemplates()));
-  app.post('/api/templates', async (request, response) => {
-    const template = await store.createTemplate(templateInput(request.body));
-    await activity(request, {
-      action: 'template.created',
-      entity_type: 'template',
-      entity_id: template.id,
-      message: `Создан шаблон «${template.name}».`
-    });
-    response.status(201).json(template);
-  });
-  app.put('/api/templates/:id', async (request, response) => {
-    const record = await store.updateTemplate(positiveId(request.params.id, 'id'), templateInput(request.body));
-    if (!record) throw recordNotFound();
-    await activity(request, {
-      action: 'template.updated',
-      entity_type: 'template',
-      entity_id: record.id,
-      message: `Обновлён шаблон «${record.name}».`
-    });
-    response.json(record);
-  });
-  app.delete('/api/templates/:id', async (request, response) => {
-    const id = positiveId(request.params.id, 'id');
-    const template = await store.getTemplate(id);
-    if (!template || !await store.deleteTemplate(id)) throw recordNotFound();
-    await activity(request, {
-      action: 'template.deleted',
-      entity_type: 'template',
-      entity_id: template.id,
-      message: `Удалён шаблон «${template.name}».`
-    });
-    response.status(204).end();
-  });
+  app.post('/api/templates', async (request, response) => { const template = await store.createTemplate(templateInput(request.body)); await activity(request, { action: 'template.created', entity_type: 'template', entity_id: template.id, message: `Создан шаблон «${template.name}».` }); response.status(201).json(template); });
+  app.put('/api/templates/:id', async (request, response) => { const record = await store.updateTemplate(positiveId(request.params.id, 'id'), templateInput(request.body)); if (!record) throw recordNotFound(); await activity(request, { action: 'template.updated', entity_type: 'template', entity_id: record.id, message: `Обновлён шаблон «${record.name}».` }); response.json(record); });
+  app.delete('/api/templates/:id', async (request, response) => { const id = positiveId(request.params.id, 'id'); const template = await store.getTemplate(id); if (!template || !await store.deleteTemplate(id)) throw recordNotFound(); await activity(request, { action: 'template.deleted', entity_type: 'template', entity_id: template.id, message: `Удалён шаблон «${template.name}».` }); response.status(204).end(); });
 
-  async function sftpDirectoriesWithStatus() {
-    const directories = await store.listSftpDirectories();
-    return Promise.all(directories.map(async (directory) => ({
-      ...directory,
-      storage_status: await sftp.directoryStatus(directory.name)
-    })));
-  }
-
+  async function sftpDirectoriesWithStatus() { const directories = await store.listSftpDirectories(); return Promise.all(directories.map(async (directory) => ({ ...directory, storage_status: await sftp.directoryStatus(directory.name) }))); }
   app.get('/api/sftp/connection', (_request, response) => response.json({ host: config.sftp.publicHost, port: config.sftp.port }));
   app.get('/api/sftp/directories', async (_request, response) => response.json(await sftpDirectoriesWithStatus()));
-  app.post('/api/sftp/directories', async (request, response) => {
-    const directory = await store.createSftpDirectory(sftpDirectoryInput(request.body));
-    await activity(request, {
-      action: 'sftp_directory.created',
-      entity_type: 'sftp_directory',
-      entity_id: directory.id,
-      message: `Добавлен SFTP-каталог «${directory.name}».`
-    });
-    response.status(201).json(directory);
-  });
-  app.post('/api/sftp/directories/:id/provision', async (request, response) => {
-    const id = positiveId(request.params.id, 'id');
-    const directory = await store.getSftpDirectory(id);
-    if (!directory) throw recordNotFound();
-    await sftp.provisionDirectory(directory.name);
-    const updated = await store.markSftpDirectoryProvisioned(id);
-    await activity(request, {
-      action: 'sftp_directory.provisioned',
-      entity_type: 'sftp_directory',
-      entity_id: updated.id,
-      message: `Создан физический SFTP-каталог «${updated.name}».`
-    });
-    response.json({ ...updated, storage_status: await sftp.directoryStatus(updated.name) });
-  });
-  app.delete('/api/sftp/directories/:id', async (request, response) => {
-    const id = positiveId(request.params.id, 'id');
-    const directory = await store.getSftpDirectory(id);
-    if (!directory || !await store.deleteSftpDirectory(id)) throw recordNotFound();
-    await activity(request, {
-      action: 'sftp_directory.deleted',
-      entity_type: 'sftp_directory',
-      entity_id: directory.id,
-      message: `Удалён SFTP-каталог «${directory.name}».`
-    });
-    response.status(204).end();
-  });
+  app.post('/api/sftp/directories', async (request, response) => { const directory = await store.createSftpDirectory(sftpDirectoryInput(request.body)); await activity(request, { action: 'sftp_directory.created', entity_type: 'sftp_directory', entity_id: directory.id, message: `Добавлен SFTP-каталог «${directory.name}».` }); response.status(201).json(directory); });
+  app.post('/api/sftp/directories/:id/provision', async (request, response) => { const id = positiveId(request.params.id, 'id'); const directory = await store.getSftpDirectory(id); if (!directory) throw recordNotFound(); await sftp.provisionDirectory(directory.name); const updated = await store.markSftpDirectoryProvisioned(id); await activity(request, { action: 'sftp_directory.provisioned', entity_type: 'sftp_directory', entity_id: updated.id, message: `Создан физический SFTP-каталог «${updated.name}».` }); response.json({ ...updated, storage_status: await sftp.directoryStatus(updated.name) }); });
+  app.delete('/api/sftp/directories/:id', async (request, response) => { const id = positiveId(request.params.id, 'id'); const directory = await store.getSftpDirectory(id); if (!directory || !await store.deleteSftpDirectory(id)) throw recordNotFound(); await activity(request, { action: 'sftp_directory.deleted', entity_type: 'sftp_directory', entity_id: directory.id, message: `Удалён SFTP-каталог «${directory.name}».` }); response.status(204).end(); });
 
   app.post('/api/locations/:id/sftp-binding', async (request, response) => {
-    const locationId = positiveId(request.params.id, 'id');
-    const input = sftpBindingInput(request.body);
-    const location = await store.getLocation(locationId);
-    if (!location) throw recordNotFound();
-    if (location.sftp_directory_id) throw conflict('Для изменения SFTP-каталога сначала явно отключите текущую привязку.');
-    const directory = await store.getSftpDirectory(input.directoryId);
-    if (!directory) throw recordNotFound();
-    if (directory.bound_location_id) throw conflict('Этот SFTP-каталог уже привязан к другой точке.');
-    const password = generateSftpPassword();
-    await sftp.createReadOnlyUser({ username: input.username, password, directoryName: directory.name });
-    let bound;
-    try {
-      bound = await store.bindLocationSftp(locationId, input);
-    } catch (error) {
-      await sftp.removeUser(input.username).catch(() => undefined);
-      throw error;
-    }
-    if (!bound) {
-      await sftp.removeUser(input.username).catch(() => undefined);
-      throw conflict('Точка уже получила SFTP-привязку. Обновите страницу.');
-    }
-    await activity(request, {
-      action: 'sftp_binding.created',
-      entity_type: 'location',
-      entity_id: bound.id,
-      message: `Для точки «${bound.name}» настроен SFTP-доступ.`
-    });
-    response.status(201).json({
-      location: bound,
-      credentials: { host: config.sftp.publicHost, port: config.sftp.port, username: input.username, password }
-    });
+    const locationId = positiveId(request.params.id, 'id'); const input = sftpBindingInput(request.body); const location = await store.getLocation(locationId); if (!location) throw recordNotFound(); if (location.sftp_directory_id) throw conflict('Для изменения SFTP-каталога сначала явно отключите текущую привязку.');
+    const directory = await store.getSftpDirectory(input.directoryId); if (!directory) throw recordNotFound(); if (directory.bound_location_id) throw conflict('Этот SFTP-каталог уже привязан к другой точке.');
+    const password = generateSftpPassword(config.generatedPasswordLength ?? 10); await sftp.createReadOnlyUser({ username: input.username, password, directoryName: directory.name }); let bound;
+    try { bound = await store.bindLocationSftp(locationId, input); } catch (error) { await sftp.removeUser(input.username).catch(() => undefined); throw error; }
+    if (!bound) { await sftp.removeUser(input.username).catch(() => undefined); throw conflict('Точка уже получила SFTP-привязку. Обновите страницу.'); }
+    await activity(request, { action: 'sftp_binding.created', entity_type: 'location', entity_id: bound.id, message: `Для точки «${bound.name}» настроен SFTP-доступ.` });
+    response.status(201).json({ location: bound, credentials: { host: config.sftp.publicHost, port: config.sftp.port, username: input.username, password } });
   });
   app.post('/api/locations/:id/sftp-password', async (request, response) => {
-    const location = await store.getLocation(positiveId(request.params.id, 'id'));
-    if (!location) throw recordNotFound();
-    if (!location.sftp_username) throw conflict('У точки нет SFTP-доступа.');
-    const password = generateSftpPassword();
-    await sftp.resetPassword({ username: location.sftp_username, password });
-    await store.touchLocationSftpPassword(location.id);
-    await activity(request, {
-      action: 'sftp_password.reset',
-      entity_type: 'location',
-      entity_id: location.id,
-      message: `Обновлён пароль SFTP для точки «${location.name}».`
-    });
-    response.json({ credentials: { host: config.sftp.publicHost, port: config.sftp.port, username: location.sftp_username, password } });
+    const location = await store.getLocation(positiveId(request.params.id, 'id')); if (!location) throw recordNotFound(); if (!location.sftp_username) throw conflict('У точки нет SFTP-доступа.');
+    const password = generateSftpPassword(config.generatedPasswordLength ?? 10); await sftp.resetPassword({ username: location.sftp_username, password }); await store.touchLocationSftpPassword(location.id);
+    await activity(request, { action: 'sftp_password.reset', entity_type: 'location', entity_id: location.id, message: `Обновлён пароль SFTP для точки «${location.name}».` }); response.json({ credentials: { host: config.sftp.publicHost, port: config.sftp.port, username: location.sftp_username, password } });
   });
-  app.delete('/api/locations/:id/sftp-binding', async (request, response) => {
-    const location = await store.getLocation(positiveId(request.params.id, 'id'));
-    if (!location) throw recordNotFound();
-    if (!location.sftp_username) throw conflict('У точки нет SFTP-доступа.');
-    await sftp.removeUser(location.sftp_username);
-    await store.unbindLocationSftp(location.id);
-    await activity(request, {
-      action: 'sftp_binding.deleted',
-      entity_type: 'location',
-      entity_id: location.id,
-      message: `Отключён SFTP-доступ для точки «${location.name}».`
-    });
-    response.status(204).end();
-  });
+  app.delete('/api/locations/:id/sftp-binding', async (request, response) => { const location = await store.getLocation(positiveId(request.params.id, 'id')); if (!location) throw recordNotFound(); if (!location.sftp_username) throw conflict('У точки нет SFTP-доступа.'); await sftp.removeUser(location.sftp_username); await store.unbindLocationSftp(location.id); await activity(request, { action: 'sftp_binding.deleted', entity_type: 'location', entity_id: location.id, message: `Отключён SFTP-доступ для точки «${location.name}».` }); response.status(204).end(); });
 
-  app.put('/api/screens/:id/source', express.raw({ type: 'image/jpeg', limit: '12mb' }), async (request, response) => {
-    const screen = await store.getScreen(positiveId(request.params.id, 'id'));
-    if (!screen) throw recordNotFound();
-    const asset = await sftp.stageJpeg(screen.id, request.body);
-    const updated = await store.savePreparedAsset(screen.id, asset);
-    await activity(request, {
-      action: 'screen.source_uploaded',
-      entity_type: 'screen',
-      entity_id: updated.id,
-      message: `Загружено изображение для монитора «${updated.name}».`
-    });
-    response.json(updated);
+  app.put('/api/screens/:id/source', express.raw({ type: 'image/jpeg', limit: config.screenSourceMaxBytes ?? 12582912 }), async (request, response) => {
+    const screen = await store.getScreen(positiveId(request.params.id, 'id')); if (!screen) throw recordNotFound(); const asset = await sftp.stageJpeg(screen.id, request.body); const updated = await store.savePreparedAsset(screen.id, asset);
+    await activity(request, { action: 'screen.source_uploaded', entity_type: 'screen', entity_id: updated.id, message: `Загружено изображение для монитора «${updated.name}».` }); response.json(updated);
   });
   app.post('/api/screens/:id/publish', async (request, response) => {
-    const screen = await store.getScreen(positiveId(request.params.id, 'id'));
-    if (!screen) throw recordNotFound();
-    if (!screen.sftp_directory_name) throw conflict('Сначала вручную привяжите SFTP-каталог к точке.');
-    if (!screen.prepared_asset_key) throw conflict('Сначала загрузите подготовленный JPEG.');
-    await sftp.publish({
-      directoryName: screen.sftp_directory_name,
-      deliveryFilename: screen.delivery_filename,
-      stagedKey: screen.prepared_asset_key
-    });
-    const updated = await store.markScreenPublished(screen.id);
-    await activity(request, {
-      action: 'screen.published',
-      entity_type: 'screen',
-      entity_id: updated.id,
-      message: `Опубликовано меню для монитора «${updated.name}».`
-    });
-    response.json(updated);
+    const screen = await store.getScreen(positiveId(request.params.id, 'id')); if (!screen) throw recordNotFound(); if (!screen.sftp_directory_name) throw conflict('Сначала вручную привяжите SFTP-каталог к точке.'); if (!screen.prepared_asset_key) throw conflict('Сначала загрузите подготовленный JPEG.');
+    await sftp.publish({ directoryName: screen.sftp_directory_name, deliveryFilename: screen.delivery_filename, stagedKey: screen.prepared_asset_key }); const updated = await store.markScreenPublished(screen.id);
+    await activity(request, { action: 'screen.published', entity_type: 'screen', entity_id: updated.id, message: `Опубликовано меню для монитора «${updated.name}».` }); response.json(updated);
   });
 
   app.get('/', requirePageSession, (_request, _response, next) => next());
@@ -975,32 +611,13 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
   app.get('/templates.html', requirePageSession, (_request, _response, next) => next());
   app.get('/profile.html', requirePageSession, (_request, _response, next) => next());
   app.get('/settings.html', requirePageSession, (_request, _response, next) => next());
-  app.use(express.static(publicDir, {
-    extensions: ['html'],
-    index: 'index.html',
-    etag: true,
-    maxAge: 0,
-    setHeaders(response) {
-      response.setHeader('Cache-Control', 'no-store');
-    }
-  }));
-  app.use((error, _request, response, _next) => {
-    if (error.code === '23505') return response.status(409).json({ error: 'Запись с таким названием уже существует.' });
-    if (error.code === '23503') return response.status(409).json({ error: 'Связанная запись не найдена.' });
-    const status = Number.isInteger(error.status) ? error.status : 500;
-    if (status >= 500) console.error(error);
-    return response.status(status).json({ error: status >= 500 ? 'Внутренняя ошибка сервера.' : error.message });
-  });
-
+  app.use(express.static(publicDir, { extensions: ['html'], index: 'index.html', etag: true, maxAge: 0, setHeaders(response) { response.setHeader('Cache-Control', 'no-store'); } }));
+  app.use(errorHandler);
   return { app, store, config };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const service = await createApp();
-  const server = service.app.listen(service.config.port, service.config.host, () => {
-    console.log(`${service.config.appName} listening on ${service.config.host}:${service.config.port}`);
-  });
-  for (const signal of ['SIGINT', 'SIGTERM']) {
-    process.once(signal, () => server.close(() => void service.store.close()));
-  }
+  const server = service.app.listen(service.config.port, service.config.host, () => { console.log(`${service.config.appName} listening on ${service.config.host}:${service.config.port}`); });
+  for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => server.close(() => void service.store.close()));
 }
