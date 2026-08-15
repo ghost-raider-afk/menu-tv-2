@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.1.5"
+SCRIPT_VERSION="1.1.6"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 BRANCH="main"
@@ -354,10 +354,14 @@ write_new_env() {
 }
 
 ensure_sftp_env() {
-  local env_file="$INSTALL_DIR/.env" domain
+  local env_file="$INSTALL_DIR/.env" domain app_name
   [[ -f "$env_file" ]] || die "Отсутствует $env_file"
   domain="$(env_value MENU_TV_2_DOMAIN "$env_file")"
   [[ -n "$domain" ]] || die "MENU_TV_2_DOMAIN в .env не настроен."
+  app_name="$(env_value APP_NAME "$env_file")"
+  if [[ -z "$app_name" || "$app_name" == "Menu TV 2.0" ]]; then
+    set_env_value "$env_file" APP_NAME "ТВ МЕНЮ"
+  fi
   [[ -n "$(env_value SFTP_PUBLIC_HOST "$env_file")" ]] || set_env_value "$env_file" SFTP_PUBLIC_HOST "$domain"
   [[ -n "$(env_value SFTP_PORT "$env_file")" ]] || set_env_value "$env_file" SFTP_PORT "2022"
   [[ -n "$(env_value SFTP_API_URL "$env_file")" ]] || set_env_value "$env_file" SFTP_API_URL "http://sftp:8080"
