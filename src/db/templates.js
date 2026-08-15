@@ -1,5 +1,14 @@
 import { isoNow, normaliseMenuRecord } from './helpers.js';
 
+function backgroundUrlFromSettings(value) {
+  try {
+    const settings = typeof value === 'string' ? JSON.parse(value) : value;
+    return typeof settings?.background_image_url === 'string' ? settings.background_image_url : '';
+  } catch {
+    return '';
+  }
+}
+
 export function createTemplatesRepository(pool) {
   async function getTemplate(id) {
     const { rows } = await pool.query('SELECT * FROM templates WHERE id = $1', [id]);
@@ -32,6 +41,21 @@ export function createTemplatesRepository(pool) {
         [name, description, active, JSON.stringify(menuRows), JSON.stringify(settings), isoNow(), id]
       );
       return rowCount ? getTemplate(id) : null;
+    },
+    async updateTemplateSettings(id, settings = {}) {
+      const { rowCount } = await pool.query(
+        'UPDATE templates SET settings_json = $1, updated_at = $2 WHERE id = $3',
+        [JSON.stringify(settings), isoNow(), id]
+      );
+      return rowCount ? getTemplate(id) : null;
+    },
+    async isTemplateBackgroundReferenced(url) {
+      if (!url) return false;
+      const [templates, drafts] = await Promise.all([
+        pool.query('SELECT settings_json FROM templates'),
+        pool.query('SELECT settings_json FROM screen_drafts')
+      ]);
+      return [...templates.rows, ...drafts.rows].some((row) => backgroundUrlFromSettings(row.settings_json) === url);
     },
     async deleteTemplate(id) {
       await pool.query('UPDATE screens SET template_id = NULL, updated_at = $1 WHERE template_id = $2', [isoNow(), id]);
