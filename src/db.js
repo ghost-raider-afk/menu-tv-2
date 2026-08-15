@@ -150,7 +150,10 @@ export class MenuTvStore {
         created_at TIMESTAMPTZ NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL
       );
-      CREATE TABLE IF NOT EXISTS users (
+      -- SFTPGo uses a table named "users" in this same PostgreSQL database.
+      -- Keep browser-administrator accounts in an application-specific table so
+      -- that the two services never alter each other's schema or credentials.
+      CREATE TABLE IF NOT EXISTS web_users (
         username TEXT PRIMARY KEY,
         password_hash TEXT NOT NULL,
         role TEXT NOT NULL DEFAULT 'administrator' CHECK(role IN ('administrator')),
@@ -201,10 +204,10 @@ export class MenuTvStore {
       ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
       ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS job_title TEXT NOT NULL DEFAULT '';
       ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'system';
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'administrator';
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 1;
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;
+      ALTER TABLE web_users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'administrator';
+      ALTER TABLE web_users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+      ALTER TABLE web_users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE web_users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;
       ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS date_format TEXT NOT NULL DEFAULT 'DD.MM.YYYY';
       ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS dashboard_refresh_seconds INTEGER NOT NULL DEFAULT 45;
       ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS default_screen_resolution TEXT NOT NULL DEFAULT '1920×1080';
@@ -217,7 +220,7 @@ export class MenuTvStore {
       CREATE INDEX IF NOT EXISTS activity_events_created_at_index ON activity_events(created_at DESC);
       CREATE INDEX IF NOT EXISTS activity_events_unread_index ON activity_events(read_at) WHERE read_at IS NULL;
       UPDATE screens SET delivery_filename = 'monitor-' || id::text || '.jpg' WHERE delivery_filename IS NULL;
-      UPDATE users SET password_changed_at = created_at WHERE password_changed_at IS NULL;
+      UPDATE web_users SET password_changed_at = created_at WHERE password_changed_at IS NULL;
     `);
     const now = isoNow();
     await this.pool.query(
@@ -257,14 +260,14 @@ export class MenuTvStore {
   }
 
   async ensureInitialAdministrator({ username, passwordHash } = {}) {
-    const { rows } = await this.pool.query('SELECT COUNT(*)::int AS count FROM users');
+    const { rows } = await this.pool.query('SELECT COUNT(*)::int AS count FROM web_users');
     if (Number(rows[0].count) > 0) return false;
     if (!username || !passwordHash) {
       throw new Error('В базе нет пользователей. Для первого запуска укажите временные BOOTSTRAP_ADMIN_USERNAME и BOOTSTRAP_ADMIN_PASSWORD.');
     }
     const now = isoNow();
     await this.pool.query(
-      `INSERT INTO users (username, password_hash, role, active, session_version, password_changed_at, created_at, updated_at)
+      `INSERT INTO web_users (username, password_hash, role, active, session_version, password_changed_at, created_at, updated_at)
        VALUES ($1, $2, 'administrator', TRUE, 1, $3, $3, $3)`,
       [username, passwordHash, now]
     );
@@ -275,7 +278,7 @@ export class MenuTvStore {
   async getActiveUser(username) {
     const { rows } = await this.pool.query(
       `SELECT username, password_hash, role, active, session_version, password_changed_at, created_at, updated_at
-       FROM users WHERE username = $1 AND active = TRUE`,
+       FROM web_users WHERE username = $1 AND active = TRUE`,
       [username]
     );
     return normaliseRow(rows[0]);
@@ -283,7 +286,7 @@ export class MenuTvStore {
 
   async updateUserPassword(username, passwordHash) {
     const { rows } = await this.pool.query(
-      `UPDATE users
+      `UPDATE web_users
        SET password_hash = $1, session_version = session_version + 1, password_changed_at = $2, updated_at = $2
        WHERE username = $3 AND active = TRUE
        RETURNING username, password_hash, role, active, session_version, password_changed_at, created_at, updated_at`,

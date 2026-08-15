@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.1.9"
+SCRIPT_VERSION="1.1.10"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 BRANCH="main"
@@ -430,7 +430,7 @@ finalize_bootstrap_administrator() {
 }
 
 administrator_is_persisted() {
-  compose exec -T "$DB_SERVICE" sh -ec 'PGPASSWORD="$POSTGRES_PASSWORD" psql -qtAX -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 1 FROM users LIMIT 1;"' 2>/dev/null | grep -qx '1'
+  compose exec -T "$DB_SERVICE" sh -ec 'PGPASSWORD="$POSTGRES_PASSWORD" psql -qtAX -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 1 FROM web_users LIMIT 1;"' 2>/dev/null | grep -qx '1'
 }
 
 bootstrap_administrator_is_configured() {
@@ -517,13 +517,13 @@ build_and_start() {
   compose config -q || return 1
   if [[ "$mode" == build ]]; then
     log "Сборка и запуск изменённых контейнеров"
-    compose up -d --build --wait || return 1
+    compose up -d --build --wait || { show_app_failure; return 1; }
   else
     log "Применение изменённой конфигурации контейнеров"
-    compose up -d --wait || return 1
+    compose up -d --wait || { show_app_failure; return 1; }
   fi
   log "Проверка готовности приложения"
-  verify_application || return 1
+  verify_application || { show_app_failure; return 1; }
   log "Проверка SFTP-сервера"
   verify_sftp || return 1
   if [[ "$check_https" == true ]]; then
@@ -531,6 +531,11 @@ build_and_start() {
     verify_https_certificate "$domain" || return 1
   fi
   finalize_bootstrap_administrator
+}
+
+show_app_failure() {
+  warn "Журнал контейнера Menu TV 2.0 (последние 120 строк):"
+  compose logs --tail=120 "$APP_SERVICE" >&2 || true
 }
 
 source_requires_runtime_update() {

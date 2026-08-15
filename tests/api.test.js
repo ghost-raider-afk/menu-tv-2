@@ -7,6 +7,17 @@ import { MenuTvStore } from '../src/db.js';
 
 const memoryDb = newDb({ autoCreateForeignKeyIndices: true });
 const { Pool } = memoryDb.adapters.createPg();
+const schemaPool = new Pool();
+// SFTPGo owns this table in the production PostgreSQL database.  Keeping it
+// here makes sure the web-administrator migration never collides with it.
+await schemaPool.query(`
+  CREATE TABLE users (
+    id BIGSERIAL PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    status INTEGER NOT NULL DEFAULT 1
+  )
+`);
+await schemaPool.end();
 const config = {
   appName: 'Menu TV 2.0 test',
   host: '127.0.0.1',
@@ -362,9 +373,9 @@ test('catalogue entries and monitor menu drafts are persisted in PostgreSQL', as
   assert.equal(productDelete.status, 409);
 });
 
-test('administrator password is hashed in the database and can be changed from the profile', async () => {
+test('administrator password is hashed in the dedicated web-user database table and can be changed from the profile', async () => {
   const cookie = await adminCookie();
-  const users = await store.pool.query('SELECT username, password_hash FROM users WHERE username = $1', ['admin']);
+  const users = await store.pool.query('SELECT username, password_hash FROM web_users WHERE username = $1', ['admin']);
   assert.equal(users.rows.length, 1);
   assert.match(users.rows[0].password_hash, /^scrypt\$/);
   assert.equal(users.rows[0].password_hash.includes(config.bootstrapAdmin.password), false);
