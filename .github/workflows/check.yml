@@ -64,6 +64,13 @@ jobs:
           const health = await fetch(`${base}/healthz`);
           if (!health.ok || (await health.json()).service !== 'menu-tv-2.0') throw new Error('health check failed');
 
+          const loaderResponse = await fetch(`${base}/app.js`);
+          const loader = await loaderResponse.text();
+          if (!loaderResponse.ok || !loader.includes('/css/tv1.css') || !loader.includes('tv-menu-1')) throw new Error('TV Menu 1 frontend loader missing');
+          const shellResponse = await fetch(`${base}/js/components/shell.js`);
+          const shellSource = await shellResponse.text();
+          if (!shellResponse.ok || !shellSource.includes('ui-rail') || !shellSource.includes('ui-context')) throw new Error('TV Menu 1 shell missing');
+
           const login = await fetch(`${base}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
