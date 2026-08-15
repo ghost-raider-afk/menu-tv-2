@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>ТВ МЕНЮ</title>
+  </head>
+  <body
+    x-data="{ page: 'settings', loaded: true, darkMode: false, sidebarToggle: false }"
+    x-init="darkMode = JSON.parse(localStorage.getItem('darkMode') || 'false'); $watch('darkMode', value => localStorage.setItem('darkMode', JSON.stringify(value)))"
+    :class="{ 'dark bg-gray-900': darkMode }"
+  >
+    <include src="./partials/preloader.html"></include>
+
+    <div class="flex h-screen overflow-hidden">
+      <include src="./partials/sidebar.html"></include>
+
+      <div class="relative flex flex-1 flex-col overflow-x-hidden overflow-y-auto">
+        <include src="./partials/overlay.html"></include>
+        <include src="./partials/header.html"></include>
+
+        <main class="flex-1">
+          <div class="mx-auto max-w-(--breakpoint-2xl) p-4 md:p-6">
+            <div class="mb-6">
+              <p class="text-sm font-medium text-brand-500">УПРАВЛЕНИЕ</p>
+              <h1 class="mt-1 text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">Настройки</h1>
+            </div>
+
+            <div class="grid gap-6 xl:grid-cols-2">
+              <section class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6" aria-labelledby="user-settings-title">
+                <h2 id="user-settings-title" class="text-lg font-semibold text-gray-900 dark:text-white">Настройки пользователя</h2>
+                <form id="user-settings-form" class="mt-5 space-y-5">
+                  <div>
+                    <label for="display-name" class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Имя для отображения</label>
+                    <input id="display-name" name="display_name" type="text" maxlength="80" required class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 outline-hidden transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:text-white/90" />
+                  </div>
+                  <label class="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-gray-200 px-4 py-3 dark:border-gray-800">
+                    <span>
+                      <span class="block text-sm font-medium text-gray-800 dark:text-white/90">Уведомления</span>
+                      <span class="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">Показывать новые действия в колокольчике.</span>
+                    </span>
+                    <input id="notifications-enabled" name="notifications_enabled" type="checkbox" class="h-5 w-5 rounded border-gray-300 text-brand-500 focus:ring-brand-500" />
+                  </label>
+                  <p id="user-settings-message" class="hidden rounded-lg border px-3 py-2 text-sm" role="status" aria-live="polite"></p>
+                  <button id="user-settings-submit" type="submit" class="inline-flex h-11 items-center justify-center rounded-lg bg-brand-500 px-4 text-sm font-medium text-white transition hover:bg-brand-600 disabled:cursor-wait disabled:opacity-70">Сохранить</button>
+                </form>
+              </section>
+
+              <section class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6" aria-labelledby="site-settings-title">
+                <h2 id="site-settings-title" class="text-lg font-semibold text-gray-900 dark:text-white">Настройки сайта</h2>
+                <form id="site-settings-form" class="mt-5 space-y-5">
+                  <div>
+                    <label for="site-app-name" class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Название приложения</label>
+                    <input id="site-app-name" type="text" disabled class="h-11 w-full cursor-not-allowed rounded-lg border border-gray-200 bg-gray-50 px-4 text-sm text-gray-500 dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-400" />
+                  </div>
+                  <div>
+                    <label for="site-domain" class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Домен</label>
+                    <input id="site-domain" type="text" disabled class="h-11 w-full cursor-not-allowed rounded-lg border border-gray-200 bg-gray-50 px-4 text-sm text-gray-500 dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-400" />
+                  </div>
+                  <div>
+                    <label for="site-timezone" class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Часовой пояс</label>
+                    <input id="site-timezone" name="timezone" type="text" maxlength="80" required class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 outline-hidden transition focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:text-white/90" />
+                  </div>
+                  <p id="site-settings-message" class="hidden rounded-lg border px-3 py-2 text-sm" role="status" aria-live="polite"></p>
+                  <button id="site-settings-submit" type="submit" class="inline-flex h-11 items-center justify-center rounded-lg bg-brand-500 px-4 text-sm font-medium text-white transition hover:bg-brand-600 disabled:cursor-wait disabled:opacity-70">Сохранить</button>
+                </form>
+              </section>
+            </div>
+
+            <section id="activity" class="mt-6 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6" aria-labelledby="activity-title">
+              <div class="flex items-center justify-between gap-4">
+                <div>
+                  <p class="text-sm font-medium text-brand-500">АУДИТ</p>
+                  <h2 id="activity-title" class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">Журнал действий</h2>
+                </div>
+                <button id="refresh-activity" type="button" class="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]">Обновить</button>
+              </div>
+              <div data-activity-list class="mt-5 divide-y divide-gray-100 dark:divide-gray-800"></div>
+              <p data-activity-empty class="hidden py-8 text-center text-sm text-gray-500 dark:text-gray-400">Действий пока нет.</p>
+            </section>
+          </div>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
