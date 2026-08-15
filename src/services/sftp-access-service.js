@@ -1,5 +1,5 @@
 import { ConflictError, NotFoundError } from '../shared/errors.js';
-import { generateSftpPassword } from '../sftp.js';
+import { generateSftpPassword } from '../sftp/index.js';
 
 export function createSftpAccessService({ store, sftp, config }) {
   return Object.freeze({
