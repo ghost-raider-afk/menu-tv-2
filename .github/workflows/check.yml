@@ -36,7 +36,8 @@ jobs:
       - name: Check installer syntax
         run: bash -n menu-tv-2.sh
       - name: Check installer test ref
-        run: MENU_TV_REF=agent/backend-modularization bash menu-tv-2.sh help | grep -F 'Ветка/реф: agent/backend-modularization'
+        run: |
+          MENU_TV_REF=agent/backend-modularization bash menu-tv-2.sh help | grep -F 'Ветка/реф: agent/backend-modularization'
       - name: Prepare clean-install environment
         run: |
           cp .env.example .env.ci
