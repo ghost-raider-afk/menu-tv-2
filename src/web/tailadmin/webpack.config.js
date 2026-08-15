@@ -22,13 +22,13 @@ const processNestedHtml = (content, loaderContext, dir = null) =>
 
 // Only the TV MENU application shell is published. The remaining upstream
 // template examples stay out of the production build.
-const generateHTMLPlugins = () => [
+const generateHTMLPlugins = () => ["index.html", "signin.html"].map((filename) =>
   new HtmlWebpackPlugin({
-    filename: "index.html",
-    template: path.join(sourceDir, "index.html"),
+    filename,
+    template: path.join(sourceDir, filename),
     inject: "body",
   }),
-];
+);
 
 module.exports = {
   mode: "development",
