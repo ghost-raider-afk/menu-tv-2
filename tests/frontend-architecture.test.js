@@ -39,11 +39,12 @@ test('shell is composed from dedicated permanent components', async () => {
 });
 
 test('menu editor owns the canonical left-aligned TV board table', async () => {
-  const [rows, preview, renderer, editorCss, tablesCss, templatesHtml] = await Promise.all([
+  const [rows, preview, renderer, editorCss, editorHtml, tablesCss, templatesHtml] = await Promise.all([
     read('js/editor/rows.js'),
     read('js/editor/preview.js'),
     read('js/editor/renderer.js'),
     read('css/editor/editor.css'),
+    read('screen-editor.html'),
     read('css/tables.css'),
     read('templates.html')
   ]);
@@ -58,6 +59,9 @@ test('menu editor owns the canonical left-aligned TV board table', async () => {
   assert.match(editorCss, /\.tv-board-table/);
   assert.match(editorCss, /left:\.8%/);
   assert.match(editorCss, /grid-template-columns:minmax\(0,76fr\) minmax\(0,12fr\) minmax\(0,12fr\)/);
+  assert.match(editorCss, /\.editor-main-column\{display:grid;min-width:0;gap:0/);
+  assert.match(editorCss, /\.editor-preview-card\{min-width:0;padding:0;border-top:0/);
+  assert.match(editorHtml, /class="editor-main-column"[\s\S]*editor-menu-card[\s\S]*editor-preview-card/);
   assert.doesNotMatch(editorCss, /\.tv1-menu-table/);
   assert.doesNotMatch(tablesCss, /menu-preview|editor-menu-table/);
   assert.match(templatesHtml, /id="template-background-file"/);
