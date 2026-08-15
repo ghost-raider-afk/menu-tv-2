@@ -22,15 +22,19 @@
       </div>
     </div>
 
-    <button
-      type="button"
-      aria-label="Переключить тему"
-      class="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-100 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-800"
-      @click="darkMode = !darkMode"
-    >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M20.1 15.5A8.4 8.4 0 0 1 8.5 3.9a8.4 8.4 0 1 0 11.6 11.6Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-    </button>
+    <div class="flex items-center gap-2">
+      <span data-session-user class="hidden text-sm text-gray-500 dark:text-gray-400 sm:block"></span>
+      <button
+        type="button"
+        aria-label="Переключить тему"
+        class="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-100 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-800"
+        @click="darkMode = !darkMode"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M20.1 15.5A8.4 8.4 0 0 1 8.5 3.9a8.4 8.4 0 1 0 11.6 11.6Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </button>
+      <button id="logout-button" type="button" class="hidden rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 sm:block dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-800">Выйти</button>
+    </div>
   </div>
 </header>
