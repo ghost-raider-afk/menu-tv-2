@@ -18,6 +18,5 @@ export function createSessionRouter({ store, config }) {
       notifications_enabled: preferences.notifications_enabled
     });
   });
-  router.get('/overview', async (_request, response) => response.json(await store.overview()));
   return router;
 }
