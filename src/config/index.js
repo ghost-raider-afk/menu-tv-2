@@ -30,6 +30,7 @@ export function loadConfig(env = process.env) {
     siteAssetsRoot: env.SITE_ASSETS_ROOT?.trim() || '/srv/menu-tv-site-assets',
     siteLogoMaxBytes: integer('SITE_LOGO_MAX_BYTES', env.SITE_LOGO_MAX_BYTES, '2097152', { minimum: 1024, maximum: 10485760 }),
     siteFaviconMaxBytes: integer('SITE_FAVICON_MAX_BYTES', env.SITE_FAVICON_MAX_BYTES, '524288', { minimum: 1024, maximum: 5242880 }),
+    templateBackgroundMaxBytes: integer('TEMPLATE_BACKGROUND_MAX_BYTES', env.TEMPLATE_BACKGROUND_MAX_BYTES, '12582912', { minimum: 1024, maximum: 52428800 }),
     db: Object.freeze({
       host: env.POSTGRES_HOST?.trim() || 'db',
       port: integer('POSTGRES_PORT', env.POSTGRES_PORT, '5432'),
