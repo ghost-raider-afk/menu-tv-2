@@ -11,6 +11,7 @@ function normaliseRow(row) {
     ...(row.id === undefined ? {} : { id: Number(row.id) }),
     ...(row.location_id === undefined ? {} : { location_id: Number(row.location_id) }),
     ...(row.template_id === undefined || row.template_id === null ? {} : { template_id: Number(row.template_id) }),
+    ...(row.session_version === undefined || row.session_version === null ? {} : { session_version: Number(row.session_version) }),
     ...(row.screen_count === undefined ? {} : { screen_count: Number(row.screen_count) }),
     ...(row.sftp_directory_id === undefined || row.sftp_directory_id === null ? {} : { sftp_directory_id: Number(row.sftp_directory_id) }),
     ...(row.bound_location_id === undefined || row.bound_location_id === null ? {} : { bound_location_id: Number(row.bound_location_id) })
@@ -25,6 +26,25 @@ function normaliseActivityEvent(row) {
   } catch {
     return { ...event, metadata: {} };
   }
+}
+
+function jsonValue(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function normaliseMenuRecord(row) {
+  const record = normaliseRow(row);
+  if (!record) return null;
+  return {
+    ...record,
+    rows: jsonValue(record.rows_json, []),
+    settings: jsonValue(record.settings_json, {})
+  };
 }
 
 export class MenuTvStore {
@@ -85,7 +105,38 @@ export class MenuTvStore {
         name TEXT NOT NULL UNIQUE,
         description TEXT NOT NULL DEFAULT '',
         active BOOLEAN NOT NULL DEFAULT TRUE,
+        rows_json TEXT NOT NULL DEFAULT '[]',
+        settings_json TEXT NOT NULL DEFAULT '{}',
         created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS catalog_products (
+        id BIGSERIAL PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        producer TEXT NOT NULL DEFAULT '',
+        characteristics TEXT NOT NULL DEFAULT '',
+        strength TEXT NOT NULL DEFAULT '',
+        price_primary TEXT NOT NULL DEFAULT '',
+        price_secondary TEXT NOT NULL DEFAULT '',
+        alcoholic BOOLEAN NOT NULL DEFAULT FALSE,
+        beverage_color TEXT NOT NULL DEFAULT 'none',
+        filtration TEXT NOT NULL DEFAULT 'none',
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS catalog_packaging (
+        id BIGSERIAL PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        unit_price TEXT NOT NULL DEFAULT '',
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS screen_drafts (
+        screen_id BIGINT PRIMARY KEY REFERENCES screens(id) ON DELETE CASCADE,
+        rows_json TEXT NOT NULL DEFAULT '[]',
+        settings_json TEXT NOT NULL DEFAULT '{}',
         updated_at TIMESTAMPTZ NOT NULL
       );
       CREATE TABLE IF NOT EXISTS user_preferences (
@@ -96,6 +147,16 @@ export class MenuTvStore {
         job_title TEXT NOT NULL DEFAULT '',
         theme TEXT NOT NULL DEFAULT 'system',
         notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS users (
+        username TEXT PRIMARY KEY,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'administrator' CHECK(role IN ('administrator')),
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        session_version INTEGER NOT NULL DEFAULT 1,
+        password_changed_at TIMESTAMPTZ NOT NULL,
         created_at TIMESTAMPTZ NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL
       );
@@ -134,10 +195,16 @@ export class MenuTvStore {
       ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_size BIGINT;
       ALTER TABLE screens ADD COLUMN IF NOT EXISTS published_sha256 TEXT;
       ALTER TABLE screens ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
+      ALTER TABLE templates ADD COLUMN IF NOT EXISTS rows_json TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE templates ADD COLUMN IF NOT EXISTS settings_json TEXT NOT NULL DEFAULT '{}';
       ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT '';
       ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
       ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS job_title TEXT NOT NULL DEFAULT '';
       ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'system';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'administrator';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;
       ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS date_format TEXT NOT NULL DEFAULT 'DD.MM.YYYY';
       ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS dashboard_refresh_seconds INTEGER NOT NULL DEFAULT 45;
       ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS default_screen_resolution TEXT NOT NULL DEFAULT '1920×1080';
@@ -150,6 +217,7 @@ export class MenuTvStore {
       CREATE INDEX IF NOT EXISTS activity_events_created_at_index ON activity_events(created_at DESC);
       CREATE INDEX IF NOT EXISTS activity_events_unread_index ON activity_events(read_at) WHERE read_at IS NULL;
       UPDATE screens SET delivery_filename = 'monitor-' || id::text || '.jpg' WHERE delivery_filename IS NULL;
+      UPDATE users SET password_changed_at = created_at WHERE password_changed_at IS NULL;
     `);
     const now = isoNow();
     await this.pool.query(
@@ -186,6 +254,42 @@ export class MenuTvStore {
         (SELECT COUNT(*)::int FROM templates) AS templates
     `);
     return Object.fromEntries(Object.entries(rows[0]).map(([key, value]) => [key, Number(value)]));
+  }
+
+  async ensureInitialAdministrator({ username, passwordHash } = {}) {
+    const { rows } = await this.pool.query('SELECT COUNT(*)::int AS count FROM users');
+    if (Number(rows[0].count) > 0) return false;
+    if (!username || !passwordHash) {
+      throw new Error('В базе нет пользователей. Для первого запуска укажите временные BOOTSTRAP_ADMIN_USERNAME и BOOTSTRAP_ADMIN_PASSWORD.');
+    }
+    const now = isoNow();
+    await this.pool.query(
+      `INSERT INTO users (username, password_hash, role, active, session_version, password_changed_at, created_at, updated_at)
+       VALUES ($1, $2, 'administrator', TRUE, 1, $3, $3, $3)`,
+      [username, passwordHash, now]
+    );
+    await this.getUserPreferences(username);
+    return true;
+  }
+
+  async getActiveUser(username) {
+    const { rows } = await this.pool.query(
+      `SELECT username, password_hash, role, active, session_version, password_changed_at, created_at, updated_at
+       FROM users WHERE username = $1 AND active = TRUE`,
+      [username]
+    );
+    return normaliseRow(rows[0]);
+  }
+
+  async updateUserPassword(username, passwordHash) {
+    const { rows } = await this.pool.query(
+      `UPDATE users
+       SET password_hash = $1, session_version = session_version + 1, password_changed_at = $2, updated_at = $2
+       WHERE username = $3 AND active = TRUE
+       RETURNING username, password_hash, role, active, session_version, password_changed_at, created_at, updated_at`,
+      [passwordHash, isoNow(), username]
+    );
+    return normaliseRow(rows[0]);
   }
 
   async getUserPreferences(username) {
@@ -343,6 +447,10 @@ export class MenuTvStore {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $7) RETURNING id
     `, [location_id, name, resolution, status, active, template_id, now]);
     await this.pool.query('UPDATE screens SET delivery_filename = $1 WHERE id = $2', [`monitor-${rows[0].id}.jpg`, rows[0].id]);
+    await this.pool.query(
+      'INSERT INTO screen_drafts (screen_id, rows_json, settings_json, updated_at) VALUES ($1, $2, $3, $4)',
+      [rows[0].id, '[]', '{}', now]
+    );
     return this.getScreen(rows[0].id);
   }
 
@@ -450,33 +558,130 @@ export class MenuTvStore {
     return `ТВ ${Number(rows[0].count) + 1}`;
   }
 
-  async listTemplates() {
+  async getScreenDraft(screenId) {
+    const { rows } = await this.pool.query('SELECT * FROM screen_drafts WHERE screen_id = $1', [screenId]);
+    return normaliseMenuRecord(rows[0]) || { screen_id: screenId, rows: [], settings: {} };
+  }
+
+  async saveScreenDraft(screenId, { rows, settings }) {
+    const now = isoNow();
+    await this.pool.query(
+      `INSERT INTO screen_drafts (screen_id, rows_json, settings_json, updated_at)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (screen_id) DO UPDATE SET rows_json = EXCLUDED.rows_json, settings_json = EXCLUDED.settings_json, updated_at = EXCLUDED.updated_at`,
+      [screenId, JSON.stringify(rows), JSON.stringify(settings), now]
+    );
+    const { rows: saved } = await this.pool.query('SELECT * FROM screen_drafts WHERE screen_id = $1', [screenId]);
+    return normaliseMenuRecord(saved[0]);
+  }
+
+  async screensUsingCatalog(kind, catalogId) {
+    const column = kind === 'product' ? 'product_id' : 'packaging_id';
     const { rows } = await this.pool.query(`
-      SELECT t.*, COUNT(s.id)::int AS assigned_screens
-      FROM templates t LEFT JOIN screens s ON s.template_id = t.id
-      GROUP BY t.id ORDER BY t.name
+      SELECT d.screen_id, d.rows_json, s.name AS screen_name, l.name AS location_name
+      FROM screen_drafts d JOIN screens s ON s.id = d.screen_id JOIN locations l ON l.id = s.location_id
     `);
+    return rows.filter((row) => jsonValue(row.rows_json, []).some((item) => Number(item?.[column]) === Number(catalogId)))
+      .map((row) => ({ screen_id: Number(row.screen_id), screen_name: row.screen_name, location_name: row.location_name }));
+  }
+
+  async listProducts() {
+    const { rows } = await this.pool.query('SELECT * FROM catalog_products ORDER BY name');
     return rows.map(normaliseRow);
+  }
+
+  async getProduct(id) {
+    const { rows } = await this.pool.query('SELECT * FROM catalog_products WHERE id = $1', [id]);
+    return normaliseRow(rows[0]);
+  }
+
+  async createProduct(product) {
+    const now = isoNow();
+    const { rows } = await this.pool.query(
+      `INSERT INTO catalog_products (name, producer, characteristics, strength, price_primary, price_secondary, alcoholic, beverage_color, filtration, active, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11) RETURNING id`,
+      [product.name, product.producer, product.characteristics, product.strength, product.price_primary, product.price_secondary,
+        product.alcoholic, product.beverage_color, product.filtration, product.active, now]
+    );
+    return this.getProduct(rows[0].id);
+  }
+
+  async updateProduct(id, product) {
+    const { rowCount } = await this.pool.query(
+      `UPDATE catalog_products
+       SET name = $1, producer = $2, characteristics = $3, strength = $4, price_primary = $5, price_secondary = $6,
+         alcoholic = $7, beverage_color = $8, filtration = $9, active = $10, updated_at = $11
+       WHERE id = $12`,
+      [product.name, product.producer, product.characteristics, product.strength, product.price_primary, product.price_secondary,
+        product.alcoholic, product.beverage_color, product.filtration, product.active, isoNow(), id]
+    );
+    return rowCount ? this.getProduct(id) : null;
+  }
+
+  async deleteProduct(id) {
+    const { rowCount } = await this.pool.query('DELETE FROM catalog_products WHERE id = $1', [id]);
+    return rowCount > 0;
+  }
+
+  async listPackaging() {
+    const { rows } = await this.pool.query('SELECT * FROM catalog_packaging ORDER BY name');
+    return rows.map(normaliseRow);
+  }
+
+  async getPackaging(id) {
+    const { rows } = await this.pool.query('SELECT * FROM catalog_packaging WHERE id = $1', [id]);
+    return normaliseRow(rows[0]);
+  }
+
+  async createPackaging(packaging) {
+    const now = isoNow();
+    const { rows } = await this.pool.query(
+      'INSERT INTO catalog_packaging (name, unit_price, active, created_at, updated_at) VALUES ($1, $2, $3, $4, $4) RETURNING id',
+      [packaging.name, packaging.unit_price, packaging.active, now]
+    );
+    return this.getPackaging(rows[0].id);
+  }
+
+  async updatePackaging(id, packaging) {
+    const { rowCount } = await this.pool.query(
+      'UPDATE catalog_packaging SET name = $1, unit_price = $2, active = $3, updated_at = $4 WHERE id = $5',
+      [packaging.name, packaging.unit_price, packaging.active, isoNow(), id]
+    );
+    return rowCount ? this.getPackaging(id) : null;
+  }
+
+  async deletePackaging(id) {
+    const { rowCount } = await this.pool.query('DELETE FROM catalog_packaging WHERE id = $1', [id]);
+    return rowCount > 0;
+  }
+
+  async listTemplates() {
+    const [templates, assignments] = await Promise.all([
+      this.pool.query('SELECT * FROM templates ORDER BY name'),
+      this.pool.query('SELECT template_id, COUNT(*)::int AS assigned_screens FROM screens WHERE template_id IS NOT NULL GROUP BY template_id')
+    ]);
+    const counts = new Map(assignments.rows.map((row) => [Number(row.template_id), Number(row.assigned_screens)]));
+    return templates.rows.map((row) => normaliseMenuRecord({ ...row, assigned_screens: counts.get(Number(row.id)) || 0 }));
   }
 
   async getTemplate(id) {
     const { rows } = await this.pool.query('SELECT * FROM templates WHERE id = $1', [id]);
-    return normaliseRow(rows[0]);
+    return normaliseMenuRecord(rows[0]);
   }
 
-  async createTemplate({ name, description = '', active = true }) {
+  async createTemplate({ name, description = '', active = true, rows: menuRows = [], settings = {} }) {
     const now = isoNow();
     const { rows } = await this.pool.query(
-      'INSERT INTO templates (name, description, active, created_at, updated_at) VALUES ($1, $2, $3, $4, $4) RETURNING id',
-      [name, description, active, now]
+      'INSERT INTO templates (name, description, active, rows_json, settings_json, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $6) RETURNING id',
+      [name, description, active, JSON.stringify(menuRows), JSON.stringify(settings), now]
     );
     return this.getTemplate(rows[0].id);
   }
 
-  async updateTemplate(id, { name, description = '', active = true }) {
+  async updateTemplate(id, { name, description = '', active = true, rows: menuRows = [], settings = {} }) {
     const { rowCount } = await this.pool.query(
-      'UPDATE templates SET name = $1, description = $2, active = $3, updated_at = $4 WHERE id = $5',
-      [name, description, active, isoNow(), id]
+      'UPDATE templates SET name = $1, description = $2, active = $3, rows_json = $4, settings_json = $5, updated_at = $6 WHERE id = $7',
+      [name, description, active, JSON.stringify(menuRows), JSON.stringify(settings), isoNow(), id]
     );
     return rowCount ? this.getTemplate(id) : null;
   }

@@ -7,11 +7,16 @@ const API = {
   session: "/api/session",
   overview: "/api/overview",
   userSettings: "/api/settings/user",
+  userPassword: "/api/settings/user/password",
   siteSettings: "/api/settings/site",
   notifications: "/api/notifications",
   locations: "/api/locations",
   screens: "/api/screens",
-  templates: "/api/templates"
+  templates: "/api/templates",
+  products: "/api/catalog/products",
+  packaging: "/api/catalog/packaging",
+  sftpDirectories: "/api/sftp/directories",
+  sftpConnection: "/api/sftp/connection"
 };
 
 const state = {
@@ -22,9 +27,14 @@ const state = {
   locations: [],
   screens: [],
   templates: [],
+  products: [],
+  packaging: [],
+  sftpDirectories: [],
   editingLocationId: null,
   editingScreenId: null,
-  editingTemplateId: null
+  editingTemplateId: null,
+  editingProductId: null,
+  editingPackagingId: null
 };
 
 const ICONS = Object.freeze({
@@ -255,41 +265,11 @@ function updateProfileMenu(user) {
   document.querySelectorAll("[data-profile-initials]").forEach((node) => { node.textContent = initials(displayName); });
 }
 
-function prepareChrome() {
-  document.querySelectorAll(".nav-link").forEach((link) => {
-    const name = link.getAttribute("href") === "/locations.html" ? "location"
-      : link.getAttribute("href") === "/screens.html" ? "screen"
-        : link.getAttribute("href") === "/templates.html" ? "template"
-          : link.getAttribute("href") === "/settings.html" ? "settings" : "overview";
-    setIcon(link.querySelector(".nav-icon"), name);
-    if (name === "settings") {
-      const text = [...link.childNodes].find((node) => node.nodeType === Node.TEXT_NODE && node.nodeValue.trim());
-      if (text) text.nodeValue = "Настройки сайта";
-    }
-  });
-  const notificationButton = element("notifications-button");
-  const notificationBadge = notificationButton?.querySelector("[data-notification-count]");
-  setIcon(notificationButton, "bell");
-  if (notificationButton && notificationBadge) notificationButton.append(notificationBadge);
-  setIcon(element("theme-toggle"), currentTheme() === "dark" ? "sun" : "moon");
-
-  const legacyProfile = document.querySelector(".profile-link[data-session-user]");
-  const legacyLogout = element("logout-button");
-  if (legacyProfile && !document.querySelector(".profile-menu")) {
-    const menu = document.createElement("div");
-    menu.className = "profile-menu";
-    const trigger = document.createElement("button");
-    trigger.type = "button";
-    trigger.className = "profile-trigger";
-    trigger.setAttribute("aria-expanded", "false");
-    trigger.setAttribute("aria-haspopup", "menu");
-    trigger.innerHTML = `<span class="profile-avatar" data-profile-initials>ТВ</span><span class="profile-trigger-name" data-session-user>Пользователь</span><span class="profile-caret">${icon("chevron")}</span>`;
-    const panel = document.createElement("section");
-    panel.className = "profile-panel is-hidden";
-    panel.setAttribute("role", "menu");
-    panel.innerHTML = `<div class="profile-summary"><span class="profile-avatar profile-avatar-large" data-profile-initials>ТВ</span><span><strong data-profile-name>Пользователь</strong><small data-profile-email>Настройки учётной записи</small></span></div><a class="profile-menu-item" role="menuitem" href="/profile.html">${icon("user")}<span>Настройки пользователя</span></a><div class="profile-menu-divider"></div><button class="profile-menu-item" data-logout type="button" role="menuitem">${icon("logout")}<span>Выйти</span></button>`;
-    menu.append(trigger, panel);
-    legacyProfile.replaceWith(menu);
+function initialiseChrome() {
+  const menu = document.querySelector(".profile-menu");
+  const trigger = document.querySelector(".profile-trigger");
+  const panel = document.querySelector(".profile-panel");
+  if (menu && trigger && panel) {
     trigger.addEventListener("click", () => {
       const open = panel.classList.contains("is-hidden");
       panel.classList.toggle("is-hidden", !open);
@@ -302,7 +282,6 @@ function prepareChrome() {
       }
     });
   }
-  legacyLogout?.remove();
   document.querySelectorAll("[data-sidebar-toggle]").forEach((button) => button.addEventListener("click", () => {
     document.querySelector("[data-sidebar]")?.classList.toggle("is-open");
   }));
@@ -311,10 +290,6 @@ function prepareChrome() {
     finally { window.location.replace("/signin.html"); }
   }));
   element("theme-toggle")?.addEventListener("click", () => { void toggleTheme(); });
-}
-
-function initialiseChrome() {
-  // Event handlers are installed synchronously before API requests start.
 }
 
 async function toggleTheme() {
@@ -376,6 +351,7 @@ async function loadLocations() {
   state.locations = await api(API.locations);
   const list = document.querySelector("[data-locations-list]");
   if (list) renderLocations();
+  renderSftpLocationOptions();
   return state.locations;
 }
 
@@ -385,10 +361,100 @@ function renderLocations() {
   if (!list || !empty) return;
   const rows = state.locations.map((location) => recordRow(
     location.name,
-    `${location.address || "Адрес не указан"} · мониторов: ${location.screen_count} · ${location.active ? "активна" : "неактивна"}`,
+    `${location.address || "Адрес не указан"} · мониторов: ${location.screen_count} · ${location.sftp_directory_name ? `SFTP: ${location.sftp_directory_name} (${location.sftp_username})` : "SFTP не настроен"}`,
     [makeButton("Изменить", "", () => editLocation(location)), makeButton("Удалить", "danger", () => void deleteLocation(location))]
   ));
   refreshList(list, empty, rows);
+}
+
+function renderSftpLocationOptions() {
+  const select = element("sftp-location");
+  if (!(select instanceof HTMLSelectElement)) return;
+  const selected = select.value;
+  select.replaceChildren(new Option("Выберите торговую точку", ""), ...state.locations.map((location) => new Option(location.name, String(location.id))));
+  select.value = selected;
+  renderSftpBindingState();
+}
+
+async function loadSftpDirectories() {
+  const [directories, connection] = await Promise.all([api(API.sftpDirectories), api(API.sftpConnection)]);
+  state.sftpDirectories = directories;
+  const connectionNode = element("sftp-connection");
+  if (connectionNode) connectionNode.textContent = `${connection.host}:${connection.port}`;
+  renderSftpDirectories();
+  return directories;
+}
+
+function renderSftpDirectories() {
+  const select = element("sftp-directory");
+  if (select instanceof HTMLSelectElement) {
+    const selected = select.value;
+    select.replaceChildren(new Option("Выберите SFTP-папку", ""), ...state.sftpDirectories.map((directory) => {
+      const suffix = directory.bound_location_name ? ` — занята: ${directory.bound_location_name}` : directory.storage_status === "ready" ? " — готова" : " — не создана";
+      const option = new Option(`${directory.name}${suffix}`, String(directory.id));
+      option.disabled = Boolean(directory.bound_location_id);
+      return option;
+    }));
+    select.value = selected;
+  }
+  const list = document.querySelector("[data-sftp-directories-list]");
+  const empty = document.querySelector("[data-sftp-directories-empty]");
+  if (!list || !empty) return;
+  const rows = state.sftpDirectories.map((directory) => recordRow(
+    directory.name,
+    `${directory.storage_status === "ready" ? "Папка создана" : "Папка ещё не создана"}${directory.bound_location_name ? ` · привязана к: ${directory.bound_location_name}` : " · не привязана"}`,
+    [
+      ...(directory.storage_status !== "ready" ? [makeButton("Создать папку", "", () => void provisionSftpDirectory(directory))] : []),
+      ...(directory.bound_location_name ? [] : [makeButton("Удалить", "danger", () => void deleteSftpDirectory(directory))])
+    ]
+  ));
+  refreshList(list, empty, rows);
+}
+
+function renderSftpBindingState() {
+  const locationId = Number(element("sftp-location")?.value);
+  const current = state.locations.find((location) => location.id === locationId);
+  const details = element("sftp-binding-state");
+  const submit = element("sftp-bind-submit");
+  const reset = element("sftp-reset-password");
+  const unbind = element("sftp-unbind");
+  if (!current) {
+    if (details) details.textContent = "Выберите торговую точку, затем вручную создайте и привяжите папку.";
+    if (submit) submit.disabled = false;
+    reset?.classList.add("is-hidden");
+    unbind?.classList.add("is-hidden");
+    return;
+  }
+  const bound = Boolean(current.sftp_directory_id);
+  if (details) details.textContent = bound
+    ? `Сейчас: ${current.sftp_directory_name} · логин ${current.sftp_username} · доступ только на чтение.`
+    : "SFTP-папка и доступ для этой точки ещё не настроены.";
+  if (submit) submit.disabled = bound;
+  reset?.classList.toggle("is-hidden", !bound);
+  unbind?.classList.toggle("is-hidden", !bound);
+}
+
+function setSftpCredentials(credentials) {
+  const target = element("sftp-credentials");
+  if (!target) return;
+  target.textContent = credentials ? `Данные для CX Проводника — хост: ${credentials.host}, порт: ${credentials.port}, логин: ${credentials.username}, пароль: ${credentials.password}. Сохраните пароль: повторно он не показывается.` : "";
+  target.className = credentials ? "form-message is-success field-full" : "form-message is-hidden field-full";
+}
+
+async function provisionSftpDirectory(directory) {
+  try {
+    await api(`${API.sftpDirectories}/${directory.id}/provision`, { method: "POST" });
+    await loadSftpDirectories();
+    await loadNotifications();
+  } catch (error) { setMessage("sftp-message", error.message); }
+}
+
+async function deleteSftpDirectory(directory) {
+  if (!window.confirm(`Удалить SFTP-папку «${directory.name}»?`)) return;
+  try {
+    await api(`${API.sftpDirectories}/${directory.id}`, { method: "DELETE" });
+    await loadSftpDirectories();
+  } catch (error) { setMessage("sftp-message", error.message); }
 }
 
 function resetLocationForm() {
@@ -425,7 +491,7 @@ async function deleteLocation(location) {
 function initialiseLocations() {
   const form = element("location-form");
   if (!(form instanceof HTMLFormElement)) return;
-  void loadLocations().catch((error) => setMessage("location-message", error.message));
+  void Promise.all([loadLocations(), loadSftpDirectories()]).catch((error) => setMessage("location-message", error.message));
   element("refresh-locations")?.addEventListener("click", () => { void loadLocations(); });
   element("cancel-location-edit")?.addEventListener("click", resetLocationForm);
   form.addEventListener("submit", async (event) => {
@@ -438,9 +504,54 @@ function initialiseLocations() {
       await api(url, { method: state.editingLocationId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       resetLocationForm();
       await loadLocations();
+      renderSftpBindingState();
       await loadNotifications();
     } catch (error) { setMessage("location-message", error.message); }
     finally { setPending(submit, false, "Сохраняем…"); }
+  });
+  element("sftp-location")?.addEventListener("change", renderSftpBindingState);
+  element("sftp-directory-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submit = element("sftp-directory-submit");
+    setPending(submit, true, "Создаём…");
+    try {
+      const directory = await api(API.sftpDirectories, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: element("sftp-directory-name").value }) });
+      element("sftp-directory-name").value = "";
+      await provisionSftpDirectory(directory);
+    } catch (error) { setMessage("sftp-message", error.message); }
+    finally { setPending(submit, false, "Создаём…"); }
+  });
+  element("sftp-binding-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const locationId = Number(element("sftp-location").value);
+    const submit = element("sftp-bind-submit");
+    setPending(submit, true, "Привязываем…");
+    try {
+      const result = await api(`${API.locations}/${locationId}/sftp-binding`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        directory_id: Number(element("sftp-directory").value), username: element("sftp-username").value
+      }) });
+      setSftpCredentials(result.credentials);
+      await Promise.all([loadLocations(), loadSftpDirectories(), loadNotifications()]);
+    } catch (error) { setMessage("sftp-message", error.message); }
+    finally { setPending(submit, false, "Привязываем…"); }
+  });
+  element("sftp-reset-password")?.addEventListener("click", async () => {
+    const locationId = Number(element("sftp-location").value);
+    if (!window.confirm("Сгенерировать новый пароль SFTP для этой точки?")) return;
+    try {
+      const result = await api(`${API.locations}/${locationId}/sftp-password`, { method: "POST" });
+      setSftpCredentials(result.credentials);
+      await loadNotifications();
+    } catch (error) { setMessage("sftp-message", error.message); }
+  });
+  element("sftp-unbind")?.addEventListener("click", async () => {
+    const locationId = Number(element("sftp-location").value);
+    if (!window.confirm("Отключить SFTP-доступ выбранной точки?")) return;
+    try {
+      await api(`${API.locations}/${locationId}/sftp-binding`, { method: "DELETE" });
+      setSftpCredentials(null);
+      await Promise.all([loadLocations(), loadSftpDirectories(), loadNotifications()]);
+    } catch (error) { setMessage("sftp-message", error.message); }
   });
 }
 
@@ -456,7 +567,7 @@ function renderTemplates() {
   if (!list || !empty) return;
   const rows = state.templates.map((template) => recordRow(
     template.name,
-    `${template.description || "Без описания"} · ${template.active ? "активен" : "неактивен"} · мониторов: ${template.assigned_screens || 0}`,
+    `${template.description || "Без описания"} · ${template.active ? "активен" : "неактивен"} · мониторов: ${template.assigned_screens || 0} · ${template.settings?.font_scale === "large" ? "крупный текст" : template.settings?.font_scale === "small" ? "компактный текст" : "обычный текст"}`,
     [makeButton("Изменить", "", () => editTemplate(template)), makeButton("Удалить", "danger", () => void deleteTemplate(template))]
   ));
   refreshList(list, empty, rows);
@@ -468,6 +579,12 @@ function resetTemplateForm() {
   state.editingTemplateId = null;
   form.reset();
   element("template-active").checked = true;
+  element("template-background-color").value = "#101828";
+  element("template-accent-color").value = "#2563EB";
+  element("template-text-color").value = "#F8FAFC";
+  element("template-font-scale").value = "medium";
+  element("template-table-width").value = "normal";
+  element("template-menu-title").value = "";
   element("template-form-title").textContent = "Новый шаблон";
   element("template-submit").textContent = "Создать шаблон";
   element("cancel-template-edit")?.classList.add("is-hidden");
@@ -479,6 +596,13 @@ function editTemplate(template) {
   element("template-name").value = template.name;
   element("template-description").value = template.description || "";
   element("template-active").checked = template.active;
+  const settings = normaliseEditorSettings(template.settings || {});
+  element("template-background-color").value = settings.background_color;
+  element("template-accent-color").value = settings.accent_color;
+  element("template-text-color").value = settings.text_color;
+  element("template-font-scale").value = settings.font_scale;
+  element("template-table-width").value = settings.table_width;
+  element("template-menu-title").value = settings.title;
   element("template-form-title").textContent = "Редактирование шаблона";
   element("template-submit").textContent = "Сохранить шаблон";
   element("cancel-template-edit")?.classList.remove("is-hidden");
@@ -502,13 +626,183 @@ function initialiseTemplates() {
     const submit = element("template-submit");
     setPending(submit, true, "Сохраняем…");
     try {
-      const payload = { name: element("template-name").value, description: element("template-description").value, active: element("template-active").checked };
+      const payload = {
+        name: element("template-name").value,
+        description: element("template-description").value,
+        active: element("template-active").checked,
+        settings: normaliseEditorSettings({
+          background_color: element("template-background-color").value,
+          accent_color: element("template-accent-color").value,
+          text_color: element("template-text-color").value,
+          font_scale: element("template-font-scale").value,
+          table_width: element("template-table-width").value,
+          title: element("template-menu-title").value.trim()
+        })
+      };
       const url = state.editingTemplateId ? `${API.templates}/${state.editingTemplateId}` : API.templates;
       await api(url, { method: state.editingTemplateId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       resetTemplateForm();
       await loadTemplates();
       await loadNotifications();
     } catch (error) { setMessage("template-message", error.message); }
+    finally { setPending(submit, false, "Сохраняем…"); }
+  });
+}
+
+function price(value) {
+  return `${String(value || "0").replace(".", ",")} ₽`;
+}
+
+async function loadCatalog() {
+  const [products, packaging] = await Promise.all([api(API.products), api(API.packaging)]);
+  state.products = products;
+  state.packaging = packaging;
+  renderCatalogProducts();
+  renderCatalogPackaging();
+}
+
+function renderCatalogProducts() {
+  const list = document.querySelector("[data-products-list]");
+  const empty = document.querySelector("[data-products-empty]");
+  if (!list || !empty) return;
+  const rows = state.products.map((product) => recordRow(
+    product.name,
+    [
+      product.producer || "Производитель не указан",
+      product.characteristics || product.strength || "Без характеристик",
+      `1 л: ${price(product.price_primary)} · 1,5 л: ${price(product.price_secondary)}`,
+      product.active ? "активна" : "скрыта"
+    ].join(" · "),
+    [makeButton("Изменить", "", () => editProduct(product)), makeButton("Удалить", "danger", () => void deleteProduct(product))]
+  ));
+  refreshList(list, empty, rows);
+}
+
+function renderCatalogPackaging() {
+  const list = document.querySelector("[data-packaging-list]");
+  const empty = document.querySelector("[data-packaging-empty]");
+  if (!list || !empty) return;
+  const rows = state.packaging.map((item) => recordRow(
+    item.name,
+    `${price(item.unit_price)} · ${item.active ? "активна" : "скрыта"}`,
+    [makeButton("Изменить", "", () => editPackaging(item)), makeButton("Удалить", "danger", () => void deletePackaging(item))]
+  ));
+  refreshList(list, empty, rows);
+}
+
+function resetProductForm() {
+  const form = element("product-form");
+  if (!(form instanceof HTMLFormElement)) return;
+  state.editingProductId = null;
+  form.reset();
+  element("product-active").checked = true;
+  element("product-alcoholic").checked = false;
+  element("product-beverage-color").value = "none";
+  element("product-filtration").value = "none";
+  element("product-form-title").textContent = "Новая продукция";
+  element("product-submit").textContent = "Добавить продукцию";
+  element("cancel-product-edit")?.classList.add("is-hidden");
+  clearMessage("product-message");
+}
+
+function editProduct(product) {
+  state.editingProductId = product.id;
+  element("product-name").value = product.name;
+  element("product-producer").value = product.producer || "";
+  element("product-characteristics").value = product.characteristics || "";
+  element("product-strength").value = product.strength || "";
+  element("product-price-primary").value = product.price_primary || "";
+  element("product-alcoholic").checked = product.alcoholic === true;
+  element("product-beverage-color").value = product.beverage_color || "none";
+  element("product-filtration").value = product.filtration || "none";
+  element("product-active").checked = product.active !== false;
+  element("product-form-title").textContent = "Редактирование продукции";
+  element("product-submit").textContent = "Сохранить продукцию";
+  element("cancel-product-edit")?.classList.remove("is-hidden");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function deleteProduct(product) {
+  if (!window.confirm(`Удалить продукцию «${product.name}»?`)) return;
+  try {
+    await api(`${API.products}/${product.id}`, { method: "DELETE" });
+    await loadCatalog();
+  } catch (error) { setMessage("product-message", error.message); }
+}
+
+function resetPackagingForm() {
+  const form = element("packaging-form");
+  if (!(form instanceof HTMLFormElement)) return;
+  state.editingPackagingId = null;
+  form.reset();
+  element("packaging-active").checked = true;
+  element("packaging-form-title").textContent = "Новая тара";
+  element("packaging-submit").textContent = "Добавить тару";
+  element("cancel-packaging-edit")?.classList.add("is-hidden");
+  clearMessage("packaging-message");
+}
+
+function editPackaging(item) {
+  state.editingPackagingId = item.id;
+  element("packaging-name").value = item.name;
+  element("packaging-price").value = item.unit_price || "";
+  element("packaging-active").checked = item.active !== false;
+  element("packaging-form-title").textContent = "Редактирование тары";
+  element("packaging-submit").textContent = "Сохранить тару";
+  element("cancel-packaging-edit")?.classList.remove("is-hidden");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function deletePackaging(item) {
+  if (!window.confirm(`Удалить тару «${item.name}»?`)) return;
+  try {
+    await api(`${API.packaging}/${item.id}`, { method: "DELETE" });
+    await loadCatalog();
+  } catch (error) { setMessage("packaging-message", error.message); }
+}
+
+function initialiseCatalog() {
+  const productForm = element("product-form");
+  const packagingForm = element("packaging-form");
+  if (!(productForm instanceof HTMLFormElement) || !(packagingForm instanceof HTMLFormElement)) return;
+  void loadCatalog().catch((error) => setMessage("product-message", error.message));
+  element("refresh-catalog")?.addEventListener("click", () => { void loadCatalog(); });
+  element("cancel-product-edit")?.addEventListener("click", resetProductForm);
+  element("cancel-packaging-edit")?.addEventListener("click", resetPackagingForm);
+  productForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submit = element("product-submit");
+    setPending(submit, true, "Сохраняем…");
+    try {
+      const payload = {
+        name: element("product-name").value,
+        producer: element("product-producer").value,
+        characteristics: element("product-characteristics").value,
+        strength: element("product-strength").value,
+        price_primary: element("product-price-primary").value,
+        alcoholic: element("product-alcoholic").checked,
+        beverage_color: element("product-beverage-color").value,
+        filtration: element("product-filtration").value,
+        active: element("product-active").checked
+      };
+      const url = state.editingProductId ? `${API.products}/${state.editingProductId}` : API.products;
+      await api(url, { method: state.editingProductId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      resetProductForm();
+      await Promise.all([loadCatalog(), loadNotifications()]);
+    } catch (error) { setMessage("product-message", error.message); }
+    finally { setPending(submit, false, "Сохраняем…"); }
+  });
+  packagingForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submit = element("packaging-submit");
+    setPending(submit, true, "Сохраняем…");
+    try {
+      const payload = { name: element("packaging-name").value, unit_price: element("packaging-price").value, active: element("packaging-active").checked };
+      const url = state.editingPackagingId ? `${API.packaging}/${state.editingPackagingId}` : API.packaging;
+      await api(url, { method: state.editingPackagingId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      resetPackagingForm();
+      await Promise.all([loadCatalog(), loadNotifications()]);
+    } catch (error) { setMessage("packaging-message", error.message); }
     finally { setPending(submit, false, "Сохраняем…"); }
   });
 }
@@ -594,20 +888,49 @@ function editorScreenId() {
 
 function setEditorMessage(message, kind = "error") { setMessage("screen-editor-message", message, kind); }
 
-function populateScreenEditor(screen, templates) {
+function newEditorRow(kind) {
+  return { id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, kind, enabled: true, ...(kind === "section" ? { name: "Новый раздел" } : kind === "item" ? { product_id: "", characteristics: "", promotion: false, promotion_text: "" } : { packaging_id: "" }) };
+}
+
+function normaliseEditorSettings(settings = {}) {
+  return {
+    background_color: /^#[0-9a-f]{6}$/i.test(settings.background_color || "") ? settings.background_color : "#101828",
+    accent_color: /^#[0-9a-f]{6}$/i.test(settings.accent_color || "") ? settings.accent_color : "#2563eb",
+    text_color: /^#[0-9a-f]{6}$/i.test(settings.text_color || "") ? settings.text_color : "#f8fafc",
+    font_scale: ["small", "medium", "large"].includes(settings.font_scale) ? settings.font_scale : "medium",
+    table_width: ["compact", "normal", "wide"].includes(settings.table_width) ? settings.table_width : "normal",
+    title: typeof settings.title === "string" ? settings.title.slice(0, 80) : ""
+  };
+}
+
+function editorSettingsFromForm() {
+  return normaliseEditorSettings({
+    background_color: element("editor-background-color").value,
+    accent_color: element("editor-accent-color").value,
+    text_color: element("editor-text-color").value,
+    font_scale: element("editor-font-scale").value,
+    table_width: element("editor-table-width").value,
+    title: element("editor-menu-title").value.trim()
+  });
+}
+
+function populateScreenEditor(screen, templates, settings) {
   element("editor-location").value = screen.location_name;
   element("editor-name").value = screen.name;
   element("editor-resolution").value = screen.resolution;
-  element("editor-status").value = screen.status;
+  element("editor-status").value = screen.status === "published" ? "ready" : screen.status;
   element("editor-active").checked = screen.active !== false;
-  element("editor-sftp-path").textContent = screen.sftp_path || "SFTP-каталог пока не привязан к торговой точке";
+  element("editor-sftp-path").textContent = screen.sftp_path || "Для точки ещё не настроен SFTP-каталог";
   const select = element("editor-template");
-  select.replaceChildren(...[
-    new Option("Без шаблона", ""),
-    ...templates.filter((template) => template.active || Number(template.id) === Number(screen.template_id)).map((template) => new Option(template.name, String(template.id)))
-  ]);
+  select.replaceChildren(new Option("Без шаблона", ""), ...templates.filter((template) => template.active || Number(template.id) === Number(screen.template_id)).map((template) => new Option(template.name, String(template.id))));
   select.value = screen.template_id ? String(screen.template_id) : "";
   element("editor-template-current").textContent = screen.template_name || "Без шаблона";
+  element("editor-background-color").value = settings.background_color;
+  element("editor-accent-color").value = settings.accent_color;
+  element("editor-text-color").value = settings.text_color;
+  element("editor-font-scale").value = settings.font_scale;
+  element("editor-table-width").value = settings.table_width;
+  element("editor-menu-title").value = settings.title;
   element("editor-publish").disabled = !screen.prepared_asset_key || !screen.sftp_directory_name;
 }
 
@@ -618,39 +941,174 @@ function initialiseScreenEditor() {
     window.location.replace("/screens.html");
     return;
   }
-  let screen = null;
+  let screen;
   let templates = [];
+  let products = [];
+  let packaging = [];
+  let rows = [];
+  let settings = normaliseEditorSettings();
   let pendingTemplateId = null;
+
+  const productById = (id) => products.find((item) => Number(item.id) === Number(id));
+  const packagingById = (id) => packaging.find((item) => Number(item.id) === Number(id));
+  const displayRowName = (row) => row.kind === "item" ? productById(row.product_id)?.name || "Продукция не выбрана" : row.kind === "packaging" ? packagingById(row.packaging_id)?.name || "Тара не выбрана" : row.name;
+
+  const renderPreview = () => {
+    settings = editorSettingsFromForm();
+    const preview = element("editor-menu-preview");
+    if (!preview) return;
+    preview.style.setProperty("--menu-background", settings.background_color);
+    preview.style.setProperty("--menu-accent", settings.accent_color);
+    preview.style.setProperty("--menu-text", settings.text_color);
+    preview.dataset.fontScale = settings.font_scale;
+    preview.dataset.tableWidth = settings.table_width;
+    preview.replaceChildren();
+    const title = document.createElement("h3");
+    title.textContent = settings.title || screen?.name || "Меню";
+    preview.append(title);
+    const table = document.createElement("div");
+    table.className = "menu-preview-table";
+    rows.filter((row) => row.enabled !== false).forEach((row) => {
+      const view = document.createElement("div");
+      view.className = `menu-preview-row menu-preview-${row.kind}`;
+      if (row.kind === "section") {
+        view.textContent = row.name || "Раздел";
+      } else if (row.kind === "item") {
+        const product = productById(row.product_id);
+        const name = document.createElement("strong");
+        name.textContent = product?.name || "Продукция не выбрана";
+        const details = document.createElement("span");
+        details.textContent = row.promotion && row.promotion_text ? row.promotion_text : (row.characteristics || product?.characteristics || product?.strength || "");
+        const prices = document.createElement("em");
+        prices.textContent = product ? `${price(product.price_primary)} / ${price(product.price_secondary)}` : "—";
+        view.append(name, details, prices);
+      } else {
+        const item = packagingById(row.packaging_id);
+        const name = document.createElement("strong");
+        name.textContent = item?.name || "Тара не выбрана";
+        const value = document.createElement("em");
+        value.textContent = item ? price(item.unit_price) : "—";
+        view.append(name, value);
+      }
+      table.append(view);
+    });
+    if (!table.childElementCount) {
+      const empty = document.createElement("p");
+      empty.textContent = "Добавьте продукцию, тару или раздел слева.";
+      table.append(empty);
+    }
+    preview.append(table);
+  };
+
+  const moveRow = (index, direction) => {
+    const target = index + direction;
+    if (target < 0 || target >= rows.length) return;
+    [rows[index], rows[target]] = [rows[target], rows[index]];
+    renderRows();
+  };
+  const renderRows = () => {
+    const target = element("editor-menu-rows");
+    if (!target) return;
+    target.replaceChildren();
+    rows.forEach((row, index) => {
+      const card = document.createElement("article");
+      card.className = `editor-menu-row editor-menu-row-${row.kind}${row.enabled === false ? " is-disabled" : ""}`;
+      const head = document.createElement("div");
+      head.className = "editor-menu-row-head";
+      const label = document.createElement("strong");
+      label.textContent = row.kind === "section" ? "Раздел" : row.kind === "item" ? "Продукция" : "Тара";
+      const controls = document.createElement("div");
+      controls.className = "editor-row-actions";
+      controls.append(makeButton("↑", "", () => moveRow(index, -1)), makeButton("↓", "", () => moveRow(index, 1)));
+      const hide = makeButton(row.enabled === false ? "Показать" : "Скрыть", "", () => { row.enabled = row.enabled === false; renderRows(); });
+      controls.append(hide, makeButton("Удалить", "danger", () => { rows.splice(index, 1); renderRows(); }));
+      head.append(label, controls);
+      card.append(head);
+      if (row.kind === "section") {
+        const input = document.createElement("input");
+        input.maxLength = 100;
+        input.value = row.name || "";
+        input.placeholder = "Название раздела";
+        input.addEventListener("input", () => { row.name = input.value; renderPreview(); });
+        card.append(input);
+      } else if (row.kind === "item") {
+        const select = document.createElement("select");
+        select.append(new Option("Выберите продукцию", ""), ...products.filter((item) => item.active || Number(item.id) === Number(row.product_id)).map((item) => new Option(`${item.name} · 1 л ${price(item.price_primary)}`, String(item.id))));
+        select.value = row.product_id ? String(row.product_id) : "";
+        select.addEventListener("change", () => { row.product_id = select.value; renderPreview(); });
+        const subtitle = document.createElement("input");
+        subtitle.maxLength = 180;
+        subtitle.value = row.characteristics || "";
+        subtitle.placeholder = "Подпись в меню (необязательно)";
+        subtitle.addEventListener("input", () => { row.characteristics = subtitle.value; renderPreview(); });
+        const promotion = document.createElement("label");
+        promotion.className = "editor-inline-toggle";
+        const check = document.createElement("input");
+        check.type = "checkbox";
+        check.checked = row.promotion === true;
+        const caption = document.createElement("span"); caption.textContent = "Акция";
+        const promotionText = document.createElement("input");
+        promotionText.maxLength = 80;
+        promotionText.value = row.promotion_text || "";
+        promotionText.placeholder = "Текст акции";
+        promotionText.disabled = !check.checked;
+        check.addEventListener("change", () => { row.promotion = check.checked; promotionText.disabled = !check.checked; renderPreview(); });
+        promotionText.addEventListener("input", () => { row.promotion_text = promotionText.value; renderPreview(); });
+        promotion.append(check, caption, promotionText);
+        card.append(select, subtitle, promotion);
+      } else {
+        const select = document.createElement("select");
+        select.append(new Option("Выберите тару", ""), ...packaging.filter((item) => item.active || Number(item.id) === Number(row.packaging_id)).map((item) => new Option(`${item.name} · ${price(item.unit_price)}`, String(item.id))));
+        select.value = row.packaging_id ? String(row.packaging_id) : "";
+        select.addEventListener("change", () => { row.packaging_id = select.value; renderPreview(); });
+        card.append(select);
+      }
+      target.append(card);
+    });
+    element("editor-menu-empty")?.classList.toggle("is-hidden", rows.length !== 0);
+    renderPreview();
+  };
+
   const load = async () => {
-    [screen, templates] = await Promise.all([api(`${API.screens}/${screenId}`), api(API.templates)]);
+    const editor = await api(`${API.screens}/${screenId}/editor`);
+    screen = editor.screen;
+    templates = editor.templates;
+    products = editor.products;
+    packaging = editor.packaging;
+    rows = Array.isArray(editor.draft?.rows) ? editor.draft.rows.map((row) => ({ ...row })) : [];
+    settings = normaliseEditorSettings(editor.draft?.settings || {});
     pendingTemplateId = screen.template_id || null;
-    populateScreenEditor(screen, templates);
+    populateScreenEditor(screen, templates, settings);
+    renderRows();
   };
   void load().catch((error) => setEditorMessage(error.message));
+  ["editor-background-color", "editor-accent-color", "editor-text-color", "editor-font-scale", "editor-table-width", "editor-menu-title"].forEach((id) => element(id)?.addEventListener("input", renderPreview));
+  element("editor-add-section")?.addEventListener("click", () => { rows.push(newEditorRow("section")); renderRows(); });
+  element("editor-add-item")?.addEventListener("click", () => { rows.push(newEditorRow("item")); renderRows(); });
+  element("editor-add-packaging")?.addEventListener("click", () => { rows.push(newEditorRow("packaging")); renderRows(); });
   element("editor-template-apply")?.addEventListener("click", () => {
     const selected = Number(element("editor-template").value) || null;
     const template = templates.find((item) => Number(item.id) === selected);
     pendingTemplateId = template?.id || null;
+    settings = normaliseEditorSettings(template?.settings || {});
     element("editor-template-current").textContent = template?.name || "Без шаблона";
-    setEditorMessage(template ? `Шаблон «${template.name}» применён в редакторе. Нажмите «Сохранить монитор», чтобы закрепить изменения.` : "Шаблон отключён в редакторе. Нажмите «Сохранить монитор».", "success");
+    populateScreenEditor(screen, templates, settings);
+    renderPreview();
+    setEditorMessage(template ? `Шаблон «${template.name}» применён в редакторе. Сохраните монитор, чтобы закрепить оформление.` : "Шаблон отключён в редакторе. Сохраните монитор, чтобы закрепить изменения.", "success");
   });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const submit = element("editor-save");
     setPending(submit, true, "Сохраняем…");
     try {
-      const updated = await api(`${API.screens}/${screenId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-        location_id: screen.location_id,
-        name: element("editor-name").value,
-        resolution: element("editor-resolution").value,
-        status: element("editor-status").value,
-        active: element("editor-active").checked,
-        template_id: pendingTemplateId
-      }) });
-      screen = updated;
-      pendingTemplateId = updated.template_id || null;
-      populateScreenEditor(screen, templates);
-      setEditorMessage("Монитор сохранён.", "success");
+      screen = await api(`${API.screens}/${screenId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location_id: screen.location_id, name: element("editor-name").value, resolution: element("editor-resolution").value, status: element("editor-status").value, active: element("editor-active").checked, template_id: pendingTemplateId }) });
+      const result = await api(`${API.screens}/${screenId}/draft`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows, settings: editorSettingsFromForm(), template_id: pendingTemplateId }) });
+      rows = result.draft.rows;
+      settings = normaliseEditorSettings(result.draft.settings);
+      pendingTemplateId = result.screen.template_id || null;
+      populateScreenEditor(result.screen, templates, settings);
+      renderRows();
+      setEditorMessage("Монитор, меню и оформление сохранены как черновик.", "success");
       await loadNotifications();
     } catch (error) { setEditorMessage(error.message); }
     finally { setPending(submit, false, "Сохраняем…"); }
@@ -662,7 +1120,7 @@ function initialiseScreenEditor() {
     setPending(button, true, "Загружаем…");
     try {
       screen = await api(`${API.screens}/${screenId}/source`, { method: "PUT", headers: { "Content-Type": "image/jpeg" }, body: file });
-      populateScreenEditor(screen, templates);
+      populateScreenEditor(screen, templates, editorSettingsFromForm());
       setEditorMessage("JPEG подготовлен. После проверки опубликуйте его на телевизор.", "success");
       await loadNotifications();
     } catch (error) { setEditorMessage(error.message); }
@@ -673,8 +1131,8 @@ function initialiseScreenEditor() {
     setPending(button, true, "Публикуем…");
     try {
       screen = await api(`${API.screens}/${screenId}/publish`, { method: "POST" });
-      populateScreenEditor(screen, templates);
-      setEditorMessage("Меню опубликовано в каталоге торговой точки.", "success");
+      populateScreenEditor(screen, templates, editorSettingsFromForm());
+      setEditorMessage("JPEG опубликован в папке SFTP торговой точки.", "success");
       await loadNotifications();
     } catch (error) { setEditorMessage(error.message); }
     finally { setPending(button, false, "Публикуем…"); }
@@ -694,6 +1152,7 @@ function populateUserForm(user) {
 
 function initialiseProfile() {
   const userForm = element("user-settings-form");
+  const passwordForm = element("password-change-form");
   if (!(userForm instanceof HTMLFormElement)) return;
   populateUserForm(state.user);
   userForm.addEventListener("submit", async (event) => {
@@ -713,6 +1172,25 @@ function initialiseProfile() {
       setMessage("user-settings-message", "Настройки пользователя сохранены.", "success");
       await loadNotifications();
     } catch (error) { setMessage("user-settings-message", error.message); }
+    finally { setPending(submit, false, "Сохраняем…"); }
+  });
+  if (passwordForm instanceof HTMLFormElement) passwordForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const currentPassword = element("current-password").value;
+    const newPassword = element("new-password").value;
+    const confirmation = element("new-password-confirmation").value;
+    if (newPassword !== confirmation) return setMessage("password-change-message", "Новый пароль и его подтверждение не совпадают.");
+    const submit = element("password-change-submit");
+    setPending(submit, true, "Сохраняем…");
+    try {
+      await api(API.userPassword, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+      });
+      passwordForm.reset();
+      setMessage("password-change-message", "Пароль изменён. Все другие активные сессии завершены.", "success");
+      await loadNotifications();
+    } catch (error) { setMessage("password-change-message", error.message); }
     finally { setPending(submit, false, "Сохраняем…"); }
   });
 }
@@ -804,7 +1282,6 @@ function initialiseSignIn() {
 
 async function initialiseApplication() {
   if (pageName() === "signin") return initialiseSignIn();
-  prepareChrome();
   try {
     const [session, user, site] = await Promise.all([api(API.session), api(API.userSettings), api(API.siteSettings)]);
     applySession(session);
@@ -822,6 +1299,7 @@ async function initialiseApplication() {
     if (pageName() === "screens") initialiseScreens();
     if (pageName() === "screen-editor") initialiseScreenEditor();
     if (pageName() === "templates") initialiseTemplates();
+    if (pageName() === "catalog") initialiseCatalog();
   } catch {
     window.location.replace("/signin.html");
   }

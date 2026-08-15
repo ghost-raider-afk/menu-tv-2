@@ -11,11 +11,12 @@ const config = {
   appName: 'Menu TV 2.0 test',
   host: '127.0.0.1',
   port: 0,
-  adminUsername: 'admin',
-  adminPassword: 'correct-horse-battery-staple',
+  bootstrapAdmin: { username: 'admin', password: 'CorrectHorse-1!' },
   sessionSecret: 's'.repeat(48),
   sessionTtlHours: 12,
   secureCookies: false,
+  passwordMinLength: 10,
+  passwordMaxLength: 32,
   siteAssetsRoot: `/tmp/menu-tv-2-test-site-assets-${process.pid}`,
   siteLogoMaxBytes: 2_097_152,
   siteFaviconMaxBytes: 524_288,
@@ -65,7 +66,7 @@ function jsonHeaders(cookie = '') {
 
 async function adminCookie() {
   const login = await fetch(`${baseUrl}/api/auth/login`, {
-    method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ username: 'admin', password: config.adminPassword })
+    method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ username: 'admin', password: config.bootstrapAdmin.password })
   });
   assert.equal(login.status, 204);
   const cookie = login.headers.get('set-cookie');
@@ -104,6 +105,9 @@ test('health is public and authentication requires the generated administrator c
   assert.match(await profilePage.text(), /Настройки пользователя/);
   const locationsPage = await fetch(`${baseUrl}/locations.html`, { headers: { Cookie: cookie } });
   assert.equal(locationsPage.status, 200);
+  const catalogPage = await fetch(`${baseUrl}/catalog.html`, { headers: { Cookie: cookie } });
+  assert.equal(catalogPage.status, 200);
+  assert.match(await catalogPage.text(), /Продукция и тара/);
 });
 
 test('location and screen data remain in the separate PostgreSQL store', async () => {
@@ -302,4 +306,83 @@ test('SFTP catalogues, point access and JPEG publication follow the manual deliv
 
   const deleteBoundLocation = await fetch(`${baseUrl}/api/locations/${location.id}`, { method: 'DELETE', headers: jsonHeaders(cookie) });
   assert.equal(deleteBoundLocation.status, 409);
+});
+
+test('catalogue entries and monitor menu drafts are persisted in PostgreSQL', async () => {
+  const cookie = await adminCookie();
+  const productResponse = await fetch(`${baseUrl}/api/catalog/products`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({
+      name: 'Пиво светлое', producer: 'Пивоварня', characteristics: 'Светлое', strength: '4.5%',
+      price_primary: '240', alcoholic: true, beverage_color: 'light', filtration: 'filtered', active: true
+    })
+  });
+  assert.equal(productResponse.status, 201);
+  const product = await productResponse.json();
+  assert.equal(product.price_secondary, '360');
+
+  const packagingResponse = await fetch(`${baseUrl}/api/catalog/packaging`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'Бутылка ПЭТ 1,5 л', unit_price: '12', active: true })
+  });
+  assert.equal(packagingResponse.status, 201);
+  const packaging = await packagingResponse.json();
+
+  const locationResponse = await fetch(`${baseUrl}/api/locations`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'Точка меню', address: 'Адрес' })
+  });
+  const location = await locationResponse.json();
+  const screenResponse = await fetch(`${baseUrl}/api/locations/${location.id}/screens`, { method: 'POST', headers: jsonHeaders(cookie), body: '{}' });
+  const screen = await screenResponse.json();
+  const templateResponse = await fetch(`${baseUrl}/api/templates`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'Тёмный', settings: { background_color: '#101828', font_scale: 'large' } })
+  });
+  const template = await templateResponse.json();
+  const saved = await fetch(`${baseUrl}/api/screens/${screen.id}/draft`, {
+    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify({
+      template_id: template.id,
+      settings: { background_color: '#101828', accent_color: '#2563EB', text_color: '#F8FAFC', font_scale: 'large', table_width: 'wide', title: 'Бар' },
+      rows: [
+        { id: 'section-1', kind: 'section', name: 'Пиво' },
+        { id: 'product-1', kind: 'item', product_id: product.id, promotion: true, promotion_text: 'Акция' },
+        { id: 'packaging-1', kind: 'packaging', packaging_id: packaging.id }
+      ]
+    })
+  });
+  assert.equal(saved.status, 200);
+  const draftResult = await saved.json();
+  assert.equal(draftResult.screen.template_id, template.id);
+  assert.deepEqual(draftResult.draft.rows.map((row) => row.name), ['Пиво', 'Пиво светлое', 'Бутылка ПЭТ 1,5 л']);
+  assert.equal(draftResult.draft.rows[1].price_secondary, '360');
+
+  const editor = await fetch(`${baseUrl}/api/screens/${screen.id}/editor`, { headers: jsonHeaders(cookie) });
+  const editorData = await editor.json();
+  assert.equal(editorData.products.length, 1);
+  assert.equal(editorData.packaging.length, 1);
+  assert.equal(editorData.draft.rows.length, 3);
+  const productDelete = await fetch(`${baseUrl}/api/catalog/products/${product.id}`, { method: 'DELETE', headers: jsonHeaders(cookie) });
+  assert.equal(productDelete.status, 409);
+});
+
+test('administrator password is hashed in the database and can be changed from the profile', async () => {
+  const cookie = await adminCookie();
+  const users = await store.pool.query('SELECT username, password_hash FROM users WHERE username = $1', ['admin']);
+  assert.equal(users.rows.length, 1);
+  assert.match(users.rows[0].password_hash, /^scrypt\$/);
+  assert.equal(users.rows[0].password_hash.includes(config.bootstrapAdmin.password), false);
+
+  const rejected = await fetch(`${baseUrl}/api/settings/user/password`, {
+    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify({ current_password: 'WrongPassword-1!', new_password: 'ChangedPassword-1!' })
+  });
+  assert.equal(rejected.status, 400);
+  const changed = await fetch(`${baseUrl}/api/settings/user/password`, {
+    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify({ current_password: config.bootstrapAdmin.password, new_password: 'ChangedPassword-1!' })
+  });
+  assert.equal(changed.status, 204);
+  const oldLogin = await fetch(`${baseUrl}/api/auth/login`, {
+    method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ username: 'admin', password: config.bootstrapAdmin.password })
+  });
+  assert.equal(oldLogin.status, 401);
+  const newLogin = await fetch(`${baseUrl}/api/auth/login`, {
+    method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ username: 'admin', password: 'ChangedPassword-1!' })
+  });
+  assert.equal(newLogin.status, 204);
 });

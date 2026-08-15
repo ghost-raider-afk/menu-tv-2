@@ -16,6 +16,7 @@
           <a class="nav-link" href="/"><span class="nav-icon">▦</span>Обзор</a>
           <a class="nav-link" href="/locations.html"><span class="nav-icon">⌖</span>Торговые точки</a>
           <a class="nav-link" href="/screens.html"><span class="nav-icon">▣</span>Мониторы</a>
+          <a class="nav-link" href="/catalog.html"><span class="nav-icon">▤</span>Продукция и тара</a>
           <a class="nav-link" href="/templates.html"><span class="nav-icon">▤</span>Шаблоны мониторов</a>
           <a class="nav-link is-active" href="/settings.html" aria-current="page"><span class="nav-icon">⚙</span>Настройки сайта</a>
         </nav>
@@ -27,9 +28,9 @@
           <button class="icon-button mobile-only" type="button" data-sidebar-toggle aria-label="Открыть меню">☰</button>
           <div class="topbar-title"><strong data-app-name>ТВ МЕНЮ</strong><span>Настройки сайта</span></div>
           <div class="topbar-actions">
-            <a class="profile-link" href="#profile" data-session-user></a>
+            <div class="profile-menu"><button class="profile-trigger" type="button" aria-expanded="false" aria-haspopup="menu"><span class="profile-avatar" data-profile-initials>ТВ</span><span class="profile-trigger-name" data-session-user>Пользователь</span><span class="profile-caret"><svg viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></svg></span></button><section class="profile-panel is-hidden" role="menu"><div class="profile-summary"><span class="profile-avatar profile-avatar-large" data-profile-initials>ТВ</span><span><strong data-profile-name>Пользователь</strong><small data-profile-email>Настройки учётной записи</small></span></div><a class="profile-menu-item" role="menuitem" href="/profile.html"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg><span>Настройки пользователя</span></a><div class="profile-menu-divider"></div><button class="profile-menu-item" data-logout type="button" role="menuitem"><svg viewBox="0 0 24 24"><path d="M10 5H5v14h5M14 8l4 4-4 4m4-4H9"/></svg><span>Выйти</span></button></section></div>
             <div class="notification-wrap">
-              <button class="icon-button notification-button" id="notifications-button" type="button" aria-label="Уведомления" aria-expanded="false">♢<span class="notification-badge is-hidden" data-notification-count></span></button>
+              <button class="icon-button notification-button" id="notifications-button" type="button" aria-label="Уведомления" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M18 10a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/></svg><span class="notification-badge is-hidden" data-notification-count></span></button>
               <section class="notification-panel is-hidden" id="notifications-panel" aria-label="Уведомления">
                 <div class="panel-heading"><strong>Уведомления</strong><button class="text-button" id="mark-notifications-read" type="button">Прочитать все</button></div>
                 <div data-notification-list></div>
@@ -37,8 +38,7 @@
                 <a class="panel-footer" href="#activity">Открыть журнал действий</a>
               </section>
             </div>
-            <button class="icon-button" id="theme-toggle" type="button" aria-label="Переключить тему">◐</button>
-            <button class="button button-secondary logout-button" id="logout-button" type="button">Выйти</button>
+            <button class="icon-button" id="theme-toggle" type="button" aria-label="Переключить тему"><svg viewBox="0 0 24 24"><path d="M20.1 15.5A8.4 8.4 0 0 1 8.5 3.9a8.4 8.4 0 1 0 11.6 11.6Z"/></svg></button>
           </div>
         </header>
 

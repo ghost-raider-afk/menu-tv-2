@@ -21,21 +21,36 @@ function generatedValue(name, value, minimum) {
   return parsed;
 }
 
-export function loadConfig(env = process.env) {
-  const adminUsername = required('ADMIN_USERNAME', env.ADMIN_USERNAME);
-  if (!/^[a-z][a-z0-9_.-]{2,63}$/i.test(adminUsername)) {
-    throw new Error('ADMIN_USERNAME: 3–64 латинских букв, цифр, точка, дефис или подчёркивание.');
+function bootstrapAdministrator(env, passwordMinimumLength) {
+  const username = (env.BOOTSTRAP_ADMIN_USERNAME ?? env.ADMIN_USERNAME ?? '').trim();
+  const password = env.BOOTSTRAP_ADMIN_PASSWORD ?? env.ADMIN_PASSWORD ?? '';
+  if (!username && !password) return null;
+  if (!username || !password) {
+    throw new Error('Для начального администратора должны быть заданы одновременно логин и пароль.');
   }
+  if (!/^[a-z][a-z0-9_.-]{2,63}$/i.test(username)) {
+    throw new Error('Логин начального администратора: 3–64 латинских букв, цифр, точка, дефис или подчёркивание.');
+  }
+  return Object.freeze({
+    username,
+    password: generatedValue('BOOTSTRAP_ADMIN_PASSWORD', password, passwordMinimumLength)
+  });
+}
+
+export function loadConfig(env = process.env) {
+  const passwordMinLength = integer('PASSWORD_MIN_LENGTH', env.PASSWORD_MIN_LENGTH, '10', { minimum: 10, maximum: 64 });
+  const passwordMaxLength = integer('PASSWORD_MAX_LENGTH', env.PASSWORD_MAX_LENGTH, '32', { minimum: passwordMinLength, maximum: 128 });
 
   return Object.freeze({
     appName: env.APP_NAME?.trim() || 'ТВ МЕНЮ',
     host: env.HOST?.trim() || '0.0.0.0',
     port: integer('PORT', env.PORT, '8080'),
-    adminUsername,
-    adminPassword: generatedValue('ADMIN_PASSWORD', env.ADMIN_PASSWORD, 10),
+    bootstrapAdmin: bootstrapAdministrator(env, passwordMinLength),
     sessionSecret: generatedValue('SESSION_SECRET', env.SESSION_SECRET, 32),
     sessionTtlHours: integer('SESSION_TTL_HOURS', env.SESSION_TTL_HOURS, '12', { minimum: 1, maximum: 168 }),
     secureCookies: env.SECURE_COOKIES !== 'false',
+    passwordMinLength,
+    passwordMaxLength,
     siteAssetsRoot: env.SITE_ASSETS_ROOT?.trim() || '/srv/menu-tv-site-assets',
     siteLogoMaxBytes: integer('SITE_LOGO_MAX_BYTES', env.SITE_LOGO_MAX_BYTES, '2097152', { minimum: 1024, maximum: 10485760 }),
     siteFaviconMaxBytes: integer('SITE_FAVICON_MAX_BYTES', env.SITE_FAVICON_MAX_BYTES, '524288', { minimum: 1024, maximum: 5242880 }),

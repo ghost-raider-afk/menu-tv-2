@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.1.8"
+SCRIPT_VERSION="1.1.9"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 BRANCH="main"
@@ -27,6 +27,8 @@ LAUNCHER_PATH="/usr/local/bin/menu-tv-2.0"
 PROJECT_OWNER_FILE="$INSTALL_DIR/.installer-owner"
 TEMP_BACKUP_DIR=""
 KEEP_TEMP_BACKUP=false
+INITIAL_ADMIN_USERNAME=""
+INITIAL_ADMIN_PASSWORD=""
 
 log() { printf '\n==> %s\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
@@ -257,6 +259,11 @@ set_env_value() {
   fi
 }
 
+delete_env_value() {
+  local file="$1" key="$2"
+  sed -i "/^${key}=/d" "$file"
+}
+
 validate_domain() {
   local domain="${1,,}"
   [[ "$domain" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]] || return 1
@@ -342,8 +349,10 @@ write_new_env() {
   set_env_value "$env_file" POSTGRES_DB "menu_tv_2"
   set_env_value "$env_file" POSTGRES_USER "menu_tv_2"
   set_env_value "$env_file" POSTGRES_PASSWORD "$(random_secret 24)"
-  set_env_value "$env_file" ADMIN_USERNAME "admin"
-  set_env_value "$env_file" ADMIN_PASSWORD "$(random_admin_password)"
+  INITIAL_ADMIN_USERNAME="admin"
+  INITIAL_ADMIN_PASSWORD="$(random_admin_password)"
+  set_env_value "$env_file" BOOTSTRAP_ADMIN_USERNAME "$INITIAL_ADMIN_USERNAME"
+  set_env_value "$env_file" BOOTSTRAP_ADMIN_PASSWORD "$INITIAL_ADMIN_PASSWORD"
   set_env_value "$env_file" SESSION_SECRET "$(random_secret 48)"
   set_env_value "$env_file" SFTP_PUBLIC_HOST "$domain"
   set_env_value "$env_file" SFTP_PORT "2022"
@@ -382,14 +391,50 @@ ensure_sftp_env() {
 validate_env() {
   local key value
   [[ -f "$INSTALL_DIR/.env" ]] || die "Отсутствует $INSTALL_DIR/.env"
-  for key in MENU_TV_2_DOMAIN POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD ADMIN_USERNAME ADMIN_PASSWORD SESSION_SECRET SFTP_PUBLIC_HOST SFTP_PORT SFTP_ADMIN_USERNAME SFTP_ADMIN_PASSWORD; do
+  for key in MENU_TV_2_DOMAIN POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD SESSION_SECRET SFTP_PUBLIC_HOST SFTP_PORT SFTP_ADMIN_USERNAME SFTP_ADMIN_PASSWORD; do
     value="$(env_value "$key")"
     [[ -n "$value" && "$value" != replace-with-* ]] || die "$key в .env не настроен."
   done
   [[ $(env_value POSTGRES_PASSWORD | wc -c) -ge 17 ]] || die "POSTGRES_PASSWORD должен содержать не менее 16 символов."
-  [[ $(env_value ADMIN_PASSWORD | wc -c) -ge 11 ]] || die "ADMIN_PASSWORD должен содержать не менее 10 символов."
+  if [[ -n "$(env_value BOOTSTRAP_ADMIN_USERNAME)" || -n "$(env_value BOOTSTRAP_ADMIN_PASSWORD)" ]]; then
+    [[ -n "$(env_value BOOTSTRAP_ADMIN_USERNAME)" && -n "$(env_value BOOTSTRAP_ADMIN_PASSWORD)" ]] || die "Для начального администратора нужны BOOTSTRAP_ADMIN_USERNAME и BOOTSTRAP_ADMIN_PASSWORD."
+    [[ $(env_value BOOTSTRAP_ADMIN_PASSWORD | wc -c) -ge 11 ]] || die "BOOTSTRAP_ADMIN_PASSWORD должен содержать не менее 10 символов."
+  fi
+  if [[ -n "$(env_value ADMIN_USERNAME)" || -n "$(env_value ADMIN_PASSWORD)" ]]; then
+    [[ -n "$(env_value ADMIN_USERNAME)" && -n "$(env_value ADMIN_PASSWORD)" ]] || die "Для переноса старого администратора нужны ADMIN_USERNAME и ADMIN_PASSWORD."
+    [[ $(env_value ADMIN_PASSWORD | wc -c) -ge 11 ]] || die "ADMIN_PASSWORD должен содержать не менее 10 символов."
+  fi
   [[ $(env_value SESSION_SECRET | wc -c) -ge 33 ]] || die "SESSION_SECRET должен содержать не менее 32 символов."
   [[ $(env_value SFTP_ADMIN_PASSWORD | wc -c) -ge 33 ]] || die "SFTP_ADMIN_PASSWORD должен содержать не менее 32 символов."
+}
+
+finalize_bootstrap_administrator() {
+  local env_file="$INSTALL_DIR/.env" username password
+  username="$(env_value BOOTSTRAP_ADMIN_USERNAME "$env_file")"
+  password="$(env_value BOOTSTRAP_ADMIN_PASSWORD "$env_file")"
+  if [[ -z "$username" && -z "$password" ]]; then
+    username="$(env_value ADMIN_USERNAME "$env_file")"
+    password="$(env_value ADMIN_PASSWORD "$env_file")"
+  fi
+  [[ -n "$username" && -n "$password" ]] || return 0
+  administrator_is_persisted || die "Учётная запись администратора ещё не подтверждена в PostgreSQL; пароль оставлен в .env."
+  [[ -n "$INITIAL_ADMIN_USERNAME" ]] || INITIAL_ADMIN_USERNAME="$username"
+  [[ -n "$INITIAL_ADMIN_PASSWORD" ]] || INITIAL_ADMIN_PASSWORD="$password"
+  delete_env_value "$env_file" BOOTSTRAP_ADMIN_USERNAME
+  delete_env_value "$env_file" BOOTSTRAP_ADMIN_PASSWORD
+  delete_env_value "$env_file" ADMIN_USERNAME
+  delete_env_value "$env_file" ADMIN_PASSWORD
+  chown root:root "$env_file"
+  chmod 600 "$env_file"
+  info "Учётная запись администратора перенесена в PostgreSQL; пароль удалён из .env."
+}
+
+administrator_is_persisted() {
+  compose exec -T "$DB_SERVICE" sh -ec 'PGPASSWORD="$POSTGRES_PASSWORD" psql -qtAX -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 1 FROM users LIMIT 1;"' 2>/dev/null | grep -qx '1'
+}
+
+bootstrap_administrator_is_configured() {
+  [[ -n "$(env_value BOOTSTRAP_ADMIN_USERNAME)" || -n "$(env_value BOOTSTRAP_ADMIN_PASSWORD)" || -n "$(env_value ADMIN_USERNAME)" || -n "$(env_value ADMIN_PASSWORD)" ]]
 }
 
 repair_permissions() {
@@ -485,6 +530,7 @@ build_and_start() {
     log "Выпуск и проверка HTTPS-сертификата Let's Encrypt"
     verify_https_certificate "$domain" || return 1
   fi
+  finalize_bootstrap_administrator
 }
 
 source_requires_runtime_update() {
@@ -625,8 +671,8 @@ show_credentials() {
   credentials_box_text '  MENU TV 2.0 — СОХРАНИТЕ ПАРАМЕТРЫ'
   printf '|------------------------------------------------------------------------------|\n'
   credentials_box_value 'Веб-адрес' "https://$domain" "$credentials_color_url"
-  credentials_box_value 'Логин администратора' "$(env_value ADMIN_USERNAME "$env_file")" "$credentials_color_login"
-  credentials_box_value 'Пароль администратора' "$(env_value ADMIN_PASSWORD "$env_file")" "$credentials_color_password"
+  credentials_box_value 'Логин администратора' "$INITIAL_ADMIN_USERNAME" "$credentials_color_login"
+  credentials_box_value 'Пароль администратора' "$INITIAL_ADMIN_PASSWORD" "$credentials_color_password"
   printf '|------------------------------------------------------------------------------|\n'
   credentials_box_value 'Хост БД' 'db (доступен только внутри сети menu-tv-2-internal)' ''
   credentials_box_value 'Имя БД' "$(env_value POSTGRES_DB "$env_file")" ''
@@ -718,6 +764,11 @@ update_app() {
     if ! sync_existing_source "$remote_revision"; then
       die "Не удалось применить обновление исходников."
     fi
+  fi
+
+  if bootstrap_administrator_is_configured && administrator_is_persisted; then
+    finalize_bootstrap_administrator
+    env_changed=true
   fi
 
   if [[ "$needs_runtime" == false && "$env_changed" == false ]]; then

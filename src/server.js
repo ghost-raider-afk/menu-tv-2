@@ -4,16 +4,18 @@ import express from 'express';
 import helmet from 'helmet';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { loadConfig } from './config.js';
 import { MenuTvStore } from './db.js';
 import { generateSftpPassword, SftpService } from './sftp.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, 'web', 'admin-ui', 'public');
-const VALID_STATUSES = new Set(['draft', 'ready']);
+const VALID_STATUSES = new Set(['draft', 'ready', 'published']);
 const VALID_THEMES = new Set(['system', 'light', 'dark']);
 const VALID_DATE_FORMATS = new Set(['DD.MM.YYYY', 'YYYY-MM-DD']);
 const SESSION_COOKIE = 'menu_tv_2_session';
+const scrypt = promisify(crypto.scrypt);
 
 function siteSettingsResponse(settings, config) {
   const version = encodeURIComponent(settings.updated_at || '0');
@@ -84,6 +86,50 @@ function optionalText(value, field, { max = 300 } = {}) {
   return value.trim();
 }
 
+function passwordInput(value, field, config) {
+  if (typeof value !== 'string' || value.length < config.passwordMinLength || value.length > config.passwordMaxLength) {
+    const error = new Error(`Поле «${field}» должно содержать от ${config.passwordMinLength} до ${config.passwordMaxLength} символов.`);
+    error.status = 400;
+    throw error;
+  }
+  if (!/[a-z]/.test(value) || !/[A-Z]/.test(value) || !/\d/.test(value) || !/[^A-Za-z0-9]/.test(value)) {
+    const error = new Error('Пароль должен содержать строчную и прописную латинскую букву, цифру и специальный символ.');
+    error.status = 400;
+    throw error;
+  }
+  return value;
+}
+
+function passwordChangeInput(body, config) {
+  const currentPassword = passwordInput(body.current_password, 'Текущий пароль', config);
+  const newPassword = passwordInput(body.new_password, 'Новый пароль', config);
+  if (currentPassword === newPassword) {
+    const error = new Error('Новый пароль должен отличаться от текущего.');
+    error.status = 400;
+    throw error;
+  }
+  return { currentPassword, newPassword };
+}
+
+async function hashPassword(password) {
+  const salt = crypto.randomBytes(16);
+  const derived = await scrypt(password, salt, 64);
+  return `scrypt$${salt.toString('base64url')}$${Buffer.from(derived).toString('base64url')}`;
+}
+
+async function verifyPassword(password, passwordHash) {
+  const [algorithm, encodedSalt, encodedHash] = String(passwordHash || '').split('$');
+  if (algorithm !== 'scrypt' || !encodedSalt || !encodedHash) return false;
+  try {
+    const expected = Buffer.from(encodedHash, 'base64url');
+    if (expected.length !== 64) return false;
+    const actual = Buffer.from(await scrypt(password, Buffer.from(encodedSalt, 'base64url'), expected.length));
+    return crypto.timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
+}
+
 function positiveId(value, field) {
   const id = Number.parseInt(value, 10);
   if (!Number.isInteger(id) || id < 1) {
@@ -129,7 +175,119 @@ function screenInput(body, { defaultScreenResolution = '1920×1080' } = {}) {
 }
 
 function templateInput(body) {
-  return { name: requireText(body.name, 'name'), description: optionalText(body.description, 'description', { max: 500 }), active: body.active !== false };
+  return {
+    name: requireText(body.name, 'name'),
+    description: optionalText(body.description, 'description', { max: 500 }),
+    active: body.active !== false,
+    rows: Array.isArray(body.rows) ? body.rows : [],
+    settings: body.settings && typeof body.settings === 'object' && !Array.isArray(body.settings) ? body.settings : {}
+  };
+}
+
+function normalisePrice(value, field, { required = true } = {}) {
+  const text = optionalText(value, field, { max: 16 }).replace(',', '.');
+  if (!text && !required) return '';
+  if (!/^\d{1,6}(?:\.\d{1,2})?$/.test(text)) {
+    const error = new Error(`Поле «${field}» должно содержать цену в формате 240 или 240.50.`);
+    error.status = 400;
+    throw error;
+  }
+  const [whole, decimal = ''] = text.split('.');
+  return decimal ? `${Number.parseInt(whole, 10)}.${decimal.padEnd(2, '0')}` : String(Number.parseInt(whole, 10));
+}
+
+function priceForOneAndHalf(value) {
+  const [whole, decimal = ''] = value.split('.');
+  const cents = Number.parseInt(whole, 10) * 100 + Number.parseInt(decimal.padEnd(2, '0'), 10);
+  const result = Math.round((cents * 3) / 2);
+  const resultWhole = Math.floor(result / 100);
+  const resultDecimal = String(result % 100).padStart(2, '0');
+  return resultDecimal === '00' ? String(resultWhole) : `${resultWhole}.${resultDecimal}`;
+}
+
+function productInput(body) {
+  const beverageColor = body.beverage_color ?? 'none';
+  const filtration = body.filtration ?? 'none';
+  if (!['none', 'light', 'dark'].includes(beverageColor) || !['none', 'filtered', 'unfiltered'].includes(filtration)) {
+    const error = new Error('Выберите корректные параметры напитка.');
+    error.status = 400;
+    throw error;
+  }
+  const pricePrimary = normalisePrice(body.price_primary, 'Цена за 1 л');
+  return {
+    name: requireText(body.name, 'Название продукции'),
+    producer: optionalText(body.producer, 'Производитель', { max: 120 }),
+    characteristics: optionalText(body.characteristics, 'Характеристики', { max: 180 }),
+    strength: optionalText(body.strength, 'Крепость', { max: 20 }),
+    price_primary: pricePrimary,
+    price_secondary: priceForOneAndHalf(pricePrimary),
+    alcoholic: body.alcoholic === true,
+    beverage_color: beverageColor,
+    filtration,
+    active: body.active !== false
+  };
+}
+
+function packagingInput(body) {
+  return {
+    name: requireText(body.name, 'Название тары'),
+    unit_price: normalisePrice(body.unit_price, 'Цена тары'),
+    active: body.active !== false
+  };
+}
+
+async function menuDraftInput(body, store) {
+  if (!Array.isArray(body.rows)) {
+    const error = new Error('Меню должно содержать список строк.');
+    error.status = 400;
+    throw error;
+  }
+  const products = new Map((await store.listProducts()).map((item) => [item.id, item]));
+  const packaging = new Map((await store.listPackaging()).map((item) => [item.id, item]));
+  const rows = body.rows.map((row, index) => {
+    const kind = row?.kind;
+    const id = typeof row?.id === 'string' && row.id.length <= 120 ? row.id : `row-${index + 1}`;
+    if (kind === 'section') return {
+      id, kind, name: requireText(row.name, 'Название раздела', { max: 100 }), enabled: row.enabled !== false
+    };
+    if (kind === 'item') {
+      const product = products.get(positiveId(row.product_id ?? row.productId, 'Продукция'));
+      if (!product || !product.active) {
+        const error = new Error('Каждая позиция меню должна быть связана с активной продукцией общей базы.');
+        error.status = 422;
+        throw error;
+      }
+      if (!product.price_primary) {
+        const error = new Error(`Для продукции «${product.name}» не указана обязательная цена.`);
+        error.status = 422;
+        throw error;
+      }
+      return {
+        id, kind, product_id: product.id, name: product.name, characteristics: optionalText(row.characteristics, 'Подпись продукции', { max: 180 }),
+        price_primary: product.price_primary, price_secondary: product.price_secondary, promotion: row.promotion === true,
+        promotion_text: optionalText(row.promotion_text ?? row.promotionText, 'Текст акции', { max: 80 }), enabled: row.enabled !== false
+      };
+    }
+    if (kind === 'packaging') {
+      const item = packaging.get(positiveId(row.packaging_id ?? row.packagingId, 'Тара'));
+      if (!item || !item.active) {
+        const error = new Error('Каждая строка тары должна быть связана с активной тарой общей базы.');
+        error.status = 422;
+        throw error;
+      }
+      return { id, kind, packaging_id: item.id, name: item.name, unit_price: item.unit_price, enabled: row.enabled !== false };
+    }
+    const error = new Error('Тип строки меню не поддерживается.');
+    error.status = 400;
+    throw error;
+  });
+  const settings = body.settings && typeof body.settings === 'object' && !Array.isArray(body.settings) ? body.settings : {};
+  if (Buffer.byteLength(JSON.stringify({ rows, settings }), 'utf8') > 48 * 1024) {
+    const error = new Error('Черновик меню слишком большой.');
+    error.status = 400;
+    throw error;
+  }
+  return { rows, settings };
 }
 
 function sftpDirectoryInput(body) {
@@ -237,8 +395,12 @@ function parseCookies(request) {
   }));
 }
 
-function issueSession(username, config) {
-  const payload = Buffer.from(JSON.stringify({ sub: username, exp: Math.floor(Date.now() / 1000) + config.sessionTtlHours * 3600 })).toString('base64url');
+function issueSession(user, config) {
+  const payload = Buffer.from(JSON.stringify({
+    sub: user.username,
+    version: user.session_version,
+    exp: Math.floor(Date.now() / 1000) + config.sessionTtlHours * 3600
+  })).toString('base64url');
   const signature = crypto.createHmac('sha256', config.sessionSecret).update(payload).digest('base64url');
   return `${payload}.${signature}`;
 }
@@ -251,7 +413,8 @@ function verifySession(token, config) {
   if (!constantTimeEqual(signature, expected)) return null;
   try {
     const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    return session.sub === config.adminUsername && Number.isInteger(session.exp) && session.exp > Math.floor(Date.now() / 1000) ? session : null;
+    return typeof session.sub === 'string' && Number.isInteger(session.version) && session.version > 0
+      && Number.isInteger(session.exp) && session.exp > Math.floor(Date.now() / 1000) ? session : null;
   } catch {
     return null;
   }
@@ -270,6 +433,10 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
   const store = suppliedStore ?? new MenuTvStore(config.db, { seedDemoData: config.seedDemoData });
   const sftp = suppliedSftp ?? new SftpService(config.sftp);
   await store.init();
+  const bootstrapAdmin = config.bootstrapAdmin
+    ? { username: config.bootstrapAdmin.username, passwordHash: await hashPassword(config.bootstrapAdmin.password) }
+    : null;
+  await store.ensureInitialAdministrator(bootstrapAdmin || undefined);
   await store.setInitialSiteName(config.appName);
   const app = express();
   app.disable('x-powered-by');
@@ -296,18 +463,19 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
   app.post('/api/auth/login', async (request, response) => {
     const username = typeof request.body?.username === 'string' ? request.body.username : '';
     const password = typeof request.body?.password === 'string' ? request.body.password : '';
-    if (!constantTimeEqual(username, config.adminUsername) || !constantTimeEqual(password, config.adminPassword)) {
+    const user = await store.getActiveUser(username);
+    if (!user || !await verifyPassword(password, user.password_hash)) {
       return response.status(401).json({ error: 'Неверный логин или пароль.' });
     }
     await store.recordActivity({
-      actor_username: config.adminUsername,
+      actor_username: user.username,
       action: 'auth.login',
       entity_type: 'session',
       message: 'Выполнен вход в панель управления.'
     });
-    const preferences = await store.getUserPreferences(config.adminUsername);
+    const preferences = await store.getUserPreferences(user.username);
     response.setHeader('Set-Cookie', [
-      sessionCookie(issueSession(config.adminUsername, config), config),
+      sessionCookie(issueSession(user, config), config),
       themeCookie(preferences.theme, config)
     ]);
     return response.status(204).end();
@@ -326,18 +494,34 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     response.status(204).end();
   });
 
-  const requirePageSession = (request, response, next) => {
+  const resolveSession = async (request) => {
     const session = verifySession(parseCookies(request)[SESSION_COOKIE], config);
-    if (!session) return response.redirect(302, '/signin.html');
-    request.session = session;
-    return next();
+    if (!session) return null;
+    const user = await store.getActiveUser(session.sub);
+    if (!user || user.session_version !== session.version) return null;
+    return { ...session, user };
   };
 
-  app.use('/api', (request, response, next) => {
-    const session = verifySession(parseCookies(request)[SESSION_COOKIE], config);
-    if (!session) return response.status(401).json({ error: 'Требуется вход в систему.' });
-    request.session = session;
-    return next();
+  const requirePageSession = async (request, response, next) => {
+    try {
+      const session = await resolveSession(request);
+      if (!session) return response.redirect(302, '/signin.html');
+      request.session = session;
+      return next();
+    } catch (error) {
+      return next(error);
+    }
+  };
+
+  app.use('/api', async (request, response, next) => {
+    try {
+      const session = await resolveSession(request);
+      if (!session) return response.status(401).json({ error: 'Требуется вход в систему.' });
+      request.session = session;
+      return next();
+    } catch (error) {
+      return next(error);
+    }
   });
 
   const activity = (request, entry) => store.recordActivity({ actor_username: request.session.sub, ...entry });
@@ -368,6 +552,26 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     response.setHeader('Set-Cookie', themeCookie(preferences.theme, config));
     response.json(preferences);
   });
+  app.put('/api/settings/user/password', async (request, response) => {
+    const { currentPassword, newPassword } = passwordChangeInput(request.body, config);
+    if (!await verifyPassword(currentPassword, request.session.user.password_hash)) {
+      return response.status(400).json({ error: 'Текущий пароль введён неверно.' });
+    }
+    const user = await store.updateUserPassword(request.session.sub, await hashPassword(newPassword));
+    if (!user) throw recordNotFound();
+    const preferences = await store.getUserPreferences(user.username);
+    await activity(request, {
+      action: 'settings.user.password_updated',
+      entity_type: 'user',
+      entity_id: user.username,
+      message: 'Изменён пароль пользователя.'
+    });
+    response.setHeader('Set-Cookie', [
+      sessionCookie(issueSession(user, config), config),
+      themeCookie(preferences.theme, config)
+    ]);
+    response.status(204).end();
+  });
   app.get('/api/settings/site', async (_request, response) => {
     const settings = await store.getSiteSettings();
     response.json(siteSettingsResponse(settings, config));
@@ -395,6 +599,60 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
 
   app.get('/api/notifications', async (request, response) => response.json(await store.listNotifications(request.query.limit)));
   app.post('/api/notifications/read', async (_request, response) => response.json({ marked_read: await store.markNotificationsRead() }));
+
+  app.get('/api/catalog/products', async (_request, response) => response.json(await store.listProducts()));
+  app.post('/api/catalog/products', async (request, response) => {
+    const product = await store.createProduct(productInput(request.body));
+    await activity(request, { action: 'catalog.product.created', entity_type: 'catalog_product', entity_id: product.id, message: `Добавлена продукция «${product.name}».` });
+    response.status(201).json(product);
+  });
+  app.put('/api/catalog/products/:id', async (request, response) => {
+    const product = await store.updateProduct(positiveId(request.params.id, 'id'), productInput(request.body));
+    if (!product) throw recordNotFound();
+    await activity(request, { action: 'catalog.product.updated', entity_type: 'catalog_product', entity_id: product.id, message: `Обновлена продукция «${product.name}».` });
+    response.json(product);
+  });
+  app.delete('/api/catalog/products/:id', async (request, response) => {
+    const id = positiveId(request.params.id, 'id');
+    const product = await store.getProduct(id);
+    if (!product) throw recordNotFound();
+    const affected = await store.screensUsingCatalog('product', id);
+    if (affected.length) {
+      const error = conflict('Продукция используется в меню мониторов и не может быть удалена.');
+      error.details = affected;
+      throw error;
+    }
+    await store.deleteProduct(id);
+    await activity(request, { action: 'catalog.product.deleted', entity_type: 'catalog_product', entity_id: id, message: `Удалена продукция «${product.name}».` });
+    response.status(204).end();
+  });
+
+  app.get('/api/catalog/packaging', async (_request, response) => response.json(await store.listPackaging()));
+  app.post('/api/catalog/packaging', async (request, response) => {
+    const packaging = await store.createPackaging(packagingInput(request.body));
+    await activity(request, { action: 'catalog.packaging.created', entity_type: 'catalog_packaging', entity_id: packaging.id, message: `Добавлена тара «${packaging.name}».` });
+    response.status(201).json(packaging);
+  });
+  app.put('/api/catalog/packaging/:id', async (request, response) => {
+    const packaging = await store.updatePackaging(positiveId(request.params.id, 'id'), packagingInput(request.body));
+    if (!packaging) throw recordNotFound();
+    await activity(request, { action: 'catalog.packaging.updated', entity_type: 'catalog_packaging', entity_id: packaging.id, message: `Обновлена тара «${packaging.name}».` });
+    response.json(packaging);
+  });
+  app.delete('/api/catalog/packaging/:id', async (request, response) => {
+    const id = positiveId(request.params.id, 'id');
+    const packaging = await store.getPackaging(id);
+    if (!packaging) throw recordNotFound();
+    const affected = await store.screensUsingCatalog('packaging', id);
+    if (affected.length) {
+      const error = conflict('Тара используется в меню мониторов и не может быть удалена.');
+      error.details = affected;
+      throw error;
+    }
+    await store.deletePackaging(id);
+    await activity(request, { action: 'catalog.packaging.deleted', entity_type: 'catalog_packaging', entity_id: id, message: `Удалена тара «${packaging.name}».` });
+    response.status(204).end();
+  });
 
   app.get('/api/locations', async (_request, response) => response.json(await store.listLocations()));
   app.post('/api/locations', async (request, response) => {
@@ -437,6 +695,31 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     const screen = await store.getScreen(positiveId(request.params.id, 'id'));
     if (!screen) throw recordNotFound();
     response.json(screen);
+  });
+  app.get('/api/screens/:id/editor', async (request, response) => {
+    const id = positiveId(request.params.id, 'id');
+    const screen = await store.getScreen(id);
+    if (!screen) throw recordNotFound();
+    const [draft, products, packaging, templates] = await Promise.all([
+      store.getScreenDraft(id), store.listProducts(), store.listPackaging(), store.listTemplates()
+    ]);
+    response.json({ screen, draft, products, packaging, templates });
+  });
+  app.put('/api/screens/:id/draft', async (request, response) => {
+    const id = positiveId(request.params.id, 'id');
+    const screen = await store.getScreen(id);
+    if (!screen) throw recordNotFound();
+    const draft = await menuDraftInput(request.body, store);
+    const templateId = request.body.template_id === undefined ? screen.template_id
+      : request.body.template_id === null || request.body.template_id === '' ? null : positiveId(request.body.template_id, 'template_id');
+    if (templateId && !await store.getTemplate(templateId)) throw recordNotFound();
+    const updatedScreen = await store.updateScreen(id, {
+      location_id: screen.location_id, name: screen.name, resolution: screen.resolution,
+      status: screen.status, active: screen.active, template_id: templateId
+    });
+    const saved = await store.saveScreenDraft(id, draft);
+    await activity(request, { action: 'screen.draft.saved', entity_type: 'screen', entity_id: id, message: `Сохранён черновик меню монитора «${screen.name}».` });
+    response.json({ screen: updatedScreen, draft: saved });
   });
   app.post('/api/locations/:id/screens', async (request, response) => {
     const locationId = positiveId(request.params.id, 'id');
@@ -687,6 +970,7 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
   app.get('/index.html', requirePageSession, (_request, _response, next) => next());
   app.get('/locations.html', requirePageSession, (_request, _response, next) => next());
   app.get('/screens.html', requirePageSession, (_request, _response, next) => next());
+  app.get('/catalog.html', requirePageSession, (_request, _response, next) => next());
   app.get('/screen-editor.html', requirePageSession, (_request, _response, next) => next());
   app.get('/templates.html', requirePageSession, (_request, _response, next) => next());
   app.get('/profile.html', requirePageSession, (_request, _response, next) => next());
