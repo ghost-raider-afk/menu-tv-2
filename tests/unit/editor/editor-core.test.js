@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createEditorState, markEditorSaved } from '../../../src/web/admin-ui/public/js/editor/state.js';
 import { addRow, applyTemplate, moveRow, removeRow, updateRow } from '../../../src/web/admin-ui/public/js/editor/commands.js';
-import { buildDisplayLines, buildRenderModel } from '../../../src/web/admin-ui/public/js/editor/renderer.js';
+import { buildDisplayLines, buildRenderModel, buildTableLayout } from '../../../src/web/admin-ui/public/js/editor/renderer.js';
 import { normaliseEditorSettings } from '../../../src/web/admin-ui/public/js/editor/settings.js';
 
 test('editor commands mutate only Editor State and track dirty revision', () => {
@@ -59,7 +59,7 @@ test('template background survives settings normalization and uses TV Menu 1 acc
   assert.equal(normaliseEditorSettings({ background_image_url: 'https://example.com/x.png' }).background_image_url, '');
 });
 
-test('TV Menu table model keeps separate 1l and 1.5l prices and pairs packaging', () => {
+test('TV board table keeps prices separate and places producer next to product name', () => {
   const state = createEditorState({
     settings: { title: 'Меню' },
     rows: [
@@ -69,13 +69,24 @@ test('TV Menu table model keeps separate 1l and 1.5l prices and pairs packaging'
     ]
   });
   const lines = buildDisplayLines(buildRenderModel(state), {
-    products: [{ id: 1, name: 'Лагер', price_primary: '240', price_secondary: '360' }],
+    products: [{ id: 1, name: 'Бавария', strength: '4,6%', producer: 'ООО «Портал»', price_primary: '179.00', price_secondary: '268.50' }],
     packaging: [{ id: 10, name: 'ПЭТ 1 л', unit_price: '10' }, { id: 11, name: 'ПЭТ 1,5 л', unit_price: '12' }]
   });
   assert.equal(lines[0].kind, 'section');
   assert.equal(lines[0].showPriceLabels, true);
-  assert.equal(lines[1].pricePrimary, '240');
-  assert.equal(lines[1].priceSecondary, '360');
+  assert.equal(lines[1].name, 'Бавария');
+  assert.equal(lines[1].strength, '4,6%');
+  assert.equal(lines[1].producer, 'ООО «Портал»');
+  assert.equal(lines[1].pricePrimary, '179.00');
+  assert.equal(lines[1].priceSecondary, '268.50');
   assert.equal(lines[2].kind, 'packaging');
   assert.equal(lines[2].items.length, 2);
+});
+
+test('board table is left aligned and leaves the right side for template artwork', () => {
+  const layout = buildTableLayout(1920, 'normal');
+  assert.equal(layout.left, 15);
+  assert.equal(layout.tableWidth, 1498);
+  assert.ok(layout.right < 1920 * 0.8);
+  assert.ok(layout.primaryBoundary < layout.secondaryBoundary);
 });
