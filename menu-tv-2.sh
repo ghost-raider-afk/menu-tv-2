@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.1.6"
+SCRIPT_VERSION="1.1.7"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 BRANCH="main"
@@ -208,7 +208,7 @@ compose() {
 
 check_dependencies() {
   local tool
-  for tool in docker git tar openssl awk sed find install mktemp runuser od tr fold shuf dig; do
+  for tool in docker git tar openssl awk sed find install mktemp runuser od tr fold shuf dig cmp; do
     command_exists "$tool" || die "Не найдена команда: $tool"
   done
   docker info >/dev/null 2>&1 || die "Docker daemon недоступен."
@@ -389,14 +389,21 @@ validate_env() {
 }
 
 repair_permissions() {
-  local owner
+  local owner mode="${1:-minimal}"
   [[ -d "$INSTALL_DIR" ]] || return 0
   owner="$(project_owner)"
   id "$owner" >/dev/null 2>&1 || die "Не найден пользователь владельца проекта: $owner"
-  chown -R "$owner:$owner" "$INSTALL_DIR"
-  find "$INSTALL_DIR" -type d -exec chmod 750 {} +
-  find "$INSTALL_DIR" -type f -exec chmod 640 {} +
-  chmod 750 "$INSTALL_DIR/menu-tv-2.sh"
+  if [[ "$mode" == full ]]; then
+    chown -R "$owner:$owner" "$INSTALL_DIR"
+    find "$INSTALL_DIR" -type d -exec chmod 750 {} +
+    find "$INSTALL_DIR" -type f -exec chmod 640 {} +
+  else
+    chown "$owner:$owner" "$INSTALL_DIR"
+  fi
+  [[ ! -f "$INSTALL_DIR/menu-tv-2.sh" ]] || {
+    chown "$owner:$owner" "$INSTALL_DIR/menu-tv-2.sh"
+    chmod 750 "$INSTALL_DIR/menu-tv-2.sh"
+  }
   if [[ -f "$INSTALL_DIR/.env" ]]; then
     chown root:root "$INSTALL_DIR/.env"
     chmod 600 "$INSTALL_DIR/.env"
@@ -452,38 +459,84 @@ verify_https_certificate() {
 }
 
 build_and_start() {
-  local domain
+  local mode="${1:-build}" check_https="${2:-true}" domain
   validate_env
   domain="$(env_value MENU_TV_2_DOMAIN)"
   assert_proxy_network
   repair_permissions
   log "Проверка конфигурации Docker Compose"
   compose config -q || return 1
-  log "Сборка и запуск независимых контейнеров"
-  compose up -d --build --wait || return 1
+  if [[ "$mode" == build ]]; then
+    log "Сборка и запуск изменённых контейнеров"
+    compose up -d --build --wait || return 1
+  else
+    log "Применение изменённой конфигурации контейнеров"
+    compose up -d --wait || return 1
+  fi
   log "Проверка готовности приложения"
   verify_application || return 1
   log "Проверка SFTP-сервера"
   verify_sftp || return 1
-  log "Выпуск и проверка HTTPS-сертификата Let's Encrypt"
-  verify_https_certificate "$domain" || return 1
+  if [[ "$check_https" == true ]]; then
+    log "Выпуск и проверка HTTPS-сертификата Let's Encrypt"
+    verify_https_certificate "$domain" || return 1
+  fi
+}
+
+source_requires_runtime_update() {
+  local files="$1" file
+  while IFS= read -r file; do
+    case "$file" in
+      Dockerfile|compose.yaml|package.json|package-lock.json|src/*) return 0 ;;
+    esac
+  done <<< "$files"
+  return 1
+}
+
+source_requires_image_rebuild() {
+  local files="$1" file
+  while IFS= read -r file; do
+    case "$file" in
+      Dockerfile|package.json|package-lock.json|src/*) return 0 ;;
+    esac
+  done <<< "$files"
+  return 1
+}
+
+source_requires_database_backup() {
+  local files="$1" file
+  while IFS= read -r file; do
+    case "$file" in
+      compose.yaml|src/db.js|migrations/*) return 0 ;;
+    esac
+  done <<< "$files"
+  return 1
+}
+
+fetch_remote_revision() {
+  git_as_project_owner -C "$INSTALL_DIR" fetch --depth 1 origin "$BRANCH"
+  git_as_project_owner -C "$INSTALL_DIR" rev-parse FETCH_HEAD
 }
 
 create_temporary_backup() {
+  local with_database="${1:-false}"
   [[ -d "$INSTALL_DIR/.git" ]] || die "Каталог исходников не является Git-репозиторием: $INSTALL_DIR"
   TEMP_BACKUP_DIR="$(mktemp -d -t "${PROGRAM_NAME}.update.XXXXXX")"
   chmod 700 "$TEMP_BACKUP_DIR"
-  log "Создание временной резервной копии"
+  log "Создание временной резервной копии исходников"
   tar --exclude='./.git' --exclude='./.env' --exclude='./node_modules' -C "$INSTALL_DIR" -czf "$TEMP_BACKUP_DIR/source.tar.gz" .
   cp "$INSTALL_DIR/.env" "$TEMP_BACKUP_DIR/.env"
   chmod 600 "$TEMP_BACKUP_DIR/.env"
   git -C "$INSTALL_DIR" rev-parse HEAD > "$TEMP_BACKUP_DIR/git-revision"
-  compose exec -T "$DB_SERVICE" sh -ec 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom --no-owner --no-privileges' > "$TEMP_BACKUP_DIR/database.dump"
+  if [[ "$with_database" == true ]]; then
+    log "Создание резервной копии базы данных"
+    compose exec -T "$DB_SERVICE" sh -ec 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom --no-owner --no-privileges' > "$TEMP_BACKUP_DIR/database.dump"
+  fi
   info "Временный бэкап создан и будет удалён после завершения операции."
 }
 
 restore_temporary_backup() {
-  [[ -n "$TEMP_BACKUP_DIR" && -f "$TEMP_BACKUP_DIR/source.tar.gz" && -f "$TEMP_BACKUP_DIR/database.dump" ]] || return 1
+  [[ -n "$TEMP_BACKUP_DIR" && -f "$TEMP_BACKUP_DIR/source.tar.gz" && -f "$TEMP_BACKUP_DIR/.env" && -f "$TEMP_BACKUP_DIR/git-revision" ]] || return 1
   warn "Обновление не прошло проверку. Выполняется автоматическое восстановление."
   compose down --remove-orphans || true
   find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.env' -exec rm -rf -- {} +
@@ -491,18 +544,31 @@ restore_temporary_backup() {
   cp "$TEMP_BACKUP_DIR/.env" "$INSTALL_DIR/.env"
   chmod 600 "$INSTALL_DIR/.env"
   git -C "$INSTALL_DIR" reset --hard "$(<"$TEMP_BACKUP_DIR/git-revision")"
-  repair_permissions
+  repair_permissions full
   install_launcher
-  compose up -d "$DB_SERVICE"
-  wait_for_database
-  compose exec -T "$DB_SERVICE" sh -ec 'PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner --no-privileges' < "$TEMP_BACKUP_DIR/database.dump"
+  if [[ -f "$TEMP_BACKUP_DIR/database.dump" ]]; then
+    compose up -d "$DB_SERVICE"
+    wait_for_database
+    compose exec -T "$DB_SERVICE" sh -ec 'PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner --no-privileges' < "$TEMP_BACKUP_DIR/database.dump"
+  fi
   compose up -d --build --wait
   verify_application
 }
 
+recover_failed_update() {
+  if [[ -z "$TEMP_BACKUP_DIR" ]]; then
+    die "Обновление не прошло проверку. Контейнеры не удалялись; проверьте конфигурацию и повторите попытку."
+  fi
+  if restore_temporary_backup; then
+    die "Обновление отменено: предыдущая версия и данные автоматически восстановлены."
+  fi
+  KEEP_TEMP_BACKUP=true
+  die "Автоматическое восстановление не завершилось. Временная копия сохранена: $TEMP_BACKUP_DIR"
+}
+
 sync_existing_source() {
-  git_as_project_owner -C "$INSTALL_DIR" fetch --depth 1 origin "$BRANCH"
-  git_as_project_owner -C "$INSTALL_DIR" reset --hard "origin/$BRANCH"
+  local revision="$1"
+  git_as_project_owner -C "$INSTALL_DIR" reset --hard "$revision"
   git_as_project_owner -C "$INSTALL_DIR" clean -fd -e .env -e .installer-owner
   repair_permissions
   install_launcher
@@ -601,7 +667,7 @@ install_app() {
   mv "$stage_dir/source" "$INSTALL_DIR"
   rmdir "$stage_dir"
   write_new_env "$domain"
-  repair_permissions
+  repair_permissions full
   install_launcher
   if ! setup_proxy "$acme_email" || ! build_and_start; then
     cleanup_failed_install
@@ -611,21 +677,55 @@ install_app() {
 }
 
 update_app() {
+  local env_before remote_revision changed_files source_changed=false env_changed=false needs_runtime=false needs_build=false needs_database_backup=false
   require_root
   prepare_host
   check_dependencies
   [[ -d "$INSTALL_DIR/.git" ]] || die "Menu TV 2.0 не установлен: $INSTALL_DIR"
+  env_before="$(mktemp -t "${PROGRAM_NAME}.env.XXXXXX")"
+  cp "$INSTALL_DIR/.env" "$env_before"
   ensure_sftp_env
   validate_env
-  create_temporary_backup
-  if ! sync_existing_source || ! build_and_start; then
-    if restore_temporary_backup; then
-      die "Обновление отменено: предыдущая версия и данные автоматически восстановлены."
-    fi
-    KEEP_TEMP_BACKUP=true
-    die "Автоматическое восстановление не завершилось. Временная копия сохранена: $TEMP_BACKUP_DIR"
+  if ! cmp -s "$env_before" "$INSTALL_DIR/.env"; then
+    env_changed=true
   fi
-  info "Обновление прошло проверку. Временная копия удалена."
+  rm -f -- "$env_before"
+
+  log "Проверка изменений в репозитории"
+  remote_revision="$(fetch_remote_revision)"
+  if ! git_as_project_owner -C "$INSTALL_DIR" diff --quiet HEAD "$remote_revision"; then
+    source_changed=true
+    changed_files="$(git_as_project_owner -C "$INSTALL_DIR" diff --name-only HEAD "$remote_revision")"
+    source_requires_runtime_update "$changed_files" && needs_runtime=true
+    source_requires_image_rebuild "$changed_files" && needs_build=true
+    source_requires_database_backup "$changed_files" && needs_database_backup=true
+  fi
+
+  if [[ "$source_changed" == false && "$env_changed" == false ]]; then
+    info "Исходники и конфигурация уже актуальны. Контейнеры, база данных и HTTPS не затрагивались."
+    return
+  fi
+
+  if [[ "$source_changed" == true ]]; then
+    if [[ "$needs_runtime" == true ]]; then
+      create_temporary_backup "$needs_database_backup"
+    fi
+    if ! sync_existing_source "$remote_revision"; then
+      die "Не удалось применить обновление исходников."
+    fi
+  fi
+
+  if [[ "$needs_runtime" == false && "$env_changed" == false ]]; then
+    info "Обновлены служебные файлы. Контейнеры, база данных и HTTPS не затрагивались."
+    return
+  fi
+
+  if [[ "$needs_build" == true ]]; then
+    build_and_start build false || recover_failed_update
+  elif ! build_and_start apply false; then
+    recover_failed_update
+  fi
+  info "Обновление прошло проверку. HTTPS-сертификат не перевыпускался."
 }
 
 confirm_removal() {
