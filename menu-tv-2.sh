@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.1.4"
+SCRIPT_VERSION="1.1.5"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 BRANCH="main"
@@ -454,15 +454,15 @@ build_and_start() {
   assert_proxy_network
   repair_permissions
   log "Проверка конфигурации Docker Compose"
-  compose config -q
+  compose config -q || return 1
   log "Сборка и запуск независимых контейнеров"
-  compose up -d --build --wait
+  compose up -d --build --wait || return 1
   log "Проверка готовности приложения"
-  verify_application
+  verify_application || return 1
   log "Проверка SFTP-сервера"
-  verify_sftp
+  verify_sftp || return 1
   log "Выпуск и проверка HTTPS-сертификата Let's Encrypt"
-  verify_https_certificate "$domain"
+  verify_https_certificate "$domain" || return 1
 }
 
 create_temporary_backup() {
