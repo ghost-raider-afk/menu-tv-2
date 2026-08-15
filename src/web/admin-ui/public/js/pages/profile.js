@@ -17,30 +17,11 @@ function populateUserForm(user) {
   element('notifications-enabled').checked = user.notifications_enabled;
 }
 
-async function applyPasswordConstraints() {
-  try {
-    const config = await api.get(API.publicConfig);
-    const min = Number(config.password_min_length);
-    const max = Number(config.password_max_length);
-    ['new-password', 'new-password-confirmation'].forEach((id) => {
-      const input = element(id);
-      if (!(input instanceof HTMLInputElement)) return;
-      if (Number.isFinite(min) && min > 0) input.minLength = min;
-      if (Number.isFinite(max) && max >= min) input.maxLength = max;
-    });
-    const hint = document.querySelector('[data-password-rules]');
-    if (hint && Number.isFinite(min) && Number.isFinite(max)) hint.textContent = `Длина пароля: ${min}–${max} символов. Требуются строчная и прописная латинская буква, цифра и специальный символ.`;
-  } catch {
-    // Backend остаётся окончательным источником проверки даже если публичная конфигурация недоступна.
-  }
-}
-
 export function initialiseProfile() {
   const userForm = element('user-settings-form');
   const passwordForm = element('password-change-form');
   if (!(userForm instanceof HTMLFormElement)) return;
   populateUserForm(state.user);
-  void applyPasswordConstraints();
 
   userForm.addEventListener('submit', async (event) => {
     event.preventDefault();
