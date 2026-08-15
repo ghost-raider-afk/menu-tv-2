@@ -11,8 +11,9 @@ const SETTINGS_INPUTS = Object.freeze([
   'editor-menu-title'
 ]);
 
-export function readEditorSettings() {
+export function readEditorSettings(baseSettings = {}) {
   return normaliseEditorSettings({
+    ...baseSettings,
     background_color: element('editor-background-color').value,
     accent_color: element('editor-accent-color').value,
     text_color: element('editor-text-color').value,
@@ -55,7 +56,7 @@ export function readScreenProperties(screen) {
 
 export function bindSettingsProperties(editorState, onChange) {
   SETTINGS_INPUTS.forEach((id) => element(id)?.addEventListener('input', () => {
-    updateSettings(editorState, readEditorSettings());
+    updateSettings(editorState, readEditorSettings(editorState.settings));
     onChange?.();
   }));
 }
