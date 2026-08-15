@@ -1,18 +1,18 @@
-# ТВ МЕНЮ 2 — архитектура проекта
+# ТВ МЕНЮ 2 — утверждённая архитектура
 
-Этот документ является единой схемой проекта. ТВ МЕНЮ 1 используется только как визуальный и пользовательский эталон frontend; рабочий код ТВ МЕНЮ 1 не изменяется. ТВ МЕНЮ 2 использует новую модульную архитектуру, PostgreSQL, Docker Compose и SFTPGo.
+Этот документ описывает фактическую структуру проекта. ТВ МЕНЮ 1 используется как визуальный и пользовательский эталон frontend; его рабочий код не изменяется. ТВ МЕНЮ 2 использует модульный frontend/backend, PostgreSQL, Docker Compose и SFTPGo.
 
-## Базовые принципы
+## Базовые правила
 
-1. `.env` — единственный источник настраиваемых лимитов, таймаутов, размеров, security-параметров и инфраструктурных значений.
+1. `.env` — единственный источник настраиваемых лимитов, размеров, таймаутов, security- и инфраструктурных параметров.
 2. Frontend: `API -> state -> render -> UI`. DOM не является источником бизнес-состояния.
-3. Backend: `HTTP -> service -> repository/integration`. HTTP-слой не должен содержать SQL, DB-слой — HTTP-логику.
-4. Редактор меню — самостоятельное ядро внутри frontend.
-5. Один render model используется для preview и формирования конечного JPEG.
-6. Применение шаблона меняет только локальный Editor State. PostgreSQL меняется только после обычного `Сохранить`.
-7. Frontend имеет один shell, один CSS-entrypoint и один набор модулей. Параллельного legacy/compatibility frontend нет.
-8. API-контракты меняются только по функциональной необходимости.
-9. Fresh install создаёт пустую PostgreSQL и ничего не мигрирует. Перенос данных нужен только при обновлении существующей старой установки.
+3. Backend: `HTTP -> service -> repository/integration`.
+4. HTTP-слой не содержит SQL; PostgreSQL-слой не знает об HTTP.
+5. Редактор меню — отдельное ядро frontend.
+6. Preview и конечный JPEG получают данные из одной render model.
+7. Применение шаблона меняет только локальный Editor State; запись в PostgreSQL выполняется обычным сохранением.
+8. Frontend имеет один shell и один CSS-entrypoint. Legacy/compatibility frontend отсутствует.
+9. Fresh install создаёт чистую PostgreSQL. Перенос старых данных выполняется только при обновлении существующей установки.
 
 ## Стек
 
@@ -27,8 +27,6 @@
 - SFTPGo
 
 # Frontend
-
-Фактическая структура frontend:
 
 ```text
 src/web/admin-ui/public/
@@ -108,61 +106,33 @@ src/web/admin-ui/public/
         └── serializer.js
 ```
 
-## HTML
+HTML содержит только содержимое страниц и рабочие формы. Sidebar, context panel, header, профиль и уведомления создаются общими компонентами.
 
-HTML-страницы содержат только контент и рабочие формы. В них нет копий sidebar, topbar, профиля или уведомлений.
+`css/index.css` — единственный CSS-entrypoint. Старых `style.css`, `css/tv1`, временных compatibility-стилей и старого shell ТВ МЕНЮ2 в проекте нет.
 
-```text
-HTML page
-   -> app.js
-      -> application.js
-         -> authenticated context
-         -> shell
-         -> page/editor module
-```
+## Frontend core
 
-## CSS
-
-`css/index.css` — единственный CSS-entrypoint.
-
-```text
-index.css
-├── tokens.css       дизайн-токены
-├── base.css         базовые элементы и общие controls
-├── shell.css        rail/context/layout
-├── components.css   header, notifications, dialogs, toast
-├── forms.css        формы и поля
-├── tables.css       списки и строки меню
-├── pages/*          стили конкретных страниц
-├── editor/*         рабочая область редактора
-└── auth/*           вход
-```
-
-В проекте не должно быть второго `style.css`, каталога `css/tv1`, временного compatibility CSS или классов старого shell ТВ МЕНЮ2.
-
-## Core
-
-- `core/api.js` — единственный HTTP-клиент frontend.
-- `core/config.js` — адреса API и базовая конфигурация клиента.
+- `core/api.js` — единый HTTP-клиент.
+- `core/config.js` — frontend-конфигурация API.
 - `core/state.js` — состояние приложения.
-- `core/session.js` — получение авторизованного контекста.
-- `core/navigation.js` — единая модель маршрутов, разделов и контекстного меню.
-- `core/notifications.js` — получение/обновление уведомлений.
-- `core/presentation.js` — тема, логотип, favicon, имя приложения, accent.
-- `core/events.js` — слабосвязанные события между модулями.
-- `core/dom.js` — небольшие безопасные DOM helpers.
+- `core/session.js` — авторизованный контекст.
+- `core/navigation.js` — единая модель разделов и маршрутов.
+- `core/notifications.js` — данные уведомлений.
+- `core/presentation.js` — тема, логотип, favicon, имя и accent.
+- `core/events.js` — слабосвязанные события.
+- `core/dom.js` — общие DOM helpers.
 
 ## Components
 
-- `shell.js` — только orchestration shell.
+- `shell.js` — только сборка shell.
 - `sidebar.js` — основной rail.
-- `context-panel.js` — контекстное подменю раздела и account block.
+- `context-panel.js` — контекстное меню раздела.
 - `header.js` — верхняя панель, профиль, logout, theme toggle.
 - `notifications.js` — UI уведомлений.
-- `dialogs.js` — общие confirm/dialog механизмы.
-- `icons.js` — общие SVG icons.
+- `dialogs.js` — общие диалоги/confirm.
+- `icons.js` — общие SVG.
 
-Каталог в контекстной панели содержит отдельные пункты `Продукция` и `Тара`.
+В разделе «Каталог» контекстное меню содержит `Продукция` и `Тара`.
 
 # Редактор меню
 
@@ -188,19 +158,17 @@ Preview  Final JPEG
            SFTP
 ```
 
-Ответственность модулей:
-
-- `editor.js` — orchestration: load/save/staging/publish.
+- `editor.js` — orchestration загрузки, сохранения, staging и публикации.
 - `state.js` — единый Editor State.
 - `commands.js` — add/delete/move/update/apply-template.
-- `history.js` — снимки состояния и база Undo/Redo.
-- `rows.js` — строки `section/product/packaging`.
-- `properties.js` — чтение/запись параметров монитора и оформления.
-- `templates.js` — список и локальное применение шаблонов.
-- `settings.js` — нормализация настроек оформления.
+- `history.js` — история снимков и основа Undo/Redo.
+- `rows.js` — `section/product/packaging`.
+- `properties.js` — параметры монитора и оформления.
+- `templates.js` — загрузка и локальное применение шаблонов.
+- `settings.js` — нормализация оформления.
 - `renderer.js` — единая render model.
-- `preview.js` — отображение render model в редакторе.
-- `final-image.js` — создание JPEG из той же render model.
+- `preview.js` — preview из render model.
+- `final-image.js` — JPEG из той же render model.
 - `serializer.js` — Editor State <-> API draft.
 
 Editor State:
@@ -215,15 +183,13 @@ dirty
 revision
 ```
 
-Кнопка `Применить` шаблон не сохраняет. Сохранение выполняется только `Сохранить монитор и меню`.
-
 # Backend
-
-Целевая backend-структура:
 
 ```text
 src/
 ├── config/
+│   ├── index.js
+│   └── env.js
 ├── contracts/
 ├── shared/
 ├── logger/
@@ -241,8 +207,13 @@ src/
 ├── middleware/
 ├── services/
 ├── db/
+│   ├── index.js
 │   ├── pool.js
+│   ├── helpers.js
 │   ├── migrations/
+│   │   ├── schema.js
+│   │   └── seed.js
+│   ├── overview.js
 │   ├── users.js
 │   ├── locations.js
 │   ├── screens.js
@@ -252,35 +223,63 @@ src/
 │   ├── notifications.js
 │   └── sftp.js
 ├── sftp/
+│   ├── index.js
 │   ├── client.js
 │   ├── storage.js
 │   └── publisher.js
 └── server.js
 ```
 
-Правила backend:
+## Ответственность backend
 
-- `config` получает конфигурацию из `.env`; UI не дублирует env-лимиты.
-- `contracts` описывает структуры API/domain.
-- `shared` содержит независимые errors/ids/validation/date helpers.
-- `middleware` содержит auth/security/error/login-limit механизмы.
-- `api` отвечает только за HTTP.
-- `services` содержит бизнес-правила.
-- `db` содержит только PostgreSQL.
-- `sftp` содержит staging/publish/integration с SFTPGo.
-- `server.js` должен стать точкой сборки приложения, а не местом хранения бизнес-логики.
+- `config/` — чтение и проверка `.env`.
+- `contracts/` — входные структуры и domain/API-контракты.
+- `shared/` — независимые errors/ids/validation helpers.
+- `logger/` — структурированные runtime-логи.
+- `middleware/` — session, login limiter, error handling и HTTP middleware.
+- `api/` — только HTTP routes и формирование HTTP-ответов.
+- `services/` — бизнес-правила, публикация, SFTP access, password/session/site-assets.
+- `db/` — только PostgreSQL, migrations и repository-функции.
+- `db/index.js` — единый `MenuTvStore`, собирающий PostgreSQL repositories.
+- `sftp/` — SFTPGo client, filesystem staging и publisher.
+- `sftp/index.js` — композиция SFTP-сервиса.
+- `server.js` — только сборка приложения, middleware, routers и lifecycle.
 
-Часть backend-фундамента уже вынесена (`contracts`, `shared`, `logger`, `middleware`); дальнейшая декомпозиция `server.js` и `db.js` выполняется без изменения внешних API-контрактов.
+Корневых `src/config.js`, `src/db.js` и `src/sftp.js` нет. Эти границы защищаются архитектурными тестами.
+
+# Основной поток
+
+```text
+Browser
+  |
+  v
+Frontend core/pages/editor
+  |
+  v
+HTTP API
+  |
+  v
+Services
+  |------------------|
+  v                  v
+MenuTvStore       SFTP service
+  |                  |
+  v                  v
+PostgreSQL       staging/SFTPGo
+                     |
+                     v
+                  TV JPEG
+```
 
 # Проверка качества
 
-Обязательные проверки перед VPS:
+Перед установкой на VPS обязательны:
 
 ```text
 npm ci
 npm run check
-Docker build
 docker compose config
+production Docker build
 docker compose up --wait
 healthz
 login
@@ -288,8 +287,13 @@ create location
 create screen
 editor load
 frontend assets
-SFTP ping
+SFTP service check
 ```
+
+CI содержит два обязательных job:
+
+- `node-check` — syntax, unit/integration и архитектурные guards.
+- `clean-install-smoke` — production image + чистые PostgreSQL/SFTPGo/app + основной runtime-сценарий.
 
 Главный пользовательский сценарий:
 
@@ -303,7 +307,5 @@ SFTP ping
 -> сохранить
 -> автоматически собрать JPEG
 -> опубликовать
--> проверить файл SFTP
+-> проверить SFTP-файл
 ```
-
-После fresh install PostgreSQL должна быть пустой, кроме необходимых системных/initial-admin записей. Миграция старых данных при чистой установке не выполняется.
