@@ -1,13 +1,3 @@
-FROM node:24.14.0-bookworm-slim AS build
-
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY src/web/tailadmin/package*.json ./src/web/tailadmin/
-RUN npm ci --prefix ./src/web/tailadmin
-COPY src ./src
-RUN npm run build && rm -rf ./src/web/tailadmin/node_modules
-
 FROM node:24.14.0-bookworm-slim AS runtime
 
 ENV NODE_ENV=production
@@ -15,7 +5,7 @@ WORKDIR /app
 
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
-COPY --from=build /app/src ./src
+COPY src ./src
 
 RUN groupadd --gid 11000 sftp-storage \
   && useradd --uid 10001 --gid sftp-storage --create-home menu-tv \
