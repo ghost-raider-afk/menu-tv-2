@@ -8,12 +8,22 @@ function normaliseRow(row) {
   if (!row) return null;
   return {
     ...row,
-    id: Number(row.id),
+    ...(row.id === undefined ? {} : { id: Number(row.id) }),
     ...(row.location_id === undefined ? {} : { location_id: Number(row.location_id) }),
     ...(row.screen_count === undefined ? {} : { screen_count: Number(row.screen_count) }),
     ...(row.sftp_directory_id === undefined || row.sftp_directory_id === null ? {} : { sftp_directory_id: Number(row.sftp_directory_id) }),
     ...(row.bound_location_id === undefined || row.bound_location_id === null ? {} : { bound_location_id: Number(row.bound_location_id) })
   };
+}
+
+function normaliseActivityEvent(row) {
+  const event = normaliseRow(row);
+  if (!event) return null;
+  try {
+    return { ...event, metadata: JSON.parse(event.metadata || '{}') };
+  } catch {
+    return { ...event, metadata: {} };
+  }
 }
 
 export class MenuTvStore {
@@ -76,6 +86,31 @@ export class MenuTvStore {
         created_at TIMESTAMPTZ NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS user_preferences (
+        username TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS site_settings (
+        id SMALLINT PRIMARY KEY,
+        timezone TEXT NOT NULL DEFAULT 'Europe/Moscow',
+        updated_by TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS activity_events (
+        id BIGSERIAL PRIMARY KEY,
+        actor_username TEXT NOT NULL,
+        action TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT,
+        message TEXT NOT NULL,
+        metadata TEXT NOT NULL DEFAULT '{}',
+        read_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL
+      );
       ALTER TABLE locations ADD COLUMN IF NOT EXISTS sftp_directory_id BIGINT REFERENCES sftp_directories(id) ON DELETE RESTRICT;
       ALTER TABLE locations ADD COLUMN IF NOT EXISTS sftp_username TEXT;
       ALTER TABLE locations ADD COLUMN IF NOT EXISTS sftp_password_issued_at TIMESTAMPTZ;
@@ -87,8 +122,15 @@ export class MenuTvStore {
       ALTER TABLE screens ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
       CREATE UNIQUE INDEX IF NOT EXISTS locations_sftp_directory_id_unique ON locations(sftp_directory_id) WHERE sftp_directory_id IS NOT NULL;
       CREATE UNIQUE INDEX IF NOT EXISTS locations_sftp_username_unique ON locations(sftp_username) WHERE sftp_username IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS activity_events_created_at_index ON activity_events(created_at DESC);
+      CREATE INDEX IF NOT EXISTS activity_events_unread_index ON activity_events(read_at) WHERE read_at IS NULL;
       UPDATE screens SET delivery_filename = 'monitor-' || id::text || '.jpg' WHERE delivery_filename IS NULL;
     `);
+    const now = isoNow();
+    await this.pool.query(
+      'INSERT INTO site_settings (id, timezone, created_at, updated_at) VALUES (1, $1, $2, $2) ON CONFLICT (id) DO NOTHING',
+      ['Europe/Moscow', now]
+    );
     if (this.seedDemoData) await this.#seed();
   }
 
@@ -119,6 +161,61 @@ export class MenuTvStore {
         (SELECT COUNT(*)::int FROM templates) AS templates
     `);
     return Object.fromEntries(Object.entries(rows[0]).map(([key, value]) => [key, Number(value)]));
+  }
+
+  async getUserPreferences(username) {
+    const now = isoNow();
+    await this.pool.query(
+      'INSERT INTO user_preferences (username, display_name, created_at, updated_at) VALUES ($1, $1, $2, $2) ON CONFLICT (username) DO NOTHING',
+      [username, now]
+    );
+    const { rows } = await this.pool.query('SELECT * FROM user_preferences WHERE username = $1', [username]);
+    return normaliseRow(rows[0]);
+  }
+
+  async updateUserPreferences(username, { display_name, notifications_enabled }) {
+    await this.getUserPreferences(username);
+    const { rows } = await this.pool.query(
+      'UPDATE user_preferences SET display_name = $1, notifications_enabled = $2, updated_at = $3 WHERE username = $4 RETURNING *',
+      [display_name, notifications_enabled, isoNow(), username]
+    );
+    return normaliseRow(rows[0]);
+  }
+
+  async getSiteSettings() {
+    const { rows } = await this.pool.query('SELECT * FROM site_settings WHERE id = 1');
+    return normaliseRow(rows[0]);
+  }
+
+  async updateSiteSettings({ timezone, updated_by }) {
+    const { rows } = await this.pool.query(
+      'UPDATE site_settings SET timezone = $1, updated_by = $2, updated_at = $3 WHERE id = 1 RETURNING *',
+      [timezone, updated_by, isoNow()]
+    );
+    return normaliseRow(rows[0]);
+  }
+
+  async recordActivity({ actor_username, action, entity_type, entity_id = null, message, metadata = {} }) {
+    const { rows } = await this.pool.query(`
+      INSERT INTO activity_events (actor_username, action, entity_type, entity_id, message, metadata, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `, [actor_username, action, entity_type, entity_id === null ? null : String(entity_id), message, JSON.stringify(metadata), isoNow()]);
+    return normaliseActivityEvent(rows[0]);
+  }
+
+  async listNotifications(limit = 20) {
+    const safeLimit = Math.max(1, Math.min(Number.parseInt(limit, 10) || 20, 100));
+    const [events, unread] = await Promise.all([
+      this.pool.query('SELECT * FROM activity_events ORDER BY created_at DESC, id DESC LIMIT $1', [safeLimit]),
+      this.pool.query('SELECT COUNT(*)::int AS count FROM activity_events WHERE read_at IS NULL')
+    ]);
+    return { items: events.rows.map(normaliseActivityEvent), unread_count: Number(unread.rows[0].count) };
+  }
+
+  async markNotificationsRead() {
+    const { rowCount } = await this.pool.query('UPDATE activity_events SET read_at = $1 WHERE read_at IS NULL', [isoNow()]);
+    return rowCount;
   }
 
   async listLocations() {
