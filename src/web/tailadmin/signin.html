@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="X-UA-Compatible" content="ie=edge" />
-    <title>Вход — ТВ МЕНЮ</title>
+    <title>ТВ МЕНЮ</title>
   </head>
   <body x-data="{ loaded: true, darkMode: false }" x-init="darkMode = JSON.parse(localStorage.getItem('darkMode') || 'false'); $watch('darkMode', value => localStorage.setItem('darkMode', JSON.stringify(value)))" :class="{ 'dark bg-gray-900': darkMode }">
     <include src="./partials/preloader.html"></include>
@@ -14,7 +14,7 @@
         <div class="flex items-center gap-3">
           <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-500 text-sm font-bold text-white">TV</span>
           <div>
-            <p class="text-lg font-semibold text-gray-900 dark:text-white">ТВ МЕНЮ</p>
+            <p data-app-name class="text-lg font-semibold text-gray-900 dark:text-white">ТВ МЕНЮ</p>
             <p class="text-sm text-gray-500 dark:text-gray-400">Панель управления</p>
           </div>
         </div>
