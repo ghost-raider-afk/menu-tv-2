@@ -8,7 +8,7 @@ const read = (path) => readFile(new URL(path, root), 'utf8');
 test('frontend loader applies TV Menu 1 theme before modular application', async () => {
   const loader = await read('app.js');
   assert.match(loader, /\/css\/tv1\.css/);
-  assert.match(loader, /data\.frontendTheme = 'tv-menu-1'/);
+  assert.match(loader, /dataset\.frontendTheme = 'tv-menu-1'/);
 });
 
 test('TV Menu 1 shell is a real modular component', async () => {
