@@ -14,16 +14,37 @@
       </button>
       <a href="index.html" class="flex items-center gap-2 lg:hidden">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500 text-xs font-bold text-white">TV</span>
-        <span class="text-base font-semibold text-gray-900 dark:text-white">ТВ МЕНЮ</span>
+        <span data-app-name class="text-base font-semibold text-gray-900 dark:text-white">ТВ МЕНЮ</span>
       </a>
       <div class="hidden lg:block">
-        <p class="text-sm font-semibold text-gray-900 dark:text-white">ТВ МЕНЮ</p>
+        <p data-app-name class="text-sm font-semibold text-gray-900 dark:text-white">ТВ МЕНЮ</p>
         <p class="text-xs text-gray-500 dark:text-gray-400">Управление экранным меню</p>
       </div>
     </div>
 
-    <div class="flex items-center gap-2">
-      <span data-session-user class="hidden text-sm text-gray-500 dark:text-gray-400 sm:block"></span>
+    <div class="relative flex items-center gap-2">
+      <a href="settings.html" data-session-user class="hidden rounded-lg px-2 py-2 text-sm text-gray-500 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 sm:block"></a>
+      <button
+        id="notifications-button"
+        type="button"
+        aria-label="Открыть уведомления"
+        aria-expanded="false"
+        class="relative flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-100 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-800"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span data-notification-count class="absolute -right-1 -top-1 hidden min-w-4 rounded-full bg-error-500 px-1 text-center text-[10px] font-semibold leading-4 text-white"></span>
+      </button>
+      <section id="notifications-panel" class="absolute right-0 top-12 z-50 hidden w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-theme-lg dark:border-gray-800 dark:bg-gray-900" aria-label="Уведомления">
+        <div class="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+          <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Уведомления</h2>
+          <button id="mark-notifications-read" type="button" class="text-xs font-medium text-brand-500 hover:text-brand-600">Прочитать все</button>
+        </div>
+        <div data-notification-list class="max-h-96 divide-y divide-gray-100 overflow-y-auto dark:divide-gray-800"></div>
+        <p data-notification-empty class="hidden px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400">Новых уведомлений нет.</p>
+        <a href="settings.html#activity" class="block border-t border-gray-100 px-4 py-3 text-center text-sm font-medium text-brand-500 hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-white/[0.03]">Журнал действий</a>
+      </section>
       <button
         type="button"
         aria-label="Переключить тему"
