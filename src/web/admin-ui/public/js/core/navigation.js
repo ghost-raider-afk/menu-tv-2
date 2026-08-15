@@ -25,7 +25,7 @@ const PAGE_TITLES = Object.freeze({
 const CONTEXT_LINKS = Object.freeze({
   overview: Object.freeze([['Обзор', '/']]),
   monitors: Object.freeze([['Торговые точки', '/locations.html'], ['Мониторы', '/screens.html']]),
-  catalog: Object.freeze([['Продукция и тара', '/catalog.html']]),
+  catalog: Object.freeze([['Продукция', '/catalog.html#products'], ['Тара', '/catalog.html#packaging']]),
   settings: Object.freeze([['Шаблоны', '/templates.html'], ['Настройки сайта', '/settings.html'], ['Профиль', '/profile.html']])
 });
 
@@ -47,6 +47,10 @@ export function navigationState(currentPage = pageName()) {
 
 export function routeIsActive(href, currentPage = pageName()) {
   if (href === '/') return currentPage === 'overview';
-  if (currentPage === 'screen-editor' && href === '/screens.html') return true;
-  return window.location.pathname === href;
+  const target = new URL(href, window.location.origin);
+  if (currentPage === 'screen-editor' && target.pathname === '/screens.html') return true;
+  if (window.location.pathname !== target.pathname) return false;
+  if (!target.hash) return true;
+  if (window.location.hash) return window.location.hash === target.hash;
+  return target.hash === '#products';
 }
