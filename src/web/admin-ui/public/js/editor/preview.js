@@ -1,5 +1,4 @@
 import { buildDisplayLines, buildRenderModel } from './renderer.js';
-import { price } from '../core/dom.js';
 
 function textNode(tag, className, text) {
   const node = document.createElement(tag);
@@ -8,34 +7,53 @@ function textNode(tag, className, text) {
   return node;
 }
 
+function priceNode(value, className = '') {
+  const node = document.createElement('em');
+  node.className = `menu-preview-price ${className}`.trim();
+  if (!value) {
+    node.textContent = '—';
+    return node;
+  }
+  const normalized = String(value).replace(',', '.');
+  const [whole = '0', decimal = ''] = normalized.split('.');
+  node.append(
+    textNode('span', 'menu-preview-price-whole', whole),
+    textNode('sup', 'menu-preview-price-cents', decimal.padEnd(2, '0').slice(0, 2))
+  );
+  return node;
+}
+
 function renderSection(line) {
   const row = document.createElement('div');
   row.className = 'menu-preview-section';
   row.append(textNode('strong', 'menu-preview-section-title', line.name || 'Меню'));
-  if (line.showPriceLabels) {
-    row.append(
-      textNode('span', 'menu-preview-price-label menu-preview-price-primary', '1 л'),
-      textNode('span', 'menu-preview-price-label menu-preview-price-secondary', '1,5 л')
-    );
-  }
+  row.append(
+    textNode('span', `menu-preview-price-label menu-preview-price-primary${line.showPriceLabels ? '' : ' is-empty'}`, line.showPriceLabels ? '1,0 л.' : ''),
+    textNode('span', `menu-preview-price-label menu-preview-price-secondary${line.showPriceLabels ? '' : ' is-empty'}`, line.showPriceLabels ? '1,5 л.' : '')
+  );
   return row;
 }
 
 function renderItem(line) {
   const row = document.createElement('div');
   row.className = `menu-preview-item tone-${line.tone}`;
+
   const content = document.createElement('div');
   content.className = 'menu-preview-item-content';
   const heading = document.createElement('div');
   heading.className = 'menu-preview-item-heading';
   if (line.promotion && line.promotionText) heading.append(textNode('span', 'menu-preview-promotion', line.promotionText));
-  heading.append(textNode('strong', '', line.name));
+
+  const mainLabel = line.strength ? `${line.name} - ${line.strength}` : line.name;
+  heading.append(textNode('strong', 'menu-preview-product-name', mainLabel));
+  if (line.producer) heading.append(textNode('span', 'menu-preview-producer', line.producer));
   content.append(heading);
   if (line.characteristics) content.append(textNode('span', 'menu-preview-details', line.characteristics));
+
   row.append(
     content,
-    textNode('em', 'menu-preview-price menu-preview-price-primary', line.pricePrimary ? price(line.pricePrimary) : '—'),
-    textNode('em', 'menu-preview-price menu-preview-price-secondary', line.priceSecondary ? price(line.priceSecondary) : '—')
+    priceNode(line.pricePrimary, 'menu-preview-price-primary'),
+    priceNode(line.priceSecondary, 'menu-preview-price-secondary')
   );
   return row;
 }
@@ -46,10 +64,7 @@ function renderPackaging(line) {
   line.items.forEach((item) => {
     const card = document.createElement('div');
     card.className = `menu-preview-packaging tone-${item.tone}`;
-    card.append(
-      textNode('strong', '', item.name),
-      textNode('em', '', item.unitPrice ? `${price(item.unitPrice)} / шт.` : '—')
-    );
+    card.append(textNode('strong', '', item.name), priceNode(item.unitPrice));
     row.append(card);
   });
   return row;
@@ -72,12 +87,8 @@ export function renderPreview(editorState, { screen, products, packaging, target
   target.dataset.tableWidth = settings.table_width || 'normal';
   target.replaceChildren();
 
-  const title = document.createElement('h3');
-  title.textContent = settings.title || screen?.name || 'Меню';
-  target.append(title);
-
   const table = document.createElement('div');
-  table.className = 'menu-preview-table tv1-menu-table';
+  table.className = 'menu-preview-table tv-board-table';
   lines.forEach((line) => {
     if (line.kind === 'section') table.append(renderSection(line));
     else if (line.kind === 'item') table.append(renderItem(line));
