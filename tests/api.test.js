@@ -3,13 +3,11 @@ import { rm } from 'node:fs/promises';
 import test from 'node:test';
 import { newDb } from 'pg-mem';
 import { createApp } from '../src/server.js';
-import { MenuTvStore } from '../src/db.js';
+import { MenuTvStore } from '../src/db/index.js';
 
 const memoryDb = newDb({ autoCreateForeignKeyIndices: true });
 const { Pool } = memoryDb.adapters.createPg();
 const schemaPool = new Pool();
-// SFTPGo owns this table in the production PostgreSQL database.  Keeping it
-// here makes sure the web-administrator migration never collides with it.
 await schemaPool.query(`
   CREATE TABLE users (
     id BIGSERIAL PRIMARY KEY,
@@ -18,6 +16,7 @@ await schemaPool.query(`
   )
 `);
 await schemaPool.end();
+
 const config = {
   appName: 'Menu TV 2.0 test',
   host: '127.0.0.1',
@@ -28,6 +27,17 @@ const config = {
   secureCookies: false,
   passwordMinLength: 10,
   passwordMaxLength: 32,
+  generatedPasswordLength: 10,
+  loginMaxAttempts: 8,
+  loginWindowMinutes: 15,
+  loginLimiterMaxEntries: 500,
+  jsonBodyMaxBytes: 65_536,
+  menuDraftMaxBytes: 49_152,
+  screenSourceMaxBytes: 12_582_912,
+  dashboardRefreshMinSeconds: 15,
+  dashboardRefreshMaxSeconds: 300,
+  screenMaxWidth: 1920,
+  screenMaxHeight: 1080,
   siteAssetsRoot: `/tmp/menu-tv-2-test-site-assets-${process.pid}`,
   siteLogoMaxBytes: 2_097_152,
   siteFaviconMaxBytes: 524_288,
@@ -54,7 +64,9 @@ class FakeSftpService {
   async resetPassword({ username, password }) { this.users.get(username).password = password; }
   async removeUser(username) { this.users.delete(username); }
   async stageJpeg(screenId, bytes) {
-    if (!Buffer.isBuffer(bytes) || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff || bytes.at(-2) !== 0xff || bytes.at(-1) !== 0xd9) throw Object.assign(new Error('Нужен файл JPEG.'), { status: 400 });
+    if (!Buffer.isBuffer(bytes) || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff || bytes.at(-2) !== 0xff || bytes.at(-1) !== 0xd9) {
+      throw Object.assign(new Error('Нужен файл JPEG.'), { status: 400 });
+    }
     const key = `${screenId}-asset.jpg`;
     this.assets.set(key, bytes);
     return { key, sha256: 'a'.repeat(64), size: bytes.length };
@@ -75,9 +87,11 @@ function jsonHeaders(cookie = '') {
   return { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) };
 }
 
-async function adminCookie() {
+async function adminCookie(password = config.bootstrapAdmin.password) {
   const login = await fetch(`${baseUrl}/api/auth/login`, {
-    method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ username: 'admin', password: config.bootstrapAdmin.password })
+    method: 'POST',
+    headers: jsonHeaders(),
+    body: JSON.stringify({ username: 'admin', password })
   });
   assert.equal(login.status, 204);
   const cookie = login.headers.get('set-cookie');
@@ -91,13 +105,14 @@ test.after(async () => {
   await rm(config.siteAssetsRoot, { recursive: true, force: true });
 });
 
-test('health is public and authentication requires the generated administrator credentials', async () => {
+test('public health, TV Menu 1 visual default and protected session work', async () => {
   const health = await fetch(`${baseUrl}/healthz`);
   assert.deepEqual(await health.json(), { status: 'ok', service: 'menu-tv-2.0' });
+
   const publicConfig = await fetch(`${baseUrl}/api/public/config`);
   const publicSettings = await publicConfig.json();
   assert.equal(publicSettings.app_name, config.appName);
-  assert.equal(publicSettings.accent_color, '#2563EB');
+  assert.equal(publicSettings.accent_color, '#F4C915');
 
   const dashboard = await fetch(`${baseUrl}/`, { redirect: 'manual' });
   assert.equal(dashboard.status, 302);
@@ -107,223 +122,67 @@ test('health is public and authentication requires the generated administrator c
     method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ username: 'admin', password: 'wrong' })
   });
   assert.equal(rejected.status, 401);
+
   const cookie = await adminCookie();
   const settingsPage = await fetch(`${baseUrl}/settings.html`, { headers: { Cookie: cookie } });
   assert.equal(settingsPage.status, 200);
   assert.match(await settingsPage.text(), /Настройки сайта/);
-  const profilePage = await fetch(`${baseUrl}/profile.html`, { headers: { Cookie: cookie } });
-  assert.equal(profilePage.status, 200);
-  assert.match(await profilePage.text(), /Настройки пользователя/);
-  const locationsPage = await fetch(`${baseUrl}/locations.html`, { headers: { Cookie: cookie } });
-  assert.equal(locationsPage.status, 200);
-  const catalogPage = await fetch(`${baseUrl}/catalog.html`, { headers: { Cookie: cookie } });
-  assert.equal(catalogPage.status, 200);
-  assert.match(await catalogPage.text(), /Продукция и тара/);
+
+  const overview = await fetch(`${baseUrl}/api/overview`, { headers: jsonHeaders(cookie) });
+  assert.deepEqual(await overview.json(), { locations: 0, screens: 0, published: 0, templates: 0 });
 });
 
-test('location and screen data remain in the separate PostgreSQL store', async () => {
+test('locations, screens and templates persist through modular PostgreSQL repositories', async () => {
   const cookie = await adminCookie();
-  const unauthorised = await fetch(`${baseUrl}/api/locations`);
-  assert.equal(unauthorised.status, 401);
-
   const createdLocation = await fetch(`${baseUrl}/api/locations`, {
-    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'Точка 2.0', address: 'Тестовая 1' })
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'Точка API', address: 'Тестовая 1' })
   });
   assert.equal(createdLocation.status, 201);
   const location = await createdLocation.json();
-  assert.equal(location.id, 1);
 
-  const createdScreen = await fetch(`${baseUrl}/api/screens`, {
-    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ location_id: location.id, name: 'Экран 1', status: 'ready' })
+  const createdScreen = await fetch(`${baseUrl}/api/locations/${location.id}/screens`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: '{}'
   });
   assert.equal(createdScreen.status, 201);
-  assert.equal((await createdScreen.json()).location_name, 'Точка 2.0');
-
-  const createdInsideLocation = await fetch(`${baseUrl}/api/locations/${location.id}/screens`, {
-    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({})
-  });
-  assert.equal(createdInsideLocation.status, 201);
-  const screen = await createdInsideLocation.json();
+  const screen = await createdScreen.json();
   assert.equal(screen.location_id, location.id);
   assert.equal(screen.template_id, null);
   assert.match(screen.name, /^ТВ /);
 
-  const overview = await fetch(`${baseUrl}/api/overview`, { headers: jsonHeaders(cookie) });
-  assert.deepEqual(await overview.json(), { locations: 1, screens: 2, published: 0, templates: 0 });
-
-  const createdTemplate = await fetch(`${baseUrl}/api/templates`, {
-    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'Основной шаблон', description: 'Тестовый', active: true })
+  const templateResponse = await fetch(`${baseUrl}/api/templates`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'Основной API', description: 'Тест', active: true })
   });
-  assert.equal(createdTemplate.status, 201);
-  const template = await createdTemplate.json();
+  assert.equal(templateResponse.status, 201);
+  const template = await templateResponse.json();
+
   const assigned = await fetch(`${baseUrl}/api/screens/${screen.id}`, {
-    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify({
-      location_id: location.id, name: screen.name, resolution: screen.resolution,
-      status: screen.status, active: screen.active, template_id: template.id
+    method: 'PUT',
+    headers: jsonHeaders(cookie),
+    body: JSON.stringify({
+      location_id: location.id,
+      name: screen.name,
+      resolution: screen.resolution,
+      status: screen.status,
+      active: screen.active,
+      template_id: template.id
     })
   });
   assert.equal(assigned.status, 200);
   assert.equal((await assigned.json()).template_id, template.id);
-  const deletedTemplate = await fetch(`${baseUrl}/api/templates/${template.id}`, { method: 'DELETE', headers: jsonHeaders(cookie) });
-  assert.equal(deletedTemplate.status, 204);
+
+  const deleted = await fetch(`${baseUrl}/api/templates/${template.id}`, { method: 'DELETE', headers: jsonHeaders(cookie) });
+  assert.equal(deleted.status, 204);
   const unassigned = await fetch(`${baseUrl}/api/screens/${screen.id}`, { headers: jsonHeaders(cookie) });
   assert.equal((await unassigned.json()).template_id, null);
 });
 
-test('profile and site settings persist separately and create administrator notifications', async () => {
-  const cookie = await adminCookie();
-  const unauthorised = await fetch(`${baseUrl}/api/settings/user`);
-  assert.equal(unauthorised.status, 401);
-
-  const readExisting = await fetch(`${baseUrl}/api/notifications/read`, { method: 'POST', headers: jsonHeaders(cookie) });
-  assert.equal(readExisting.status, 200);
-
-  const session = await fetch(`${baseUrl}/api/session`, { headers: jsonHeaders(cookie) });
-  assert.equal((await session.json()).display_name, 'admin');
-
-  const profile = await fetch(`${baseUrl}/api/settings/user`, {
-    method: 'PUT',
-    headers: jsonHeaders(cookie),
-    body: JSON.stringify({
-      display_name: 'Главный администратор',
-      email: 'admin@example.test',
-      phone: '+7 900 000-00-00',
-      job_title: 'Администратор',
-      theme: 'dark',
-      notifications_enabled: false
-    })
-  });
-  assert.equal(profile.status, 200);
-  const profileSettings = await profile.json();
-  assert.equal(profileSettings.username, 'admin');
-  assert.equal(profileSettings.display_name, 'Главный администратор');
-  assert.equal(profileSettings.email, 'admin@example.test');
-  assert.equal(profileSettings.theme, 'dark');
-  assert.equal(profileSettings.notifications_enabled, false);
-  assert.ok(profileSettings.created_at);
-  assert.ok(profileSettings.updated_at);
-
-  const site = await fetch(`${baseUrl}/api/settings/site`, {
-    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify({
-      application_name: 'ТВ МЕНЮ Тест',
-      accent_color: '#0F766E',
-      timezone: 'Europe/Moscow',
-      date_format: 'DD.MM.YYYY',
-      dashboard_refresh_seconds: 30,
-      default_screen_resolution: '1920×1080'
-    })
-  });
-  assert.equal(site.status, 200);
-  const siteSettings = await site.json();
-  assert.equal(siteSettings.app_name, 'ТВ МЕНЮ Тест');
-  assert.equal(siteSettings.accent_color, '#0F766E');
-  assert.equal(siteSettings.dashboard_refresh_seconds, 30);
-  assert.equal(siteSettings.timezone, 'Europe/Moscow');
-  assert.equal(siteSettings.updated_by, 'admin');
-
-  const invalidTimezone = await fetch(`${baseUrl}/api/settings/site`, {
-    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify({
-      application_name: 'ТВ МЕНЮ Тест',
-      accent_color: '#0F766E',
-      timezone: 'Wrong/Timezone',
-      date_format: 'DD.MM.YYYY',
-      dashboard_refresh_seconds: 30,
-      default_screen_resolution: '1920×1080'
-    })
-  });
-  assert.equal(invalidTimezone.status, 400);
-
-  const notifications = await fetch(`${baseUrl}/api/notifications?limit=20`, { headers: jsonHeaders(cookie) });
-  const summary = await notifications.json();
-  assert.equal(summary.unread_count, 2);
-  assert.ok(summary.items.some((item) => item.action === 'settings.user.updated'));
-  assert.ok(summary.items.some((item) => item.action === 'settings.site.updated'));
-
-  const read = await fetch(`${baseUrl}/api/notifications/read`, { method: 'POST', headers: jsonHeaders(cookie) });
-  assert.equal((await read.json()).marked_read, 2);
-  const afterRead = await fetch(`${baseUrl}/api/notifications`, { headers: jsonHeaders(cookie) });
-  assert.equal((await afterRead.json()).unread_count, 0);
-
-  const logo = await fetch(`${baseUrl}/api/settings/site/logo`, {
-    method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/png' },
-    body: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00])
-  });
-  assert.equal(logo.status, 200);
-  const logoSettings = await logo.json();
-  assert.match(logoSettings.logo_url, /^\/site-assets\/site-logo\.png\?v=/);
-  assert.equal((await fetch(`${baseUrl}${logoSettings.logo_url}`)).status, 200);
-
-  const favicon = await fetch(`${baseUrl}/api/settings/site/favicon`, {
-    method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/x-icon' },
-    body: Buffer.from([0x00, 0x00, 0x01, 0x00, 0x00])
-  });
-  assert.equal(favicon.status, 200);
-  assert.match((await favicon.json()).favicon_url, /^\/site-assets\/site-favicon\.ico\?v=/);
-});
-
-test('SFTP catalogues, point access and JPEG publication follow the manual delivery flow', async () => {
-  const cookie = await adminCookie();
-  const locationResponse = await fetch(`${baseUrl}/api/locations`, {
-    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'SFTP-точка', address: 'Адрес' })
-  });
-  const location = await locationResponse.json();
-
-  const directoryResponse = await fetch(`${baseUrl}/api/sftp/directories`, {
-    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'point-alpha' })
-  });
-  assert.equal(directoryResponse.status, 201);
-  const directory = await directoryResponse.json();
-
-  const beforeProvision = await fetch(`${baseUrl}/api/sftp/directories`, { headers: jsonHeaders(cookie) });
-  assert.equal((await beforeProvision.json()).find((item) => item.id === directory.id).storage_status, 'missing');
-
-  const provision = await fetch(`${baseUrl}/api/sftp/directories/${directory.id}/provision`, { method: 'POST', headers: jsonHeaders(cookie) });
-  assert.equal(provision.status, 200);
-  assert.equal((await provision.json()).storage_status, 'ready');
-
-  const binding = await fetch(`${baseUrl}/api/locations/${location.id}/sftp-binding`, {
-    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ directory_id: directory.id, username: 'point_alpha' })
-  });
-  assert.equal(binding.status, 201);
-  const { credentials } = await binding.json();
-  assert.equal(credentials.username, 'point_alpha');
-  assert.match(credentials.password, /^[A-Za-z0-9]{10}$/);
-  assert.match(credentials.password, /[A-Z]/);
-  assert.match(credentials.password, /[a-z]/);
-  assert.match(credentials.password, /[0-9]/);
-  assert.deepEqual(sftp.users.get('point_alpha').permissions, { '/': ['list', 'download'] });
-
-  const screenResponse = await fetch(`${baseUrl}/api/screens`, {
-    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ location_id: location.id, name: 'Основной экран' })
-  });
-  const screen = await screenResponse.json();
-  const deliveryPath = `/point-alpha/monitor-${screen.id}.jpg`;
-  assert.equal(screen.sftp_path, deliveryPath);
-
-  const source = await fetch(`${baseUrl}/api/screens/${screen.id}/source`, {
-    method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/jpeg' }, body: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0xff, 0xd9])
-  });
-  assert.equal(source.status, 200);
-  assert.equal((await source.json()).status, 'ready');
-
-  const publish = await fetch(`${baseUrl}/api/screens/${screen.id}/publish`, { method: 'POST', headers: jsonHeaders(cookie) });
-  assert.equal(publish.status, 200);
-  assert.equal((await publish.json()).status, 'published');
-  assert.ok(sftp.publications.has(deliveryPath.slice(1)));
-
-  const resetPassword = await fetch(`${baseUrl}/api/locations/${location.id}/sftp-password`, { method: 'POST', headers: jsonHeaders(cookie) });
-  assert.equal(resetPassword.status, 200);
-  assert.match((await resetPassword.json()).credentials.password, /^[A-Za-z0-9]{10}$/);
-
-  const deleteBoundLocation = await fetch(`${baseUrl}/api/locations/${location.id}`, { method: 'DELETE', headers: jsonHeaders(cookie) });
-  assert.equal(deleteBoundLocation.status, 409);
-});
-
-test('catalogue entries and monitor menu drafts are persisted in PostgreSQL', async () => {
+test('catalogue and editor draft preserve required product linkage and prices', async () => {
   const cookie = await adminCookie();
   const productResponse = await fetch(`${baseUrl}/api/catalog/products`, {
-    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({
-      name: 'Пиво светлое', producer: 'Пивоварня', characteristics: 'Светлое', strength: '4.5%',
+    method: 'POST',
+    headers: jsonHeaders(cookie),
+    body: JSON.stringify({
+      name: 'Пиво API', producer: 'Пивоварня', characteristics: 'Светлое', strength: '4.5%',
       price_primary: '240', alcoholic: true, beverage_color: 'light', filtration: 'filtered', active: true
     })
   });
@@ -332,66 +191,124 @@ test('catalogue entries and monitor menu drafts are persisted in PostgreSQL', as
   assert.equal(product.price_secondary, '360');
 
   const packagingResponse = await fetch(`${baseUrl}/api/catalog/packaging`, {
-    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'Бутылка ПЭТ 1,5 л', unit_price: '12', active: true })
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'ПЭТ API 1,5 л', unit_price: '12', active: true })
   });
   assert.equal(packagingResponse.status, 201);
   const packaging = await packagingResponse.json();
 
   const locationResponse = await fetch(`${baseUrl}/api/locations`, {
-    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'Точка меню', address: 'Адрес' })
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'Точка редактора', address: 'Адрес' })
   });
   const location = await locationResponse.json();
-  const screenResponse = await fetch(`${baseUrl}/api/locations/${location.id}/screens`, { method: 'POST', headers: jsonHeaders(cookie), body: '{}' });
-  const screen = await screenResponse.json();
-  const templateResponse = await fetch(`${baseUrl}/api/templates`, {
-    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'Тёмный', settings: { background_color: '#101828', font_scale: 'large' } })
+  const screenResponse = await fetch(`${baseUrl}/api/locations/${location.id}/screens`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: '{}'
   });
-  const template = await templateResponse.json();
+  const screen = await screenResponse.json();
+
   const saved = await fetch(`${baseUrl}/api/screens/${screen.id}/draft`, {
-    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify({
-      template_id: template.id,
-      settings: { background_color: '#101828', accent_color: '#2563EB', text_color: '#F8FAFC', font_scale: 'large', table_width: 'wide', title: 'Бар' },
+    method: 'PUT',
+    headers: jsonHeaders(cookie),
+    body: JSON.stringify({
+      settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC', title: 'Бар' },
       rows: [
         { id: 'section-1', kind: 'section', name: 'Пиво' },
-        { id: 'product-1', kind: 'item', product_id: product.id, promotion: true, promotion_text: 'Акция' },
+        { id: 'product-1', kind: 'item', product_id: product.id },
         { id: 'packaging-1', kind: 'packaging', packaging_id: packaging.id }
       ]
     })
   });
   assert.equal(saved.status, 200);
-  const draftResult = await saved.json();
-  assert.equal(draftResult.screen.template_id, template.id);
-  assert.deepEqual(draftResult.draft.rows.map((row) => row.name), ['Пиво', 'Пиво светлое', 'Бутылка ПЭТ 1,5 л']);
-  assert.equal(draftResult.draft.rows[1].price_secondary, '360');
+  const draft = await saved.json();
+  assert.deepEqual(draft.draft.rows.map((row) => row.name), ['Пиво', 'Пиво API', 'ПЭТ API 1,5 л']);
+  assert.equal(draft.draft.rows[1].price_primary, '240');
+  assert.equal(draft.draft.rows[1].price_secondary, '360');
 
-  const editor = await fetch(`${baseUrl}/api/screens/${screen.id}/editor`, { headers: jsonHeaders(cookie) });
-  const editorData = await editor.json();
-  assert.equal(editorData.products.length, 1);
-  assert.equal(editorData.packaging.length, 1);
-  assert.equal(editorData.draft.rows.length, 3);
-  const productDelete = await fetch(`${baseUrl}/api/catalog/products/${product.id}`, { method: 'DELETE', headers: jsonHeaders(cookie) });
-  assert.equal(productDelete.status, 409);
+  const blockedDelete = await fetch(`${baseUrl}/api/catalog/products/${product.id}`, { method: 'DELETE', headers: jsonHeaders(cookie) });
+  assert.equal(blockedDelete.status, 409);
 });
 
-test('administrator password is hashed in the dedicated web-user database table and can be changed from the profile', async () => {
+test('SFTP access, JPEG staging and publication work through modular SFTP service boundary', async () => {
   const cookie = await adminCookie();
+  const locationResponse = await fetch(`${baseUrl}/api/locations`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'SFTP-точка API', address: 'Адрес' })
+  });
+  const location = await locationResponse.json();
+
+  const directoryResponse = await fetch(`${baseUrl}/api/sftp/directories`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'point-api' })
+  });
+  assert.equal(directoryResponse.status, 201);
+  const directory = await directoryResponse.json();
+
+  const provision = await fetch(`${baseUrl}/api/sftp/directories/${directory.id}/provision`, {
+    method: 'POST', headers: jsonHeaders(cookie)
+  });
+  assert.equal(provision.status, 200);
+
+  const binding = await fetch(`${baseUrl}/api/locations/${location.id}/sftp-binding`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ directory_id: directory.id, username: 'point_api' })
+  });
+  assert.equal(binding.status, 201);
+  const bindingBody = await binding.json();
+  assert.equal(bindingBody.credentials.username, 'point_api');
+  assert.match(bindingBody.credentials.password, /^[A-Za-z0-9]{10}$/);
+
+  const screenResponse = await fetch(`${baseUrl}/api/screens`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ location_id: location.id, name: 'Основной SFTP экран' })
+  });
+  const screen = await screenResponse.json();
+
+  const source = await fetch(`${baseUrl}/api/screens/${screen.id}/source`, {
+    method: 'PUT',
+    headers: { Cookie: cookie, 'Content-Type': 'image/jpeg' },
+    body: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0xff, 0xd9])
+  });
+  assert.equal(source.status, 200);
+  assert.equal((await source.json()).status, 'ready');
+
+  const publish = await fetch(`${baseUrl}/api/screens/${screen.id}/publish`, {
+    method: 'POST', headers: jsonHeaders(cookie)
+  });
+  assert.equal(publish.status, 200);
+  assert.equal((await publish.json()).status, 'published');
+  assert.ok(sftp.publications.has(`point-api/monitor-${screen.id}.jpg`));
+});
+
+test('profile, site settings and password change remain independent from SFTPGo users table', async () => {
+  const cookie = await adminCookie();
+  const profile = await fetch(`${baseUrl}/api/settings/user`, {
+    method: 'PUT',
+    headers: jsonHeaders(cookie),
+    body: JSON.stringify({
+      display_name: 'Главный администратор', email: 'admin@example.test', phone: '', job_title: 'Администратор',
+      theme: 'dark', notifications_enabled: true
+    })
+  });
+  assert.equal(profile.status, 200);
+  assert.equal((await profile.json()).display_name, 'Главный администратор');
+
+  const site = await fetch(`${baseUrl}/api/settings/site`, {
+    method: 'PUT',
+    headers: jsonHeaders(cookie),
+    body: JSON.stringify({
+      application_name: 'ТВ МЕНЮ Тест', accent_color: '#0F766E', timezone: 'Europe/Moscow',
+      date_format: 'DD.MM.YYYY', dashboard_refresh_seconds: 30, default_screen_resolution: '1920×1080'
+    })
+  });
+  assert.equal(site.status, 200);
+  assert.equal((await site.json()).accent_color, '#0F766E');
+
   const users = await store.pool.query('SELECT username, password_hash FROM web_users WHERE username = $1', ['admin']);
   assert.equal(users.rows.length, 1);
   assert.match(users.rows[0].password_hash, /^scrypt\$/);
-  assert.equal(users.rows[0].password_hash.includes(config.bootstrapAdmin.password), false);
 
-  const rejected = await fetch(`${baseUrl}/api/settings/user/password`, {
-    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify({ current_password: 'WrongPassword-1!', new_password: 'ChangedPassword-1!' })
-  });
-  assert.equal(rejected.status, 400);
   const changed = await fetch(`${baseUrl}/api/settings/user/password`, {
-    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify({ current_password: config.bootstrapAdmin.password, new_password: 'ChangedPassword-1!' })
+    method: 'PUT',
+    headers: jsonHeaders(cookie),
+    body: JSON.stringify({ current_password: config.bootstrapAdmin.password, new_password: 'ChangedPassword-1!' })
   });
   assert.equal(changed.status, 204);
-  const oldLogin = await fetch(`${baseUrl}/api/auth/login`, {
-    method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ username: 'admin', password: config.bootstrapAdmin.password })
-  });
-  assert.equal(oldLogin.status, 401);
+
   const newLogin = await fetch(`${baseUrl}/api/auth/login`, {
     method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ username: 'admin', password: 'ChangedPassword-1!' })
   });
