@@ -2,9 +2,6 @@ import { element } from './dom.js';
 import { state } from './state.js';
 import { setIcon } from '../components/icons.js';
 
-const TV1_DEFAULT_ACCENT = '#F4C915';
-const LEGACY_DEFAULT_ACCENT = '#2563EB';
-
 function imageElement(url, label) {
   const image = document.createElement('img');
   image.src = url;
@@ -13,23 +10,17 @@ function imageElement(url, label) {
   return image;
 }
 
-function effectiveAccent(site) {
-  const configured = String(site?.accent_color || '').toUpperCase();
-  if (!configured) return TV1_DEFAULT_ACCENT;
-  if (configured === LEGACY_DEFAULT_ACCENT && !site?.updated_by) return TV1_DEFAULT_ACCENT;
-  return configured;
-}
-
 export function applyPresentation(site) {
   if (!site) return;
-  const name = site.app_name || 'ТВ МЕНЮ';
-  const accent = effectiveAccent(site);
+  const name = site.app_name || site.application_name || 'ТВ МЕНЮ';
   document.title = name;
-  document.querySelectorAll('[data-app-name], [data-shell-company]').forEach((node) => { node.textContent = name; });
-  document.documentElement.style.setProperty('--brand-accent', accent);
-  document.documentElement.style.setProperty('--ui-accent', accent);
-  document.documentElement.style.setProperty('--primary', accent);
-  document.documentElement.style.setProperty('--primary-strong', accent);
+  document.querySelectorAll('[data-app-name]').forEach((node) => { node.textContent = name; });
+  if (site.accent_color) {
+    document.documentElement.style.setProperty('--brand-accent', site.accent_color);
+    document.documentElement.style.setProperty('--ui-accent', site.accent_color);
+    document.documentElement.style.setProperty('--brand-accent-hover', site.accent_color);
+    document.documentElement.style.setProperty('--ui-accent-hover', site.accent_color);
+  }
   document.querySelectorAll('.brand-mark').forEach((mark) => {
     mark.replaceChildren();
     if (site.logo_url) mark.append(imageElement(site.logo_url, 'Логотип'));
