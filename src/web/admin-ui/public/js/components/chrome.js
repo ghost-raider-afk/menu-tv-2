@@ -12,7 +12,7 @@ function initials(value) {
 
 export function updateProfileMenu(user) {
   const displayName = user?.display_name || user?.username || state.session?.display_name || state.session?.username || 'Пользователь';
-  document.querySelectorAll('[data-profile-name], [data-session-user]').forEach((node) => { node.textContent = displayName; });
+  document.querySelectorAll('[data-profile-name], [data-session-user], [data-shell-user]').forEach((node) => { node.textContent = displayName; });
   document.querySelectorAll('[data-profile-email]').forEach((node) => { node.textContent = user?.email || 'Настройки учётной записи'; });
   document.querySelectorAll('[data-profile-initials]').forEach((node) => { node.textContent = initials(displayName); });
 }
@@ -27,6 +27,7 @@ async function toggleTheme() {
 }
 
 export function initialiseChrome() {
+  updateProfileMenu(state.user);
   const menu = document.querySelector('.profile-menu');
   const trigger = document.querySelector('.profile-trigger');
   const panel = document.querySelector('.profile-panel');
@@ -46,9 +47,13 @@ export function initialiseChrome() {
   document.querySelectorAll('[data-sidebar-toggle]').forEach((button) => button.addEventListener('click', () => {
     document.querySelector('[data-sidebar]')?.classList.toggle('is-open');
   }));
-  document.querySelectorAll('[data-logout]').forEach((button) => button.addEventListener('click', async () => {
-    try { await api.post(API.logout); }
-    finally { window.location.replace('/signin.html'); }
-  }));
+  document.querySelectorAll('[data-logout]').forEach((button) => {
+    if (button.dataset.logoutBound === '1') return;
+    button.dataset.logoutBound = '1';
+    button.addEventListener('click', async () => {
+      try { await api.post(API.logout); }
+      finally { window.location.replace('/signin.html'); }
+    });
+  });
   element('theme-toggle')?.addEventListener('click', () => { void toggleTheme(); });
 }
