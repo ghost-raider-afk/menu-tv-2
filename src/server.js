@@ -2,7 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { loadConfig } from './config.js';
+import { loadConfig } from './config/index.js';
 import { MenuTvStore } from './db.js';
 import { errorHandler } from './middleware/errors.js';
 import { createSessionMiddleware } from './middleware/session.js';
