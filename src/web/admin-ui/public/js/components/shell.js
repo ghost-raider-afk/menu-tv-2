@@ -1,28 +1,9 @@
 import { pageName } from '../core/config.js';
 import { state } from '../core/state.js';
 
-const SECTIONS = Object.freeze({
-  overview: 'overview',
-  locations: 'monitors',
-  screens: 'monitors',
-  'screen-editor': 'monitors',
-  catalog: 'catalog',
-  templates: 'settings',
-  settings: 'settings',
-  profile: 'settings'
-});
-
-const PAGE_TITLES = Object.freeze({
-  overview: 'Обзор', locations: 'Торговые точки', screens: 'Мониторы', 'screen-editor': 'Редактор меню',
-  catalog: 'Каталог', templates: 'Шаблоны', settings: 'Настройки сайта', profile: 'Профиль'
-});
-
-const CONTEXT_LINKS = Object.freeze({
-  overview: [['Обзор', '/']],
-  monitors: [['Торговые точки', '/locations.html'], ['Мониторы', '/screens.html']],
-  catalog: [['Продукция и тара', '/catalog.html']],
-  settings: [['Шаблоны', '/templates.html'], ['Настройки сайта', '/settings.html'], ['Профиль', '/profile.html']]
-});
+const SECTIONS = Object.freeze({ overview: 'overview', locations: 'monitors', screens: 'monitors', 'screen-editor': 'monitors', catalog: 'catalog', templates: 'settings', settings: 'settings', profile: 'settings' });
+const PAGE_TITLES = Object.freeze({ overview: 'Обзор', locations: 'Торговые точки', screens: 'Мониторы', 'screen-editor': 'Редактор меню', catalog: 'Каталог', templates: 'Шаблоны', settings: 'Настройки сайта', profile: 'Профиль' });
+const CONTEXT_LINKS = Object.freeze({ overview: [['Обзор', '/']], monitors: [['Торговые точки', '/locations.html'], ['Мониторы', '/screens.html']], catalog: [['Продукция и тара', '/catalog.html']], settings: [['Шаблоны', '/templates.html'], ['Настройки сайта', '/settings.html'], ['Профиль', '/profile.html']] });
 
 function currentPathMatches(href, currentPage) {
   if (href === '/') return currentPage === 'overview';
@@ -36,8 +17,7 @@ function railLink({ key, label, href, icon }, activeSection) {
 }
 
 function contextMarkup(section, currentPage) {
-  const links = CONTEXT_LINKS[section] || CONTEXT_LINKS.overview;
-  return links.map(([label, href]) => `<a class="app-route-link${currentPathMatches(href, currentPage) ? ' active' : ''}" href="${href}"><span>${label}</span><span aria-hidden="true">›</span></a>`).join('');
+  return (CONTEXT_LINKS[section] || CONTEXT_LINKS.overview).map(([label, href]) => `<a class="app-route-link${currentPathMatches(href, currentPage) ? ' active' : ''}" href="${href}"><span>${label}</span><span aria-hidden="true">›</span></a>`).join('');
 }
 
 function appName() {
@@ -58,10 +38,7 @@ function buildRail(section) {
   rail.setAttribute('aria-label', 'Основные разделы');
   rail.innerHTML = `<a class="ui-rail-brand" href="/" title="${appName()}"><span class="brand-mark" data-shell-brand>ТВ</span></a><nav class="ui-rail-nav" aria-label="Разделы">${railLink({ key: 'monitors', label: 'Мониторы', href: '/screens.html', icon: '▣' }, section)}${railLink({ key: 'catalog', label: 'Каталог', href: '/catalog.html', icon: '▤' }, section)}${railLink({ key: 'settings', label: 'Настройки', href: '/settings.html', icon: '⚙' }, section)}</nav>`;
   const logo = state.site?.logo_url;
-  if (logo) {
-    const brand = rail.querySelector('[data-shell-brand]');
-    brand.replaceChildren(Object.assign(document.createElement('img'), { src: logo, alt: '' }));
-  }
+  if (logo) rail.querySelector('[data-shell-brand]')?.replaceChildren(Object.assign(document.createElement('img'), { src: logo, alt: '' }));
   return rail;
 }
 
@@ -73,6 +50,14 @@ function buildContext(section, currentPage) {
   context.querySelector('[data-shell-company]').textContent = appName();
   context.querySelector('[data-shell-user]').textContent = userName();
   return context;
+}
+
+function buildToolbar(currentPage) {
+  const toolbar = document.createElement('header');
+  toolbar.className = 'topbar ui-workspace-toolbar';
+  toolbar.setAttribute('aria-label', `${PAGE_TITLES[currentPage] || 'ТВ МЕНЮ'}: быстрые действия`);
+  toolbar.innerHTML = `<div class="ui-toolbar-title"><strong>${PAGE_TITLES[currentPage] || 'ТВ МЕНЮ'}</strong><span data-app-name>${appName()}</span></div><div class="topbar-actions"><div class="notification-wrap"><button class="icon-button notification-button" id="notifications-button" type="button" aria-label="Уведомления" aria-expanded="false"><span aria-hidden="true">♢</span><span class="notification-badge is-hidden" data-notification-count></span></button><section class="notification-panel is-hidden" id="notifications-panel" aria-label="Уведомления"><div class="panel-heading"><strong>Уведомления</strong><button class="text-button" id="mark-notifications-read" type="button">Прочитать все</button></div><div data-notification-list></div><p class="empty-state is-hidden" data-notification-empty>Новых уведомлений нет.</p><a class="panel-footer" href="/settings.html#activity">Открыть журнал действий</a></section></div><button class="icon-button" id="theme-toggle" type="button" aria-label="Переключить тему">◐</button></div>`;
+  return toolbar;
 }
 
 function setCollapsed(shell, context, collapsed) {
@@ -97,18 +82,24 @@ function wireShell(shell, rail, context, section) {
 export function initialiseShell() {
   const currentPage = pageName();
   const shell = document.querySelector('.app-shell');
-  if (!shell || document.querySelector('.ui-rail')) return;
+  const appContent = shell?.querySelector('.app-content');
+  if (!shell || !appContent || document.querySelector('.ui-rail')) return;
   const section = SECTIONS[currentPage] || 'overview';
   document.body.classList.add('ui-v319', 'app-page-v2');
   document.body.dataset.appPage = currentPage;
   document.body.dataset.uiSection = section;
-  shell.querySelector('.sidebar')?.classList.add('legacy-sidebar');
+
+  shell.querySelector('.sidebar')?.remove();
+  appContent.querySelector('.topbar')?.remove();
+
   const rail = buildRail(section);
   const context = buildContext(section, currentPage);
+  const toolbar = buildToolbar(currentPage);
   shell.prepend(context);
   shell.prepend(rail);
+  appContent.prepend(toolbar);
+
   document.querySelector('.page-heading')?.classList.add('workspace-header', 'app-page-heading');
   document.querySelector('.main-content')?.classList.add('app-page-content');
-  document.querySelector('.topbar')?.setAttribute('aria-label', `${PAGE_TITLES[currentPage] || 'ТВ МЕНЮ'}: быстрые действия`);
   wireShell(shell, rail, context, section);
 }
