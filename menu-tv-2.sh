@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.1.7"
+SCRIPT_VERSION="1.1.8"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 BRANCH="main"
@@ -17,6 +17,7 @@ DB_CONTAINER="menu-tv-2-db"
 SFTP_CONTAINER="menu-tv-2-sftp"
 DB_VOLUME="menu-tv-2-db-data"
 SFTP_VOLUME="menu-tv-2-sftp-data"
+SITE_ASSETS_VOLUME="menu-tv-2-site-assets"
 PROXY_NETWORK="menu-tv-2-proxy"
 PROXY_DIR="/opt/menu-tv-2-proxy"
 PROXY_COMPOSE_FILE="$PROXY_DIR/compose.yaml"
@@ -366,6 +367,9 @@ ensure_sftp_env() {
   [[ -n "$(env_value SFTP_PORT "$env_file")" ]] || set_env_value "$env_file" SFTP_PORT "2022"
   [[ -n "$(env_value SFTP_API_URL "$env_file")" ]] || set_env_value "$env_file" SFTP_API_URL "http://sftp:8080"
   [[ -n "$(env_value SFTP_STORAGE_ROOT "$env_file")" ]] || set_env_value "$env_file" SFTP_STORAGE_ROOT "/srv/menu-tv-sftp"
+  [[ -n "$(env_value SITE_ASSETS_ROOT "$env_file")" ]] || set_env_value "$env_file" SITE_ASSETS_ROOT "/srv/menu-tv-site-assets"
+  [[ -n "$(env_value SITE_LOGO_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" SITE_LOGO_MAX_BYTES "2097152"
+  [[ -n "$(env_value SITE_FAVICON_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" SITE_FAVICON_MAX_BYTES "524288"
   [[ -n "$(env_value SFTP_ADMIN_USERNAME "$env_file")" ]] || set_env_value "$env_file" SFTP_ADMIN_USERNAME "menu_tv_2_service"
   if [[ -z "$(env_value SFTP_ADMIN_PASSWORD "$env_file")" || "$(env_value SFTP_ADMIN_PASSWORD "$env_file")" == replace-with-* ]]; then
     set_env_value "$env_file" SFTP_ADMIN_PASSWORD "$(random_secret 32)"
@@ -640,6 +644,7 @@ cleanup_failed_install() {
   fi
   docker volume rm "$DB_VOLUME" >/dev/null 2>&1 || true
   docker volume rm "$SFTP_VOLUME" >/dev/null 2>&1 || true
+  docker volume rm "$SITE_ASSETS_VOLUME" >/dev/null 2>&1 || true
   rm -rf -- "$INSTALL_DIR"
   if [[ -d "$PROXY_DIR" ]]; then
     docker compose --project-name menu-tv-2-proxy --project-directory "$PROXY_DIR" --env-file "$PROXY_ENV_FILE" down --volumes --remove-orphans || true
@@ -731,7 +736,7 @@ update_app() {
 confirm_removal() {
   local input
   printf '\nБудут затронуты только Menu TV 2.0: %s, %s, %s, %s и %s.\n' "$INSTALL_DIR" "$APP_CONTAINER" "$DB_CONTAINER" "$SFTP_CONTAINER" "$DB_VOLUME"
-  printf 'Также будет удален SFTP-том: %s.\n' "$SFTP_VOLUME"
+  printf 'Также будут удалены тома SFTP и оформления сайта: %s, %s.\n' "$SFTP_VOLUME" "$SITE_ASSETS_VOLUME"
   read -r -p 'Подтвердить удаление? [YES/NO]: ' input
   [[ "${input^^}" == YES ]]
 }
@@ -744,6 +749,7 @@ remove_project() {
   compose down --volumes --rmi local --remove-orphans || true
   docker volume rm "$DB_VOLUME" >/dev/null 2>&1 || true
   docker volume rm "$SFTP_VOLUME" >/dev/null 2>&1 || true
+  docker volume rm "$SITE_ASSETS_VOLUME" >/dev/null 2>&1 || true
   rm -rf -- "$INSTALL_DIR"
   info "Проект удалён. Скрипт оставлен: sudo $PROGRAM_NAME"
 }
@@ -757,6 +763,7 @@ purge_project() {
     compose down --volumes --rmi local --remove-orphans || true
     docker volume rm "$DB_VOLUME" >/dev/null 2>&1 || true
     docker volume rm "$SFTP_VOLUME" >/dev/null 2>&1 || true
+    docker volume rm "$SITE_ASSETS_VOLUME" >/dev/null 2>&1 || true
     rm -rf -- "$INSTALL_DIR"
   fi
   rm -f -- "$LAUNCHER_PATH"
