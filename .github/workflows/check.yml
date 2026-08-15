@@ -40,26 +40,26 @@ jobs:
           MENU_TV_REF=agent/backend-modularization bash menu-tv-2.sh help | grep -F 'Ветка/реф: agent/backend-modularization'
       - name: Prepare clean-install environment
         run: |
-          cp .env.example .env.ci
-          sed -i 's|^MENU_TV_2_DOMAIN=.*|MENU_TV_2_DOMAIN=menu.example.test|' .env.ci
-          sed -i 's|^SFTP_PUBLIC_HOST=.*|SFTP_PUBLIC_HOST=menu.example.test|' .env.ci
-          sed -i 's|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=ci-postgres-password-0123456789|' .env.ci
-          sed -i 's|^SESSION_SECRET=.*|SESSION_SECRET=ci-session-secret-0123456789012345678901234567890123456789|' .env.ci
-          sed -i 's|^SFTP_ADMIN_PASSWORD=.*|SFTP_ADMIN_PASSWORD=ci-sftp-secret-0123456789012345678901234567890123456789|' .env.ci
-          sed -i 's|^BOOTSTRAP_ADMIN_USERNAME=.*|BOOTSTRAP_ADMIN_USERNAME=admin|' .env.ci
-          sed -i 's|^BOOTSTRAP_ADMIN_PASSWORD=.*|BOOTSTRAP_ADMIN_PASSWORD=Ci-Admin-Password1!|' .env.ci
-          sed -i 's|^SECURE_COOKIES=.*|SECURE_COOKIES=false|' .env.ci
+          cp .env.example .env
+          sed -i 's|^MENU_TV_2_DOMAIN=.*|MENU_TV_2_DOMAIN=menu.example.test|' .env
+          sed -i 's|^SFTP_PUBLIC_HOST=.*|SFTP_PUBLIC_HOST=menu.example.test|' .env
+          sed -i 's|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=ci-postgres-password-0123456789|' .env
+          sed -i 's|^SESSION_SECRET=.*|SESSION_SECRET=ci-session-secret-0123456789012345678901234567890123456789|' .env
+          sed -i 's|^SFTP_ADMIN_PASSWORD=.*|SFTP_ADMIN_PASSWORD=ci-sftp-secret-0123456789012345678901234567890123456789|' .env
+          sed -i 's|^BOOTSTRAP_ADMIN_USERNAME=.*|BOOTSTRAP_ADMIN_USERNAME=admin|' .env
+          sed -i 's|^BOOTSTRAP_ADMIN_PASSWORD=.*|BOOTSTRAP_ADMIN_PASSWORD=Ci-Admin-Password1!|' .env
+          sed -i 's|^SECURE_COOKIES=.*|SECURE_COOKIES=false|' .env
       - name: Validate Docker Compose
-        run: docker compose --env-file .env.ci config -q
+        run: docker compose --env-file .env config -q
       - name: Build production application image
         run: docker build --pull -t menu-tv-2-ci .
       - name: Start clean runtime stack
         run: |
           docker network create menu-tv-2-proxy
-          docker compose --project-name menu-tv-2-ci --env-file .env.ci up -d --build --wait
+          docker compose --project-name menu-tv-2-ci --env-file .env up -d --build --wait
       - name: Smoke test application workflow
         run: |
-          docker compose --project-name menu-tv-2-ci --env-file .env.ci exec -T app node --input-type=module <<'NODE'
+          docker compose --project-name menu-tv-2-ci --env-file .env exec -T app node --input-type=module <<'NODE'
           const base = 'http://127.0.0.1:8080';
           const health = await fetch(`${base}/healthz`);
           if (!health.ok || (await health.json()).service !== 'menu-tv-2.0') throw new Error('health check failed');
@@ -97,15 +97,15 @@ jobs:
           if (!pageResponse.ok || !(await pageResponse.text()).includes('Редактор меню')) throw new Error('editor page failed');
           NODE
       - name: Smoke test SFTP service
-        run: docker compose --project-name menu-tv-2-ci --env-file .env.ci exec -T sftp sftpgo ping
+        run: docker compose --project-name menu-tv-2-ci --env-file .env exec -T sftp sftpgo ping
       - name: Show runtime status
         if: always()
-        run: docker compose --project-name menu-tv-2-ci --env-file .env.ci ps || true
+        run: docker compose --project-name menu-tv-2-ci --env-file .env ps || true
       - name: Show runtime logs on failure
         if: failure()
-        run: docker compose --project-name menu-tv-2-ci --env-file .env.ci logs --no-color --tail=200 || true
+        run: docker compose --project-name menu-tv-2-ci --env-file .env logs --no-color --tail=200 || true
       - name: Clean runtime stack
         if: always()
         run: |
-          docker compose --project-name menu-tv-2-ci --env-file .env.ci down -v --remove-orphans || true
+          docker compose --project-name menu-tv-2-ci --env-file .env down -v --remove-orphans || true
           docker network rm menu-tv-2-proxy >/dev/null 2>&1 || true
