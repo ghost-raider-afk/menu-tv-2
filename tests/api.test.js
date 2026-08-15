@@ -78,6 +78,10 @@ test('health is public and authentication requires the generated administrator c
   const health = await fetch(`${baseUrl}/healthz`);
   assert.deepEqual(await health.json(), { status: 'ok', service: 'menu-tv-2.0' });
 
+  const dashboard = await fetch(`${baseUrl}/`, { redirect: 'manual' });
+  assert.equal(dashboard.status, 302);
+  assert.equal(dashboard.headers.get('location'), '/signin.html');
+
   const rejected = await fetch(`${baseUrl}/api/auth/login`, {
     method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ username: 'admin', password: 'wrong' })
   });
