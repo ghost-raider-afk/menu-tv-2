@@ -1,8 +1,6 @@
 import { pageName } from './core/config.js';
 import { loadAuthenticatedContext } from './core/session.js';
-import { initialiseNavigation } from './core/navigation.js';
 import { initialiseNotifications } from './core/notifications.js';
-import { initialiseChrome } from './components/chrome.js';
 import { initialiseShell } from './components/shell.js';
 
 async function initialisePage(name) {
@@ -47,7 +45,6 @@ async function initialisePage(name) {
 async function initialiseApplication() {
   const current = pageName();
   if (current === 'signin') {
-    document.body.classList.add('ui-v319');
     const { initialiseSignIn } = await import('./pages/signin.js');
     initialiseSignIn();
     return;
@@ -56,8 +53,6 @@ async function initialiseApplication() {
   try {
     await loadAuthenticatedContext();
     initialiseShell();
-    initialiseNavigation();
-    initialiseChrome();
     initialiseNotifications();
     await initialisePage(current);
   } catch (error) {
