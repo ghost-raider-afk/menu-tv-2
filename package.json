@@ -8,7 +8,7 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "build": "node --check src/web/admin-ui/public/app.js",
+    "build": "find src -type f -name '*.js' -print0 | xargs -0 -n1 node --check",
     "start": "node src/server.js",
     "test": "node --test",
     "check": "npm run build && npm test"
