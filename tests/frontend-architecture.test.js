@@ -38,9 +38,11 @@ test('shell is composed from dedicated permanent components', async () => {
   assert.match(navigation, /Тара/);
 });
 
-test('menu editor owns the restored TV Menu table UI and visual renderer styles', async () => {
-  const [rows, editorCss, tablesCss, templatesHtml] = await Promise.all([
+test('menu editor owns the canonical left-aligned TV board table', async () => {
+  const [rows, preview, renderer, editorCss, tablesCss, templatesHtml] = await Promise.all([
     read('js/editor/rows.js'),
+    read('js/editor/preview.js'),
+    read('js/editor/renderer.js'),
     read('css/editor/editor.css'),
     read('css/tables.css'),
     read('templates.html')
@@ -48,8 +50,15 @@ test('menu editor owns the restored TV Menu table UI and visual renderer styles'
   assert.match(rows, /editor-menu-table-head/);
   assert.match(rows, /'1 л'/);
   assert.match(rows, /'1,5 л'/);
-  assert.match(editorCss, /\.editor-menu-table-head/);
-  assert.match(editorCss, /\.tv1-menu-table/);
+  assert.match(preview, /tv-board-table/);
+  assert.match(preview, /menu-preview-producer/);
+  assert.match(renderer, /producer: product\?\.producer/);
+  assert.match(renderer, /leftMarginFactor: 0\.008/);
+  assert.match(renderer, /normal: 0\.78/);
+  assert.match(editorCss, /\.tv-board-table/);
+  assert.match(editorCss, /left:\.8%/);
+  assert.match(editorCss, /grid-template-columns:minmax\(0,76fr\) minmax\(0,12fr\) minmax\(0,12fr\)/);
+  assert.doesNotMatch(editorCss, /\.tv1-menu-table/);
   assert.doesNotMatch(tablesCss, /menu-preview|editor-menu-table/);
   assert.match(templatesHtml, /id="template-background-file"/);
   assert.match(templatesHtml, /id="template-background-upload"/);
