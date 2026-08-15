@@ -38,6 +38,23 @@ test('shell is composed from dedicated permanent components', async () => {
   assert.match(navigation, /Тара/);
 });
 
+test('menu editor owns the restored TV Menu table UI and visual renderer styles', async () => {
+  const [rows, editorCss, tablesCss, templatesHtml] = await Promise.all([
+    read('js/editor/rows.js'),
+    read('css/editor/editor.css'),
+    read('css/tables.css'),
+    read('templates.html')
+  ]);
+  assert.match(rows, /editor-menu-table-head/);
+  assert.match(rows, /'1 л'/);
+  assert.match(rows, /'1,5 л'/);
+  assert.match(editorCss, /\.editor-menu-table-head/);
+  assert.match(editorCss, /\.tv1-menu-table/);
+  assert.doesNotMatch(tablesCss, /menu-preview|editor-menu-table/);
+  assert.match(templatesHtml, /id="template-background-file"/);
+  assert.match(templatesHtml, /id="template-background-upload"/);
+});
+
 test('legacy frontend files are physically absent', async () => {
   for (const path of ['style.css','css/tv1.css','css/tv1/tokens.css','css/tv1/base.css','css/tv1/shell.css','css/tv1/pages.css','css/tv1/editor.css','css/tv1/auth.css','js/components/chrome.js']) {
     await assert.rejects(access(new URL(path, root)), undefined, path);
