@@ -11,7 +11,7 @@ test('frontend loader applies TV Menu 1 theme before modular application', async
   assert.match(loader, /dataset\.frontendTheme = 'tv-menu-1'/);
 });
 
-test('TV Menu 1 shell is a real modular component', async () => {
+test('TV Menu 1 shell replaces legacy navigation chrome', async () => {
   const [application, shell] = await Promise.all([
     read('js/application.js'),
     read('js/components/shell.js')
@@ -19,7 +19,9 @@ test('TV Menu 1 shell is a real modular component', async () => {
   assert.match(application, /initialiseShell/);
   assert.match(shell, /ui-rail/);
   assert.match(shell, /ui-context/);
-  assert.match(shell, /legacy-sidebar/);
+  assert.match(shell, /buildToolbar/);
+  assert.match(shell, /querySelector\('\.sidebar'\)\?\.remove\(\)/);
+  assert.match(shell, /querySelector\('\.topbar'\)\?\.remove\(\)/);
   assert.match(shell, /Торговые точки/);
   assert.match(shell, /Продукция и тара/);
 });
