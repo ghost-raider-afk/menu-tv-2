@@ -1,8 +1,17 @@
 # ТВ МЕНЮ 2 — целевая архитектура
 
-Этот документ фиксирует целевую структуру проекта без требования переписывать рабочую систему с нуля.
+Этот документ фиксирует целевую структуру проекта и порядок постепенной миграции. Рабочую систему не переписываем с нуля: сохраняем Node.js/Express/PostgreSQL/Docker/SFTPGo и поэтапно уменьшаем монолиты `server.js`, `db.js`, `app.js`, `style.css`.
 
-Основной принцип: сохраняем текущий стек и рабочее поведение, а монолитные файлы постепенно делим на независимые модули.
+## Базовые принципы
+
+1. `.env` — единственный источник настраиваемых лимитов, таймаутов, размеров, security-параметров и инфраструктурных значений.
+2. API-контракты и пользовательская логика не меняются только ради рефакторинга.
+3. Frontend: `API -> state -> render -> UI`. DOM не является источником бизнес-состояния.
+4. Backend: `HTTP -> service -> repository/integration`. HTTP-слой не содержит SQL, DB-слой не содержит HTTP-логики.
+5. Редактор — отдельное приложение внутри frontend.
+6. Один renderer используется и для визуального preview, и как источник данных/геометрии для формирования конечного изображения. Это исключает расхождение «в редакторе одно — на ТВ другое».
+7. Изменения редактора не пишутся в PostgreSQL до обычного действия `Сохранить`.
+8. Миграция выполняется маленькими проверяемыми этапами; после каждого этапа приложение должно оставаться устанавливаемым и рабочим.
 
 ## Базовый стек
 
@@ -14,15 +23,57 @@
 - Traefik
 - SFTPGo
 - Нативные ES Modules во frontend
-- HTML/CSS/JavaScript без обязательного перехода на React/Vue
+- HTML/CSS/JavaScript без обязательного React/Vue
 
-## Целевая структура backend
+## Целевая структура проекта
+
+```text
+menu-tv-2/
+├── docs/
+│   ├── ARCHITECTURE.md
+│   └── VPS-ACCEPTANCE.md
+├── infra/
+├── src/
+│   ├── config/
+│   ├── contracts/
+│   ├── shared/
+│   ├── logger/
+│   ├── api/
+│   ├── middleware/
+│   ├── services/
+│   ├── db/
+│   ├── sftp/
+│   ├── web/
+│   └── server.js
+└── tests/
+    ├── unit/
+    ├── integration/
+    └── e2e/
+```
+
+# Backend
 
 ```text
 src/
 ├── config/
 │   ├── index.js
-│   └── limits.js
+│   └── env.js
+│
+├── contracts/
+│   ├── menu.js
+│   ├── screens.js
+│   ├── catalog.js
+│   ├── templates.js
+│   └── locations.js
+│
+├── shared/
+│   ├── errors.js
+│   ├── ids.js
+│   ├── validation.js
+│   └── dates.js
+│
+├── logger/
+│   └── index.js
 │
 ├── api/
 │   ├── auth/
@@ -72,19 +123,20 @@ src/
 └── server.js
 ```
 
-### Ответственность слоёв backend
+### Ответственность backend-слоёв
 
-- `server.js` — только создание Express-приложения, подключение middleware и маршрутов, запуск сервера.
-- `api/*` — HTTP-маршруты и преобразование HTTP-запросов/ответов.
-- `middleware/*` — авторизация, обработка ошибок, безопасность, общая валидация.
-- `services/*` — бизнес-логика.
-- `db/*` — только PostgreSQL и запросы к данным.
-- `sftp/*` — работа с SFTPGo, файлами и публикацией.
-- `config/*` — единая конфигурация из `.env`.
+- `config/*` — только нормализованная конфигурация из `.env`. Не дублировать значения константами в коде.
+- `contracts/*` — JSDoc/структуры входных и выходных данных. Это единый словарь `Screen`, `ScreenDraft`, `MenuRow`, `TemplateSettings`, `Product` и т.д.
+- `shared/*` — независимые переиспользуемые функции: типовые ошибки, ID, примитивная валидация, даты.
+- `logger/*` — структурированные логи вместо хаотичного `console.log/error`. Поля: timestamp, level, requestId, actor, action, entityType/entityId, error.
+- `api/*` — маршруты, HTTP-коды, чтение params/body/query и вызов services. Без SQL.
+- `middleware/*` — сессия, security headers, request-id, единая обработка ошибок, общие проверки.
+- `services/*` — бизнес-правила и транзакционные сценарии.
+- `db/*` — PostgreSQL-запросы и миграции. Без HTTP и UI-логики.
+- `sftp/*` — интеграция с SFTPGo, staging и публикация файлов.
+- `server.js` — только сборка приложения и запуск.
 
-`server.js` и текущий `db.js` должны уменьшаться постепенно, без изменения API и поведения приложения.
-
-## Целевая структура frontend
+# Frontend
 
 ```text
 src/web/admin-ui/public/
@@ -129,10 +181,13 @@ src/web/admin-ui/public/
 │   └── editor/
 │       ├── editor.js
 │       ├── state.js
-│       ├── canvas.js
+│       ├── commands.js
+│       ├── history.js
 │       ├── rows.js
 │       ├── properties.js
 │       ├── templates.js
+│       ├── canvas.js
+│       ├── renderer.js
 │       ├── preview.js
 │       └── serializer.js
 │
@@ -141,149 +196,176 @@ src/web/admin-ui/public/
     ├── reset.css
     ├── base.css
     ├── layout.css
-    │
     ├── components/
-    │   ├── sidebar.css
-    │   ├── buttons.css
-    │   ├── cards.css
-    │   ├── forms.css
-    │   ├── modal.css
-    │   └── tables.css
-    │
     └── pages/
-        ├── dashboard.css
-        ├── locations.css
-        ├── screens.css
-        ├── catalog.css
-        └── editor.css
 ```
 
-## Frontend core
+### Frontend core
 
-### `core/api.js`
+- `core/api.js` — единый HTTP-клиент: JSON, GET/POST/PUT/DELETE, 401/409/422/500, network errors.
+- `core/session.js` — пользователь, сессия, logout, проверка авторизации.
+- `core/state.js` — общее UI-состояние.
+- `core/events.js` — слабосвязанные события между модулями.
+- `core/navigation.js` — единая навигация и active-state.
+- `components/*` — один sidebar/header/modal/toast/dropdown/confirm/loader для всех страниц.
+- `pages/*` — маленький контроллер на страницу; страницы не знают реализацию других страниц.
 
-Единый HTTP-клиент для всех страниц.
-
-Отвечает за:
-- `GET/POST/PUT/DELETE`
-- JSON
-- HTTP-ошибки
-- `401` и переход на вход
-- `409/422/500`
-- общие заголовки
-- сетевые ошибки
-
-Страницы не должны напрямую дублировать `fetch()`-логику.
-
-### `core/state.js`
-
-Общее состояние интерфейса. DOM не должен быть единственным источником состояния.
-
-Поток данных:
-
-```text
-API → state → render → UI
-```
-
-### `core/navigation.js`
-
-Единая навигация и активное состояние разделов.
-
-### `components/*`
-
-Повторно используемые элементы интерфейса: sidebar, header, модальные окна, уведомления, dropdown, loader и подтверждения.
-
-## Редактор меню
-
-Редактор считается отдельным модулем приложения и должен развиваться независимо от остальных страниц.
+# Ядро редактора меню
 
 ```text
 editor/
-├── editor.js
-├── state.js
-├── canvas.js
-├── rows.js
-├── properties.js
-├── templates.js
-├── preview.js
-└── serializer.js
+├── editor.js       # точка входа и orchestration
+├── state.js        # единый Editor State
+├── commands.js     # add/delete/move/update/apply-template
+├── history.js      # будущий Undo/Redo
+├── rows.js         # разделы/продукция/тара
+├── properties.js   # панель свойств
+├── templates.js    # локальное применение шаблонов
+├── canvas.js       # DOM-рабочая область 16:9
+├── renderer.js     # единая модель визуального результата
+├── preview.js      # preview через renderer
+└── serializer.js   # state <-> API draft
 ```
 
-### Назначение модулей редактора
+## Editor State
 
-- `editor.js` — точка входа и координация редактора.
-- `state.js` — текущее состояние меню, выбранный элемент, настройки, шаблон, dirty-state.
-- `canvas.js` — визуальная рабочая область 16:9.
-- `rows.js` — разделы, продукция, тара, порядок и включение/выключение строк.
-- `properties.js` — свойства выбранного элемента.
-- `templates.js` — загрузка и применение шаблона только в локальное состояние редактора.
-- `preview.js` — живой предпросмотр.
-- `serializer.js` — преобразование состояния редактора в формат API/черновика.
-
-Изменения в редакторе не должны записываться в PostgreSQL до обычного действия `Сохранить`.
-
-## CSS / дизайн-система
-
-Текущий единый `style.css` постепенно делится на:
-
-- дизайн-токены
-- базовые стили
-- layout
-- компоненты
-- стили отдельных страниц
-
-`tokens.css` становится единым источником цветов, отступов, радиусов, размеров шрифтов, теней и анимаций.
-
-## Принцип миграции frontend
-
-Никакой полной одномоментной переписи.
-
-Порядок:
+Минимальная модель:
 
 ```text
-текущий app.js
-  ↓
-core/api.js
-  ↓
-session + navigation
-  ↓
-общие components
-  ↓
-отдельные pages
-  ↓
-editor/*
-  ↓
-удаление оставшегося монолитного app.js
+screen
+rows
+settings
+selectedRowId
+templateId
+dirty
+revision
 ```
 
-На каждом этапе приложение должно оставаться рабочим.
-
-## Принцип миграции backend
-
-Аналогично:
+Все действия проходят через commands:
 
 ```text
-текущий server.js / db.js
-  ↓
-общие middleware и helpers
-  ↓
-маршруты по доменам
-  ↓
-services
-  ↓
-репозитории PostgreSQL
-  ↓
-тонкий server.js
+UI -> command -> Editor State -> renderer -> UI
 ```
 
-API-контракты и поведение не меняются только ради рефакторинга.
+`commands.js` создаёт фундамент для `Undo/Redo`, так как операции редактора перестают быть прямыми изменениями DOM.
 
-## Что пока не делаем
+## Единый renderer
 
-- не меняем Node.js / Express / PostgreSQL;
-- не внедряем React/Vue только ради модности;
-- не переписываем рабочий редактор с нуля;
-- не меняем схему публикации без отдельного решения;
+Критическое правило:
+
+```text
+Editor State
+    |
+    v
+Renderer
+  |      |
+  v      v
+Preview  Final image pipeline
+```
+
+`preview.js` и формирование конечного изображения не должны иметь две независимые реализации раскладки. Renderer должен выдавать нормализованную геометрию/стили/текст, используемые обоими путями.
+
+# CSS / дизайн-система
+
+`tokens.css` — единый источник frontend-дизайна:
+- цвета;
+- типографика;
+- spacing;
+- радиусы;
+- тени;
+- анимации;
+- transitions;
+- z-index;
+- breakpoints.
+
+Компонентные и страничные стили используют только токены, где это применимо.
+
+# Тестовая структура
+
+```text
+tests/
+├── unit/
+│   ├── shared/
+│   ├── services/
+│   └── editor/
+├── integration/
+│   ├── api/
+│   ├── postgres/
+│   └── sftp/
+└── e2e/
+    └── menu-workflow/
+```
+
+Главный e2e-сценарий:
+
+```text
+создать точку
+-> создать монитор
+-> добавить продукцию/тару
+-> собрать меню
+-> сохранить
+-> сформировать конечный файл
+-> опубликовать
+-> проверить доступность результата
+```
+
+# Порядок миграции
+
+## Этап 1 — фундамент
+- architecture/acceptance docs;
+- `shared/errors`;
+- `logger`;
+- contracts;
+- `frontend/core/api`, events;
+- `editor/state`, commands, renderer skeleton;
+- unit tests чистых модулей.
+
+## Этап 2 — frontend core
+- перевести существующий `api()` на `core/api.js`;
+- session/navigation/notifications;
+- общие components;
+- после каждого переноса удалять старую реализацию из `app.js`.
+
+## Этап 3 — страницы
+- locations;
+- screens;
+- catalog;
+- templates;
+- settings/profile;
+- dashboard.
+
+## Этап 4 — редактор
+- Editor State;
+- commands/history;
+- rows/properties/templates;
+- общий renderer;
+- preview;
+- serializer;
+- final-image pipeline.
+
+## Этап 5 — backend
+- shared/errors + error middleware;
+- auth/session;
+- API routes по доменам;
+- services;
+- db repositories;
+- sftp integration;
+- тонкий `server.js`.
+
+## Этап 6 — чистая VPS
+- установка только через штатный `menu-tv-2.sh`;
+- fresh install без миграции старых данных;
+- PostgreSQL поднимается автоматически;
+- healthcheck;
+- вход в браузере;
+- полный e2e workflow;
+- проверка логов и перезапуска контейнеров.
+
+# Что не делаем
+
+- не меняем Node.js / Express / PostgreSQL ради моды;
+- не внедряем React/Vue без функциональной необходимости;
+- не делаем Big Bang rewrite;
+- не меняем API-контракты без причины;
+- не меняем публикацию без отдельной проверки;
 - не трогаем ТВ МЕНЮ 1.
-
-Этот документ является целевой структурой ТВ МЕНЮ 2 и ориентиром для дальнейшей постепенной модернизации frontend и backend.
