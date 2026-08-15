@@ -77,6 +77,8 @@ test.after(async () => {
 test('health is public and authentication requires the generated administrator credentials', async () => {
   const health = await fetch(`${baseUrl}/healthz`);
   assert.deepEqual(await health.json(), { status: 'ok', service: 'menu-tv-2.0' });
+  const publicConfig = await fetch(`${baseUrl}/api/public/config`);
+  assert.deepEqual(await publicConfig.json(), { app_name: config.appName });
 
   const dashboard = await fetch(`${baseUrl}/`, { redirect: 'manual' });
   assert.equal(dashboard.status, 302);
@@ -109,6 +111,56 @@ test('location and screen data remain in the separate PostgreSQL store', async (
 
   const overview = await fetch(`${baseUrl}/api/overview`, { headers: jsonHeaders(cookie) });
   assert.deepEqual(await overview.json(), { locations: 1, screens: 1, published: 0, templates: 0 });
+});
+
+test('profile and site settings persist separately and create administrator notifications', async () => {
+  const cookie = await adminCookie();
+  const unauthorised = await fetch(`${baseUrl}/api/settings/user`);
+  assert.equal(unauthorised.status, 401);
+
+  const readExisting = await fetch(`${baseUrl}/api/notifications/read`, { method: 'POST', headers: jsonHeaders(cookie) });
+  assert.equal(readExisting.status, 200);
+
+  const session = await fetch(`${baseUrl}/api/session`, { headers: jsonHeaders(cookie) });
+  assert.equal((await session.json()).display_name, 'admin');
+
+  const profile = await fetch(`${baseUrl}/api/settings/user`, {
+    method: 'PUT',
+    headers: jsonHeaders(cookie),
+    body: JSON.stringify({ display_name: 'Главный администратор', notifications_enabled: false })
+  });
+  assert.equal(profile.status, 200);
+  const profileSettings = await profile.json();
+  assert.equal(profileSettings.username, 'admin');
+  assert.equal(profileSettings.display_name, 'Главный администратор');
+  assert.equal(profileSettings.notifications_enabled, false);
+  assert.ok(profileSettings.created_at);
+  assert.ok(profileSettings.updated_at);
+
+  const site = await fetch(`${baseUrl}/api/settings/site`, {
+    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify({ timezone: 'Europe/Moscow' })
+  });
+  assert.equal(site.status, 200);
+  const siteSettings = await site.json();
+  assert.equal(siteSettings.app_name, config.appName);
+  assert.equal(siteSettings.timezone, 'Europe/Moscow');
+  assert.equal(siteSettings.updated_by, 'admin');
+
+  const invalidTimezone = await fetch(`${baseUrl}/api/settings/site`, {
+    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify({ timezone: 'Wrong/Timezone' })
+  });
+  assert.equal(invalidTimezone.status, 400);
+
+  const notifications = await fetch(`${baseUrl}/api/notifications?limit=20`, { headers: jsonHeaders(cookie) });
+  const summary = await notifications.json();
+  assert.equal(summary.unread_count, 2);
+  assert.ok(summary.items.some((item) => item.action === 'settings.user.updated'));
+  assert.ok(summary.items.some((item) => item.action === 'settings.site.updated'));
+
+  const read = await fetch(`${baseUrl}/api/notifications/read`, { method: 'POST', headers: jsonHeaders(cookie) });
+  assert.equal((await read.json()).marked_read, 2);
+  const afterRead = await fetch(`${baseUrl}/api/notifications`, { headers: jsonHeaders(cookie) });
+  assert.equal((await afterRead.json()).unread_count, 0);
 });
 
 test('SFTP catalogues, point access and JPEG publication follow the manual delivery flow', async () => {
