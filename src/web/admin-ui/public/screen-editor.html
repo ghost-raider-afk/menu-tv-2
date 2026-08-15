@@ -14,11 +14,14 @@
         <main class="main-content editor-content">
           <div class="page-heading"><p class="eyebrow">МОНИТОР</p><h1>Редактор меню</h1><p>Меню собирается из общей базы продукции и тары. Изменения сохраняются только кнопкой «Сохранить монитор и меню».</p></div>
           <form id="screen-editor-form" class="editor-workspace">
-            <section class="settings-card editor-menu-card">
-              <div class="card-heading"><div><p class="eyebrow">СОДЕРЖИМОЕ</p><h2>Строки меню</h2></div><div class="editor-add-actions"><button class="button button-secondary" id="editor-add-section" type="button">+ Раздел</button><button class="button button-secondary" id="editor-add-item" type="button">+ Продукция</button><button class="button button-secondary" id="editor-add-packaging" type="button">+ Тара</button></div></div>
-              <p class="muted-copy">Цена продукции и тары берётся из каталога и не редактируется здесь.</p>
-              <div class="editor-menu-rows" id="editor-menu-rows"></div><p class="empty-state" id="editor-menu-empty">В меню ещё нет строк.</p>
-            </section>
+            <div class="editor-main-column">
+              <section class="settings-card editor-menu-card">
+                <div class="card-heading"><div><p class="eyebrow">СОДЕРЖИМОЕ</p><h2>Строки меню</h2></div><div class="editor-add-actions"><button class="button button-secondary" id="editor-add-section" type="button">+ Раздел</button><button class="button button-secondary" id="editor-add-item" type="button">+ Продукция</button><button class="button button-secondary" id="editor-add-packaging" type="button">+ Тара</button></div></div>
+                <p class="muted-copy">Цена продукции и тары берётся из каталога и не редактируется здесь.</p>
+                <div class="editor-menu-rows" id="editor-menu-rows"></div><p class="empty-state" id="editor-menu-empty">В меню ещё нет строк.</p>
+              </section>
+              <section class="settings-card editor-preview-card"><div class="editor-menu-preview" id="editor-menu-preview"></div></section>
+            </div>
             <aside class="editor-side">
               <section class="settings-card">
                 <div class="card-heading"><div><p class="eyebrow">МОНИТОР</p><h2>Параметры</h2></div><a class="text-button" href="/screens.html">К списку</a></div>
@@ -50,7 +53,6 @@
               <p class="form-message is-hidden" id="screen-editor-message" role="status"></p>
               <div class="form-actions"><button class="button button-primary button-wide" id="editor-save" type="submit">Сохранить монитор и меню</button></div>
             </aside>
-            <section class="settings-card editor-preview-card"><div class="card-heading"><div><p class="eyebrow">ПРЕДПРОСМОТР</p><h2>Экран телевизора</h2></div></div><div class="editor-menu-preview" id="editor-menu-preview"></div></section>
           </form>
         </main>
       </div>
