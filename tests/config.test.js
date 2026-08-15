@@ -21,6 +21,7 @@ test('runtime limits are controlled by environment values', () => {
     JSON_BODY_MAX_BYTES: '70000',
     MENU_DRAFT_MAX_BYTES: '50000',
     SCREEN_SOURCE_MAX_BYTES: '13000000',
+    TEMPLATE_BACKGROUND_MAX_BYTES: '9000000',
     DASHBOARD_REFRESH_MIN_SECONDS: '20',
     DASHBOARD_REFRESH_MAX_SECONDS: '240',
     SCREEN_MAX_WIDTH: '1600',
@@ -34,6 +35,7 @@ test('runtime limits are controlled by environment values', () => {
   assert.equal(config.jsonBodyMaxBytes, 70000);
   assert.equal(config.menuDraftMaxBytes, 50000);
   assert.equal(config.screenSourceMaxBytes, 13000000);
+  assert.equal(config.templateBackgroundMaxBytes, 9000000);
   assert.equal(config.dashboardRefreshMinSeconds, 20);
   assert.equal(config.dashboardRefreshMaxSeconds, 240);
   assert.equal(config.screenMaxWidth, 1600);
