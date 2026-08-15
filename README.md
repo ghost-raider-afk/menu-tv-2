@@ -137,6 +137,7 @@ npm start
 
 Административный интерфейс основан на исходной HTML-сборке TailAdmin 2.3.0.
 Её неизменённые исходники находятся в `src/web/tailadmin`, а `npm run build`
-собирает их в `src/web/public`, откуда их отдаёт Express. Внутри папки
-шаблона сохранён исходный файл `LICENSE` TailAdmin (MIT):
+собирает их отдельным официальным набором зависимостей в `src/web/public`,
+откуда их отдаёт Express. Внутри папки шаблона сохранён исходный файл
+`LICENSE` TailAdmin (MIT):
 https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template

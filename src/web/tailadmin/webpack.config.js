@@ -2,8 +2,8 @@ const path = require("path");
 const glob = require("glob");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
-const sourceDir = path.resolve(__dirname, "src/web/tailadmin");
-const publicDir = path.resolve(__dirname, "src/web/public");
+const sourceDir = __dirname;
+const publicDir = path.resolve(__dirname, "../public");
 
 const INCLUDE_PATTERN =
   /<include\s+src=["'](.+?)["']\s*\/?>\s*(?:<\/include>)?/gis;

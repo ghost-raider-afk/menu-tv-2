@@ -3,8 +3,10 @@ FROM node:24.14.0-bookworm-slim AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
+COPY src/web/tailadmin/package*.json ./src/web/tailadmin/
+RUN npm ci --prefix ./src/web/tailadmin
 COPY src ./src
-RUN npm run build
+RUN npm run build && rm -rf ./src/web/tailadmin/node_modules
 
 FROM node:24.14.0-bookworm-slim AS runtime
 
