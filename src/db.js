@@ -89,13 +89,24 @@ export class MenuTvStore {
       CREATE TABLE IF NOT EXISTS user_preferences (
         username TEXT PRIMARY KEY,
         display_name TEXT NOT NULL,
+        email TEXT NOT NULL DEFAULT '',
+        phone TEXT NOT NULL DEFAULT '',
+        job_title TEXT NOT NULL DEFAULT '',
+        theme TEXT NOT NULL DEFAULT 'system',
         notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
         created_at TIMESTAMPTZ NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL
       );
       CREATE TABLE IF NOT EXISTS site_settings (
         id SMALLINT PRIMARY KEY,
+        application_name TEXT NOT NULL DEFAULT '',
+        accent_color TEXT NOT NULL DEFAULT '#2563EB',
+        logo_filename TEXT NOT NULL DEFAULT '',
+        favicon_filename TEXT NOT NULL DEFAULT '',
         timezone TEXT NOT NULL DEFAULT 'Europe/Moscow',
+        date_format TEXT NOT NULL DEFAULT 'DD.MM.YYYY',
+        dashboard_refresh_seconds INTEGER NOT NULL DEFAULT 45,
+        default_screen_resolution TEXT NOT NULL DEFAULT '1920×1080',
         updated_by TEXT NOT NULL DEFAULT '',
         created_at TIMESTAMPTZ NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL
@@ -120,6 +131,17 @@ export class MenuTvStore {
       ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_size BIGINT;
       ALTER TABLE screens ADD COLUMN IF NOT EXISTS published_sha256 TEXT;
       ALTER TABLE screens ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
+      ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT '';
+      ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
+      ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS job_title TEXT NOT NULL DEFAULT '';
+      ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT 'system';
+      ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS date_format TEXT NOT NULL DEFAULT 'DD.MM.YYYY';
+      ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS dashboard_refresh_seconds INTEGER NOT NULL DEFAULT 45;
+      ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS default_screen_resolution TEXT NOT NULL DEFAULT '1920×1080';
+      ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS application_name TEXT NOT NULL DEFAULT '';
+      ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS accent_color TEXT NOT NULL DEFAULT '#2563EB';
+      ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS logo_filename TEXT NOT NULL DEFAULT '';
+      ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS favicon_filename TEXT NOT NULL DEFAULT '';
       CREATE UNIQUE INDEX IF NOT EXISTS locations_sftp_directory_id_unique ON locations(sftp_directory_id) WHERE sftp_directory_id IS NOT NULL;
       CREATE UNIQUE INDEX IF NOT EXISTS locations_sftp_username_unique ON locations(sftp_username) WHERE sftp_username IS NOT NULL;
       CREATE INDEX IF NOT EXISTS activity_events_created_at_index ON activity_events(created_at DESC);
@@ -173,13 +195,23 @@ export class MenuTvStore {
     return normaliseRow(rows[0]);
   }
 
-  async updateUserPreferences(username, { display_name, notifications_enabled }) {
+  async updateUserPreferences(username, { display_name, email, phone, job_title, theme, notifications_enabled }) {
     await this.getUserPreferences(username);
     const { rows } = await this.pool.query(
-      'UPDATE user_preferences SET display_name = $1, notifications_enabled = $2, updated_at = $3 WHERE username = $4 RETURNING *',
-      [display_name, notifications_enabled, isoNow(), username]
+      `UPDATE user_preferences
+       SET display_name = $1, email = $2, phone = $3, job_title = $4, theme = $5,
+         notifications_enabled = $6, updated_at = $7
+       WHERE username = $8 RETURNING *`,
+      [display_name, email, phone, job_title, theme, notifications_enabled, isoNow(), username]
     );
     return normaliseRow(rows[0]);
+  }
+
+  async setInitialSiteName(name) {
+    await this.pool.query(
+      "UPDATE site_settings SET application_name = $1, updated_at = $2 WHERE id = 1 AND application_name = ''",
+      [name, isoNow()]
+    );
   }
 
   async getSiteSettings() {
@@ -187,10 +219,22 @@ export class MenuTvStore {
     return normaliseRow(rows[0]);
   }
 
-  async updateSiteSettings({ timezone, updated_by }) {
+  async updateSiteSettings({ application_name, accent_color, timezone, date_format, dashboard_refresh_seconds, default_screen_resolution, updated_by }) {
     const { rows } = await this.pool.query(
-      'UPDATE site_settings SET timezone = $1, updated_by = $2, updated_at = $3 WHERE id = 1 RETURNING *',
-      [timezone, updated_by, isoNow()]
+      `UPDATE site_settings
+       SET application_name = $1, accent_color = $2, timezone = $3, date_format = $4,
+         dashboard_refresh_seconds = $5, default_screen_resolution = $6, updated_by = $7, updated_at = $8
+       WHERE id = 1 RETURNING *`,
+      [application_name, accent_color, timezone, date_format, dashboard_refresh_seconds, default_screen_resolution, updated_by, isoNow()]
+    );
+    return normaliseRow(rows[0]);
+  }
+
+  async setSiteAsset(kind, filename, updatedBy) {
+    const column = kind === 'logo' ? 'logo_filename' : 'favicon_filename';
+    const { rows } = await this.pool.query(
+      `UPDATE site_settings SET ${column} = $1, updated_by = $2, updated_at = $3 WHERE id = 1 RETURNING *`,
+      [filename, updatedBy, isoNow()]
     );
     return normaliseRow(rows[0]);
   }
