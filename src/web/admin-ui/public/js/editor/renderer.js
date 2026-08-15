@@ -6,9 +6,13 @@ export const MENU_TABLE_STYLE = Object.freeze({
   lightText: '#F4F7FA',
   darkText: '#101317',
   mutedText: '#C5CBD2',
-  separator: '#8B929A',
+  separator: '#D8DDE2',
   packagingBackground: '#121820',
-  promotion: '#D92D35'
+  promotion: '#D92D35',
+  leftMarginFactor: 0.008,
+  nameColumnFactor: 0.76,
+  primaryPriceFactor: 0.12,
+  secondaryPriceFactor: 0.12
 });
 
 function numeric(value, fallback) {
@@ -25,7 +29,23 @@ function recordById(records, id) {
 }
 
 export function tableWidthFactor(value) {
-  return ({ compact: 0.68, normal: 0.8, wide: 0.9 })[value] || 0.8;
+  return ({ compact: 0.68, normal: 0.78, wide: 0.88 })[value] || 0.78;
+}
+
+export function buildTableLayout(viewportWidth, tableWidthSetting = 'normal') {
+  const tableWidth = Math.round(viewportWidth * tableWidthFactor(tableWidthSetting));
+  const left = Math.max(8, Math.round(viewportWidth * MENU_TABLE_STYLE.leftMarginFactor));
+  const primaryBoundary = left + Math.round(tableWidth * MENU_TABLE_STYLE.nameColumnFactor);
+  const secondaryBoundary = primaryBoundary + Math.round(tableWidth * MENU_TABLE_STYLE.primaryPriceFactor);
+  return Object.freeze({
+    left,
+    right: left + tableWidth,
+    tableWidth,
+    primaryBoundary,
+    secondaryBoundary,
+    primaryCenter: primaryBoundary + Math.round(tableWidth * MENU_TABLE_STYLE.primaryPriceFactor / 2),
+    secondaryCenter: secondaryBoundary + Math.round(tableWidth * MENU_TABLE_STYLE.secondaryPriceFactor / 2)
+  });
 }
 
 /**
@@ -49,8 +69,8 @@ export function buildRenderModel(editorState, viewport = {}) {
 }
 
 /**
- * Converts editor rows to the exact visual lines used by both preview and JPEG.
- * Consecutive packaging rows are paired exactly like the TV Menu 1 table.
+ * Canonical TV table lines. Preview and JPEG consume exactly the same structure.
+ * The first section is the table header; there is no separate title above it.
  */
 export function buildDisplayLines(model, { products = [], packaging = [], fallbackTitle = 'Меню' } = {}) {
   const lines = [];
@@ -92,7 +112,9 @@ export function buildDisplayLines(model, { products = [], packaging = [], fallba
         kind: 'item',
         tone,
         name: product?.name || row.name || 'Продукция не выбрана',
-        characteristics: row.characteristics || product?.characteristics || product?.strength || '',
+        strength: product?.strength || '',
+        producer: product?.producer || '',
+        characteristics: row.characteristics || product?.characteristics || '',
         promotion: row.promotion === true,
         promotionText: row.promotion_text || row.promotionText || '',
         pricePrimary: product?.price_primary || row.price_primary || row.pricePrimary || '',
