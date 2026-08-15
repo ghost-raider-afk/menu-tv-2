@@ -313,7 +313,15 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     response.json(await store.markScreenPublished(screen.id));
   });
 
-  app.use(express.static(publicDir, { extensions: ['html'], index: 'index.html', maxAge: '1h' }));
+  app.use(express.static(publicDir, {
+    extensions: ['html'],
+    index: 'index.html',
+    etag: true,
+    maxAge: 0,
+    setHeaders(response) {
+      response.setHeader('Cache-Control', 'no-store');
+    }
+  }));
   app.use((error, _request, response, _next) => {
     if (error.code === '23505') return response.status(409).json({ error: 'A record with this name already exists' });
     if (error.code === '23503') return response.status(409).json({ error: 'Referenced record does not exist' });
