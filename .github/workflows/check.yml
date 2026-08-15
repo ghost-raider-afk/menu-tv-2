@@ -94,6 +94,35 @@ jobs:
           const cookie = sessionCookie.split(';', 1)[0].trim();
           const jsonHeaders = { 'Content-Type': 'application/json', Cookie: cookie };
 
+          const templatesPageResponse = await fetch(`${base}/templates.html`, { headers: { Cookie: cookie } });
+          const templatesPage = await templatesPageResponse.text();
+          if (!templatesPageResponse.ok || !templatesPage.includes('template-background-file') || !templatesPage.includes('template-background-upload')) throw new Error('template background UI missing');
+
+          const templateResponse = await fetch(`${base}/api/templates`, {
+            method: 'POST',
+            headers: jsonHeaders,
+            body: JSON.stringify({
+              name: 'CI шаблон',
+              description: 'Проверка фона',
+              active: true,
+              settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC', font_scale: 'medium', table_width: 'normal', title: 'CI меню' }
+            })
+          });
+          if (templateResponse.status !== 201) throw new Error(`template create failed: ${templateResponse.status}`);
+          const template = await templateResponse.json();
+          const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2pXQAAAAASUVORK5CYII=', 'base64');
+          const backgroundResponse = await fetch(`${base}/api/templates/${template.id}/background`, {
+            method: 'PUT',
+            headers: { Cookie: cookie, 'Content-Type': 'image/png' },
+            body: png
+          });
+          if (!backgroundResponse.ok) throw new Error(`template background upload failed: ${backgroundResponse.status}`);
+          const templateWithBackground = await backgroundResponse.json();
+          const backgroundUrl = templateWithBackground.settings?.background_image_url;
+          if (!/^\/site-assets\/templates\/background-[0-9a-f-]{36}\.png$/i.test(backgroundUrl || '')) throw new Error('template background URL invalid');
+          const backgroundAsset = await fetch(`${base}${backgroundUrl}`);
+          if (!backgroundAsset.ok || Buffer.compare(Buffer.from(await backgroundAsset.arrayBuffer()), png) !== 0) throw new Error('template background asset not served');
+
           const locationResponse = await fetch(`${base}/api/locations`, {
             method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name: 'CI точка', address: 'CI' })
           });
@@ -111,10 +140,16 @@ jobs:
           if (!editorResponse.ok) throw new Error(`editor load failed: ${editorResponse.status}`);
           const editor = await editorResponse.json();
           if (!Array.isArray(editor.products) || !Array.isArray(editor.packaging) || !Array.isArray(editor.templates)) throw new Error('editor payload invalid');
+          const editorTemplate = editor.templates.find((item) => Number(item.id) === Number(template.id));
+          if (editorTemplate?.settings?.background_image_url !== backgroundUrl) throw new Error('template background missing from editor payload');
 
           const pageResponse = await fetch(`${base}/screen-editor.html?id=${screen.id}`, { headers: { Cookie: cookie } });
           const page = await pageResponse.text();
           if (!pageResponse.ok || !page.includes('Редактор меню') || !page.includes('/css/index.css') || /class="[^"]*\b(?:sidebar|topbar)\b/.test(page)) throw new Error('editor page architecture invalid');
+
+          const rendererResponse = await fetch(`${base}/js/editor/renderer.js`);
+          const rendererSource = await rendererResponse.text();
+          if (!rendererResponse.ok || !rendererSource.includes('showPriceLabels') || !rendererSource.includes('pricePrimary') || !rendererSource.includes('priceSecondary')) throw new Error('TV Menu table renderer contract missing');
           NODE
       - name: Smoke test SFTP service
         run: docker compose --project-name menu-tv-2-ci --env-file .env exec -T sftp sftpgo ping
