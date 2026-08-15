@@ -8,7 +8,7 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "build": "npm --prefix src/web/tailadmin run build",
+    "build": "node --check src/web/admin-ui/public/app.js",
     "start": "node src/server.js",
     "test": "node --test",
     "check": "npm run build && npm test"
@@ -19,7 +19,6 @@
     "pg": "^8.13.1"
   },
   "devDependencies": {
-    "pg-mem": "^3.0.5",
-    "tailwindcss": "^3.4.17"
+    "pg-mem": "^3.0.5"
   }
 }
