@@ -92,9 +92,7 @@ export function buildDisplayLines(model, { products = [], packaging = [], fallba
         kind: 'item',
         tone,
         name: product?.name || row.name || 'Продукция не выбрана',
-        characteristics: row.promotion && (row.promotion_text || row.promotionText)
-          ? (row.promotion_text || row.promotionText)
-          : (row.characteristics || product?.characteristics || product?.strength || ''),
+        characteristics: row.characteristics || product?.characteristics || product?.strength || '',
         promotion: row.promotion === true,
         promotionText: row.promotion_text || row.promotionText || '',
         pricePrimary: product?.price_primary || row.price_primary || row.pricePrimary || '',
