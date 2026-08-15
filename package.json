@@ -8,7 +8,7 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "build:css": "tailwindcss -i ./src/web/tailwind.css -o ./src/web/public/assets/app.css --minify",
+    "build:css": "tailwindcss -i ./src/web/tailwind.css -o ./src/web/public/menu-tv.css --minify",
     "build": "npm run build:css",
     "start": "node src/server.js",
     "test": "node --test",
