@@ -26,3 +26,24 @@ jobs:
         run: npm ci
       - name: Run checks
         run: npm run check
+
+  clean-install-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check installer syntax
+        run: bash -n menu-tv-2.sh
+      - name: Prepare clean-install environment
+        run: |
+          cp .env.example .env.ci
+          sed -i 's|^MENU_TV_2_DOMAIN=.*|MENU_TV_2_DOMAIN=menu.example.test|' .env.ci
+          sed -i 's|^SFTP_PUBLIC_HOST=.*|SFTP_PUBLIC_HOST=menu.example.test|' .env.ci
+          sed -i 's|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=ci-postgres-password-0123456789|' .env.ci
+          sed -i 's|^SESSION_SECRET=.*|SESSION_SECRET=ci-session-secret-0123456789012345678901234567890123456789|' .env.ci
+          sed -i 's|^SFTP_ADMIN_PASSWORD=.*|SFTP_ADMIN_PASSWORD=ci-sftp-secret-0123456789012345678901234567890123456789|' .env.ci
+      - name: Validate Docker Compose
+        run: docker compose --env-file .env.ci config -q
+      - name: Build production application image
+        run: docker build --pull -t menu-tv-2-ci .
