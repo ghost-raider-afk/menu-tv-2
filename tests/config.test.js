@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadConfig } from '../src/config/index.js';
-import { generateSftpPassword } from '../src/sftp.js';
+import { generateSftpPassword } from '../src/sftp/index.js';
 
 function validEnv(overrides = {}) {
   return {
