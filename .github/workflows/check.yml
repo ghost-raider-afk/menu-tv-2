@@ -64,12 +64,23 @@ jobs:
           const health = await fetch(`${base}/healthz`);
           if (!health.ok || (await health.json()).service !== 'menu-tv-2.0') throw new Error('health check failed');
 
+          const cssResponse = await fetch(`${base}/css/index.css`);
+          const css = await cssResponse.text();
+          if (!cssResponse.ok || !css.includes('./shell.css') || !css.includes('./editor/editor.css') || /tv1/i.test(css)) throw new Error('final CSS entrypoint invalid');
+          const legacyCss = await fetch(`${base}/style.css`);
+          if (legacyCss.ok) throw new Error('legacy style.css is still served');
+
           const loaderResponse = await fetch(`${base}/app.js`);
           const loader = await loaderResponse.text();
-          if (!loaderResponse.ok || !loader.includes('/css/tv1.css') || !loader.includes('tv-menu-1')) throw new Error('TV Menu 1 frontend loader missing');
-          const shellResponse = await fetch(`${base}/js/components/shell.js`);
+          if (!loaderResponse.ok || !loader.includes("import('/js/application.js')") || /tv1|style\.css/i.test(loader)) throw new Error('frontend loader invalid');
+
+          const [shellResponse, sidebarResponse, headerResponse] = await Promise.all([
+            fetch(`${base}/js/components/shell.js`),
+            fetch(`${base}/js/components/sidebar.js`),
+            fetch(`${base}/js/components/header.js`)
+          ]);
           const shellSource = await shellResponse.text();
-          if (!shellResponse.ok || !shellSource.includes('ui-rail') || !shellSource.includes('ui-context')) throw new Error('TV Menu 1 shell missing');
+          if (!shellResponse.ok || !sidebarResponse.ok || !headerResponse.ok || !shellSource.includes('createSidebar') || !shellSource.includes('createContextPanel') || !shellSource.includes('createHeader')) throw new Error('modular shell missing');
 
           const login = await fetch(`${base}/api/auth/login`, {
             method: 'POST',
@@ -94,6 +105,7 @@ jobs:
           });
           if (screenResponse.status !== 201) throw new Error(`screen create failed: ${screenResponse.status}`);
           const screen = await screenResponse.json();
+          if (screen.template_id !== null && screen.template_id !== undefined) throw new Error('fresh screen unexpectedly requires a template');
 
           const editorResponse = await fetch(`${base}/api/screens/${screen.id}/editor`, { headers: { Cookie: cookie } });
           if (!editorResponse.ok) throw new Error(`editor load failed: ${editorResponse.status}`);
@@ -101,7 +113,8 @@ jobs:
           if (!Array.isArray(editor.products) || !Array.isArray(editor.packaging) || !Array.isArray(editor.templates)) throw new Error('editor payload invalid');
 
           const pageResponse = await fetch(`${base}/screen-editor.html?id=${screen.id}`, { headers: { Cookie: cookie } });
-          if (!pageResponse.ok || !(await pageResponse.text()).includes('Редактор меню')) throw new Error('editor page failed');
+          const page = await pageResponse.text();
+          if (!pageResponse.ok || !page.includes('Редактор меню') || !page.includes('/css/index.css') || /class="[^"]*\b(?:sidebar|topbar)\b/.test(page)) throw new Error('editor page architecture invalid');
           NODE
       - name: Smoke test SFTP service
         run: docker compose --project-name menu-tv-2-ci --env-file .env exec -T sftp sftpgo ping
