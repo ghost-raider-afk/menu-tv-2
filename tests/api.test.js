@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { rm } from 'node:fs/promises';
 import test from 'node:test';
 import { newDb } from 'pg-mem';
 import { createApp } from '../src/server.js';
@@ -15,6 +16,9 @@ const config = {
   sessionSecret: 's'.repeat(48),
   sessionTtlHours: 12,
   secureCookies: false,
+  siteAssetsRoot: `/tmp/menu-tv-2-test-site-assets-${process.pid}`,
+  siteLogoMaxBytes: 2_097_152,
+  siteFaviconMaxBytes: 524_288,
   db: { host: 'db', port: 5432, database: 'menu_tv_2', user: 'menu_tv_2', password: 'p'.repeat(32) },
   sftp: { publicHost: 'tv.example.test', port: 2022 },
   seedDemoData: false
@@ -72,13 +76,16 @@ async function adminCookie() {
 test.after(async () => {
   await new Promise((resolve) => server.close(resolve));
   await store.close();
+  await rm(config.siteAssetsRoot, { recursive: true, force: true });
 });
 
 test('health is public and authentication requires the generated administrator credentials', async () => {
   const health = await fetch(`${baseUrl}/healthz`);
   assert.deepEqual(await health.json(), { status: 'ok', service: 'menu-tv-2.0' });
   const publicConfig = await fetch(`${baseUrl}/api/public/config`);
-  assert.deepEqual(await publicConfig.json(), { app_name: config.appName });
+  const publicSettings = await publicConfig.json();
+  assert.equal(publicSettings.app_name, config.appName);
+  assert.equal(publicSettings.accent_color, '#2563EB');
 
   const dashboard = await fetch(`${baseUrl}/`, { redirect: 'manual' });
   assert.equal(dashboard.status, 302);
@@ -88,7 +95,12 @@ test('health is public and authentication requires the generated administrator c
     method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ username: 'admin', password: 'wrong' })
   });
   assert.equal(rejected.status, 401);
-  await adminCookie();
+  const cookie = await adminCookie();
+  const settingsPage = await fetch(`${baseUrl}/settings.html`, { headers: { Cookie: cookie } });
+  assert.equal(settingsPage.status, 200);
+  assert.match(await settingsPage.text(), /Настройки пользователя/);
+  const locationsPage = await fetch(`${baseUrl}/locations.html`, { headers: { Cookie: cookie } });
+  assert.equal(locationsPage.status, 200);
 });
 
 test('location and screen data remain in the separate PostgreSQL store', async () => {
@@ -127,27 +139,52 @@ test('profile and site settings persist separately and create administrator noti
   const profile = await fetch(`${baseUrl}/api/settings/user`, {
     method: 'PUT',
     headers: jsonHeaders(cookie),
-    body: JSON.stringify({ display_name: 'Главный администратор', notifications_enabled: false })
+    body: JSON.stringify({
+      display_name: 'Главный администратор',
+      email: 'admin@example.test',
+      phone: '+7 900 000-00-00',
+      job_title: 'Администратор',
+      theme: 'dark',
+      notifications_enabled: false
+    })
   });
   assert.equal(profile.status, 200);
   const profileSettings = await profile.json();
   assert.equal(profileSettings.username, 'admin');
   assert.equal(profileSettings.display_name, 'Главный администратор');
+  assert.equal(profileSettings.email, 'admin@example.test');
+  assert.equal(profileSettings.theme, 'dark');
   assert.equal(profileSettings.notifications_enabled, false);
   assert.ok(profileSettings.created_at);
   assert.ok(profileSettings.updated_at);
 
   const site = await fetch(`${baseUrl}/api/settings/site`, {
-    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify({ timezone: 'Europe/Moscow' })
+    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify({
+      application_name: 'ТВ МЕНЮ Тест',
+      accent_color: '#0F766E',
+      timezone: 'Europe/Moscow',
+      date_format: 'DD.MM.YYYY',
+      dashboard_refresh_seconds: 30,
+      default_screen_resolution: '1920×1080'
+    })
   });
   assert.equal(site.status, 200);
   const siteSettings = await site.json();
-  assert.equal(siteSettings.app_name, config.appName);
+  assert.equal(siteSettings.app_name, 'ТВ МЕНЮ Тест');
+  assert.equal(siteSettings.accent_color, '#0F766E');
+  assert.equal(siteSettings.dashboard_refresh_seconds, 30);
   assert.equal(siteSettings.timezone, 'Europe/Moscow');
   assert.equal(siteSettings.updated_by, 'admin');
 
   const invalidTimezone = await fetch(`${baseUrl}/api/settings/site`, {
-    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify({ timezone: 'Wrong/Timezone' })
+    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify({
+      application_name: 'ТВ МЕНЮ Тест',
+      accent_color: '#0F766E',
+      timezone: 'Wrong/Timezone',
+      date_format: 'DD.MM.YYYY',
+      dashboard_refresh_seconds: 30,
+      default_screen_resolution: '1920×1080'
+    })
   });
   assert.equal(invalidTimezone.status, 400);
 
@@ -161,6 +198,22 @@ test('profile and site settings persist separately and create administrator noti
   assert.equal((await read.json()).marked_read, 2);
   const afterRead = await fetch(`${baseUrl}/api/notifications`, { headers: jsonHeaders(cookie) });
   assert.equal((await afterRead.json()).unread_count, 0);
+
+  const logo = await fetch(`${baseUrl}/api/settings/site/logo`, {
+    method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/png' },
+    body: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00])
+  });
+  assert.equal(logo.status, 200);
+  const logoSettings = await logo.json();
+  assert.match(logoSettings.logo_url, /^\/site-assets\/site-logo\.png\?v=/);
+  assert.equal((await fetch(`${baseUrl}${logoSettings.logo_url}`)).status, 200);
+
+  const favicon = await fetch(`${baseUrl}/api/settings/site/favicon`, {
+    method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/x-icon' },
+    body: Buffer.from([0x00, 0x00, 0x01, 0x00, 0x00])
+  });
+  assert.equal(favicon.status, 200);
+  assert.match((await favicon.json()).favicon_url, /^\/site-assets\/site-favicon\.ico\?v=/);
 });
 
 test('SFTP catalogues, point access and JPEG publication follow the manual delivery flow', async () => {
