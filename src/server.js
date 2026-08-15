@@ -3,15 +3,17 @@ import helmet from 'helmet';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { loadConfig } from './config/index.js';
-import { MenuTvStore } from './db.js';
+import { MenuTvStore } from './db/index.js';
+import { logger } from './logger/index.js';
 import { errorHandler } from './middleware/errors.js';
 import { createSessionMiddleware } from './middleware/session.js';
 import { hashPassword } from './services/password-service.js';
 import { createSessionResolver } from './services/session-service.js';
 import { siteSettingsResponse } from './services/site-assets-service.js';
-import { SftpService } from './sftp.js';
+import { SftpService } from './sftp/index.js';
 import { createAuthRouter } from './api/auth/routes.js';
 import { createSessionRouter } from './api/session/routes.js';
+import { createOverviewRouter } from './api/overview/routes.js';
 import { createSettingsRouter } from './api/settings/routes.js';
 import { createNotificationsRouter } from './api/notifications/routes.js';
 import { createCatalogRouter } from './api/catalog/routes.js';
@@ -68,6 +70,7 @@ function mountPublicRoutes(app, { store, config }) {
 function mountProtectedApi(app, dependencies, requireApiSession) {
   app.use('/api', requireApiSession);
   app.use('/api', createSessionRouter(dependencies));
+  app.use('/api', createOverviewRouter(dependencies));
   app.use('/api/settings', createSettingsRouter(dependencies));
   app.use('/api/notifications', createNotificationsRouter(dependencies));
   app.use('/api/catalog', createCatalogRouter(dependencies));
@@ -111,9 +114,16 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const service = await createApp();
   const server = service.app.listen(service.config.port, service.config.host, () => {
-    console.log(`${service.config.appName} listening on ${service.config.host}:${service.config.port}`);
+    logger.info('Menu TV server started', {
+      app: service.config.appName,
+      host: service.config.host,
+      port: service.config.port
+    });
   });
   for (const signal of ['SIGINT', 'SIGTERM']) {
-    process.once(signal, () => server.close(() => void service.store.close()));
+    process.once(signal, () => {
+      logger.info('Menu TV server stopping', { signal });
+      server.close(() => void service.store.close());
+    });
   }
 }
