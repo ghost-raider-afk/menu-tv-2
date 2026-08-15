@@ -142,7 +142,9 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
   app.disable('x-powered-by');
   app.use(helmet({ contentSecurityPolicy: { directives: {
     defaultSrc: ["'self'"],
-    styleSrc: ["'self'", 'https://fonts.googleapis.com'],
+    // TailAdmin and FullCalendar add transient style nodes while the page starts.
+    // Without this source FullCalendar aborts bundle execution, leaving the preloader visible.
+    styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
     fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
     scriptSrc: ["'self'", "'unsafe-eval'"],
     imgSrc: ["'self'", 'data:']
