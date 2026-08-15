@@ -140,7 +140,13 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
   await store.init();
   const app = express();
   app.disable('x-powered-by');
-  app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], styleSrc: ["'self'"], scriptSrc: ["'self'"], imgSrc: ["'self'", 'data:'] } } }));
+  app.use(helmet({ contentSecurityPolicy: { directives: {
+    defaultSrc: ["'self'"],
+    styleSrc: ["'self'", 'https://fonts.googleapis.com'],
+    fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
+    scriptSrc: ["'self'", "'unsafe-eval'"],
+    imgSrc: ["'self'", 'data:']
+  } } }));
   app.use(express.json({ limit: '64kb' }));
 
   app.get('/healthz', async (_request, response) => {
