@@ -14,7 +14,7 @@ const SESSION_COOKIE = 'menu_tv_2_session';
 
 function requireText(value, field, { max = 120 } = {}) {
   if (typeof value !== 'string' || value.trim().length === 0 || value.trim().length > max) {
-    const error = new Error(`${field} must contain 1–${max} characters`);
+    const error = new Error(`Поле «${field}» должно содержать от 1 до ${max} символов.`);
     error.status = 400;
     throw error;
   }
@@ -24,7 +24,7 @@ function requireText(value, field, { max = 120 } = {}) {
 function optionalText(value, field, { max = 300 } = {}) {
   if (value === undefined || value === null) return '';
   if (typeof value !== 'string' || value.trim().length > max) {
-    const error = new Error(`${field} must contain at most ${max} characters`);
+    const error = new Error(`Поле «${field}» должно содержать не более ${max} символов.`);
     error.status = 400;
     throw error;
   }
@@ -34,7 +34,7 @@ function optionalText(value, field, { max = 300 } = {}) {
 function positiveId(value, field) {
   const id = Number.parseInt(value, 10);
   if (!Number.isInteger(id) || id < 1) {
-    const error = new Error(`${field} must be a positive integer`);
+    const error = new Error(`Поле «${field}» должно быть положительным целым числом.`);
     error.status = 400;
     throw error;
   }
@@ -42,7 +42,7 @@ function positiveId(value, field) {
 }
 
 function recordNotFound() {
-  const error = new Error('Record not found');
+  const error = new Error('Запись не найдена.');
   error.status = 404;
   return error;
 }
@@ -60,7 +60,7 @@ function locationInput(body) {
 function screenInput(body) {
   const status = body.status ?? 'draft';
   if (!VALID_STATUSES.has(status)) {
-    const error = new Error('status must be draft, ready or published');
+    const error = new Error('Статус может быть только «черновик», «готово» или «опубликовано».');
     error.status = 400;
     throw error;
   }
@@ -142,8 +142,8 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
   app.disable('x-powered-by');
   app.use(helmet({ contentSecurityPolicy: { directives: {
     defaultSrc: ["'self'"],
-    // TailAdmin and FullCalendar add transient style nodes while the page starts.
-    // Without this source FullCalendar aborts bundle execution, leaving the preloader visible.
+    // Alpine changes element visibility while the interface starts.
+    // Its transient inline styles are required for the preloader and theme switch.
     styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
     fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
     scriptSrc: ["'self'", "'unsafe-eval'"],
@@ -160,7 +160,7 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     const username = typeof request.body?.username === 'string' ? request.body.username : '';
     const password = typeof request.body?.password === 'string' ? request.body.password : '';
     if (!constantTimeEqual(username, config.adminUsername) || !constantTimeEqual(password, config.adminPassword)) {
-      return response.status(401).json({ error: 'Incorrect username or password' });
+      return response.status(401).json({ error: 'Неверный логин или пароль.' });
     }
     response.setHeader('Set-Cookie', sessionCookie(issueSession(config.adminUsername, config), config));
     return response.status(204).end();
@@ -170,9 +170,16 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     response.status(204).end();
   });
 
+  const requirePageSession = (request, response, next) => {
+    const session = verifySession(parseCookies(request)[SESSION_COOKIE], config);
+    if (!session) return response.redirect(302, '/signin.html');
+    request.session = session;
+    return next();
+  };
+
   app.use('/api', (request, response, next) => {
     const session = verifySession(parseCookies(request)[SESSION_COOKIE], config);
-    if (!session) return response.status(401).json({ error: 'Unauthorised' });
+    if (!session) return response.status(401).json({ error: 'Требуется вход в систему.' });
     request.session = session;
     return next();
   });
@@ -321,6 +328,8 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     response.json(await store.markScreenPublished(screen.id));
   });
 
+  app.get('/', requirePageSession, (_request, _response, next) => next());
+  app.get('/index.html', requirePageSession, (_request, _response, next) => next());
   app.use(express.static(publicDir, {
     extensions: ['html'],
     index: 'index.html',
@@ -331,11 +340,11 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
     }
   }));
   app.use((error, _request, response, _next) => {
-    if (error.code === '23505') return response.status(409).json({ error: 'A record with this name already exists' });
-    if (error.code === '23503') return response.status(409).json({ error: 'Referenced record does not exist' });
+    if (error.code === '23505') return response.status(409).json({ error: 'Запись с таким названием уже существует.' });
+    if (error.code === '23503') return response.status(409).json({ error: 'Связанная запись не найдена.' });
     const status = Number.isInteger(error.status) ? error.status : 500;
     if (status >= 500) console.error(error);
-    return response.status(status).json({ error: status >= 500 ? 'Internal server error' : error.message });
+    return response.status(status).json({ error: status >= 500 ? 'Внутренняя ошибка сервера.' : error.message });
   });
 
   return { app, store, config };
