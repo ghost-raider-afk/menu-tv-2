@@ -12,7 +12,7 @@
     <div class="app-shell">
       <div class="app-content">
         <main class="main-content workspace-content">
-          <div class="page-heading"><p class="eyebrow">ОФОРМЛЕНИЕ</p><h1>Шаблоны мониторов</h1><p>Шаблон хранит фон, цвета и геометрию. Верхней шапкой меню является первый раздел в редакторе монитора.</p></div>
+          <div class="page-heading"><p class="eyebrow">ОФОРМЛЕНИЕ</p><h1>Шаблоны мониторов</h1><p>Шаблон хранит фон, цвета и желаемый масштаб шрифта. Геометрия таблицы единая и соответствует эталонному макету ТВ МЕНЮ1.</p></div>
           <div class="workspace-grid">
             <section class="settings-card">
               <div class="card-heading"><div><p class="eyebrow">РЕДАКТОР</p><h2 id="template-form-title">Новый шаблон</h2></div><button class="text-button is-hidden" id="cancel-template-edit" type="button">Отменить</button></div>
@@ -30,10 +30,10 @@
                   <small id="template-background-status">Фон сохраняет пропорции и заполняет экран с обрезкой по краям при необходимости.</small>
                 </div>
                 <label class="field"><span>Цвет фона без изображения</span><input id="template-background-color" type="color" value="#101828" /></label>
-                <label class="field"><span>Акцент</span><input id="template-accent-color" type="color" value="#F4C915" /></label>
+                <label class="field"><span>Акцент таблицы</span><input id="template-accent-color" type="color" value="#F4C915" /></label>
                 <label class="field"><span>Основной текст</span><input id="template-text-color" type="color" value="#F8FAFC" /></label>
-                <label class="field"><span>Размер текста</span><select id="template-font-scale"><option value="small">Компактный</option><option value="medium" selected>Обычный</option><option value="large">Крупный</option></select></label>
-                <label class="field field-full"><span>Ширина таблицы</span><select id="template-table-width"><option value="compact">Компактная</option><option value="normal" selected>Обычная</option><option value="wide">Широкая</option></select></label>
+                <label class="field"><span>Масштаб шрифта, %</span><input id="template-font-scale" type="number" min="55" max="130" step="1" value="100" required /></label>
+                <p class="muted-copy field-full">В редакторе монитора масштаб можно скорректировать вручную. Если строк слишком много, итоговый renderer автоматически уменьшит его до вмещения.</p>
                 <label class="toggle-row field-full"><span><strong>Активен</strong><small>Шаблон доступен при настройке монитора.</small></span><input id="template-active" type="checkbox" checked /><i aria-hidden="true"></i></label>
                 <p class="form-message is-hidden field-full" id="template-message" role="status" aria-live="polite"></p>
                 <div class="form-actions field-full"><button class="button button-primary" id="template-submit" type="submit">Создать шаблон</button></div>
