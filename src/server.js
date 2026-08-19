@@ -120,8 +120,15 @@ function mountFrontend(app, requirePageSession) {
     maxAge: 0,
     setHeaders(response, filename) {
       const extension = path.extname(filename).toLowerCase();
-      if (extension === '.html') response.setHeader('Cache-Control', 'no-store');
-      else response.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+      if (extension === '.html') {
+        response.setHeader('Cache-Control', 'no-store');
+        return;
+      }
+      if (extension === '.js' || extension === '.css') {
+        response.setHeader('Cache-Control', 'no-cache, must-revalidate');
+        return;
+      }
+      response.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
     }
   }));
 }
