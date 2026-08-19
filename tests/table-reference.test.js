@@ -12,7 +12,9 @@ const products = Array.from({ length: 16 }, (_, index) => ({
   id: index + 1,
   name: `ПРОДУКЦИЯ ${index + 1}`,
   producer: `ПРОИЗВОДИТЕЛЬ ${index + 1}`,
-  strength: '4,6%',
+  strength: '4,6°',
+  beverage_color: index % 2 === 0 ? 'light' : 'dark',
+  filtration: index % 2 === 0 ? 'unfiltered' : 'filtered',
   price_primary: '179',
   price_secondary: '268.50',
   active: true
@@ -29,7 +31,7 @@ function referenceRows() {
   ];
 }
 
-test('canonical table geometry is locked to the supplied 2048x1152 reference', () => {
+test('canonical coordinates stay fixed while redesigned vertical geometry supports two-line items', () => {
   assert.deepEqual(MENU_REFERENCE, {
     width: 2048,
     height: 1152,
@@ -40,30 +42,31 @@ test('canonical table geometry is locked to the supplied 2048x1152 reference', (
     secondaryBoundary: 1417,
     tableTop: 64,
     tableBottom: 1032,
-    firstSectionHeight: 62,
-    sectionHeight: 54,
-    sectionGap: 15,
-    itemHeight: 48,
-    packagingHeight: 54,
+    firstSectionHeight: 58,
+    sectionHeight: 50,
+    sectionGap: 10,
+    itemHeight: 52,
+    packagingHeight: 48,
     fontScaleMinPercent: 55,
     fontScaleMaxPercent: 130
   });
 });
 
-test('reference row set exactly fills the reference table at 100 percent', () => {
+test('TV Menu 1 reference density fits by a small automatic reduction without clipping', () => {
   const state = {
     rows: referenceRows(),
-    settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC', font_scale_percent: 100 }
+    settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC', font_scale_percent: 100, font_family: 'arial-narrow' }
   };
   const model = buildRenderModel(state, { width: 1920, height: 1080 });
   const lines = buildDisplayLines(model, { products });
   const layout = buildRenderLayout(model, lines);
   assert.equal(lines.length, 19);
   assert.equal(layout.vertical.availableHeight, 968);
-  assert.equal(layout.vertical.baseContentHeight, 968);
-  assert.equal(layout.vertical.effectivePercent, 100);
-  assert.equal(layout.vertical.autoReduced, false);
-  assert.equal(layout.vertical.boxes.at(-1).bottom, 1032);
+  assert.equal(layout.vertical.baseContentHeight, 1010);
+  assert.equal(layout.vertical.effectivePercent, 95.8);
+  assert.equal(layout.vertical.autoReduced, true);
+  assert.equal(layout.vertical.fits, true);
+  assert.ok(Math.abs(layout.vertical.boxes.at(-1).bottom - 1032) < 0.01);
 });
 
 test('overflow automatically reduces scale while preserving exact horizontal reference columns', () => {
@@ -73,7 +76,7 @@ test('overflow automatically reduces scale while preserving exact horizontal ref
   ];
   const model = buildRenderModel({
     rows,
-    settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC', font_scale_percent: 100 }
+    settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC', font_scale_percent: 100, font_family: 'arial-narrow' }
   }, { width: 1920, height: 1080 });
   const lines = buildDisplayLines(model, { products });
   const layout = buildRenderLayout(model, lines);
@@ -90,6 +93,7 @@ test('overflow automatically reduces scale while preserving exact horizontal ref
   assert.match(svg, /viewBox="0 0 2048 1152"/);
   assert.match(svg, /x1="1231"/);
   assert.match(svg, /x1="1417"/);
-  assert.match(svg, />1,0л\.<\/text>/);
-  assert.match(svg, />1,5л\.<\/text>/);
+  assert.match(svg, />1 л\.<\/text>/);
+  assert.match(svg, />1,5 л\.<\/text>/);
+  assert.doesNotMatch(svg, /°/);
 });
