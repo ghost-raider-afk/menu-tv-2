@@ -50,8 +50,11 @@ export function createTemplatesRouter({ store, config }) {
   });
   router.delete('/:id', async (request, response) => {
     const id = positiveId(request.params.id, 'id');
-    const template = await store.getTemplate(id);
-    if (!template || !await store.deleteTemplate(id)) throw notFound();
+    const template = await store.transaction(async (tx) => {
+      const current = await tx.getTemplate(id);
+      if (!current || !await tx.deleteTemplate(id)) throw notFound();
+      return current;
+    });
     await cleanupTemplateBackground(template, { store, config });
     await activity(store, request, { action: 'template.deleted', entity_type: 'template', entity_id: template.id, message: `Удалён шаблон «${template.name}».` });
     response.status(204).end();
