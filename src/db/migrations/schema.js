@@ -104,8 +104,6 @@ export async function initialiseSchema(pool) {
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL
     );
-    -- SFTPGo owns a table named "users" in the same PostgreSQL database.
-    -- Browser administrators are deliberately stored in web_users.
     CREATE TABLE IF NOT EXISTS web_users (
       username TEXT PRIMARY KEY,
       password_hash TEXT NOT NULL,
@@ -182,7 +180,7 @@ export async function initialiseSchema(pool) {
     UPDATE web_users SET password_changed_at = created_at WHERE password_changed_at IS NULL;
     UPDATE site_settings SET accent_color = '#F4C915' WHERE accent_color = '#2563EB' AND COALESCE(updated_by, '') = '';
     UPDATE screens SET template_id = NULL
-      WHERE template_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM templates t WHERE t.id = screens.template_id);
+      WHERE template_id IS NOT NULL AND template_id NOT IN (SELECT id FROM templates);
   `);
 
   await ensureTemplateForeignKey(pool);
