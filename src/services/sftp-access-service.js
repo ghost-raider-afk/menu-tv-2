@@ -2,6 +2,20 @@ import { logger } from '../logger/index.js';
 import { ConflictError, NotFoundError } from '../shared/errors.js';
 import { generateSftpPassword } from '../sftp/index.js';
 
+async function createManagedSftpUser({ store, sftp, username, password, directoryName }) {
+  try {
+    await sftp.createReadOnlyUser({ username, password, directoryName });
+    return;
+  } catch (error) {
+    if (error?.status !== 409) throw error;
+    const owner = await store.getLocationBySftpUsername(username);
+    if (owner) throw new ConflictError('Этот логин SFTP уже используется другой торговой точкой.');
+    logger.warn('Removing orphaned SFTP user before retrying binding', { username, directory_name: directoryName });
+    await sftp.removeUser(username);
+    await sftp.createReadOnlyUser({ username, password, directoryName });
+  }
+}
+
 export function createSftpAccessService({ store, sftp, config }) {
   return Object.freeze({
     connection() {
@@ -29,7 +43,7 @@ export function createSftpAccessService({ store, sftp, config }) {
       if (!directory) throw new NotFoundError();
       if (directory.bound_location_id) throw new ConflictError('Этот SFTP-каталог уже привязан к другой точке.');
       const password = generateSftpPassword(config.generatedPasswordLength);
-      await sftp.createReadOnlyUser({ username: input.username, password, directoryName: directory.name });
+      await createManagedSftpUser({ store, sftp, username: input.username, password, directoryName: directory.name });
       let bound;
       try {
         bound = await store.bindLocationSftp(locationId, input);
