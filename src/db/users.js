@@ -35,6 +35,14 @@ export function createUsersRepository(pool) {
       return normaliseRow(rows[0]);
     },
 
+    async listActiveAdministrators() {
+      const { rows } = await pool.query(
+        `SELECT username, role, active, session_version, password_changed_at, created_at, updated_at
+         FROM web_users WHERE role = 'administrator' AND active = TRUE ORDER BY username`
+      );
+      return rows.map(normaliseRow);
+    },
+
     async updateUserPassword(username, passwordHash) {
       const { rows } = await pool.query(
         `UPDATE web_users SET password_hash = $1, session_version = session_version + 1,
