@@ -38,6 +38,7 @@ jobs:
       - name: Check installer test ref
         run: |
           MENU_TV_REF=agent/backend-modularization bash menu-tv-2.sh help | grep -F 'Ветка/реф: agent/backend-modularization'
+          MENU_TV_REF=agent/backend-modularization bash menu-tv-2.sh help | grep -F 'Версия скрипта: 1.1.12'
       - name: Prepare clean-install environment
         run: |
           cp .env.example .env
@@ -63,6 +64,9 @@ jobs:
           const base = 'http://127.0.0.1:8080';
           const health = await fetch(`${base}/healthz`);
           if (!health.ok || (await health.json()).service !== 'menu-tv-2.0') throw new Error('health check failed');
+          const ready = await fetch(`${base}/readyz`);
+          const readyBody = await ready.json();
+          if (!ready.ok || readyBody.status !== 'ready' || readyBody.service !== 'menu-tv-2.0') throw new Error('readiness check failed');
 
           const cssResponse = await fetch(`${base}/css/index.css`);
           const css = await cssResponse.text();
@@ -140,8 +144,35 @@ jobs:
           if (!editorResponse.ok) throw new Error(`editor load failed: ${editorResponse.status}`);
           const editor = await editorResponse.json();
           if (!Array.isArray(editor.products) || !Array.isArray(editor.packaging) || !Array.isArray(editor.templates)) throw new Error('editor payload invalid');
+          if (!Number.isInteger(Number(editor.draft?.revision)) || Number(editor.draft.revision) < 1) throw new Error('draft revision missing');
           const editorTemplate = editor.templates.find((item) => Number(item.id) === Number(template.id));
           if (editorTemplate?.settings?.background_image_url !== backgroundUrl) throw new Error('template background missing from editor payload');
+
+          const draftPayload = {
+            revision: Number(editor.draft.revision),
+            rows: [{ id: 'ci-section', kind: 'section', name: 'CI раздел', enabled: true }],
+            settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC', font_scale: 'medium', table_width: 'normal' },
+            screen: {
+              location_id: screen.location_id,
+              name: screen.name,
+              resolution: screen.resolution,
+              status: screen.status,
+              active: screen.active,
+              template_id: template.id
+            }
+          };
+          const draftSave = await fetch(`${base}/api/screens/${screen.id}/draft`, {
+            method: 'PUT', headers: jsonHeaders, body: JSON.stringify(draftPayload)
+          });
+          if (!draftSave.ok) throw new Error(`draft save failed: ${draftSave.status}`);
+          const savedDraft = await draftSave.json();
+          if (Number(savedDraft.draft?.revision) !== Number(editor.draft.revision) + 1) throw new Error('draft revision did not increment');
+          if (Number(savedDraft.screen?.template_id) !== Number(template.id)) throw new Error('screen/template was not saved atomically');
+
+          const staleSave = await fetch(`${base}/api/screens/${screen.id}/draft`, {
+            method: 'PUT', headers: jsonHeaders, body: JSON.stringify(draftPayload)
+          });
+          if (staleSave.status !== 409) throw new Error(`stale editor write was not rejected: ${staleSave.status}`);
 
           const pageResponse = await fetch(`${base}/screen-editor.html?id=${screen.id}`, { headers: { Cookie: cookie } });
           const page = await pageResponse.text();
@@ -149,7 +180,7 @@ jobs:
 
           const rendererResponse = await fetch(`${base}/js/editor/renderer.js`);
           const rendererSource = await rendererResponse.text();
-          if (!rendererResponse.ok || !rendererSource.includes('showPriceLabels') || !rendererSource.includes('pricePrimary') || !rendererSource.includes('priceSecondary')) throw new Error('TV Menu table renderer contract missing');
+          if (!rendererResponse.ok || !rendererSource.includes('showPriceLabels') || !rendererSource.includes('pricePrimary') || !rendererSource.includes('priceSecondary') || !rendererSource.includes('buildVerticalLayout') || !rendererSource.includes('fits')) throw new Error('TV Menu table renderer contract missing');
           NODE
       - name: Smoke test SFTP service
         run: docker compose --project-name menu-tv-2-ci --env-file .env exec -T sftp sftpgo ping
