@@ -1,6 +1,6 @@
 import { navigationState } from '../core/navigation.js';
 import { createSidebar } from './sidebar.js';
-import { createContextPanel } from './context-panel.js';
+import { createContextPanel, refreshContextActive } from './context-panel.js';
 import { createHeader, initialiseHeader } from './header.js';
 
 function setCollapsed(shell, context, collapsed) {
@@ -30,6 +30,7 @@ function wireContext(shell, rail, context, header, section) {
   header.addEventListener('pointerdown', () => {
     if (window.innerWidth <= 1180 && !context.classList.contains('is-collapsed')) setCollapsed(shell, context, true);
   }, { capture: true, passive: true });
+  window.addEventListener('hashchange', () => refreshContextActive(context));
 }
 
 export function initialiseShell() {
@@ -49,5 +50,6 @@ export function initialiseShell() {
   shell.prepend(rail);
 
   wireContext(shell, rail, context, header, section);
+  refreshContextActive(context);
   initialiseHeader();
 }
