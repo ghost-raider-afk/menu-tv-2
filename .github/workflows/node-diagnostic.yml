@@ -1,0 +1,50 @@
+name: node-diagnostic
+
+on:
+  push:
+    branches:
+      - agent/backend-modularization
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/backend-modularization
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Run node checks and capture output
+        shell: bash
+        run: |
+          set +e
+          {
+            echo "HEAD=$(git rev-parse HEAD)"
+            echo '=== npm ci ==='
+            npm ci
+            install_status=$?
+            echo "npm_ci_status=$install_status"
+            if [ "$install_status" -eq 0 ]; then
+              echo '=== npm run check ==='
+              npm run check
+              check_status=$?
+            else
+              check_status=99
+            fi
+            echo "npm_check_status=$check_status"
+          } > ci-node-diagnostic.txt 2>&1
+          exit 0
+      - name: Commit diagnostic output
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add ci-node-diagnostic.txt
+          git commit -m 'Record node diagnostic output'
+          git push origin HEAD:agent/backend-modularization
