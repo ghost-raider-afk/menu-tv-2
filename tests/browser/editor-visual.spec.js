@@ -49,7 +49,7 @@ async function createEditorFixture(page, { rows = 1 } = {}) {
       rows: draftRows,
       settings: {
         background_color: '#101828',
-        accent_color: '#F4C915',
+        accent_color: '#F6C90E',
         text_color: '#F8FAFC',
         font_scale_percent: 100,
         font_family: 'arial-narrow'
@@ -91,7 +91,7 @@ async function createReferenceDensityFixture(page) {
       rows,
       settings: {
         background_color: '#101828',
-        accent_color: '#F4C915',
+        accent_color: '#F6C90E',
         text_color: '#F8FAFC',
         font_scale_percent: 100,
         font_family: 'arial-narrow'
@@ -148,14 +148,19 @@ for (const viewport of [{ width: 1920, height: 1080 }, { width: 1366, height: 76
     const preview = page.locator('#editor-menu-preview');
     const svg = preview.locator('svg.menu-table-svg');
     await expect(svg).toBeVisible();
-    await expect(svg).toHaveAttribute('viewBox', '0 0 2048 1152');
-    await expect(svg.locator('line[x1="1231"]')).toHaveCount(5);
-    await expect(svg.locator('line[x1="1417"]')).toHaveCount(5);
+    await expect(svg).toHaveAttribute('viewBox', '0 0 1920 1080');
+    await expect(svg.locator('line.separator')).toHaveCount(4);
+    await expect(svg.locator('line.separator[x1="65"][x2="1430"]')).toHaveCount(4);
+    await expect(svg.locator('line[x1="1258"]')).toHaveCount(0);
+    await expect(svg.locator('line[x1="1405"]')).toHaveCount(0);
     await expect(svg.locator('.item-name').first()).toContainText('БАВАРИЯ ПШЕНИЧНОЕ');
     await expect(svg.locator('.item-name').first()).not.toContainText('4,6%');
     await expect(svg.locator('.item-name').first()).not.toContainText('°');
     await expect(svg.locator('.item-meta').first()).toContainText('ООО «Портал», п. Солнечный · 4,6% · светлое · нефильтрованное');
-    await expect(svg.locator('.table-section rect').first()).toHaveAttribute('rx', /[1-9]/);
+    await expect(svg.locator('.table-section rect').first()).toHaveAttribute('x', '56');
+    await expect(svg.locator('.table-section rect').first()).toHaveAttribute('width', '1374');
+    await expect(svg.locator('.table-section rect').first()).toHaveAttribute('rx', '5');
+    await expect(svg.locator('.price').first()).toHaveAttribute('text-anchor', 'end');
 
     const sizes = await svg.locator('.table-item').first().evaluate((item) => ({
       title: Number(item.querySelector('.item-name')?.getAttribute('font-size')),
@@ -185,7 +190,7 @@ test('reference density fits cleanly with TV Menu 1 two-line product typography'
   await expect(svg.locator('.table-item')).toHaveCount(16);
   const effective = Number(await preview.getAttribute('data-font-scale-effective'));
   expect(effective).toBeLessThanOrEqual(100);
-  expect(effective).toBeGreaterThan(75);
+  expect(effective).toBeGreaterThan(90);
 
   const overlaps = await svg.locator('.table-item').evaluateAll((items) => items.map((item) => {
     const title = item.querySelector('.item-name')?.getBBox();
@@ -210,7 +215,7 @@ test('reference geometry, manual scale and automatic fitting use one SVG rendere
   const preview = page.locator('#editor-menu-preview');
   const svg = preview.locator('svg.menu-table-svg');
   await expect(svg).toBeVisible();
-  await expect(svg.locator('rect[x="15"]')).toHaveCount(1);
+  await expect(svg.locator('rect[x="56"][width="1374"]')).toHaveCount(1);
   await expect(page.locator('#editor-font-scale-effective')).toContainText('автоматически применено');
 
   const scale = page.locator('#editor-font-scale-number');
