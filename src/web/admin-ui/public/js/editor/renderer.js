@@ -392,8 +392,10 @@ function itemMarkup(line, box, horizontal, palette, scale, typography) {
   const nameCharacters = Math.max(8, Math.floor((horizontal.primaryPriceX - itemNameX - 30) / (13 * fontScale)));
   const metaCharacters = Math.max(18, Math.floor((horizontal.primaryPriceX - nameX - 30) / (7 * fontScale)));
   const priceBaseline = box.top + 35 * fontScale;
-  const nameBaseline = line.metadata ? box.top + 25 * fontScale : priceBaseline;
-  const metaBaseline = box.top + 43 * fontScale;
+  // TV Menu 1 uses 25/43. A one-unit outward adjustment preserves the
+  // reference appearance while preventing overlap with taller Linux fallbacks.
+  const nameBaseline = line.metadata ? box.top + 24 * fontScale : priceBaseline;
+  const metaBaseline = box.top + 44 * fontScale;
 
   return `<g class="table-item tone-${line.tone === 'accent' ? 'accent' : 'light'}">
     ${separatorMarkup(box, horizontal, scale)}
