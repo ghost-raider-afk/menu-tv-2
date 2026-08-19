@@ -9,6 +9,30 @@ function localPath(root, url) {
   return path.join(root, url.replace('/site-assets/', ''));
 }
 
+function jpegFor(width, height) {
+  const bytes = Buffer.alloc(17);
+  let offset = 0;
+  bytes[offset++] = 0xff; bytes[offset++] = 0xd8;
+  bytes[offset++] = 0xff; bytes[offset++] = 0xc0;
+  bytes.writeUInt16BE(11, offset); offset += 2;
+  bytes[offset++] = 8;
+  bytes.writeUInt16BE(height, offset); offset += 2;
+  bytes.writeUInt16BE(width, offset); offset += 2;
+  bytes[offset++] = 1; bytes[offset++] = 1; bytes[offset++] = 0x11; bytes[offset++] = 0;
+  bytes[offset++] = 0xff; bytes[offset++] = 0xd9;
+  return bytes;
+}
+
+function pngHeader(width, height) {
+  const bytes = Buffer.alloc(24);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bytes, 0);
+  bytes.writeUInt32BE(13, 8);
+  bytes.write('IHDR', 12, 4, 'ascii');
+  bytes.writeUInt32BE(width, 16);
+  bytes.writeUInt32BE(height, 20);
+  return bytes;
+}
+
 test('template background replacement preserves assets referenced by saved screen drafts', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'menu-tv-template-assets-'));
   let template = { id: 7, name: 'Основной', settings: {} };
@@ -23,9 +47,14 @@ test('template background replacement preserves assets referenced by saved scree
       return template.settings?.background_image_url === url || draftBackgroundUrl === url;
     }
   };
-  const config = { siteAssetsRoot: root, templateBackgroundMaxBytes: 1024 * 1024 };
-  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0xff, 0xd9]);
-  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+  const config = {
+    siteAssetsRoot: root,
+    templateBackgroundMaxBytes: 1024 * 1024,
+    screenMaxWidth: 1920,
+    screenMaxHeight: 1080
+  };
+  const jpeg = jpegFor(1920, 1080);
+  const png = pngHeader(1280, 720);
 
   try {
     template = await replaceTemplateBackground(template, jpeg, { store, config });
