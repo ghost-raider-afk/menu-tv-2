@@ -10,7 +10,9 @@ function publicationMatches(screen, info) {
   );
 }
 
-export function createPublishService({ store, sftp }) {
+export function createPublishService({ store, sftp, config }) {
+  if (!config?.imageMaxPixels) throw new Error('Publish service requires IMAGE_MAX_PIXELS from runtime config.');
+
   async function finishPublished(screen) {
     const stagedKey = screen.prepared_asset_key;
     const updated = await store.markScreenPublished(screen.id, screen.publication_pending_sha256);
@@ -34,7 +36,7 @@ export function createPublishService({ store, sftp }) {
       }
       const draft = await store.getScreenDraft(screenId);
       if (!draft?.revision) throw new ConflictError('Черновик монитора не найден. Сохраните меню и повторите подготовку JPEG.');
-      validateScreenJpeg(bytes, screen.resolution);
+      await validateScreenJpeg(bytes, screen.resolution, config.imageMaxPixels);
       const previousKey = screen.prepared_asset_key;
       const asset = await sftp.stageJpeg(screen.id, bytes);
       let updated;
