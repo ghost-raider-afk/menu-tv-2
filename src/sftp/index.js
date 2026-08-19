@@ -57,6 +57,18 @@ export class SftpService {
     return this.storage.stageJpeg(screenId, bytes);
   }
 
+  removeStaged(key) {
+    return this.storage.removeStaged(key);
+  }
+
+  cleanupStaging(keepKeys, options) {
+    return this.storage.cleanupStaging(keepKeys, options);
+  }
+
+  publishedInfo(directoryName, deliveryFilename) {
+    return this.publisher.publishedInfo(directoryName, deliveryFilename);
+  }
+
   publish(input) {
     return this.publisher.publish(input);
   }
