@@ -29,13 +29,18 @@ export function createPublishService({ store, sftp }) {
     async stageJpeg(screenId, bytes) {
       const screen = await store.getScreen(screenId);
       if (!screen) throw new NotFoundError();
+      if (screen.publication_pending_sha256) {
+        throw new ConflictError('Сейчас выполняется публикация этого монитора. Дождитесь её завершения перед подготовкой нового JPEG.');
+      }
+      const draft = await store.getScreenDraft(screenId);
+      if (!draft?.revision) throw new ConflictError('Черновик монитора не найден. Сохраните меню и повторите подготовку JPEG.');
       validateScreenJpeg(bytes, screen.resolution);
       const previousKey = screen.prepared_asset_key;
       const asset = await sftp.stageJpeg(screen.id, bytes);
       let updated;
       try {
-        updated = await store.savePreparedAsset(screen.id, asset);
-        if (!updated) throw new NotFoundError();
+        updated = await store.savePreparedAsset(screen.id, asset, draft.revision);
+        if (!updated) throw new ConflictError('Меню изменилось во время подготовки JPEG. Сохраните актуальную версию и повторите операцию.');
       } catch (error) {
         await sftp.removeStaged(asset.key).catch(() => undefined);
         throw error;
@@ -60,13 +65,13 @@ export function createPublishService({ store, sftp }) {
         if (publicationMatches(screen, info)) return finishPublished(screen);
       }
 
-      if (!screen.prepared_asset_key || !screen.prepared_asset_sha256) {
-        throw new ConflictError('Сначала загрузите подготовленный JPEG.');
+      if (!screen.prepared_asset_key || !screen.prepared_asset_sha256 || !screen.prepared_draft_revision) {
+        throw new ConflictError('Сначала сохраните текущее меню и подготовьте JPEG.');
       }
 
       const expectedSha256 = screen.prepared_asset_sha256;
       screen = await store.markPublicationStarted(screen.id, expectedSha256);
-      if (!screen) throw new ConflictError('Подготовленный JPEG изменился. Обновите страницу и повторите публикацию.');
+      if (!screen) throw new ConflictError('Меню или подготовленный JPEG изменились. Обновите страницу и повторите публикацию.');
 
       try {
         const info = await sftp.publish({
