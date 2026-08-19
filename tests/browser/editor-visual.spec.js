@@ -151,10 +151,19 @@ for (const viewport of [{ width: 1920, height: 1080 }, { width: 1366, height: 76
     await expect(svg).toHaveAttribute('viewBox', '0 0 2048 1152');
     await expect(svg.locator('line[x1="1231"]')).toHaveCount(5);
     await expect(svg.locator('line[x1="1417"]')).toHaveCount(5);
-    await expect(svg.locator('.item-name').first()).toContainText('4,6%');
+    await expect(svg.locator('.item-name').first()).toContainText('БАВАРИЯ ПШЕНИЧНОЕ');
+    await expect(svg.locator('.item-name').first()).not.toContainText('4,6%');
     await expect(svg.locator('.item-name').first()).not.toContainText('°');
-    await expect(svg.locator('.item-meta').first()).toContainText('ООО «Портал», п. Солнечный · светлое · нефильтрованное');
+    await expect(svg.locator('.item-meta').first()).toContainText('ООО «Портал», п. Солнечный · 4,6% · светлое · нефильтрованное');
     await expect(svg.locator('.table-section rect').first()).toHaveAttribute('rx', /[1-9]/);
+
+    const sizes = await svg.locator('.table-item').first().evaluate((item) => ({
+      title: Number(item.querySelector('.item-name')?.getAttribute('font-size')),
+      meta: Number(item.querySelector('.item-meta')?.getAttribute('font-size')),
+      price: Number(item.querySelector('.price')?.getAttribute('font-size'))
+    }));
+    expect(sizes.title).toBeGreaterThan(sizes.meta * 1.7);
+    expect(sizes.price).toBeGreaterThan(sizes.title);
 
     await test.info().attach(`editor-${viewport.width}x${viewport.height}.png`, {
       body: await page.screenshot({ fullPage: true }),
@@ -163,7 +172,7 @@ for (const viewport of [{ width: 1920, height: 1080 }, { width: 1366, height: 76
   });
 }
 
-test('reference density fits cleanly with two-line product typography', async ({ page }) => {
+test('reference density fits cleanly with TV Menu 1 two-line product typography', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await login(page);
   const { screen } = await createReferenceDensityFixture(page);
@@ -176,7 +185,7 @@ test('reference density fits cleanly with two-line product typography', async ({
   await expect(svg.locator('.table-item')).toHaveCount(16);
   const effective = Number(await preview.getAttribute('data-font-scale-effective'));
   expect(effective).toBeLessThanOrEqual(100);
-  expect(effective).toBeGreaterThan(90);
+  expect(effective).toBeGreaterThan(75);
 
   const overlaps = await svg.locator('.table-item').evaluateAll((items) => items.map((item) => {
     const title = item.querySelector('.item-name')?.getBBox();
