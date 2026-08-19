@@ -105,13 +105,16 @@ export class SftpStorage {
       if (error.code === 'ENOENT') return { removed: 0 };
       throw storageError('Не удалось проверить временные JPEG.');
     }
-    const cutoff = Date.now() - Math.max(0, Number(maxAgeMs) || 0);
+
+    const maximumAge = Math.max(0, Number(maxAgeMs) || 0);
+    const cutoff = Date.now() - maximumAge;
     let removed = 0;
     for (const entry of entries) {
       if (!entry.isFile() || !STAGED_KEY.test(entry.name) || keep.has(entry.name)) continue;
-      const filename = this.stagedPath(entry.name);
-      const stat = await fs.stat(filename).catch(() => null);
-      if (!stat || stat.mtimeMs > cutoff) continue;
+      if (maximumAge > 0) {
+        const stat = await fs.stat(this.stagedPath(entry.name)).catch(() => null);
+        if (!stat || stat.mtimeMs > cutoff) continue;
+      }
       if (await this.removeStaged(entry.name)) removed += 1;
     }
     return { removed };
