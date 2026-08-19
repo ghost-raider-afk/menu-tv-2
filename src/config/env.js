@@ -3,8 +3,8 @@ export function required(name, value) {
   return value.trim();
 }
 
-export function integer(name, value, fallback, { minimum = 1, maximum = 65535 } = {}) {
-  const source = String(value ?? fallback).trim();
+export function integer(name, value, { minimum = 1, maximum = 65535 } = {}) {
+  const source = required(name, value);
   if (!/^-?\d+$/.test(source)) {
     throw new Error(`Параметр ${name} должен быть целым числом от ${minimum} до ${maximum}.`);
   }
@@ -13,6 +13,12 @@ export function integer(name, value, fallback, { minimum = 1, maximum = 65535 } 
     throw new Error(`Параметр ${name} должен быть целым числом от ${minimum} до ${maximum}.`);
   }
   return parsed;
+}
+
+export function boolean(name, value) {
+  const source = required(name, value).toLowerCase();
+  if (source !== 'true' && source !== 'false') throw new Error(`Параметр ${name} должен быть true или false.`);
+  return source === 'true';
 }
 
 export function generatedValue(name, value, minimum) {
