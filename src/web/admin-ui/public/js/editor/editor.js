@@ -46,7 +46,7 @@ export function initialiseScreenEditor() {
   const previewTarget = element('editor-menu-preview');
   const rowsTarget = element('editor-menu-rows');
   const rowsEmpty = element('editor-menu-empty');
-  const refreshPreview = () => renderPreview(editorState, { screen, products, packaging, target: previewTarget });
+  const refreshPreview = (screenOverride = screen) => renderPreview(editorState, { screen: screenOverride, products, packaging, target: previewTarget });
   const refreshRows = () => renderRows(editorState, { target: rowsTarget, empty: rowsEmpty, products, packaging, onChange: refreshPreview });
 
   const load = async () => {
@@ -92,6 +92,11 @@ export function initialiseScreenEditor() {
         ...readScreenProperties(screen),
         template_id: editorState.templateId
       };
+      const preview = refreshPreview(screenPayload);
+      if (!preview?.layout?.vertical?.fits) {
+        throw new Error(`Меню не помещается в ${screenPayload.resolution}. Уменьшите размер текста или количество строк.`);
+      }
+
       const saved = await api.put(`${API.screens}/${screenId}/draft`, serializeDraft(editorState, screenPayload));
       replaceEditorState(editorState, {
         screen: saved.screen,
