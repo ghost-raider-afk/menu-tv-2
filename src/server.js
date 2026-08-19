@@ -67,7 +67,7 @@ function configureSecurity(app, config) {
         styleSrc: ["'self'"],
         fontSrc: ["'self'", 'data:'],
         scriptSrc: ["'self'"],
-        imgSrc: ["'self'", 'data:']
+        imgSrc: ["'self'", 'data:', 'blob:']
       }
     }
   }));
