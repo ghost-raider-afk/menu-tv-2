@@ -38,10 +38,11 @@ test('shell is composed from dedicated permanent components', async () => {
   assert.match(navigation, /Тара/);
 });
 
-test('menu editor owns the canonical left-aligned TV board table', async () => {
-  const [rows, preview, renderer, editorCss, editorHtml, tablesCss, templatesHtml] = await Promise.all([
+test('menu editor owns one canonical reference-geometry SVG table', async () => {
+  const [rows, preview, finalImage, renderer, editorCss, editorHtml, tablesCss, templatesHtml] = await Promise.all([
     read('js/editor/rows.js'),
     read('js/editor/preview.js'),
+    read('js/editor/final-image.js'),
     read('js/editor/renderer.js'),
     read('css/editor/editor.css'),
     read('screen-editor.html'),
@@ -51,21 +52,25 @@ test('menu editor owns the canonical left-aligned TV board table', async () => {
   assert.match(rows, /editor-menu-table-head/);
   assert.match(rows, /'1 л'/);
   assert.match(rows, /'1,5 л'/);
-  assert.match(preview, /tv-board-table/);
-  assert.match(preview, /menu-preview-producer/);
+  assert.match(preview, /buildTableSvg/);
+  assert.match(finalImage, /buildTableSvg/);
   assert.match(renderer, /producer: product\?\.producer/);
-  assert.match(renderer, /leftMarginFactor: 0\.008/);
-  assert.match(renderer, /normal: 0\.78/);
-  assert.match(editorCss, /\.tv-board-table/);
-  assert.match(editorCss, /left:\.8%/);
-  assert.match(editorCss, /grid-template-columns:minmax\(0,76fr\) minmax\(0,12fr\) minmax\(0,12fr\)/);
+  assert.match(renderer, /tableX: 15/);
+  assert.match(renderer, /tableRight: 1605/);
+  assert.match(renderer, /primaryBoundary: 1231/);
+  assert.match(renderer, /secondaryBoundary: 1417/);
+  assert.match(renderer, /viewBox="0 0 \$\{MENU_REFERENCE\.width\} \$\{MENU_REFERENCE\.height\}"/);
+  assert.match(editorCss, /\.menu-table-svg/);
+  assert.doesNotMatch(editorCss, /\.tv-board-table/);
   assert.match(editorCss, /\.editor-main-column\{display:grid;min-width:0;gap:0/);
   assert.match(editorCss, /\.editor-preview-card\{min-width:0;padding:0;border-top:0/);
   assert.match(editorHtml, /class="editor-main-column"[\s\S]*editor-menu-card[\s\S]*editor-preview-card/);
-  assert.doesNotMatch(editorCss, /\.tv1-menu-table/);
+  assert.match(editorHtml, /id="editor-font-scale"/);
+  assert.match(editorHtml, /id="editor-font-scale-number"/);
   assert.doesNotMatch(tablesCss, /menu-preview|editor-menu-table/);
   assert.match(templatesHtml, /id="template-background-file"/);
   assert.match(templatesHtml, /id="template-background-upload"/);
+  assert.match(templatesHtml, /id="template-font-scale"/);
 });
 
 test('legacy frontend files are physically absent', async () => {
