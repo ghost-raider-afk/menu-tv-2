@@ -30,11 +30,11 @@ test('template application replaces editor rows/settings locally', () => {
   applyTemplate(state, {
     id: 7,
     rows: [{ id: 'new', kind: 'section', name: 'Новое', enabled: true }],
-    settings: { font_scale_percent: 110 }
+    settings: { font_scale_percent: 110, font_family: 'tahoma-bold' }
   });
   assert.equal(state.templateId, 7);
   assert.deepEqual(state.rows.map((row) => row.id), ['new']);
-  assert.deepEqual(state.settings, { font_scale_percent: 110 });
+  assert.deepEqual(state.settings, { font_scale_percent: 110, font_family: 'tahoma-bold' });
   assert.equal(state.dirty, true);
 });
 
@@ -58,12 +58,13 @@ test('template background survives settings normalization and uses canonical def
   assert.equal(settings.background_image_url, url);
   assert.equal(settings.accent_color, '#F4C915');
   assert.equal(settings.font_scale_percent, 100);
+  assert.equal(settings.font_family, 'arial-narrow');
   assert.equal(normaliseEditorSettings({ background_image_url: 'https://example.com/x.png' }).background_image_url, '');
 });
 
-test('canonical table keeps prices separate and places producer next to product name', () => {
+test('canonical table keeps prices separate and builds second line only from catalog fields', () => {
   const state = createEditorState({
-    settings: { font_scale_percent: 100 },
+    settings: { font_scale_percent: 100, font_family: 'arial-narrow' },
     rows: [
       { id: 'product-1', kind: 'item', product_id: 1, enabled: true },
       { id: 'pack-1', kind: 'packaging', packaging_id: 10, enabled: true },
@@ -72,7 +73,7 @@ test('canonical table keeps prices separate and places producer next to product 
   });
   const model = buildRenderModel(state, { width: 1920, height: 1080 });
   const lines = buildDisplayLines(model, {
-    products: [{ id: 1, name: 'Бавария', strength: '4,6%', producer: 'ООО «Портал»', price_primary: '179.00', price_secondary: '268.50' }],
+    products: [{ id: 1, name: 'Бавария', strength: '4,6°', producer: 'ООО «Портал»', beverage_color: 'light', filtration: 'unfiltered', price_primary: '179.00', price_secondary: '268.50' }],
     packaging: [{ id: 10, name: 'ПЭТ 1 л', unit_price: '10' }, { id: 11, name: 'ПЭТ 1,5 л', unit_price: '12' }]
   });
   assert.equal(lines[0].kind, 'section');
@@ -80,6 +81,7 @@ test('canonical table keeps prices separate and places producer next to product 
   assert.equal(lines[1].name, 'Бавария');
   assert.equal(lines[1].strength, '4,6%');
   assert.equal(lines[1].producer, 'ООО «Портал»');
+  assert.equal(lines[1].metadata, 'ООО «Портал» · светлое · нефильтрованное');
   assert.equal(lines[1].pricePrimary, '179.00');
   assert.equal(lines[1].priceSecondary, '268.50');
   assert.equal(lines[2].kind, 'packaging');
@@ -87,11 +89,13 @@ test('canonical table keeps prices separate and places producer next to product 
 
   const layout = buildRenderLayout(model, lines);
   const svg = buildTableSvg(model, lines, layout);
-  assert.match(svg, /ООО «Портал»/);
+  assert.match(svg, /БАВАРИЯ · 4,6%/);
+  assert.match(svg, /ООО «Портал» · светлое · нефильтрованное/);
+  assert.doesNotMatch(svg, /°/);
   assert.match(svg, />179<tspan/);
 });
 
-test('board geometry is locked to the supplied reference and leaves artwork on the right', () => {
+test('board horizontal geometry stays locked to the supplied reference and leaves artwork on the right', () => {
   assert.equal(MENU_REFERENCE.tableX, 15);
   assert.equal(MENU_REFERENCE.tableRight, 1605);
   assert.equal(MENU_REFERENCE.tableWidth, 1590);
@@ -102,7 +106,7 @@ test('board geometry is locked to the supplied reference and leaves artwork on t
 
 test('automatic font fitting reduces scale and refuses silent clipping', () => {
   const state = createEditorState({
-    settings: { font_scale_percent: 100 },
+    settings: { font_scale_percent: 100, font_family: 'arial-narrow' },
     rows: Array.from({ length: 30 }, (_, index) => ({ id: `section-${index}`, kind: 'section', name: `Раздел ${index}`, enabled: true }))
   });
   const model = buildRenderModel(state, { width: 1920, height: 1080 });
