@@ -41,6 +41,7 @@ export function createScreensRouter({ store, sftp, config }) {
     const id = positiveId(request.params.id, 'id');
     const expectedRevision = positiveId(request.body?.revision, 'revision');
     const result = await store.transaction(async (tx) => {
+      if (!await tx.lockScreen(id)) throw notFound();
       const current = await tx.getScreen(id);
       if (!current) throw notFound();
       if (current.publication_pending_sha256) {
@@ -129,6 +130,7 @@ export function createScreensRouter({ store, sftp, config }) {
   router.put('/screens/:id', async (request, response) => {
     const id = positiveId(request.params.id, 'id');
     const result = await store.transaction(async (tx) => {
+      if (!await tx.lockScreen(id)) throw notFound();
       const siteSettings = await tx.getSiteSettings();
       const input = screenInput(request.body, {
         defaultScreenResolution: siteSettings.default_screen_resolution,
@@ -165,6 +167,7 @@ export function createScreensRouter({ store, sftp, config }) {
   router.delete('/screens/:id', async (request, response) => {
     const id = positiveId(request.params.id, 'id');
     const screen = await store.transaction(async (tx) => {
+      if (!await tx.lockScreen(id)) throw notFound();
       const current = await tx.getScreen(id);
       if (!current) throw notFound();
       if (current.publication_pending_sha256) {
