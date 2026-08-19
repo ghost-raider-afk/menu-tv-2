@@ -1,5 +1,6 @@
 import { createDatabasePool } from './pool.js';
 import { initialiseSchema } from './migrations/schema.js';
+import { migrateLegacyMenuSettings } from './migrations/menu-settings.js';
 import { seedDemoData } from './migrations/seed.js';
 import { createOverviewRepository } from './overview.js';
 import { createUsersRepository } from './users.js';
@@ -36,6 +37,7 @@ export class MenuTvStore {
 
   async init() {
     await initialiseSchema(this.pool);
+    await migrateLegacyMenuSettings(this.pool);
     if (this.seedDemoData) await seedDemoData(this.pool);
   }
 
