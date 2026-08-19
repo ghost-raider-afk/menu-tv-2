@@ -4,7 +4,7 @@ import { ValidationError } from '../shared/errors.js';
 
 const scrypt = promisify(crypto.scrypt);
 
-function passwordInput(value, field, config) {
+function newPasswordInput(value, field, config) {
   if (typeof value !== 'string' || value.length < config.passwordMinLength || value.length > config.passwordMaxLength) {
     throw new ValidationError(`Поле «${field}» должно содержать от ${config.passwordMinLength} до ${config.passwordMaxLength} символов.`);
   }
@@ -14,11 +14,22 @@ function passwordInput(value, field, config) {
   return value;
 }
 
+function currentPasswordInput(value) {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new ValidationError('Введите текущий пароль.');
+  }
+  return value;
+}
+
 export function passwordChangeInput(body, config) {
-  const currentPassword = passwordInput(body.current_password, 'Текущий пароль', config);
-  const newPassword = passwordInput(body.new_password, 'Новый пароль', config);
+  const currentPassword = currentPasswordInput(body.current_password);
+  const newPassword = newPasswordInput(body.new_password, 'Новый пароль', config);
   if (currentPassword === newPassword) throw new ValidationError('Новый пароль должен отличаться от текущего.');
   return { currentPassword, newPassword };
+}
+
+export function validateNewPassword(value, config, field = 'Пароль') {
+  return newPasswordInput(value, field, config);
 }
 
 export async function hashPassword(password) {
