@@ -8,6 +8,7 @@ import { logger } from './logger/index.js';
 import { errorHandler } from './middleware/errors.js';
 import { createSessionMiddleware } from './middleware/session.js';
 import { hashPassword } from './services/password-service.js';
+import { createPublishService } from './services/publish-service.js';
 import { createSessionResolver } from './services/session-service.js';
 import { siteSettingsResponse } from './services/site-assets-service.js';
 import { SftpService } from './sftp/index.js';
@@ -38,6 +39,24 @@ async function initialiseStore(store, config) {
   await store.setInitialSiteName(config.appName);
 }
 
+async function recoverRuntimeState(store, sftp, config) {
+  const requiredMethods = ['publishedInfo', 'removeStaged', 'cleanupStaging'];
+  if (!requiredMethods.every((method) => typeof sftp?.[method] === 'function')) return;
+  const publish = createPublishService({ store, sftp });
+  try {
+    const recovery = await publish.reconcilePending();
+    if (recovery.recovered || recovery.unresolved) logger.info('Publication recovery completed', recovery);
+  } catch (error) {
+    logger.warn('Publication recovery could not complete', { error });
+  }
+  try {
+    const cleanup = await publish.cleanupStaging({ maxAgeMs: config.sftp.stagingMaxAgeHours * 60 * 60 * 1000 });
+    if (cleanup.removed) logger.info('Unused staging JPEG files removed', cleanup);
+  } catch (error) {
+    logger.warn('Staging cleanup could not complete', { error });
+  }
+}
+
 function configureSecurity(app, config) {
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
@@ -56,9 +75,10 @@ function configureSecurity(app, config) {
 }
 
 function mountPublicRoutes(app, { store, config }) {
-  app.get('/healthz', async (_request, response) => {
+  app.get('/healthz', (_request, response) => response.json({ status: 'ok', service: 'menu-tv-2.0' }));
+  app.get('/readyz', async (_request, response) => {
     await store.pool.query('SELECT 1');
-    response.json({ status: 'ok', service: 'menu-tv-2.0' });
+    response.json({ status: 'ready', service: 'menu-tv-2.0' });
   });
   app.use('/site-assets', express.static(config.siteAssetsRoot, { etag: true, maxAge: '1d', immutable: true }));
   app.get('/api/public/config', async (_request, response) => {
@@ -87,7 +107,11 @@ function mountFrontend(app, requirePageSession) {
     index: 'index.html',
     etag: true,
     maxAge: 0,
-    setHeaders(response) { response.setHeader('Cache-Control', 'no-store'); }
+    setHeaders(response, filename) {
+      const extension = path.extname(filename).toLowerCase();
+      if (extension === '.html') response.setHeader('Cache-Control', 'no-store');
+      else response.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+    }
   }));
 }
 
@@ -95,6 +119,7 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
   const store = suppliedStore ?? new MenuTvStore(config.db, { seedDemoData: config.seedDemoData });
   const sftp = suppliedSftp ?? new SftpService(config.sftp);
   await initialiseStore(store, config);
+  await recoverRuntimeState(store, sftp, config);
 
   const app = express();
   configureSecurity(app, config);
