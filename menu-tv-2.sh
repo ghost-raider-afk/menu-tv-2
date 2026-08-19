@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.1.13"
+SCRIPT_VERSION="1.1.14"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
@@ -57,6 +57,7 @@ Menu TV 2.0 — управление независимым приложение
 Команды:
   sudo $PROGRAM_NAME install
   sudo $PROGRAM_NAME update
+  sudo $PROGRAM_NAME reset-admin-password [логин]
   sudo $PROGRAM_NAME check-script-update
   sudo $PROGRAM_NAME update-script
   sudo $PROGRAM_NAME remove
@@ -827,6 +828,23 @@ update_app() {
   info "Обновление прошло проверку. HTTPS-сертификат не перевыпускался."
 }
 
+reset_admin_password() {
+  local username="${1:-}"
+  require_root
+  [[ -d "$INSTALL_DIR/.git" ]] || die "Menu TV 2.0 не установлен: $INSTALL_DIR"
+  [[ -f "$INSTALL_DIR/.env" ]] || die "Отсутствует $INSTALL_DIR/.env"
+  command_exists docker || die "Не найдена команда: docker"
+  docker info >/dev/null 2>&1 || die "Docker daemon недоступен."
+  docker compose version >/dev/null 2>&1 || die "Нужен Docker Compose v2."
+  verify_application >/dev/null 2>&1 || die "Контейнер приложения не готов. Сначала запустите или обновите Menu TV 2.0."
+  log "Сброс пароля администратора"
+  if [[ -n "$username" ]]; then
+    compose exec -T "$APP_SERVICE" node src/cli/reset-admin-password.js "$username"
+  else
+    compose exec -T "$APP_SERVICE" node src/cli/reset-admin-password.js
+  fi
+}
+
 confirm_removal() {
   local input
   printf '\nБудут затронуты только Menu TV 2.0: %s, %s, %s, %s и %s.\n' "$INSTALL_DIR" "$APP_CONTAINER" "$DB_CONTAINER" "$SFTP_CONTAINER" "$DB_VOLUME"
@@ -907,6 +925,7 @@ menu() {
     printf '  4. Удалить скрипт\n'
     printf '  5. Удалить проект и скрипт\n'
     printf '  6. Проверить обновления скрипта\n'
+    printf '  7. Сбросить пароль администратора\n'
     printf '  0. Выход\n'
     printf '============================================\n'
     read -r -p 'Выберите действие: ' action
@@ -917,8 +936,9 @@ menu() {
       4) remove_script; return ;;
       5) purge_project; return ;;
       6) update_script ;;
+      7) reset_admin_password ;;
       0) return ;;
-      *) warn "Выберите пункт от 0 до 6." ;;
+      *) warn "Выберите пункт от 0 до 7." ;;
     esac
   done
 }
@@ -928,6 +948,7 @@ main() {
     menu) menu ;;
     install) install_app ;;
     update) update_app ;;
+    reset-admin-password) reset_admin_password "${2:-}" ;;
     check-script-update) check_script_update ;;
     update-script) update_script ;;
     remove) remove_project ;;
