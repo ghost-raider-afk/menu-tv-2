@@ -33,7 +33,7 @@ test('image inspector reads dimensions from real JPEG and PNG files', async () =
 test('screen JPEG is fully decoded and must exactly match monitor resolution', async () => {
   const valid = await jpegFor(1920, 1080);
   assert.equal((await validateScreenJpeg(valid, '1920×1080', 40_000_000)).width, 1920);
-  await assert.rejects(() => validateScreenJpeg(jpegFor(1280, 720), '1920×1080', 40_000_000), /должен иметь разрешение 1920×1080/);
+  await assert.rejects(async () => validateScreenJpeg(await jpegFor(1280, 720), '1920×1080', 40_000_000), /должен иметь разрешение 1920×1080/);
   await assert.rejects(() => validateScreenJpeg(Buffer.from([0xff, 0xd8, 0xff, 0xd9]), '1920×1080', 40_000_000), /формат или структура/);
 });
 
