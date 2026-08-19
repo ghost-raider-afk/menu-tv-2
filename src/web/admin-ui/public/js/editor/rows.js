@@ -14,63 +14,81 @@ export function createEditorRow(kind) {
   };
 }
 
-function cell(className, ...children) {
-  const node = document.createElement('div');
+function td(className, ...children) {
+  const node = document.createElement('td');
   node.className = className;
   node.append(...children.filter(Boolean));
   return node;
 }
 
-function tableHeader() {
-  const header = document.createElement('div');
-  header.className = 'editor-menu-table-head';
-  ['Позиция', 'Подпись / акция', '1 л', '1,5 л', 'Управление'].forEach((label) => {
-    const span = document.createElement('span');
-    span.textContent = label;
-    header.append(span);
-  });
-  return header;
+function text(value, className = '') {
+  const node = document.createElement('span');
+  if (className) node.className = className;
+  node.textContent = value;
+  return node;
+}
+
+function controlButton(label, title, tone, action) {
+  const button = makeButton(label, tone, action);
+  button.classList.add('editor-row-action');
+  button.title = title;
+  button.setAttribute('aria-label', title);
+  return button;
 }
 
 function actionButtons(editorState, row, index, refresh) {
   const controls = document.createElement('div');
   controls.className = 'editor-row-actions';
+  const up = controlButton('↑', 'Переместить выше', '', () => { moveRow(editorState, row.id, index - 1); refresh(); });
+  const down = controlButton('↓', 'Переместить ниже', '', () => { moveRow(editorState, row.id, index + 1); refresh(); });
+  up.disabled = index === 0;
+  down.disabled = index >= editorState.rows.length - 1;
   controls.append(
-    makeButton('↑', '', () => { moveRow(editorState, row.id, index - 1); refresh(); }),
-    makeButton('↓', '', () => { moveRow(editorState, row.id, index + 1); refresh(); }),
-    makeButton(row.enabled === false ? 'Показать' : 'Скрыть', '', () => { updateRow(editorState, row.id, { enabled: row.enabled === false }); refresh(); }),
-    makeButton('×', 'danger', () => { removeRow(editorState, row.id); refresh(); })
+    up,
+    down,
+    controlButton(row.enabled === false ? '○' : '●', row.enabled === false ? 'Показать строку' : 'Скрыть строку', '', () => {
+      updateRow(editorState, row.id, { enabled: row.enabled === false });
+      refresh();
+    }),
+    controlButton('×', 'Удалить строку', 'danger', () => { removeRow(editorState, row.id); refresh(); })
   );
   return controls;
 }
 
+function orderCell(index, kind) {
+  const wrap = document.createElement('div');
+  wrap.className = 'editor-row-order';
+  wrap.append(text(String(index + 1), 'editor-row-number'), text(kind, 'editor-row-kind'));
+  return wrap;
+}
+
 function sectionRow(editorState, row, index, refresh, onChange) {
-  const line = document.createElement('article');
-  line.className = `editor-menu-table-row editor-menu-table-section${row.enabled === false ? ' is-disabled' : ''}`;
+  const line = document.createElement('tr');
+  line.className = `editor-menu-table-section${row.enabled === false ? ' is-disabled' : ''}`;
+  line.dataset.rowId = row.id;
+
   const input = document.createElement('input');
+  input.className = 'editor-section-name';
   input.maxLength = 100;
   input.value = row.name || '';
   input.placeholder = 'Название раздела';
   input.addEventListener('input', () => { updateRow(editorState, row.id, { name: input.value }); onChange?.(); });
-  const badge = document.createElement('span');
-  badge.className = 'editor-row-kind';
-  badge.textContent = 'Раздел';
+
+  const titleCell = td('editor-menu-position editor-section-cell', input);
+  titleCell.colSpan = 3;
   line.append(
-    cell('editor-menu-cell editor-menu-position', badge, input),
-    cell('editor-menu-cell editor-menu-details'),
-    cell('editor-menu-cell editor-menu-price editor-menu-price-label', document.createTextNode(index === 0 ? '1 л' : '')),
-    cell('editor-menu-cell editor-menu-price editor-menu-price-label', document.createTextNode(index === 0 ? '1,5 л' : '')),
-    cell('editor-menu-cell editor-menu-actions', actionButtons(editorState, row, index, refresh))
+    td('editor-menu-order', orderCell(index, 'Раздел')),
+    titleCell,
+    td('editor-menu-price editor-menu-price-label', text(index === 0 ? '1,0 л' : '—')),
+    td('editor-menu-price editor-menu-price-label', text(index === 0 ? '1,5 л' : '—')),
+    td('editor-menu-actions', actionButtons(editorState, row, index, refresh))
   );
   return line;
 }
 
-function itemRow(editorState, row, index, products, refresh, onChange) {
-  const line = document.createElement('article');
-  line.className = `editor-menu-table-row editor-menu-table-item${row.enabled === false ? ' is-disabled' : ''}`;
-  const product = products.find((item) => Number(item.id) === Number(row.product_id));
-
+function productSelect(row, products, refresh, editorState) {
   const select = document.createElement('select');
+  select.className = 'editor-product-select';
   select.append(
     new Option('Выберите продукцию', ''),
     ...products
@@ -82,20 +100,26 @@ function itemRow(editorState, row, index, products, refresh, onChange) {
     updateRow(editorState, row.id, { product_id: select.value });
     refresh();
   });
+  return select;
+}
 
+function detailsEditor(editorState, row, product, onChange) {
+  const wrap = document.createElement('div');
+  wrap.className = 'editor-details-stack';
   const subtitle = document.createElement('input');
   subtitle.maxLength = 180;
   subtitle.value = row.characteristics || '';
-  subtitle.placeholder = product?.characteristics || 'Подпись / характеристики';
+  subtitle.placeholder = product?.characteristics || 'Дополнительная подпись';
   subtitle.addEventListener('input', () => { updateRow(editorState, row.id, { characteristics: subtitle.value }); onChange?.(); });
 
-  const promotion = document.createElement('label');
-  promotion.className = 'editor-inline-toggle editor-promotion-control';
+  const promotion = document.createElement('div');
+  promotion.className = 'editor-promotion-control';
+  const toggle = document.createElement('label');
+  toggle.className = 'editor-promotion-toggle';
   const check = document.createElement('input');
   check.type = 'checkbox';
   check.checked = row.promotion === true;
-  const caption = document.createElement('span');
-  caption.textContent = 'Акция';
+  toggle.append(check, text('Акция'));
   const promotionText = document.createElement('input');
   promotionText.maxLength = 80;
   promotionText.value = row.promotion_text || '';
@@ -107,24 +131,39 @@ function itemRow(editorState, row, index, products, refresh, onChange) {
     onChange?.();
   });
   promotionText.addEventListener('input', () => { updateRow(editorState, row.id, { promotion_text: promotionText.value }); onChange?.(); });
-  promotion.append(check, caption, promotionText);
+  promotion.append(toggle, promotionText);
+  wrap.append(subtitle, promotion);
+  return wrap;
+}
 
-  const kind = document.createElement('span');
-  kind.className = 'editor-row-kind';
-  kind.textContent = 'Продукция';
+function itemRow(editorState, row, index, products, refresh, onChange) {
+  const line = document.createElement('tr');
+  line.className = `editor-menu-table-item${row.enabled === false ? ' is-disabled' : ''}`;
+  line.dataset.rowId = row.id;
+  const product = products.find((item) => Number(item.id) === Number(row.product_id));
+  const productMeta = document.createElement('div');
+  productMeta.className = 'editor-product-meta';
+  productMeta.append(
+    text(product?.strength ? `Крепость: ${product.strength}` : 'Крепость не указана'),
+    text(product?.filtration && product.filtration !== 'none' ? product.filtration : '', 'editor-product-filter')
+  );
+
   line.append(
-    cell('editor-menu-cell editor-menu-position', kind, select),
-    cell('editor-menu-cell editor-menu-details', subtitle, promotion),
-    cell('editor-menu-cell editor-menu-price', document.createTextNode(product?.price_primary ? price(product.price_primary) : '—')),
-    cell('editor-menu-cell editor-menu-price', document.createTextNode(product?.price_secondary ? price(product.price_secondary) : '—')),
-    cell('editor-menu-cell editor-menu-actions', actionButtons(editorState, row, index, refresh))
+    td('editor-menu-order', orderCell(index, 'Продукция')),
+    td('editor-menu-position', productSelect(row, products, refresh, editorState), productMeta),
+    td('editor-menu-producer', text(product?.producer || '—', product?.producer ? '' : 'editor-muted')),
+    td('editor-menu-details', detailsEditor(editorState, row, product, onChange)),
+    td('editor-menu-price', text(product?.price_primary ? price(product.price_primary) : '—')),
+    td('editor-menu-price', text(product?.price_secondary ? price(product.price_secondary) : '—')),
+    td('editor-menu-actions', actionButtons(editorState, row, index, refresh))
   );
   return line;
 }
 
 function packagingRow(editorState, row, index, packaging, refresh) {
-  const line = document.createElement('article');
-  line.className = `editor-menu-table-row editor-menu-table-packaging${row.enabled === false ? ' is-disabled' : ''}`;
+  const line = document.createElement('tr');
+  line.className = `editor-menu-table-packaging${row.enabled === false ? ' is-disabled' : ''}`;
+  line.dataset.rowId = row.id;
   const selected = packaging.find((item) => Number(item.id) === Number(row.packaging_id));
   const select = document.createElement('select');
   select.append(
@@ -138,36 +177,46 @@ function packagingRow(editorState, row, index, packaging, refresh) {
     updateRow(editorState, row.id, { packaging_id: select.value });
     refresh();
   });
-  const kind = document.createElement('span');
-  kind.className = 'editor-row-kind';
-  kind.textContent = 'Тара';
-  const note = document.createElement('span');
-  note.className = 'editor-packaging-note';
-  note.textContent = 'Цена за штуку';
+
   line.append(
-    cell('editor-menu-cell editor-menu-position', kind, select),
-    cell('editor-menu-cell editor-menu-details', note),
-    cell('editor-menu-cell editor-menu-price', document.createTextNode(selected?.unit_price ? `${price(selected.unit_price)} / шт.` : '—')),
-    cell('editor-menu-cell editor-menu-price', document.createTextNode('—')),
-    cell('editor-menu-cell editor-menu-actions', actionButtons(editorState, row, index, refresh))
+    td('editor-menu-order', orderCell(index, 'Тара')),
+    td('editor-menu-position', select),
+    td('editor-menu-producer', text('—', 'editor-muted')),
+    td('editor-menu-details', text('Цена за единицу тары', 'editor-muted')),
+    td('editor-menu-price', text(selected?.unit_price ? `${price(selected.unit_price)} / шт.` : '—')),
+    td('editor-menu-price', text('—', 'editor-muted')),
+    td('editor-menu-actions', actionButtons(editorState, row, index, refresh))
   );
   return line;
+}
+
+function buildTable(editorState, options) {
+  const table = document.createElement('table');
+  table.className = 'editor-menu-editor-table';
+  table.innerHTML = `<colgroup><col class="col-order"><col class="col-position"><col class="col-producer"><col class="col-details"><col class="col-price"><col class="col-price"><col class="col-actions"></colgroup><thead><tr><th>№</th><th>Позиция</th><th>Производитель</th><th>Подпись / акция</th><th>1,0 л</th><th>1,5 л</th><th aria-label="Управление"></th></tr></thead>`;
+  const body = document.createElement('tbody');
+  const refresh = () => {
+    renderRows(editorState, options);
+    options.onChange?.();
+  };
+  editorState.rows.forEach((row, index) => {
+    if (row.kind === 'section') body.append(sectionRow(editorState, row, index, refresh, options.onChange));
+    else if (row.kind === 'item') body.append(itemRow(editorState, row, index, options.products, refresh, options.onChange));
+    else if (row.kind === 'packaging') body.append(packagingRow(editorState, row, index, options.packaging, refresh));
+  });
+  table.append(body);
+  return table;
 }
 
 export function renderRows(editorState, { target, empty, products, packaging, onChange }) {
   if (!target) return;
   target.replaceChildren();
-  const refresh = () => {
-    renderRows(editorState, { target, empty, products, packaging, onChange });
-    onChange?.();
-  };
-
-  if (editorState.rows.length) target.append(tableHeader());
-  editorState.rows.forEach((row, index) => {
-    if (row.kind === 'section') target.append(sectionRow(editorState, row, index, refresh, onChange));
-    else if (row.kind === 'item') target.append(itemRow(editorState, row, index, products, refresh, onChange));
-    else if (row.kind === 'packaging') target.append(packagingRow(editorState, row, index, packaging, refresh));
-  });
+  if (editorState.rows.length) {
+    const scroll = document.createElement('div');
+    scroll.className = 'editor-menu-table-scroll';
+    scroll.append(buildTable(editorState, { target, empty, products, packaging, onChange }));
+    target.append(scroll);
+  }
   empty?.classList.toggle('is-hidden', editorState.rows.length !== 0);
 }
 
