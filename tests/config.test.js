@@ -29,7 +29,9 @@ test('runtime limits are controlled by environment values', () => {
     LOGIN_MAX_ATTEMPTS: '6',
     LOGIN_WINDOW_MINUTES: '10',
     LOGIN_LIMITER_MAX_ENTRIES: '700',
-    GENERATED_PASSWORD_LENGTH: '18'
+    GENERATED_PASSWORD_LENGTH: '18',
+    SFTP_API_TIMEOUT_MS: '4200',
+    SFTP_STAGING_MAX_AGE_HOURS: '36'
   }));
 
   assert.equal(config.jsonBodyMaxBytes, 70000);
@@ -44,6 +46,8 @@ test('runtime limits are controlled by environment values', () => {
   assert.equal(config.loginWindowMinutes, 10);
   assert.equal(config.loginLimiterMaxEntries, 700);
   assert.equal(config.generatedPasswordLength, 18);
+  assert.equal(config.sftp.apiTimeoutMs, 4200);
+  assert.equal(config.sftp.stagingMaxAgeHours, 36);
 });
 
 test('generated SFTP password respects configured length and character classes', () => {
