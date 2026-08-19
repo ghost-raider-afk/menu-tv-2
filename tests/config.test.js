@@ -100,10 +100,13 @@ test('runtime limits are controlled by environment values', () => {
   assert.equal(config.healthReadinessCacheMs, 1500);
 });
 
-test('runtime config refuses missing env values instead of using code fallbacks', () => {
-  const env = validEnv();
-  delete env.LOGIN_MAX_ATTEMPTS;
-  assert.throws(() => loadConfig(env), /LOGIN_MAX_ATTEMPTS/);
+test('every declared runtime env value is mandatory and has no code fallback', () => {
+  const baseline = validEnv();
+  for (const key of Object.keys(baseline)) {
+    const env = { ...baseline };
+    delete env[key];
+    assert.throws(() => loadConfig(env), new RegExp(key), key);
+  }
 });
 
 test('runtime booleans must be explicit true or false', () => {
