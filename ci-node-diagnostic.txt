@@ -1,4 +1,4 @@
-HEAD=64d1fd82984835eefc493ac801e4d4cf84f2c4b6
+HEAD=a3a834686deb96782415ce0e71198588f7a75f47
 === npm ci ===
 
 added 114 packages, and audited 115 packages in 2s
@@ -55,83 +55,79 @@ ColumnNotFound [Error]: column "screens.template_id" does not exist
 }
 
 Node.js v24.19.0
-✖ tests/api.test.js (571.808763ms)
-✔ server is a thin application assembly layer (8.233337ms)
-✔ database facade lives only in db index and contains no domain SQL (5.999636ms)
-✔ SFTP facade lives only in sftp index and is composed from client storage and publisher (2.090542ms)
-✔ configuration has one modular entrypoint and no legacy config file (4.974578ms)
-✔ fresh PostgreSQL schema uses TV Menu 1 visual default without overwriting a changed accent (1.378726ms)
-✔ runtime limits are controlled by environment values (1.77706ms)
-✔ runtime config refuses missing env values instead of using code fallbacks (0.495008ms)
-✔ runtime booleans must be explicit true or false (0.291925ms)
-✔ generated SFTP password respects configured length and character classes (0.699102ms)
-✔ shell uses dynamic viewport height and explicit layer tokens (10.392265ms)
-✔ hidden switches expose a keyboard focus indicator (2.571064ms)
-✔ preview aspect ratio is driven by monitor resolution and table has one canonical SVG owner (5.997733ms)
-✔ preview and final image share the exact canonical SVG and fit logic (5.396577ms)
-✔ site accent derives contrast colors instead of reusing arbitrary accent as text (1.677221ms)
-✖ screen creation rolls back screen and draft together after a later failure (203.084394ms)
-✖ stale draft revision rolls back screen metadata changed earlier in the transaction (52.266564ms)
-✔ all pages use the single final CSS entrypoint and contain no legacy shell (19.318115ms)
-✔ CSS architecture has one permanent entrypoint and TV Menu 1 identity tokens (6.946853ms)
-✔ shell is composed from dedicated permanent components (4.086493ms)
-✔ menu editor owns one canonical reference-geometry SVG table (7.247156ms)
-✔ legacy frontend files are physically absent (3.852865ms)
-✔ frontend modules resolve as a complete ES module graph (54.339454ms)
-✔ image inspector reads JPEG and PNG dimensions without decoding (2.368672ms)
-✔ screen JPEG must fully decode and exactly match monitor resolution (23.569504ms)
-✔ image limits reject decompression-bomb dimensions before decode (0.971529ms)
-✔ positive ids reject trailing characters and unsafe integers (1.994855ms)
-✔ site refresh interval rejects numeric prefixes with junk suffixes (24.401454ms)
-✔ current password is verified as entered while complexity applies only to the new password (0.468759ms)
-✔ environment integer parser rejects partial numeric strings (1.326428ms)
-✔ login limiter blocks after configured number of failures and resets on success (1.56976ms)
-✔ canonical table geometry is locked to the supplied 2048x1152 reference (1.772964ms)
-✔ one canonical SVG contains sections, producer and both price columns (3.642401ms)
-✔ font scale automatically reduces to fit but respects manual maximum (0.963506ms)
-✔ menu that cannot fit even at minimum scale is explicitly rejected by layout (0.448959ms)
-✔ legacy menu settings are migrated once into canonical font scale percent (76.899121ms)
-✔ menu settings contract stores only canonical renderer fields (2.215914ms)
-✔ menu font scale has one validated range (0.792221ms)
-✔ client cannot inject arbitrary template asset URL (0.327959ms)
-✔ staged JPEG is bound to the exact current draft revision (11.915758ms)
-✔ staging race removes the new orphan when draft changed before DB commit (6.497448ms)
-✔ pending publication is recovered by target SHA without rewriting the file (0.684901ms)
-✔ SFTPGo management requests fail with a bounded timeout (27.626093ms)
-✔ staging cleanup removes only unreferenced keys (9.038757ms)
-✔ unsafe staging keys are rejected before any filesystem access (2.152239ms)
-✔ failed database update removes only the new site asset and keeps the previous file (34.497854ms)
-✔ successful site asset update switches to a unique file then removes the previous asset (15.314024ms)
-✔ template background replacement preserves assets referenced by saved screen drafts (64.664018ms)
-file:///home/runner/work/menu-tv-2/menu-tv-2/tests/unit/editor/editor-core.test.js:5
-import { buildDisplayLines, buildRenderLayout, buildRenderModel, buildTableLayout, buildVerticalLayout } from '../../../src/web/admin-ui/public/js/editor/renderer.js';
-                                                                 ^^^^^^^^^^^^^^^^
-SyntaxError: The requested module '../../../src/web/admin-ui/public/js/editor/renderer.js' does not provide an export named 'buildTableLayout'
-    at #asyncInstantiate (node:internal/modules/esm/module_job:327:21)
-    at async ModuleJob.run (node:internal/modules/esm/module_job:431:5)
-    at async node:internal/modules/esm/loader:643:26
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
-
-Node.js v24.19.0
-✖ tests/unit/editor/editor-core.test.js (52.729589ms)
-✔ shared application errors expose stable HTTP status values (1.004768ms)
-ℹ tests 50
+✖ tests/api.test.js (390.906792ms)
+✔ server is a thin application assembly layer (6.385426ms)
+✔ database facade lives only in db index and contains no domain SQL (4.733152ms)
+✔ SFTP facade lives only in sftp index and is composed from client storage and publisher (2.027517ms)
+✔ configuration has one modular entrypoint and no legacy config file (2.975181ms)
+✔ fresh PostgreSQL schema uses TV Menu 1 visual default without overwriting a changed accent (0.960179ms)
+✔ runtime limits are controlled by environment values (1.540792ms)
+✔ runtime config refuses missing env values instead of using code fallbacks (0.405834ms)
+✔ runtime booleans must be explicit true or false (0.210523ms)
+✔ generated SFTP password respects configured length and character classes (0.580834ms)
+✔ shell uses dynamic viewport height and explicit layer tokens (5.273706ms)
+✔ hidden switches expose a keyboard focus indicator (1.35708ms)
+✔ preview aspect ratio is driven by monitor resolution and table has one canonical SVG owner (2.233553ms)
+✔ preview and final image share the exact canonical SVG and fit logic (2.532558ms)
+✔ site accent derives contrast colors instead of reusing arbitrary accent as text (0.939738ms)
+✖ screen creation rolls back screen and draft together after a later failure (123.526202ms)
+✖ stale draft revision rolls back screen metadata changed earlier in the transaction (58.398981ms)
+✔ all pages use the single final CSS entrypoint and contain no legacy shell (8.607898ms)
+✔ CSS architecture has one permanent entrypoint and TV Menu 1 identity tokens (2.949248ms)
+✔ shell is composed from dedicated permanent components (1.085956ms)
+✔ menu editor owns one canonical reference-geometry SVG table (4.387348ms)
+✔ legacy frontend files are physically absent (2.427501ms)
+✔ frontend modules resolve as a complete ES module graph (44.454683ms)
+✔ image inspector reads JPEG and PNG dimensions without decoding (1.778856ms)
+✔ screen JPEG must fully decode and exactly match monitor resolution (16.207935ms)
+✔ image limits reject decompression-bomb dimensions before decode (0.492262ms)
+✔ positive ids reject trailing characters and unsafe integers (1.416999ms)
+✔ site refresh interval rejects numeric prefixes with junk suffixes (17.804721ms)
+✔ current password is verified as entered while complexity applies only to the new password (0.388578ms)
+✔ environment integer parser rejects partial numeric strings (0.917786ms)
+✔ login limiter blocks after configured number of failures and resets on success (1.163381ms)
+✔ canonical table geometry is locked to the supplied 2048x1152 reference (1.228979ms)
+✔ one canonical SVG contains sections, producer and both price columns (2.696472ms)
+✔ font scale automatically reduces to fit but respects manual maximum (0.771508ms)
+✔ menu that cannot fit even at minimum scale is explicitly rejected by layout (0.50397ms)
+✔ legacy menu settings are migrated once into canonical font scale percent (61.111487ms)
+✔ menu settings contract stores only canonical renderer fields (1.343729ms)
+✔ menu font scale has one validated range (0.512082ms)
+✔ client cannot inject arbitrary template asset URL (0.18829ms)
+✔ staged JPEG is bound to the exact current draft revision (10.247787ms)
+✔ staging race removes the new orphan when draft changed before DB commit (5.998916ms)
+✔ pending publication is recovered by target SHA without rewriting the file (0.556538ms)
+✔ SFTPGo management requests fail with a bounded timeout (26.968796ms)
+✔ staging cleanup removes only unreferenced keys (7.452208ms)
+✔ unsafe staging keys are rejected before any filesystem access (2.702411ms)
+✔ failed database update removes only the new site asset and keeps the previous file (21.80932ms)
+✔ successful site asset update switches to a unique file then removes the previous asset (13.585113ms)
+✔ template background replacement preserves assets referenced by saved screen drafts (52.120759ms)
+✔ editor commands mutate only Editor State and track dirty revision (1.019356ms)
+✔ template application replaces editor rows/settings locally (0.912608ms)
+✔ renderer model filters disabled rows and respects arbitrary monitor aspect ratio (0.317913ms)
+✔ template background survives settings normalization and uses canonical defaults (0.318363ms)
+✔ canonical table keeps prices separate and places producer next to product name (1.815622ms)
+✔ board geometry is locked to the supplied reference and leaves artwork on the right (0.204624ms)
+✔ automatic font fitting reduces scale and refuses silent clipping (0.579232ms)
+✔ shared application errors expose stable HTTP status values (0.698159ms)
+ℹ tests 56
 ℹ suites 0
-ℹ pass 46
-ℹ fail 4
+ℹ pass 53
+ℹ fail 3
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 1106.732904
+ℹ duration_ms 813.921173
 
 ✖ failing tests:
 
 test at tests/api.test.js:1:1
-✖ tests/api.test.js (571.808763ms)
+✖ tests/api.test.js (390.906792ms)
   'test failed'
 
 test at tests/database-transactions.test.js:14:1
-✖ screen creation rolls back screen and draft together after a later failure (203.084394ms)
+✖ screen creation rolls back screen and draft together after a later failure (123.526202ms)
   Error: column "screens.template_id" does not exist
   
   🐜 This seems to be an execution error, which means that your request syntax seems okay,
@@ -158,7 +154,7 @@ test at tests/database-transactions.test.js:14:1
   }
 
 test at tests/database-transactions.test.js:34:1
-✖ stale draft revision rolls back screen metadata changed earlier in the transaction (52.266564ms)
+✖ stale draft revision rolls back screen metadata changed earlier in the transaction (58.398981ms)
   Error: column "screens.template_id" does not exist
   
   🐜 This seems to be an execution error, which means that your request syntax seems okay,
@@ -183,8 +179,4 @@ test at tests/database-transactions.test.js:34:1
     code: undefined,
     location: { start: 0, end: 0 }
   }
-
-test at tests/unit/editor/editor-core.test.js:1:1
-✖ tests/unit/editor/editor-core.test.js (52.729589ms)
-  'test failed'
 npm_check_status=1
