@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import test from 'node:test';
+import sharp from 'sharp';
 import { newDb } from 'pg-mem';
 import { createApp } from '../src/server.js';
 import { MenuTvStore } from '../src/db/index.js';
@@ -30,6 +31,7 @@ const config = {
   passwordMaxLength: 32,
   generatedPasswordLength: 10,
   loginMaxAttempts: 8,
+  loginIpMaxAttempts: 32,
   loginWindowMinutes: 15,
   loginLimiterMaxEntries: 500,
   jsonBodyMaxBytes: 65_536,
@@ -39,30 +41,19 @@ const config = {
   dashboardRefreshMaxSeconds: 300,
   screenMaxWidth: 1920,
   screenMaxHeight: 1080,
+  imageMaxPixels: 40_000_000,
+  healthReadinessCacheMs: 0,
   siteAssetsRoot: `/tmp/menu-tv-2-test-site-assets-${process.pid}`,
   siteLogoMaxBytes: 2_097_152,
   siteFaviconMaxBytes: 524_288,
   templateBackgroundMaxBytes: 12_582_912,
-  db: { host: 'db', port: 5432, database: 'menu_tv_2', user: 'menu_tv_2', password: 'p'.repeat(32) },
-  sftp: { publicHost: 'tv.example.test', port: 2022, stagingMaxAgeHours: 24 },
+  db: { host: 'db', port: 5432, database: 'menu_tv_2', user: 'menu_tv_2', password: 'p'.repeat(32), poolMax: 5, connectionTimeoutMs: 5000, idleTimeoutMs: 30000 },
+  sftp: { apiUrl: 'http://127.0.0.1:18080', apiTimeoutMs: 1000, adminUsername: 'test', adminPassword: 'a'.repeat(32), storageRoot: '/tmp/menu-tv-test-sftp', publicHost: 'tv.example.test', port: 2022, stagingMaxAgeHours: 24 },
   seedDemoData: false
 };
 
-function jpegFor(width, height) {
-  const bytes = Buffer.alloc(17);
-  let offset = 0;
-  bytes[offset++] = 0xff; bytes[offset++] = 0xd8;
-  bytes[offset++] = 0xff; bytes[offset++] = 0xc0;
-  bytes.writeUInt16BE(11, offset); offset += 2;
-  bytes[offset++] = 8;
-  bytes.writeUInt16BE(height, offset); offset += 2;
-  bytes.writeUInt16BE(width, offset); offset += 2;
-  bytes[offset++] = 1;
-  bytes[offset++] = 1;
-  bytes[offset++] = 0x11;
-  bytes[offset++] = 0;
-  bytes[offset++] = 0xff; bytes[offset++] = 0xd9;
-  return bytes;
+async function jpegFor(width, height) {
+  return sharp({ create: { width, height, channels: 3, background: { r: 20, g: 30, b: 40 } } }).jpeg({ quality: 85 }).toBuffer();
 }
 
 class FakeSftpService {
@@ -301,12 +292,12 @@ test('SFTP access, validated JPEG staging and recoverable publication work throu
   const screen = await screenResponse.json();
 
   const wrongSize = await fetch(`${baseUrl}/api/screens/${screen.id}/source`, {
-    method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/jpeg' }, body: jpegFor(1280, 720)
+    method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/jpeg' }, body: await jpegFor(1280, 720)
   });
   assert.equal(wrongSize.status, 400);
 
   const source = await fetch(`${baseUrl}/api/screens/${screen.id}/source`, {
-    method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/jpeg' }, body: jpegFor(1920, 1080)
+    method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/jpeg' }, body: await jpegFor(1920, 1080)
   });
   assert.equal(source.status, 200);
   const staged = await source.json();
