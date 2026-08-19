@@ -5,9 +5,7 @@ import { normaliseEditorSettings } from './settings.js';
 const SETTINGS_INPUTS = Object.freeze([
   'editor-background-color',
   'editor-accent-color',
-  'editor-text-color',
-  'editor-font-scale',
-  'editor-table-width'
+  'editor-text-color'
 ]);
 
 const SCREEN_INPUTS = Object.freeze([
@@ -17,14 +15,28 @@ const SCREEN_INPUTS = Object.freeze([
   'editor-active'
 ]);
 
+function fontScaleValue() {
+  const number = element('editor-font-scale-number');
+  const range = element('editor-font-scale');
+  return number?.value || range?.value || '100';
+}
+
+function syncFontScaleInputs(value) {
+  const normalized = normaliseEditorSettings({ font_scale_percent: value }).font_scale_percent;
+  const number = element('editor-font-scale-number');
+  const range = element('editor-font-scale');
+  if (number instanceof HTMLInputElement) number.value = String(normalized);
+  if (range instanceof HTMLInputElement) range.value = String(normalized);
+  return normalized;
+}
+
 export function readEditorSettings(baseSettings = {}) {
   return normaliseEditorSettings({
     ...baseSettings,
     background_color: element('editor-background-color').value,
     accent_color: element('editor-accent-color').value,
     text_color: element('editor-text-color').value,
-    font_scale: element('editor-font-scale').value,
-    table_width: element('editor-table-width').value
+    font_scale_percent: fontScaleValue()
   });
 }
 
@@ -33,8 +45,7 @@ export function writeEditorSettings(settings) {
   element('editor-background-color').value = normalized.background_color;
   element('editor-accent-color').value = normalized.accent_color;
   element('editor-text-color').value = normalized.text_color;
-  element('editor-font-scale').value = normalized.font_scale;
-  element('editor-table-width').value = normalized.table_width;
+  syncFontScaleInputs(normalized.font_scale_percent);
   return normalized;
 }
 
@@ -68,10 +79,22 @@ export function syncDeliveryControls(screen, editorState) {
 }
 
 export function bindSettingsProperties(editorState, onChange) {
-  SETTINGS_INPUTS.forEach((id) => element(id)?.addEventListener('input', () => {
+  const apply = () => {
     updateSettings(editorState, readEditorSettings(editorState.settings));
     onChange?.();
-  }));
+  };
+  SETTINGS_INPUTS.forEach((id) => element(id)?.addEventListener('input', apply));
+
+  const range = element('editor-font-scale');
+  const number = element('editor-font-scale-number');
+  range?.addEventListener('input', () => {
+    syncFontScaleInputs(range.value);
+    apply();
+  });
+  number?.addEventListener('input', () => {
+    syncFontScaleInputs(number.value);
+    apply();
+  });
 }
 
 export function bindScreenProperties(editorState, onChange) {
