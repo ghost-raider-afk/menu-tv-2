@@ -10,6 +10,7 @@ export function createAuthRouter({ store, config }) {
   const dummyHash = hashPassword(DUMMY_LOGIN_PASSWORD);
   const loginLimiter = createLoginLimiter({
     maxAttempts: config.loginMaxAttempts,
+    ipMaxAttempts: config.loginIpMaxAttempts,
     windowMinutes: config.loginWindowMinutes,
     maxEntries: config.loginLimiterMaxEntries
   });
