@@ -4,21 +4,21 @@ import test from 'node:test';
 import sharp from 'sharp';
 import { createPublishService } from '../src/services/publish-service.js';
 
-const config = Object.freeze({ imageMaxPixels: 40000000 });
+const config = { imageMaxPixels: 40_000_000 };
 
 async function jpegFor(width, height) {
   return sharp({
-    create: { width, height, channels: 3, background: { r: 20, g: 30, b: 40 } }
-  }).jpeg({ quality: 85 }).toBuffer();
+    create: { width, height, channels: 3, background: { r: 16, g: 24, b: 40 } }
+  }).jpeg({ quality: 80 }).toBuffer();
 }
 
 test('staged JPEG is bound to the exact current draft revision', async () => {
-  const bytes = await jpegFor(320, 180);
+  const bytes = await jpegFor(1920, 1080);
   const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
   let savedRevision = null;
   const removed = [];
   const store = {
-    async getScreen() { return { id: 7, resolution: '320×180', publication_pending_sha256: null, prepared_asset_key: '7-old.jpg' }; },
+    async getScreen() { return { id: 7, resolution: '1920×1080', publication_pending_sha256: null, prepared_asset_key: '7-old.jpg' }; },
     async getScreenDraft() { return { revision: 12 }; },
     async savePreparedAsset(_id, asset, revision) {
       savedRevision = revision;
@@ -37,11 +37,11 @@ test('staged JPEG is bound to the exact current draft revision', async () => {
 });
 
 test('staging race removes the new orphan when draft changed before DB commit', async () => {
-  const bytes = await jpegFor(320, 180);
+  const bytes = await jpegFor(1920, 1080);
   const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
   const removed = [];
   const store = {
-    async getScreen() { return { id: 8, resolution: '320×180', publication_pending_sha256: null, prepared_asset_key: null }; },
+    async getScreen() { return { id: 8, resolution: '1920×1080', publication_pending_sha256: null, prepared_asset_key: null }; },
     async getScreenDraft() { return { revision: 3 }; },
     async savePreparedAsset() { return null; }
   };
