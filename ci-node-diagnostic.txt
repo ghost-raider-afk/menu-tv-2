@@ -1,0 +1,115 @@
+HEAD=9237c7d7e3187be14907b0596f605bc647bd82d6
+
+added 114 packages, and audited 115 packages in 2s
+
+36 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+npm_ci_status=0
+
+> menu-tv-2@0.1.0 check
+> npm run build && npm test
+
+
+> menu-tv-2@0.1.0 build
+> find src -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+
+
+> menu-tv-2@0.1.0 test
+> node --test
+
+✔ public liveness/readiness, visual default and protected session work (321.74169ms)
+✔ locations, screens and templates persist through modular PostgreSQL repositories (174.338059ms)
+✔ catalogue draft uses revision locking and preserves required linkage and prices (164.756144ms)
+{"timestamp":"2026-08-19T05:54:59.030Z","level":"error","message":"HTTP request failed","method":"POST","path":"/api/screens/3/publish","actor":"admin","error":{"name":"Error","message":"column \"prepared_draft_revision\" does not exist\n\n🐜 This seems to be an execution error, which means that your request syntax seems okay,\n    but the resulting statement cannot be executed → Probably not a pg-mem error.\n\n*️⃣ Failed SQL statement: UPDATE screens SET publication_pending_sha256 = prepared_asset_sha256, publication_started_at = '2026-08-19T05:54:59.027Z', updated_at = '2026-08-19T05:54:59.027Z'\n         WHERE id = '3' AND publication_pending_sha256 IS NULL\n           AND prepared_asset_key IS NOT NULL AND prepared_asset_sha256 = '7dc2e98844a4f8164d5aa038b5a6f148edd72c081b0b1a48350e48c474f4279a'\n           AND prepared_draft_revision IS NOT NULL\n           AND EXISTS (SELECT 1 FROM screen_drafts d WHERE d.screen_id = '3' AND d.revision = prepared_draft_revision);\n\n👉 You can file an issue at https://github.com/oguimbal/pg-mem along with a way to reproduce this error (if you can), and  the stacktrace:\n\n","stack":"Error: column \"prepared_draft_revision\" does not exist\n\n🐜 This seems to be an execution error, which means that your request syntax seems okay,\n    but the resulting statement cannot be executed → Probably not a pg-mem error.\n\n*️⃣ Failed SQL statement: UPDATE screens SET publication_pending_sha256 = prepared_asset_sha256, publication_started_at = '2026-08-19T05:54:59.027Z', updated_at = '2026-08-19T05:54:59.027Z'\n         WHERE id = '3' AND publication_pending_sha256 IS NULL\n           AND prepared_asset_key IS NOT NULL AND prepared_asset_sha256 = '7dc2e98844a4f8164d5aa038b5a6f148edd72c081b0b1a48350e48c474f4279a'\n           AND prepared_draft_revision IS NOT NULL\n           AND EXISTS (SELECT 1 FROM screen_drafts d WHERE d.screen_id = '3' AND d.revision = prepared_draft_revision);\n\n👉 You can file an issue at https://github.com/oguimbal/pg-mem along with a way to reproduce this error (if you can), and  the stacktrace:\n\n\n    at _buildValueReal (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1528:19)\n    at _buildValue (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1488:11)\n    at buildBinary (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1699:22)\n    at _buildValueReal (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1508:20)\n    at _buildValue (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1488:11)\n    at buildBinary (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1699:22)\n    at _buildValueReal (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1508:20)\n    at _buildValue (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1488:11)\n    at buildValue (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1461:17)\n    at /home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:12633:59"}}
+✖ SFTP access, validated JPEG staging and recoverable publication work through service boundary (157.556643ms)
+✔ profile, site settings and password change remain independent from SFTPGo users table (209.65539ms)
+✔ server is a thin application assembly layer (5.804166ms)
+✔ database facade lives only in db index and contains no domain SQL (5.377914ms)
+✔ SFTP facade lives only in sftp index and is composed from client storage and publisher (1.812669ms)
+✔ configuration has one modular entrypoint and no legacy config file (2.568205ms)
+✔ fresh PostgreSQL schema uses TV Menu 1 visual default without overwriting a changed accent (0.923657ms)
+✔ runtime limits are controlled by environment values (1.959525ms)
+✔ runtime config refuses missing env values instead of using code fallbacks (0.649872ms)
+✔ runtime booleans must be explicit true or false (0.410442ms)
+✔ generated SFTP password respects configured length and character classes (0.827086ms)
+✔ shell uses dynamic viewport height and explicit layer tokens (7.279197ms)
+✔ hidden switches expose a keyboard focus indicator (2.674697ms)
+✔ preview aspect ratio is driven by monitor resolution and table has one canonical SVG owner (3.220745ms)
+✔ preview and final image share the exact canonical SVG and fit logic (4.88668ms)
+✔ site accent derives contrast colors instead of reusing arbitrary accent as text (1.43529ms)
+✔ transaction commits work performed through repositories bound to one acquired client (1.546747ms)
+✔ transaction always rolls back and releases the same client after a later failure (0.753809ms)
+✔ all pages use the single final CSS entrypoint and contain no legacy shell (13.932701ms)
+✔ CSS architecture has one permanent entrypoint and TV Menu 1 identity tokens (3.906101ms)
+✔ shell is composed from dedicated permanent components (1.603612ms)
+✔ menu editor owns one professional semantic table and one canonical reference renderer (5.923584ms)
+✔ legacy frontend files are physically absent (2.504302ms)
+✔ frontend modules resolve as a complete ES module graph (40.944114ms)
+✔ image inspector reads dimensions from real JPEG and PNG files (49.124128ms)
+✔ screen JPEG is fully decoded and must exactly match monitor resolution (51.335691ms)
+✔ structurally plausible but truncated image is rejected by full decoder (5.553119ms)
+✔ image limits reject decompression-bomb dimensions before decoding tiny payload (0.461751ms)
+✔ positive ids reject trailing characters and unsafe integers (1.726607ms)
+✔ site refresh interval rejects numeric prefixes with junk suffixes (33.103825ms)
+✔ current password is verified as entered while complexity applies only to the new password (0.491557ms)
+✔ environment integer parser rejects partial numeric strings (1.207288ms)
+✔ login limiter blocks after configured number of failures and resets on success (1.520958ms)
+✔ canonical table geometry is locked to the supplied 2048x1152 reference (4.845639ms)
+✔ one canonical SVG contains sections, producer and both price columns (5.700695ms)
+✔ font scale automatically reduces to fit but respects manual maximum (1.026948ms)
+✔ menu that cannot fit even at minimum scale is explicitly rejected by layout (0.756002ms)
+✔ legacy menu settings are migrated once into canonical font scale percent (88.169148ms)
+✔ menu settings contract stores only canonical renderer fields (1.990532ms)
+✔ menu font scale has one validated range (0.698867ms)
+✔ client cannot inject arbitrary template asset URL (0.270745ms)
+✔ staged JPEG is bound to the exact current draft revision (48.390453ms)
+✔ staging race removes the new orphan when draft changed before DB commit (30.032609ms)
+✔ pending publication is recovered by target SHA without rewriting the file (0.904435ms)
+✔ SFTPGo management requests fail with a bounded timeout (27.090362ms)
+✔ staging cleanup removes only unreferenced keys (10.249428ms)
+✔ unsafe staging keys are rejected before any filesystem access (2.315068ms)
+✔ failed database update removes only the new site asset and keeps the previous file (26.115381ms)
+✔ successful site asset update switches to a unique file then removes the previous asset (22.235809ms)
+✔ canonical table geometry is locked to the supplied 2048x1152 reference (1.87561ms)
+✔ reference row set exactly fills the reference table at 100 percent (4.094854ms)
+✔ overflow automatically reduces scale while preserving exact horizontal reference columns (2.766414ms)
+✔ template background replacement preserves assets referenced by saved screen drafts (89.745596ms)
+✔ editor commands mutate only Editor State and track dirty revision (1.15468ms)
+✔ template application replaces editor rows/settings locally (0.848261ms)
+✔ renderer model filters disabled rows and respects arbitrary monitor aspect ratio (0.45399ms)
+✔ template background survives settings normalization and uses canonical defaults (0.430555ms)
+✔ canonical table keeps prices separate and places producer next to product name (2.113737ms)
+✔ board geometry is locked to the supplied reference and leaves artwork on the right (0.321282ms)
+✔ automatic font fitting reduces scale and refuses silent clipping (0.929663ms)
+✔ shared application errors expose stable HTTP status values (1.14124ms)
+ℹ tests 64
+ℹ suites 0
+ℹ pass 63
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1667.33735
+
+✖ failing tests:
+
+test at tests/api.test.js:263:1
+✖ SFTP access, validated JPEG staging and recoverable publication work through service boundary (157.556643ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  500 !== 200
+  
+      at TestContext.<anonymous> (file:///home/runner/work/menu-tv-2/menu-tv-2/tests/api.test.js:311:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 500,
+    expected: 200,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+npm_check_status=1
