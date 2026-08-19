@@ -20,8 +20,10 @@ export function optionalText(value, field, { max = 300 } = {}) {
 }
 
 export function positiveId(value, field) {
-  const id = Number.parseInt(value, 10);
-  if (!Number.isInteger(id) || id < 1) throw new ValidationError(`Поле «${field}» должно быть положительным целым числом.`);
+  const source = typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : '';
+  if (!/^[1-9]\d*$/.test(source)) throw new ValidationError(`Поле «${field}» должно быть положительным целым числом.`);
+  const id = Number(source);
+  if (!Number.isSafeInteger(id) || id < 1) throw new ValidationError(`Поле «${field}» должно быть положительным целым числом.`);
   return id;
 }
 
@@ -108,9 +110,13 @@ export async function menuDraftInput(body, store, maxBytes) {
   if (!Array.isArray(body.rows)) throw new ValidationError('Меню должно содержать список строк.');
   const products = new Map((await store.listProducts()).map((item) => [item.id, item]));
   const packaging = new Map((await store.listPackaging()).map((item) => [item.id, item]));
+  const usedIds = new Set();
   const rows = body.rows.map((row, index) => {
     const kind = row?.kind;
-    const id = typeof row?.id === 'string' && row.id.length <= 120 ? row.id : `row-${index + 1}`;
+    const candidateId = typeof row?.id === 'string' && row.id.length <= 120 && row.id.length > 0 ? row.id : `row-${index + 1}`;
+    if (usedIds.has(candidateId)) throw new ValidationError('Идентификаторы строк меню должны быть уникальными.');
+    usedIds.add(candidateId);
+    const id = candidateId;
     if (kind === 'section') return { id, kind, name: requireText(row.name, 'Название раздела', { max: 100 }), enabled: row.enabled !== false };
     if (kind === 'item') {
       const product = products.get(positiveId(row.product_id ?? row.productId, 'Продукция'));
@@ -178,8 +184,14 @@ export function siteSettingsInput(body, config) {
   catch { throw new ValidationError('Укажите существующий часовой пояс в формате Europe/Moscow.'); }
   const date_format = requireText(body.date_format, 'date_format', { max: 16 });
   if (!VALID_DATE_FORMATS.has(date_format)) throw new ValidationError('Формат даты выбран неверно.');
-  const dashboard_refresh_seconds = Number.parseInt(body.dashboard_refresh_seconds, 10);
-  if (!Number.isInteger(dashboard_refresh_seconds) || dashboard_refresh_seconds < config.dashboardRefreshMinSeconds || dashboard_refresh_seconds > config.dashboardRefreshMaxSeconds) {
+  const refreshSource = typeof body.dashboard_refresh_seconds === 'number'
+    ? String(body.dashboard_refresh_seconds)
+    : typeof body.dashboard_refresh_seconds === 'string' ? body.dashboard_refresh_seconds.trim() : '';
+  if (!/^\d+$/.test(refreshSource)) {
+    throw new ValidationError(`Интервал обновления должен быть от ${config.dashboardRefreshMinSeconds} до ${config.dashboardRefreshMaxSeconds} секунд.`);
+  }
+  const dashboard_refresh_seconds = Number(refreshSource);
+  if (!Number.isSafeInteger(dashboard_refresh_seconds) || dashboard_refresh_seconds < config.dashboardRefreshMinSeconds || dashboard_refresh_seconds > config.dashboardRefreshMaxSeconds) {
     throw new ValidationError(`Интервал обновления должен быть от ${config.dashboardRefreshMinSeconds} до ${config.dashboardRefreshMaxSeconds} секунд.`);
   }
   const default_screen_resolution = resolutionInput(body.default_screen_resolution, 'default_screen_resolution', {
