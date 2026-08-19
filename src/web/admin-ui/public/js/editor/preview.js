@@ -8,6 +8,14 @@ function textNode(tag, className, text) {
   return node;
 }
 
+function applyPreviewTypography(target, layout) {
+  const svg = target.querySelector('svg.menu-table-svg');
+  if (!(svg instanceof SVGElement)) return;
+  svg.style.fontFamily = layout.typography.family;
+  svg.style.fontWeight = String(layout.typography.weightFloor || 400);
+  svg.dataset.fontKey = layout.typography.key;
+}
+
 export function renderPreview(editorState, { screen, products, packaging, target }) {
   if (!target) return null;
   const resolution = parseResolution(screen?.resolution);
@@ -32,8 +40,10 @@ export function renderPreview(editorState, { screen, products, packaging, target
   target.style.aspectRatio = `${model.viewport.width} / ${model.viewport.height}`;
   target.dataset.menuFits = layout.vertical.fits ? 'true' : 'false';
   target.dataset.fontScaleEffective = String(layout.vertical.effectivePercent);
+  target.dataset.fontKey = layout.typography.key;
   target.classList.toggle('is-overflowing', !layout.vertical.fits);
   target.innerHTML = buildTableSvg(model, lines, layout);
+  applyPreviewTypography(target, layout);
 
   return { model, lines, layout };
 }
