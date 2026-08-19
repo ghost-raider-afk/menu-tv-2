@@ -38,7 +38,7 @@ test('shell is composed from dedicated permanent components', async () => {
   assert.match(navigation, /Тара/);
 });
 
-test('menu editor owns one canonical reference-geometry SVG table', async () => {
+test('menu editor owns one professional semantic table and one canonical reference renderer', async () => {
   const [rows, preview, finalImage, renderer, editorCss, editorHtml, tablesCss, templatesHtml] = await Promise.all([
     read('js/editor/rows.js'),
     read('js/editor/preview.js'),
@@ -49,9 +49,11 @@ test('menu editor owns one canonical reference-geometry SVG table', async () => 
     read('css/tables.css'),
     read('templates.html')
   ]);
-  assert.match(rows, /editor-menu-table-head/);
-  assert.match(rows, /'1 л'/);
-  assert.match(rows, /'1,5 л'/);
+  assert.match(rows, /editor-menu-editor-table/);
+  assert.match(rows, /<th>Производитель<\/th>/);
+  assert.match(rows, /<th>1,0 л<\/th>/);
+  assert.match(rows, /<th>1,5 л<\/th>/);
+  assert.doesNotMatch(rows, /editor-menu-table-head/);
   assert.match(preview, /buildTableSvg/);
   assert.match(finalImage, /buildTableSvg/);
   assert.match(renderer, /producer: product\?\.producer/);
@@ -59,7 +61,10 @@ test('menu editor owns one canonical reference-geometry SVG table', async () => 
   assert.match(renderer, /tableRight: 1605/);
   assert.match(renderer, /primaryBoundary: 1231/);
   assert.match(renderer, /secondaryBoundary: 1417/);
+  assert.match(renderer, /sectionGap: 15/);
   assert.match(renderer, /viewBox="0 0 \$\{MENU_REFERENCE\.width\} \$\{MENU_REFERENCE\.height\}"/);
+  assert.match(editorCss, /\.editor-menu-editor-table/);
+  assert.match(editorCss, /\.editor-menu-table-scroll/);
   assert.match(editorCss, /\.menu-table-svg/);
   assert.doesNotMatch(editorCss, /\.tv-board-table/);
   assert.match(editorCss, /\.editor-main-column\{display:grid;min-width:0;gap:0/);
