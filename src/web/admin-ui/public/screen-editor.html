@@ -12,7 +12,7 @@
     <div class="app-shell">
       <div class="app-content">
         <main class="main-content editor-content">
-          <div class="page-heading"><p class="eyebrow">МОНИТОР</p><h1>Редактор меню</h1><p>Меню собирается из общей базы продукции и тары. Изменения сохраняются только кнопкой «Сохранить монитор и меню».</p></div>
+          <div class="page-heading"><p class="eyebrow">МОНИТОР</p><h1>Редактор меню</h1><p>Меню собирается из общей базы продукции и тары. Первый раздел является верхней шапкой таблицы.</p></div>
           <form id="screen-editor-form" class="editor-workspace">
             <div class="editor-main-column">
               <section class="settings-card editor-menu-card">
@@ -20,7 +20,10 @@
                 <p class="muted-copy">Цена продукции и тары берётся из каталога и не редактируется здесь.</p>
                 <div class="editor-menu-rows" id="editor-menu-rows"></div><p class="empty-state" id="editor-menu-empty">В меню ещё нет строк.</p>
               </section>
-              <section class="settings-card editor-preview-card"><div class="editor-menu-preview" id="editor-menu-preview"></div></section>
+              <section class="settings-card editor-preview-card">
+                <div class="editor-menu-preview" id="editor-menu-preview"></div>
+                <p class="editor-layout-warning is-hidden" id="editor-layout-warning" role="status"></p>
+              </section>
             </div>
             <aside class="editor-side">
               <section class="settings-card">
@@ -37,7 +40,6 @@
                 <div class="card-heading"><div><p class="eyebrow">ШАБЛОН</p><h2>Оформление</h2></div></div>
                 <div class="template-apply"><label class="field"><span>Использовать шаблон</span><select id="editor-template"></select></label><button class="button button-secondary" id="editor-template-apply" type="button">Применить</button><p class="template-current">Сейчас: <strong id="editor-template-current">—</strong></p></div>
                 <div class="form-grid">
-                  <label class="field field-full"><span>Заголовок меню</span><input id="editor-menu-title" maxlength="80" placeholder="Например, Разливное пиво" /></label>
                   <label class="field"><span>Фон</span><input id="editor-background-color" type="color" /></label>
                   <label class="field"><span>Акцент</span><input id="editor-accent-color" type="color" /></label>
                   <label class="field"><span>Основной текст</span><input id="editor-text-color" type="color" /></label>
@@ -48,9 +50,10 @@
               <section class="settings-card screen-delivery-card">
                 <div class="card-heading"><div><p class="eyebrow">ДОСТАВКА</p><h2>JPEG для телевизора</h2></div></div>
                 <p class="delivery-path" id="editor-sftp-path">—</p>
+                <p class="draft-state" id="editor-dirty-state">Загрузка данных…</p>
                 <div class="delivery-actions"><input id="editor-source-file" type="file" accept="image/jpeg" /><button class="button button-secondary" id="editor-upload" type="button">Загрузить JPEG вручную</button><button class="button button-primary" id="editor-publish" type="button">Опубликовать</button></div>
               </section>
-              <p class="form-message is-hidden" id="screen-editor-message" role="status"></p>
+              <p class="form-message is-hidden" id="screen-editor-message" role="status" aria-live="polite"></p>
               <div class="form-actions"><button class="button button-primary button-wide" id="editor-save" type="submit">Сохранить монитор и меню</button></div>
             </aside>
           </form>
