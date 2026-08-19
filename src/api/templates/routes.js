@@ -1,19 +1,23 @@
 import express from 'express';
 import { positiveId, templateInput } from '../../contracts/input.js';
+import { menuSettingsInput } from '../../contracts/menu-settings.js';
 import { cleanupTemplateBackground, removeTemplateBackground, replaceTemplateBackground } from '../../services/template-assets-service.js';
 import { activity, notFound } from '../helpers.js';
 
-function withoutClientAssetMetadata(input) {
-  const settings = { ...(input.settings || {}) };
-  delete settings.background_image_url;
-  return { ...input, settings };
+function canonicalTemplateInput(body, { backgroundImageUrl = '' } = {}) {
+  const input = templateInput(body);
+  input.settings = menuSettingsInput({
+    ...(input.settings || {}),
+    background_image_url: backgroundImageUrl
+  }, { allowBackgroundImage: Boolean(backgroundImageUrl) });
+  return input;
 }
 
 export function createTemplatesRouter({ store, config }) {
   const router = express.Router();
   router.get('/', async (_request, response) => response.json(await store.listTemplates()));
   router.post('/', async (request, response) => {
-    const template = await store.createTemplate(withoutClientAssetMetadata(templateInput(request.body)));
+    const template = await store.createTemplate(canonicalTemplateInput(request.body));
     await activity(store, request, { action: 'template.created', entity_type: 'template', entity_id: template.id, message: `Создан шаблон «${template.name}».` });
     response.status(201).json(template);
   });
@@ -21,8 +25,7 @@ export function createTemplatesRouter({ store, config }) {
     const id = positiveId(request.params.id, 'id');
     const existing = await store.getTemplate(id);
     if (!existing) throw notFound();
-    const input = withoutClientAssetMetadata(templateInput(request.body));
-    input.settings.background_image_url = existing.settings?.background_image_url || '';
+    const input = canonicalTemplateInput(request.body, { backgroundImageUrl: existing.settings?.background_image_url || '' });
     const record = await store.updateTemplate(id, input);
     if (!record) throw notFound();
     await activity(store, request, { action: 'template.updated', entity_type: 'template', entity_id: record.id, message: `Обновлён шаблон «${record.name}».` });
