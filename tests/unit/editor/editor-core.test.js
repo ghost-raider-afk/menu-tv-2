@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createEditorState, markEditorSaved } from '../../../src/web/admin-ui/public/js/editor/state.js';
 import { addRow, applyTemplate, moveRow, removeRow, updateRow } from '../../../src/web/admin-ui/public/js/editor/commands.js';
-import { buildDisplayLines, buildRenderModel, buildTableLayout } from '../../../src/web/admin-ui/public/js/editor/renderer.js';
+import { buildDisplayLines, buildRenderLayout, buildRenderModel, buildTableLayout, buildVerticalLayout } from '../../../src/web/admin-ui/public/js/editor/renderer.js';
 import { normaliseEditorSettings } from '../../../src/web/admin-ui/public/js/editor/settings.js';
 
 test('editor commands mutate only Editor State and track dirty revision', () => {
@@ -12,6 +12,7 @@ test('editor commands mutate only Editor State and track dirty revision', () => 
   assert.equal(state.rows.length, 2);
   assert.equal(state.dirty, true);
   assert.equal(state.revision, 2);
+  assert.equal(state.draftRevision, 0);
 
   updateRow(state, 'item-1', { promotion: true });
   assert.equal(state.rows[1].promotion, true);
@@ -37,17 +38,17 @@ test('template application replaces editor rows/settings locally', () => {
   assert.equal(state.dirty, true);
 });
 
-test('renderer model filters disabled rows and keeps 16:9 default viewport', () => {
+test('renderer model filters disabled rows and respects arbitrary monitor aspect ratio', () => {
   const state = createEditorState({
     rows: [
       { id: 'a', kind: 'section', name: 'A', enabled: true },
       { id: 'b', kind: 'section', name: 'B', enabled: false }
     ]
   });
-  const model = buildRenderModel(state);
-  assert.equal(model.viewport.width, 1920);
-  assert.equal(model.viewport.height, 1080);
-  assert.equal(model.viewport.aspectRatio, 16 / 9);
+  const model = buildRenderModel(state, { width: 1024, height: 768 });
+  assert.equal(model.viewport.width, 1024);
+  assert.equal(model.viewport.height, 768);
+  assert.equal(model.viewport.aspectRatio, 4 / 3);
   assert.deepEqual(model.rows.map((row) => row.id), ['a']);
 });
 
@@ -89,4 +90,23 @@ test('board table is left aligned and leaves the right side for template artwork
   assert.equal(layout.tableWidth, 1498);
   assert.ok(layout.right < 1920 * 0.8);
   assert.ok(layout.primaryBoundary < layout.secondaryBoundary);
+});
+
+test('vertical layout scales font and refuses silent clipping', () => {
+  const small = buildVerticalLayout(1080, 18, 'small');
+  const medium = buildVerticalLayout(1080, 18, 'medium');
+  const large = buildVerticalLayout(1080, 18, 'large');
+  assert.ok(small.minRowHeight < medium.minRowHeight);
+  assert.ok(medium.minRowHeight < large.minRowHeight);
+  assert.equal(small.fits, true);
+  assert.equal(large.fits, false);
+
+  const state = createEditorState({
+    settings: { font_scale: 'medium', table_width: 'normal' },
+    rows: Array.from({ length: 30 }, (_, index) => ({ id: `section-${index}`, kind: 'section', name: `Раздел ${index}`, enabled: true }))
+  });
+  const model = buildRenderModel(state, { width: 1920, height: 1080 });
+  const lines = buildDisplayLines(model);
+  const layout = buildRenderLayout(model, lines);
+  assert.equal(layout.vertical.fits, false);
 });
