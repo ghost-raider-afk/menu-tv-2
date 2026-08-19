@@ -42,7 +42,7 @@ async function initialiseStore(store, config) {
 async function recoverRuntimeState(store, sftp, config) {
   const requiredMethods = ['publishedInfo', 'removeStaged', 'cleanupStaging'];
   if (!requiredMethods.every((method) => typeof sftp?.[method] === 'function')) return;
-  const publish = createPublishService({ store, sftp });
+  const publish = createPublishService({ store, sftp, config });
   try {
     const recovery = await publish.reconcilePending();
     if (recovery.recovered || recovery.unresolved) logger.info('Publication recovery completed', recovery);
