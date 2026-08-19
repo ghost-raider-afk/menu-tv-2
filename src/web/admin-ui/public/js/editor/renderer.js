@@ -10,14 +10,24 @@ export const MENU_TABLE_STYLE = Object.freeze({
   packagingBackground: '#121820',
   promotion: '#D92D35',
   leftMarginFactor: 0.008,
+  topFactor: 0.055,
+  bottomFactor: 0.12,
   nameColumnFactor: 0.76,
   primaryPriceFactor: 0.12,
-  secondaryPriceFactor: 0.12
+  secondaryPriceFactor: 0.12,
+  minRowHeight: 38,
+  maxRowHeight: 58
 });
+
+const FONT_SCALE = Object.freeze({ small: 0.88, medium: 1, large: 1.15 });
 
 function numeric(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function enabledRows(rows) {
@@ -26,6 +36,10 @@ function enabledRows(rows) {
 
 function recordById(records, id) {
   return records.find((record) => Number(record.id) === Number(id));
+}
+
+export function menuFontScale(value) {
+  return FONT_SCALE[value] || 1;
 }
 
 export function tableWidthFactor(value) {
@@ -45,6 +59,32 @@ export function buildTableLayout(viewportWidth, tableWidthSetting = 'normal') {
     secondaryBoundary,
     primaryCenter: primaryBoundary + Math.round(tableWidth * MENU_TABLE_STYLE.primaryPriceFactor / 2),
     secondaryCenter: secondaryBoundary + Math.round(tableWidth * MENU_TABLE_STYLE.secondaryPriceFactor / 2)
+  });
+}
+
+export function buildVerticalLayout(viewportHeight, lineCount, fontScaleSetting = 'medium') {
+  const height = Math.max(1, Math.round(numeric(viewportHeight, DEFAULT_HEIGHT)));
+  const count = Math.max(1, Number.isInteger(lineCount) ? lineCount : 1);
+  const scale = menuFontScale(fontScaleSetting);
+  const top = Math.round(height * MENU_TABLE_STYLE.topFactor);
+  const bottom = Math.round(height * MENU_TABLE_STYLE.bottomFactor);
+  const availableHeight = Math.max(1, height - top - bottom);
+  const minRowHeight = Math.max(1, Math.round(MENU_TABLE_STYLE.minRowHeight * scale));
+  const maxRowHeight = Math.max(minRowHeight, Math.round(MENU_TABLE_STYLE.maxRowHeight * scale));
+  const naturalHeight = Math.floor(availableHeight / count);
+  const fits = naturalHeight >= minRowHeight;
+  const rowHeight = clamp(naturalHeight, minRowHeight, maxRowHeight);
+  return Object.freeze({
+    top,
+    bottom,
+    availableHeight,
+    rowHeight,
+    minRowHeight,
+    maxRowHeight,
+    usedHeight: rowHeight * count,
+    lineCount: count,
+    fits,
+    scale
   });
 }
 
@@ -141,6 +181,13 @@ export function buildDisplayLines(model, { products = [], packaging = [], fallba
   }
 
   return Object.freeze(lines);
+}
+
+export function buildRenderLayout(model, lines) {
+  return Object.freeze({
+    horizontal: buildTableLayout(model.viewport.width, model.settings.table_width),
+    vertical: buildVerticalLayout(model.viewport.height, lines.length, model.settings.font_scale)
+  });
 }
 
 export function renderFingerprint(model) {
