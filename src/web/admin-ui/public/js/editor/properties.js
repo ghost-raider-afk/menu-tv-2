@@ -5,7 +5,8 @@ import { normaliseEditorSettings } from './settings.js';
 const SETTINGS_INPUTS = Object.freeze([
   'editor-background-color',
   'editor-accent-color',
-  'editor-text-color'
+  'editor-text-color',
+  'editor-font-family'
 ]);
 
 const SCREEN_INPUTS = Object.freeze([
@@ -36,7 +37,8 @@ export function readEditorSettings(baseSettings = {}) {
     background_color: element('editor-background-color').value,
     accent_color: element('editor-accent-color').value,
     text_color: element('editor-text-color').value,
-    font_scale_percent: fontScaleValue()
+    font_scale_percent: fontScaleValue(),
+    font_family: element('editor-font-family').value
   });
 }
 
@@ -45,6 +47,7 @@ export function writeEditorSettings(settings) {
   element('editor-background-color').value = normalized.background_color;
   element('editor-accent-color').value = normalized.accent_color;
   element('editor-text-color').value = normalized.text_color;
+  element('editor-font-family').value = normalized.font_family;
   syncFontScaleInputs(normalized.font_scale_percent);
   return normalized;
 }
@@ -83,7 +86,11 @@ export function bindSettingsProperties(editorState, onChange) {
     updateSettings(editorState, readEditorSettings(editorState.settings));
     onChange?.();
   };
-  SETTINGS_INPUTS.forEach((id) => element(id)?.addEventListener('input', apply));
+  SETTINGS_INPUTS.forEach((id) => {
+    const target = element(id);
+    const eventName = target instanceof HTMLSelectElement ? 'change' : 'input';
+    target?.addEventListener(eventName, apply);
+  });
 
   const range = element('editor-font-scale');
   const number = element('editor-font-scale-number');

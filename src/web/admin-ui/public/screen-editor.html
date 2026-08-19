@@ -12,12 +12,12 @@
     <div class="app-shell">
       <div class="app-content">
         <main class="main-content editor-content">
-          <div class="page-heading"><p class="eyebrow">МОНИТОР</p><h1>Редактор меню</h1><p>Меню собирается из общей базы продукции и тары. Геометрия итоговой таблицы зафиксирована по эталону ТВ МЕНЮ1, а первый раздел является верхней шапкой таблицы.</p></div>
+          <div class="page-heading"><p class="eyebrow">МОНИТОР</p><h1>Редактор меню</h1><p>Меню собирается из общей базы продукции и тары. Геометрия итоговой таблицы следует стилю ТВ МЕНЮ1, а первый раздел является верхней шапкой таблицы.</p></div>
           <form id="screen-editor-form" class="editor-workspace">
             <div class="editor-main-column">
               <section class="settings-card editor-menu-card">
                 <div class="card-heading"><div><p class="eyebrow">СОДЕРЖИМОЕ</p><h2>Строки меню</h2></div><div class="editor-add-actions"><button class="button button-secondary" id="editor-add-section" type="button">+ Раздел</button><button class="button button-secondary" id="editor-add-item" type="button">+ Продукция</button><button class="button button-secondary" id="editor-add-packaging" type="button">+ Тара</button></div></div>
-                <p class="muted-copy">Цена продукции и тары берётся из каталога и не редактируется здесь. Производитель выводится компактно рядом с названием продукции.</p>
+                <p class="muted-copy">Цена и характеристики берутся из каталога. Вторая строка позиции формируется автоматически: производитель · светлое/тёмное · фильтрованное/нефильтрованное.</p>
                 <div class="editor-menu-rows" id="editor-menu-rows"></div><p class="empty-state" id="editor-menu-empty">В меню ещё нет строк.</p>
               </section>
               <section class="settings-card editor-preview-card">
@@ -52,6 +52,7 @@
                     <small id="editor-font-scale-effective">Фактически: 100%.</small>
                     <small>Если строк много, таблица автоматически уменьшает шрифт и высоту строк до вмещения. Здесь задаётся желаемый максимальный масштаб.</small>
                   </div>
+                  <label class="field field-full table-font-field"><span>Шрифт таблицы</span><select id="editor-font-family"><option value="arial-narrow">Arial Narrow</option><option value="tahoma-bold">Tahoma Bold</option><option value="arial">Arial</option><option value="dejavu-condensed">DejaVu Sans Condensed</option><option value="liberation-narrow">Liberation Sans Narrow</option><option value="system-sans">Системный sans-serif</option></select><small>Шрифт применяется одновременно к предпросмотру и итоговому JPEG.</small></label>
                 </div>
               </section>
               <section class="settings-card screen-delivery-card">

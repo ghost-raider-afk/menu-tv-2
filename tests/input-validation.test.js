@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadConfig } from '../src/config/index.js';
 import { positiveId, siteSettingsInput } from '../src/contracts/input.js';
+import { menuSettingsInput } from '../src/contracts/menu-settings.js';
 import { passwordChangeInput } from '../src/services/password-service.js';
 
 function config() {
@@ -46,6 +47,12 @@ test('site refresh interval rejects numeric prefixes with junk suffixes', () => 
   };
   assert.equal(siteSettingsInput({ ...base, dashboard_refresh_seconds: '30' }, config()).dashboard_refresh_seconds, 30);
   assert.throws(() => siteSettingsInput({ ...base, dashboard_refresh_seconds: '30seconds' }, config()), /Интервал обновления/);
+});
+
+test('table font uses a closed allowlist and includes Tahoma Bold', () => {
+  assert.equal(menuSettingsInput({ font_family: 'tahoma-bold' }).font_family, 'tahoma-bold');
+  assert.equal(menuSettingsInput({}).font_family, 'arial-narrow');
+  assert.throws(() => menuSettingsInput({ font_family: 'Comic Sans MS' }), /Шрифт таблицы/);
 });
 
 test('current password is verified as entered while complexity applies only to the new password', () => {

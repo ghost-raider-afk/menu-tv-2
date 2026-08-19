@@ -38,7 +38,7 @@ test('shell is composed from dedicated permanent components', async () => {
   assert.match(navigation, /Тара/);
 });
 
-test('menu editor owns one professional semantic table and one canonical reference renderer', async () => {
+test('menu editor owns one compact semantic table and one canonical renderer', async () => {
   const [rows, preview, finalImage, renderer, editorCss, editorHtml, tablesCss, templatesHtml] = await Promise.all([
     read('js/editor/rows.js'),
     read('js/editor/preview.js'),
@@ -50,32 +50,38 @@ test('menu editor owns one professional semantic table and one canonical referen
     read('templates.html')
   ]);
   assert.match(rows, /editor-menu-editor-table/);
-  assert.match(rows, /<th>Производитель<\/th>/);
-  assert.match(rows, /<th>1,0 л<\/th>/);
+  assert.match(rows, /<th>Данные из базы<\/th>/);
+  assert.match(rows, /<th>1 л<\/th>/);
   assert.match(rows, /<th>1,5 л<\/th>/);
   assert.doesNotMatch(rows, /editor-menu-table-head/);
   assert.match(preview, /buildTableSvg/);
   assert.match(finalImage, /buildTableSvg/);
-  assert.match(renderer, /producer: product\?\.producer/);
+  assert.match(renderer, /formatProductMetadata/);
+  assert.match(renderer, /beverageColorLabel/);
+  assert.match(renderer, /filtrationLabel/);
   assert.match(renderer, /tableX: 15/);
   assert.match(renderer, /tableRight: 1605/);
   assert.match(renderer, /primaryBoundary: 1231/);
   assert.match(renderer, /secondaryBoundary: 1417/);
-  assert.match(renderer, /sectionGap: 15/);
+  assert.match(renderer, /sectionGap: 10/);
   assert.match(renderer, /viewBox="0 0 \$\{MENU_REFERENCE\.width\} \$\{MENU_REFERENCE\.height\}"/);
   assert.match(editorCss, /\.editor-menu-editor-table/);
   assert.match(editorCss, /\.editor-menu-table-scroll/);
   assert.match(editorCss, /\.menu-table-svg/);
   assert.doesNotMatch(editorCss, /\.tv-board-table/);
+  assert.doesNotMatch(editorCss, /!important/);
   assert.match(editorCss, /\.editor-main-column\{display:grid;min-width:0;gap:0/);
   assert.match(editorCss, /\.editor-preview-card\{min-width:0;padding:0;border-top:0/);
   assert.match(editorHtml, /class="editor-main-column"[\s\S]*editor-menu-card[\s\S]*editor-preview-card/);
   assert.match(editorHtml, /id="editor-font-scale"/);
   assert.match(editorHtml, /id="editor-font-scale-number"/);
+  assert.match(editorHtml, /id="editor-font-family"/);
+  assert.match(editorHtml, />Tahoma Bold<\/option>/);
   assert.doesNotMatch(tablesCss, /menu-preview|editor-menu-table/);
   assert.match(templatesHtml, /id="template-background-file"/);
   assert.match(templatesHtml, /id="template-background-upload"/);
   assert.match(templatesHtml, /id="template-font-scale"/);
+  assert.match(templatesHtml, /id="template-font-family"/);
 });
 
 test('legacy frontend files are physically absent', async () => {

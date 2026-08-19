@@ -25,6 +25,7 @@ const EDITOR_LOADING_CONTROLS = Object.freeze([
   'editor-text-color',
   'editor-font-scale',
   'editor-font-scale-number',
+  'editor-font-family',
   'editor-add-section',
   'editor-add-item',
   'editor-add-packaging',

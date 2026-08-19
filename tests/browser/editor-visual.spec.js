@@ -23,7 +23,7 @@ async function createEditorFixture(page, { rows = 1 } = {}) {
       name: `БАВАРИЯ ПШЕНИЧНОЕ ${suffix}`,
       producer: 'ООО «Портал», п. Солнечный',
       characteristics: 'Светлое нефильтрованное',
-      strength: '4,6%',
+      strength: '4,6°',
       price_primary: '179',
       alcoholic: true,
       beverage_color: 'light',
@@ -51,7 +51,8 @@ async function createEditorFixture(page, { rows = 1 } = {}) {
         background_color: '#101828',
         accent_color: '#F4C915',
         text_color: '#F8FAFC',
-        font_scale_percent: 100
+        font_scale_percent: 100,
+        font_family: 'arial-narrow'
       },
       screen: {
         location_id: screen.location_id,
@@ -92,7 +93,8 @@ async function createReferenceDensityFixture(page) {
         background_color: '#101828',
         accent_color: '#F4C915',
         text_color: '#F8FAFC',
-        font_scale_percent: 100
+        font_scale_percent: 100,
+        font_family: 'arial-narrow'
       },
       screen: {
         location_id: screen.location_id,
@@ -109,7 +111,7 @@ async function createReferenceDensityFixture(page) {
 }
 
 for (const viewport of [{ width: 1920, height: 1080 }, { width: 1366, height: 768 }]) {
-  test(`editor keeps professional table usable at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+  test(`editor keeps compact professional table usable at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await login(page);
     const { screen } = await createEditorFixture(page, { rows: 4 });
@@ -118,8 +120,15 @@ for (const viewport of [{ width: 1920, height: 1080 }, { width: 1366, height: 76
     const table = page.locator('.editor-menu-editor-table');
     const scroll = page.locator('.editor-menu-table-scroll');
     await expect(table).toBeVisible();
-    await expect(table.getByRole('columnheader', { name: 'Производитель' })).toBeVisible();
+    await expect(table.getByRole('columnheader', { name: 'Данные из базы' })).toBeVisible();
     await expect(table.locator('tbody tr')).toHaveCount(5);
+
+    const itemRow = table.locator('tbody tr').nth(1);
+    const itemBox = await itemRow.boundingBox();
+    expect(itemBox).not.toBeNull();
+    expect(itemBox.height).toBeLessThanOrEqual(34);
+    const selectFontSize = await itemRow.locator('select').evaluate((node) => getComputedStyle(node).fontSize);
+    expect(selectFontSize).toBe('11px');
 
     const dimensions = await scroll.evaluate((node) => ({ clientWidth: node.clientWidth, scrollWidth: node.scrollWidth }));
     expect(dimensions.clientWidth).toBeGreaterThan(500);
@@ -137,11 +146,15 @@ for (const viewport of [{ width: 1920, height: 1080 }, { width: 1366, height: 76
     expect(Math.abs(adjacency[1].y - (adjacency[0].y + adjacency[0].height))).toBeLessThanOrEqual(2);
 
     const preview = page.locator('#editor-menu-preview');
-    await expect(preview.locator('svg.menu-table-svg')).toBeVisible();
-    await expect(preview.locator('svg.menu-table-svg')).toHaveAttribute('viewBox', '0 0 2048 1152');
-    await expect(preview.locator('line[x1="1231"]')).toHaveCount(5);
-    await expect(preview.locator('line[x1="1417"]')).toHaveCount(5);
-    await expect(preview.locator('.producer').first()).toContainText('ООО «Портал»');
+    const svg = preview.locator('svg.menu-table-svg');
+    await expect(svg).toBeVisible();
+    await expect(svg).toHaveAttribute('viewBox', '0 0 2048 1152');
+    await expect(svg.locator('line[x1="1231"]')).toHaveCount(5);
+    await expect(svg.locator('line[x1="1417"]')).toHaveCount(5);
+    await expect(svg.locator('.item-name').first()).toContainText('4,6%');
+    await expect(svg.locator('.item-name').first()).not.toContainText('°');
+    await expect(svg.locator('.item-meta').first()).toContainText('ООО «Портал», п. Солнечный · светлое · нефильтрованное');
+    await expect(svg.locator('.table-section rect').first()).toHaveAttribute('rx', /[1-9]/);
 
     await test.info().attach(`editor-${viewport.width}x${viewport.height}.png`, {
       body: await page.screenshot({ fullPage: true }),
@@ -150,7 +163,7 @@ for (const viewport of [{ width: 1920, height: 1080 }, { width: 1366, height: 76
   });
 }
 
-test('reference density fills canonical table exactly at 100 percent', async ({ page }) => {
+test('reference density fits cleanly with two-line product typography', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await login(page);
   const { screen } = await createReferenceDensityFixture(page);
@@ -161,9 +174,17 @@ test('reference density fills canonical table exactly at 100 percent', async ({ 
   await expect(svg).toBeVisible();
   await expect(svg.locator('.table-section')).toHaveCount(3);
   await expect(svg.locator('.table-item')).toHaveCount(16);
-  await expect(preview).toHaveAttribute('data-font-scale-effective', '100');
-  await expect(page.locator('#editor-font-scale-effective')).toContainText('Фактически: 100%');
-  await expect(svg.locator('line[y1="1032"]')).toHaveCount(1);
+  const effective = Number(await preview.getAttribute('data-font-scale-effective'));
+  expect(effective).toBeLessThanOrEqual(100);
+  expect(effective).toBeGreaterThan(90);
+
+  const overlaps = await svg.locator('.table-item').evaluateAll((items) => items.map((item) => {
+    const title = item.querySelector('.item-name')?.getBBox();
+    const meta = item.querySelector('.item-meta')?.getBBox();
+    if (!title || !meta) return false;
+    return title.y + title.height > meta.y + 1;
+  }));
+  expect(overlaps.some(Boolean)).toBe(false);
 
   await test.info().attach('reference-density-1920x1080.png', {
     body: await page.screenshot({ fullPage: true }),
@@ -193,6 +214,19 @@ test('reference geometry, manual scale and automatic fitting use one SVG rendere
   const effective = Number(await preview.getAttribute('data-font-scale-effective'));
   expect(effective).toBeLessThanOrEqual(90);
   expect(effective).toBeGreaterThanOrEqual(55);
+});
+
+test('font selector updates preview through the canonical renderer', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await login(page);
+  const { screen } = await createEditorFixture(page, { rows: 3 });
+  await page.goto(`/screen-editor.html?id=${screen.id}`);
+
+  const font = page.locator('#editor-font-family');
+  await expect(font).toHaveValue('arial-narrow');
+  await font.selectOption('tahoma-bold');
+  await expect(page.locator('#editor-dirty-state')).toContainText('несохранённые изменения');
+  await expect(page.locator('svg.menu-table-svg')).toHaveAttribute('font-family', 'Tahoma, Arial, sans-serif');
 });
 
 test('screen property edits immediately update preview and block stale publication', async ({ page }) => {
