@@ -1,0 +1,258 @@
+name: check
+
+on:
+  push:
+    branches:
+      - main
+      - 'agent/**'
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  node-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run checks
+        run: npm run check
+
+  browser-visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_DB: menu_tv_2_e2e
+          POSTGRES_USER: menu_tv_2_e2e
+          POSTGRES_PASSWORD: ci-browser-postgres-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U menu_tv_2_e2e -d menu_tv_2_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_NAME: ТВ МЕНЮ
+      NODE_ENV: test
+      HOST: 127.0.0.1
+      PORT: '8080'
+      MENU_TV_2_DOMAIN: localhost
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: '5432'
+      POSTGRES_DB: menu_tv_2_e2e
+      POSTGRES_USER: menu_tv_2_e2e
+      POSTGRES_PASSWORD: ci-browser-postgres-password
+      POSTGRES_POOL_MAX: '5'
+      POSTGRES_CONNECTION_TIMEOUT_MS: '5000'
+      POSTGRES_IDLE_TIMEOUT_MS: '30000'
+      BOOTSTRAP_ADMIN_USERNAME: admin
+      BOOTSTRAP_ADMIN_PASSWORD: Browser-CI-Password1!
+      PASSWORD_MIN_LENGTH: '10'
+      PASSWORD_MAX_LENGTH: '32'
+      SESSION_SECRET: ci-browser-session-secret-0123456789012345678901234567890123456789
+      SESSION_TTL_HOURS: '12'
+      SECURE_COOKIES: 'false'
+      LOGIN_MAX_ATTEMPTS: '8'
+      LOGIN_IP_MAX_ATTEMPTS: '32'
+      LOGIN_WINDOW_MINUTES: '15'
+      LOGIN_LIMITER_MAX_ENTRIES: '500'
+      GENERATED_PASSWORD_LENGTH: '10'
+      JSON_BODY_MAX_BYTES: '65536'
+      MENU_DRAFT_MAX_BYTES: '49152'
+      SCREEN_SOURCE_MAX_BYTES: '12582912'
+      DASHBOARD_REFRESH_MIN_SECONDS: '15'
+      DASHBOARD_REFRESH_MAX_SECONDS: '300'
+      SCREEN_MAX_WIDTH: '1920'
+      SCREEN_MAX_HEIGHT: '1080'
+      IMAGE_MAX_PIXELS: '40000000'
+      SITE_ASSETS_ROOT: /tmp/menu-tv-2-browser-assets
+      SITE_LOGO_MAX_BYTES: '2097152'
+      SITE_FAVICON_MAX_BYTES: '524288'
+      TEMPLATE_BACKGROUND_MAX_BYTES: '12582912'
+      HEALTH_READINESS_CACHE_MS: '0'
+      SFTP_PUBLIC_HOST: localhost
+      SFTP_PORT: '2022'
+      SFTP_API_URL: http://127.0.0.1:18080
+      SFTP_API_TIMEOUT_MS: '1000'
+      SFTP_STORAGE_ROOT: /tmp/menu-tv-2-browser-sftp
+      SFTP_STAGING_MAX_AGE_HOURS: '24'
+      SFTP_ADMIN_USERNAME: browser_service
+      SFTP_ADMIN_PASSWORD: ci-browser-sftp-admin-password-0123456789
+      SEED_DEMO_DATA: 'false'
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
+      E2E_ADMIN_PASSWORD: Browser-CI-Password1!
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Start application
+        run: |
+          node src/server.js > /tmp/menu-tv-browser.log 2>&1 &
+          echo $! > /tmp/menu-tv-browser.pid
+          for attempt in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:8080/readyz >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/menu-tv-browser.log
+          exit 1
+      - name: Run browser and visual checks
+        run: npm run test:browser
+      - name: Upload browser report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+      - name: Show application log on failure
+        if: failure()
+        run: cat /tmp/menu-tv-browser.log || true
+      - name: Stop application
+        if: always()
+        run: test ! -f /tmp/menu-tv-browser.pid || kill "$(cat /tmp/menu-tv-browser.pid)" || true
+
+  clean-install-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check installer syntax
+        run: bash -n menu-tv-2.sh
+      - name: Check installer ref
+        run: |
+          TEST_REF="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          MENU_TV_REF="$TEST_REF" bash menu-tv-2.sh help | grep -F "Ветка/реф: $TEST_REF"
+          MENU_TV_REF="$TEST_REF" bash menu-tv-2.sh help | grep -F 'Версия скрипта: 1.1.13'
+      - name: Prepare clean-install environment
+        run: |
+          cp .env.example .env
+          sed -i 's|^MENU_TV_2_DOMAIN=.*|MENU_TV_2_DOMAIN=menu.example.test|' .env
+          sed -i 's|^SFTP_PUBLIC_HOST=.*|SFTP_PUBLIC_HOST=menu.example.test|' .env
+          sed -i 's|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=ci-postgres-password-0123456789|' .env
+          sed -i 's|^SESSION_SECRET=.*|SESSION_SECRET=ci-session-secret-0123456789012345678901234567890123456789|' .env
+          sed -i 's|^SFTP_ADMIN_PASSWORD=.*|SFTP_ADMIN_PASSWORD=ci-sftp-secret-0123456789012345678901234567890123456789|' .env
+          sed -i 's|^BOOTSTRAP_ADMIN_USERNAME=.*|BOOTSTRAP_ADMIN_USERNAME=admin|' .env
+          sed -i 's|^BOOTSTRAP_ADMIN_PASSWORD=.*|BOOTSTRAP_ADMIN_PASSWORD=Ci-Admin-Password1!|' .env
+          sed -i 's|^SECURE_COOKIES=.*|SECURE_COOKIES=false|' .env
+      - name: Validate Docker Compose
+        run: docker compose --env-file .env config -q
+      - name: Build production application image
+        run: docker build --pull -t menu-tv-2-ci .
+      - name: Start clean runtime stack
+        run: |
+          docker network create menu-tv-2-proxy
+          docker compose --project-name menu-tv-2-ci --env-file .env up -d --build --wait
+      - name: Smoke test application workflow
+        run: |
+          docker compose --project-name menu-tv-2-ci --env-file .env exec -T app node --input-type=module <<'NODE'
+          import sharp from 'sharp';
+
+          const base = 'http://127.0.0.1:8080';
+          const health = await fetch(`${base}/healthz`);
+          if (!health.ok || (await health.json()).service !== 'menu-tv-2.0') throw new Error('health check failed');
+          const ready = await fetch(`${base}/readyz`);
+          const readyBody = await ready.json();
+          if (!ready.ok || readyBody.status !== 'ready' || readyBody.service !== 'menu-tv-2.0') throw new Error('readiness check failed');
+
+          const cssResponse = await fetch(`${base}/css/index.css`);
+          const css = await cssResponse.text();
+          if (!cssResponse.ok || !css.includes('./shell.css') || !css.includes('./editor/editor.css') || /tv1/i.test(css)) throw new Error('final CSS entrypoint invalid');
+          const legacyCss = await fetch(`${base}/style.css`);
+          if (legacyCss.ok) throw new Error('legacy style.css is still served');
+
+          const loaderResponse = await fetch(`${base}/app.js`);
+          const loader = await loaderResponse.text();
+          if (!loaderResponse.ok || !loader.includes("import('/js/application.js')") || /tv1|style\.css/i.test(loader)) throw new Error('frontend loader invalid');
+
+          const login = await fetch(`${base}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: 'admin', password: 'Ci-Admin-Password1!' })
+          });
+          if (login.status !== 204) throw new Error(`login failed: ${login.status}`);
+          const setCookies = typeof login.headers.getSetCookie === 'function' ? login.headers.getSetCookie() : [login.headers.get('set-cookie')];
+          const sessionCookie = setCookies.flatMap((value) => String(value || '').split(/,(?=\s*menu_tv_)/)).find((value) => value.trim().startsWith('menu_tv_2_session='));
+          if (!sessionCookie) throw new Error('session cookie missing');
+          const cookie = sessionCookie.split(';', 1)[0].trim();
+          const jsonHeaders = { 'Content-Type': 'application/json', Cookie: cookie };
+
+          const templateResponse = await fetch(`${base}/api/templates`, {
+            method: 'POST', headers: jsonHeaders,
+            body: JSON.stringify({ name: 'CI шаблон', description: 'Проверка фона', active: true, settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC', font_scale_percent: 100 } })
+          });
+          if (templateResponse.status !== 201) throw new Error(`template create failed: ${templateResponse.status}`);
+          const template = await templateResponse.json();
+          const png = await sharp({ create: { width: 16, height: 16, channels: 4, background: { r: 16, g: 24, b: 40, alpha: 1 } } }).png().toBuffer();
+          const backgroundResponse = await fetch(`${base}/api/templates/${template.id}/background`, { method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/png' }, body: png });
+          if (!backgroundResponse.ok) throw new Error(`template background upload failed: ${backgroundResponse.status}`);
+          const templateWithBackground = await backgroundResponse.json();
+          const backgroundUrl = templateWithBackground.settings?.background_image_url;
+          if (!/^\/site-assets\/templates\/background-[0-9a-f-]{36}\.png$/i.test(backgroundUrl || '')) throw new Error('template background URL invalid');
+          const backgroundAsset = await fetch(`${base}${backgroundUrl}`);
+          if (!backgroundAsset.ok || Buffer.compare(Buffer.from(await backgroundAsset.arrayBuffer()), png) !== 0) throw new Error('template background asset not served');
+
+          const locationResponse = await fetch(`${base}/api/locations`, { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name: 'CI точка', address: 'CI' }) });
+          if (locationResponse.status !== 201) throw new Error(`location create failed: ${locationResponse.status}`);
+          const location = await locationResponse.json();
+          const screenResponse = await fetch(`${base}/api/locations/${location.id}/screens`, { method: 'POST', headers: { Cookie: cookie } });
+          if (screenResponse.status !== 201) throw new Error(`screen create failed: ${screenResponse.status}`);
+          const screen = await screenResponse.json();
+          const editorResponse = await fetch(`${base}/api/screens/${screen.id}/editor`, { headers: { Cookie: cookie } });
+          if (!editorResponse.ok) throw new Error(`editor load failed: ${editorResponse.status}`);
+          const editor = await editorResponse.json();
+          if (!Number.isInteger(Number(editor.draft?.revision)) || Number(editor.draft.revision) < 1) throw new Error('draft revision missing');
+
+          const draftPayload = {
+            revision: Number(editor.draft.revision),
+            rows: [{ id: 'ci-section', kind: 'section', name: 'CI раздел', enabled: true }],
+            settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC', font_scale_percent: 100 },
+            screen: { location_id: screen.location_id, name: screen.name, resolution: screen.resolution, status: screen.status, active: screen.active, template_id: template.id }
+          };
+          const draftSave = await fetch(`${base}/api/screens/${screen.id}/draft`, { method: 'PUT', headers: jsonHeaders, body: JSON.stringify(draftPayload) });
+          if (!draftSave.ok) throw new Error(`draft save failed: ${draftSave.status}`);
+          const savedDraft = await draftSave.json();
+          if (Number(savedDraft.draft?.revision) !== Number(editor.draft.revision) + 1) throw new Error('draft revision did not increment');
+          const staleSave = await fetch(`${base}/api/screens/${screen.id}/draft`, { method: 'PUT', headers: jsonHeaders, body: JSON.stringify(draftPayload) });
+          if (staleSave.status !== 409) throw new Error(`stale editor write was not rejected: ${staleSave.status}`);
+
+          const rendererResponse = await fetch(`${base}/js/editor/renderer.js`);
+          const rendererSource = await rendererResponse.text();
+          if (!rendererResponse.ok || !rendererSource.includes('MENU_REFERENCE') || !rendererSource.includes('buildTableSvg') || !rendererSource.includes('font_scale_percent') || !rendererSource.includes('autoReduced')) throw new Error('canonical TV Menu table renderer contract missing');
+          NODE
+      - name: Smoke test SFTP service
+        run: docker compose --project-name menu-tv-2-ci --env-file .env exec -T sftp sftpgo ping
+      - name: Show runtime status
+        if: always()
+        run: docker compose --project-name menu-tv-2-ci --env-file .env ps || true
+      - name: Show runtime logs on failure
+        if: failure()
+        run: docker compose --project-name menu-tv-2-ci --env-file .env logs --no-color --tail=200 || true
+      - name: Clean runtime stack
+        if: always()
+        run: |
+          docker compose --project-name menu-tv-2-ci --env-file .env down -v --remove-orphans || true
+          docker network rm menu-tv-2-proxy >/dev/null 2>&1 || true
