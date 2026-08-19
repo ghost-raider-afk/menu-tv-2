@@ -114,6 +114,11 @@ export function createScreensRepository(pool) {
       return rows.map(normaliseRow);
     },
 
+    async listPreparedAssetKeys() {
+      const { rows } = await pool.query('SELECT prepared_asset_key FROM screens WHERE prepared_asset_key IS NOT NULL');
+      return rows.map((row) => row.prepared_asset_key).filter(Boolean);
+    },
+
     async nextScreenName(locationId) {
       const { rows } = await pool.query('SELECT COUNT(*)::int AS count FROM screens WHERE location_id = $1', [locationId]);
       return `ТВ ${Number(rows[0].count) + 1}`;
