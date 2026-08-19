@@ -1,5 +1,6 @@
 import express from 'express';
 import { menuDraftInput, positiveId, screenInput } from '../../contracts/input.js';
+import { menuSettingsInput } from '../../contracts/menu-settings.js';
 import { logger } from '../../logger/index.js';
 import { activity, conflict, notFound } from '../helpers.js';
 
@@ -49,6 +50,7 @@ export function createScreensRouter({ store, sftp, config }) {
       }
 
       const draft = await menuDraftInput(request.body, tx, config.menuDraftMaxBytes);
+      draft.settings = menuSettingsInput(draft.settings, { allowBackgroundImage: true });
       const templateId = requestedTemplateId(request.body, current);
       if (templateId && !await tx.getTemplate(templateId)) throw notFound();
 
