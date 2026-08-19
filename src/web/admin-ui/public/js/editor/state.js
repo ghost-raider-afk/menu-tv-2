@@ -10,7 +10,8 @@ export function createEditorState(initial = {}) {
     selectedRowId: initial.selectedRowId ?? null,
     templateId: initial.templateId ?? null,
     dirty: initial.dirty === true,
-    revision: Number.isInteger(initial.revision) ? initial.revision : 0
+    revision: Number.isInteger(initial.revision) ? initial.revision : 0,
+    draftRevision: Number.isInteger(initial.draftRevision) ? initial.draftRevision : 0
   };
 }
 
