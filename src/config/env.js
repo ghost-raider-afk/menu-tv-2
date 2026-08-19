@@ -4,8 +4,12 @@ export function required(name, value) {
 }
 
 export function integer(name, value, fallback, { minimum = 1, maximum = 65535 } = {}) {
-  const parsed = Number.parseInt(value ?? fallback, 10);
-  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+  const source = String(value ?? fallback).trim();
+  if (!/^-?\d+$/.test(source)) {
+    throw new Error(`Параметр ${name} должен быть целым числом от ${minimum} до ${maximum}.`);
+  }
+  const parsed = Number(source);
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
     throw new Error(`Параметр ${name} должен быть целым числом от ${minimum} до ${maximum}.`);
   }
   return parsed;
