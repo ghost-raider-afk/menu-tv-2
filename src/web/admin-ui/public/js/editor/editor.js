@@ -60,7 +60,9 @@ export function initialiseScreenEditor() {
       rows: Array.isArray(editor.draft?.rows) ? editor.draft.rows : [],
       settings: normaliseEditorSettings(editor.draft?.settings || {}),
       templateId: screen.template_id || null,
-      dirty: false
+      dirty: false,
+      revision: 0,
+      draftRevision: Number(editor.draft?.revision || 0)
     });
     history.clear();
     populateEditor(screen, templates, editorState);
@@ -86,18 +88,19 @@ export function initialiseScreenEditor() {
     setPending(submit, true, 'Сохраняем…');
     try {
       updateSettings(editorState, readEditorSettings(editorState.settings));
-      screen = await api.put(`${API.screens}/${screenId}`, {
+      const screenPayload = {
         ...readScreenProperties(screen),
         template_id: editorState.templateId
-      });
-      const saved = await api.put(`${API.screens}/${screenId}/draft`, serializeDraft(editorState));
+      };
+      const saved = await api.put(`${API.screens}/${screenId}/draft`, serializeDraft(editorState, screenPayload));
       replaceEditorState(editorState, {
         screen: saved.screen,
         rows: saved.draft.rows || [],
         settings: normaliseEditorSettings(saved.draft.settings || {}),
         templateId: saved.screen.template_id || null,
         dirty: false,
-        revision: editorState.revision
+        revision: editorState.revision,
+        draftRevision: Number(saved.draft.revision || 0)
       });
       screen = saved.screen;
       markEditorSaved(editorState);
