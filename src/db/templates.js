@@ -25,6 +25,10 @@ export function createTemplatesRepository(pool) {
       return templates.rows.map((row) => normaliseMenuRecord({ ...row, assigned_screens: counts.get(Number(row.id)) || 0 }));
     },
     getTemplate,
+    async lockTemplate(id) {
+      const { rowCount } = await pool.query('SELECT id FROM templates WHERE id = $1 FOR UPDATE', [id]);
+      return rowCount > 0;
+    },
     async createTemplate({ name, description = '', active = true, rows: menuRows = [], settings = {} }) {
       const now = isoNow();
       const { rows } = await pool.query(
