@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import test from 'node:test';
 import { newDb } from 'pg-mem';
@@ -41,10 +42,28 @@ const config = {
   siteAssetsRoot: `/tmp/menu-tv-2-test-site-assets-${process.pid}`,
   siteLogoMaxBytes: 2_097_152,
   siteFaviconMaxBytes: 524_288,
+  templateBackgroundMaxBytes: 12_582_912,
   db: { host: 'db', port: 5432, database: 'menu_tv_2', user: 'menu_tv_2', password: 'p'.repeat(32) },
-  sftp: { publicHost: 'tv.example.test', port: 2022 },
+  sftp: { publicHost: 'tv.example.test', port: 2022, stagingMaxAgeHours: 24 },
   seedDemoData: false
 };
+
+function jpegFor(width, height) {
+  const bytes = Buffer.alloc(17);
+  let offset = 0;
+  bytes[offset++] = 0xff; bytes[offset++] = 0xd8;
+  bytes[offset++] = 0xff; bytes[offset++] = 0xc0;
+  bytes.writeUInt16BE(11, offset); offset += 2;
+  bytes[offset++] = 8;
+  bytes.writeUInt16BE(height, offset); offset += 2;
+  bytes.writeUInt16BE(width, offset); offset += 2;
+  bytes[offset++] = 1;
+  bytes[offset++] = 1;
+  bytes[offset++] = 0x11;
+  bytes[offset++] = 0;
+  bytes[offset++] = 0xff; bytes[offset++] = 0xd9;
+  return bytes;
+}
 
 class FakeSftpService {
   constructor() {
@@ -64,15 +83,28 @@ class FakeSftpService {
   async resetPassword({ username, password }) { this.users.get(username).password = password; }
   async removeUser(username) { this.users.delete(username); }
   async stageJpeg(screenId, bytes) {
-    if (!Buffer.isBuffer(bytes) || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff || bytes.at(-2) !== 0xff || bytes.at(-1) !== 0xd9) {
-      throw Object.assign(new Error('Нужен файл JPEG.'), { status: 400 });
-    }
-    const key = `${screenId}-asset.jpg`;
-    this.assets.set(key, bytes);
-    return { key, sha256: 'a'.repeat(64), size: bytes.length };
+    const key = `${screenId}-${crypto.randomUUID()}.jpg`;
+    this.assets.set(key, Buffer.from(bytes));
+    return { key, sha256: crypto.createHash('sha256').update(bytes).digest('hex'), size: bytes.length };
   }
-  async publish({ directoryName, deliveryFilename, stagedKey }) {
-    this.publications.set(`${directoryName}/${deliveryFilename}`, this.assets.get(stagedKey));
+  async removeStaged(key) { return this.assets.delete(key); }
+  async cleanupStaging(keepKeys = []) {
+    const keep = new Set(keepKeys);
+    let removed = 0;
+    for (const key of [...this.assets.keys()]) if (!keep.has(key)) { this.assets.delete(key); removed += 1; }
+    return { removed };
+  }
+  async publishedInfo(directoryName, deliveryFilename) {
+    const bytes = this.publications.get(`${directoryName}/${deliveryFilename}`);
+    return bytes ? { sha256: crypto.createHash('sha256').update(bytes).digest('hex'), size: bytes.length } : null;
+  }
+  async publish({ directoryName, deliveryFilename, stagedKey, expectedSha256 }) {
+    const bytes = this.assets.get(stagedKey);
+    if (!bytes) throw Object.assign(new Error('Подготовленный JPEG не найден.'), { status: 409 });
+    const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+    assert.equal(sha256, expectedSha256);
+    this.publications.set(`${directoryName}/${deliveryFilename}`, Buffer.from(bytes));
+    return { sha256, size: bytes.length };
   }
 }
 
@@ -105,9 +137,11 @@ test.after(async () => {
   await rm(config.siteAssetsRoot, { recursive: true, force: true });
 });
 
-test('public health, TV Menu 1 visual default and protected session work', async () => {
+test('public liveness/readiness, visual default and protected session work', async () => {
   const health = await fetch(`${baseUrl}/healthz`);
   assert.deepEqual(await health.json(), { status: 'ok', service: 'menu-tv-2.0' });
+  const ready = await fetch(`${baseUrl}/readyz`);
+  assert.deepEqual(await ready.json(), { status: 'ready', service: 'menu-tv-2.0' });
 
   const publicConfig = await fetch(`${baseUrl}/api/public/config`);
   const publicSettings = await publicConfig.json();
@@ -176,7 +210,7 @@ test('locations, screens and templates persist through modular PostgreSQL reposi
   assert.equal((await unassigned.json()).template_id, null);
 });
 
-test('catalogue and editor draft preserve required product linkage and prices', async () => {
+test('catalogue draft uses revision locking and preserves required linkage and prices', async () => {
   const cookie = await adminCookie();
   const productResponse = await fetch(`${baseUrl}/api/catalog/products`, {
     method: 'POST',
@@ -204,30 +238,38 @@ test('catalogue and editor draft preserve required product linkage and prices', 
     method: 'POST', headers: jsonHeaders(cookie), body: '{}'
   });
   const screen = await screenResponse.json();
+  const editorBefore = await (await fetch(`${baseUrl}/api/screens/${screen.id}/editor`, { headers: { Cookie: cookie } })).json();
+  assert.equal(editorBefore.draft.revision, 1);
 
+  const requestBody = {
+    revision: editorBefore.draft.revision,
+    settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC', title: 'Бар' },
+    rows: [
+      { id: 'section-1', kind: 'section', name: 'Пиво' },
+      { id: 'product-1', kind: 'item', product_id: product.id },
+      { id: 'packaging-1', kind: 'packaging', packaging_id: packaging.id }
+    ]
+  };
   const saved = await fetch(`${baseUrl}/api/screens/${screen.id}/draft`, {
-    method: 'PUT',
-    headers: jsonHeaders(cookie),
-    body: JSON.stringify({
-      settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC', title: 'Бар' },
-      rows: [
-        { id: 'section-1', kind: 'section', name: 'Пиво' },
-        { id: 'product-1', kind: 'item', product_id: product.id },
-        { id: 'packaging-1', kind: 'packaging', packaging_id: packaging.id }
-      ]
-    })
+    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify(requestBody)
   });
   assert.equal(saved.status, 200);
   const draft = await saved.json();
+  assert.equal(draft.draft.revision, 2);
   assert.deepEqual(draft.draft.rows.map((row) => row.name), ['Пиво', 'Пиво API', 'ПЭТ API 1,5 л']);
   assert.equal(draft.draft.rows[1].price_primary, '240');
   assert.equal(draft.draft.rows[1].price_secondary, '360');
+
+  const stale = await fetch(`${baseUrl}/api/screens/${screen.id}/draft`, {
+    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify(requestBody)
+  });
+  assert.equal(stale.status, 409);
 
   const blockedDelete = await fetch(`${baseUrl}/api/catalog/products/${product.id}`, { method: 'DELETE', headers: jsonHeaders(cookie) });
   assert.equal(blockedDelete.status, 409);
 });
 
-test('SFTP access, JPEG staging and publication work through modular SFTP service boundary', async () => {
+test('SFTP access, validated JPEG staging and recoverable publication work through service boundary', async () => {
   const cookie = await adminCookie();
   const locationResponse = await fetch(`${baseUrl}/api/locations`, {
     method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'SFTP-точка API', address: 'Адрес' })
@@ -258,19 +300,28 @@ test('SFTP access, JPEG staging and publication work through modular SFTP servic
   });
   const screen = await screenResponse.json();
 
+  const wrongSize = await fetch(`${baseUrl}/api/screens/${screen.id}/source`, {
+    method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/jpeg' }, body: jpegFor(1280, 720)
+  });
+  assert.equal(wrongSize.status, 400);
+
   const source = await fetch(`${baseUrl}/api/screens/${screen.id}/source`, {
-    method: 'PUT',
-    headers: { Cookie: cookie, 'Content-Type': 'image/jpeg' },
-    body: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0xff, 0xd9])
+    method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/jpeg' }, body: jpegFor(1920, 1080)
   });
   assert.equal(source.status, 200);
-  assert.equal((await source.json()).status, 'ready');
+  const staged = await source.json();
+  assert.equal(staged.status, 'ready');
+  const stagedKey = staged.prepared_asset_key;
+  assert.ok(sftp.assets.has(stagedKey));
 
   const publish = await fetch(`${baseUrl}/api/screens/${screen.id}/publish`, {
     method: 'POST', headers: jsonHeaders(cookie)
   });
   assert.equal(publish.status, 200);
-  assert.equal((await publish.json()).status, 'published');
+  const published = await publish.json();
+  assert.equal(published.status, 'published');
+  assert.equal(published.prepared_asset_key, null);
+  assert.ok(!sftp.assets.has(stagedKey));
   assert.ok(sftp.publications.has(`point-api/monitor-${screen.id}.jpg`));
 });
 
