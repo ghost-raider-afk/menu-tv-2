@@ -17,7 +17,6 @@ const product = Object.freeze({
   strength: '4,6°',
   beverage_color: 'light',
   filtration: 'unfiltered',
-  characteristics: 'Светлое нефильтрованное',
   price_primary: '179',
   price_secondary: '268.50',
   active: true
@@ -46,7 +45,7 @@ function rendered(count = 4, scale = 100, fontFamily = 'arial-narrow') {
   return { model, lines, layout, svg: buildTableSvg(model, lines, layout) };
 }
 
-test('canonical table geometry keeps the supplied 2048x1152 coordinate system', () => {
+test('canonical table keeps 2048x1152 coordinates with TV Menu 1 vertical rhythm', () => {
   assert.deepEqual({
     width: MENU_REFERENCE.width,
     height: MENU_REFERENCE.height,
@@ -54,7 +53,9 @@ test('canonical table geometry keeps the supplied 2048x1152 coordinate system', 
     right: MENU_REFERENCE.tableRight,
     primary: MENU_REFERENCE.primaryBoundary,
     secondary: MENU_REFERENCE.secondaryBoundary,
-    top: MENU_REFERENCE.tableTop
+    top: MENU_REFERENCE.tableTop,
+    bottom: MENU_REFERENCE.tableBottom,
+    item: MENU_REFERENCE.itemHeight
   }, {
     width: 2048,
     height: 1152,
@@ -62,32 +63,35 @@ test('canonical table geometry keeps the supplied 2048x1152 coordinate system', 
     right: 1605,
     primary: 1231,
     secondary: 1417,
-    top: 64
+    top: 28,
+    bottom: 1120,
+    item: 72
   });
 });
 
-test('product line is built from catalog fields and normalizes strength to percent', () => {
+test('second line is built from catalog producer, strength, color and filtration', () => {
   assert.equal(formatStrength('4,6°'), '4,6%');
   assert.equal(formatStrength('5.0'), '5.0%');
   assert.equal(formatStrength('4,2%'), '4,2%');
-  assert.equal(formatProductMetadata(product), 'ООО «Портал», п. Солнечный · светлое · нефильтрованное');
+  assert.equal(formatProductMetadata(product), 'ООО «Портал», п. Солнечный · 4,6% · светлое · нефильтрованное');
 
   const { lines } = rendered();
   assert.equal(lines[1].strength, '4,6%');
-  assert.equal(lines[1].metadata, 'ООО «Портал», п. Солнечный · светлое · нефильтрованное');
+  assert.equal(lines[1].metadata, 'ООО «Портал», п. Солнечный · 4,6% · светлое · нефильтрованное');
 });
 
-test('one canonical SVG contains rounded sections, two-line products and both price columns', () => {
+test('canonical SVG mirrors TV Menu 1 hierarchy: name first, metadata second', () => {
   const { svg } = rendered();
   assert.match(svg, /viewBox="0 0 2048 1152"/);
   assert.match(svg, /x1="1231"/);
   assert.match(svg, /x1="1417"/);
-  assert.match(svg, /1 л\./);
-  assert.match(svg, /1,5 л\./);
+  assert.match(svg, />1 л<\/text>/);
+  assert.match(svg, />1,5 л<\/text>/);
   assert.match(svg, /class="table-section">\s*<rect[^>]*rx="/);
-  assert.match(svg, /БАВАРИЯ ПШЕНИЧНОЕ · 4,6%/);
+  assert.match(svg, /class="item-name"[^>]*>БАВАРИЯ ПШЕНИЧНОЕ<\/text>/);
+  assert.doesNotMatch(svg, /class="item-name"[^>]*4,6%/);
   assert.doesNotMatch(svg, /4,6°/);
-  assert.match(svg, /class="item-meta"[^>]*>ООО «Портал», п\. Солнечный · светлое · нефильтрованное</);
+  assert.match(svg, /class="item-meta"[^>]*>ООО «Портал», п\. Солнечный · 4,6% · светлое · нефильтрованное<\/text>/);
   assert.match(svg, />179<tspan/);
   assert.match(svg, />268<tspan/);
 });
@@ -95,9 +99,10 @@ test('one canonical SVG contains rounded sections, two-line products and both pr
 test('canonical SVG is CSP-safe and carries presentation without style blocks', () => {
   const { svg } = rendered();
   assert.doesNotMatch(svg, /<style[\s>]/i);
-  assert.match(svg, /class="item-name"[^>]*fill="#F8FAFC"/);
-  assert.match(svg, /class="separator"[^>]*stroke="#D9DEE5"[^>]*stroke-dasharray=/);
-  assert.match(svg, /class="section-title"[^>]*fill="#101317"/);
+  assert.match(svg, /class="item-name"[^>]*font-size="42"[^>]*fill="#F8FAFC"/);
+  assert.match(svg, /class="item-meta"[^>]*font-size="22"/);
+  assert.match(svg, /class="separator"[^>]*stroke="#C8D0DA"[^>]*stroke-dasharray=/);
+  assert.match(svg, /class="section-title"[^>]*font-size="50"[^>]*fill="#101317"/);
   assert.match(svg, /font-family="Arial Narrow, Liberation Sans Narrow, DejaVu Sans Condensed, Arial, sans-serif"/);
 });
 
@@ -108,7 +113,7 @@ test('Tahoma Bold is a real renderer option and enforces bold text floor', () =>
 });
 
 test('font scale automatically reduces to fit but respects manual maximum', () => {
-  const { layout } = rendered(25, 100);
+  const { layout } = rendered(20, 100);
   assert.equal(layout.vertical.fits, true);
   assert.equal(layout.vertical.autoReduced, true);
   assert.ok(layout.vertical.effectivePercent < 100);

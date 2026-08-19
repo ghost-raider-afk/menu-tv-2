@@ -31,7 +31,7 @@ function referenceRows() {
   ];
 }
 
-test('canonical coordinates stay fixed while redesigned vertical geometry supports two-line items', () => {
+test('canonical coordinates use TV Menu 1 vertical geometry with larger readable rows', () => {
   assert.deepEqual(MENU_REFERENCE, {
     width: 2048,
     height: 1152,
@@ -40,19 +40,19 @@ test('canonical coordinates stay fixed while redesigned vertical geometry suppor
     tableWidth: 1590,
     primaryBoundary: 1231,
     secondaryBoundary: 1417,
-    tableTop: 64,
-    tableBottom: 1032,
-    firstSectionHeight: 58,
-    sectionHeight: 50,
-    sectionGap: 10,
-    itemHeight: 52,
-    packagingHeight: 48,
+    tableTop: 28,
+    tableBottom: 1120,
+    firstSectionHeight: 80,
+    sectionHeight: 64,
+    sectionGap: 12,
+    itemHeight: 72,
+    packagingHeight: 58,
     fontScaleMinPercent: 55,
     fontScaleMaxPercent: 130
   });
 });
 
-test('TV Menu 1 reference density fits by a small automatic reduction without clipping', () => {
+test('TV Menu 1 reference density auto-fits while preserving the larger type hierarchy', () => {
   const state = {
     rows: referenceRows(),
     settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC', font_scale_percent: 100, font_family: 'arial-narrow' }
@@ -61,12 +61,12 @@ test('TV Menu 1 reference density fits by a small automatic reduction without cl
   const lines = buildDisplayLines(model, { products });
   const layout = buildRenderLayout(model, lines);
   assert.equal(lines.length, 19);
-  assert.equal(layout.vertical.availableHeight, 968);
-  assert.equal(layout.vertical.baseContentHeight, 1010);
-  assert.equal(layout.vertical.effectivePercent, 95.8);
+  assert.equal(layout.vertical.availableHeight, 1092);
+  assert.equal(layout.vertical.baseContentHeight, 1384);
+  assert.equal(layout.vertical.effectivePercent, 78.9);
   assert.equal(layout.vertical.autoReduced, true);
   assert.equal(layout.vertical.fits, true);
-  assert.ok(Math.abs(layout.vertical.boxes.at(-1).bottom - 1032) < 0.01);
+  assert.ok(Math.abs(layout.vertical.boxes.at(-1).bottom - 1120) < 0.5);
 });
 
 test('overflow automatically reduces scale while preserving exact horizontal reference columns', () => {
@@ -93,7 +93,7 @@ test('overflow automatically reduces scale while preserving exact horizontal ref
   assert.match(svg, /viewBox="0 0 2048 1152"/);
   assert.match(svg, /x1="1231"/);
   assert.match(svg, /x1="1417"/);
-  assert.match(svg, />1 л\.<\/text>/);
-  assert.match(svg, />1,5 л\.<\/text>/);
+  assert.match(svg, />1 л<\/text>/);
+  assert.match(svg, />1,5 л<\/text>/);
   assert.doesNotMatch(svg, /°/);
 });

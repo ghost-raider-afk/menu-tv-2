@@ -20,13 +20,13 @@ export const MENU_REFERENCE = Object.freeze({
   tableWidth: 1590,
   primaryBoundary: 1231,
   secondaryBoundary: 1417,
-  tableTop: 64,
-  tableBottom: 1032,
-  firstSectionHeight: 58,
-  sectionHeight: 50,
-  sectionGap: 10,
-  itemHeight: 52,
-  packagingHeight: 48,
+  tableTop: 28,
+  tableBottom: 1120,
+  firstSectionHeight: 80,
+  sectionHeight: 64,
+  sectionGap: 12,
+  itemHeight: 72,
+  packagingHeight: 58,
   fontScaleMinPercent: 55,
   fontScaleMaxPercent: 130
 });
@@ -36,7 +36,7 @@ export const MENU_TABLE_STYLE = Object.freeze({
   defaultAccent: '#F4C915',
   defaultText: '#F4F7FA',
   darkText: '#101317',
-  separator: '#D9DEE5',
+  separator: '#C8D0DA',
   secondaryText: '#C7CED8',
   packagingBackground: '#101419',
   promotion: '#D92D35'
@@ -135,7 +135,7 @@ function fitCharacters(width, fontSize, factor = 0.56) {
 }
 
 function priceParts(value) {
-  if (!value) return null;
+  if (!value && value !== 0) return null;
   const normalized = String(value).replace(',', '.');
   const [whole = '0', decimal = ''] = normalized.split('.');
   return { whole, cents: decimal.padEnd(2, '0').slice(0, 2) };
@@ -165,13 +165,15 @@ function filtrationLabel(value) {
 export function formatProductMetadata(product) {
   return [
     product?.producer || '',
+    formatStrength(product?.strength || ''),
     beverageColorLabel(product?.beverage_color),
     filtrationLabel(product?.filtration)
   ].filter(Boolean).join(' · ');
 }
 
 function fontDefinition(value) {
-  return MENU_FONT_OPTIONS.find((font) => font.key === value) || MENU_FONT_OPTIONS.find((font) => font.key === DEFAULT_FONT_KEY);
+  return MENU_FONT_OPTIONS.find((font) => font.key === value)
+    || MENU_FONT_OPTIONS.find((font) => font.key === DEFAULT_FONT_KEY);
 }
 
 function lineBaseHeight(line) {
@@ -197,7 +199,7 @@ export function buildMenuPalette(settings = {}) {
     accent,
     sectionText: foregroundFor(accent),
     primaryText,
-    secondaryText: mix(primaryText, background, 0.25),
+    secondaryText: mix(primaryText, background, 0.22),
     accentText: readableColor(accent, background)
   });
 }
@@ -292,10 +294,7 @@ export function buildRenderLayout(model, lines) {
   const baseHeight = Math.max(1, baseContentHeight(lines));
   const requestedPercent = requestedFontScalePercent(model.settings);
   const fitPercent = (available / baseHeight) * 100;
-  const effectivePercent = Math.max(
-    MENU_REFERENCE.fontScaleMinPercent,
-    Math.min(requestedPercent, fitPercent)
-  );
+  const effectivePercent = Math.max(MENU_REFERENCE.fontScaleMinPercent, Math.min(requestedPercent, fitPercent));
   const scale = effectivePercent / 100;
   const fits = baseHeight * scale <= available + 0.5;
   let cursor = MENU_REFERENCE.tableTop;
@@ -351,14 +350,16 @@ function textAttributes({ size, weight = 400, fill, letterSpacing = 0, anchor = 
 }
 
 function separatorMarkup(y, horizontal, scale) {
-  return `<line x1="${horizontal.left}" y1="${y}" x2="${horizontal.right}" y2="${y}" class="separator" stroke="${MENU_TABLE_STYLE.separator}" stroke-width="${Math.max(1.5, 2.2 * scale)}" stroke-dasharray="${7 * scale} ${7 * scale}" opacity="0.9"/>`;
+  const width = Math.max(1.35, 1.8 * scale);
+  const dash = `${8 * scale} ${7 * scale}`;
+  return `<line x1="${horizontal.left}" y1="${y}" x2="${horizontal.right}" y2="${y}" class="separator" stroke="${MENU_TABLE_STYLE.separator}" stroke-width="${width}" stroke-dasharray="${dash}" opacity="0.72"/>`;
 }
 
 function verticalSeparatorsMarkup(box, horizontal, scale) {
-  const width = Math.max(1.5, 2.2 * scale);
-  const dash = `${7 * scale} ${7 * scale}`;
-  return `<line x1="${horizontal.primaryBoundary}" y1="${box.top}" x2="${horizontal.primaryBoundary}" y2="${box.bottom}" class="separator" stroke="${MENU_TABLE_STYLE.separator}" stroke-width="${width}" stroke-dasharray="${dash}" opacity="0.9"/>
-    <line x1="${horizontal.secondaryBoundary}" y1="${box.top}" x2="${horizontal.secondaryBoundary}" y2="${box.bottom}" class="separator" stroke="${MENU_TABLE_STYLE.separator}" stroke-width="${width}" stroke-dasharray="${dash}" opacity="0.9"/>`;
+  const width = Math.max(1.35, 1.8 * scale);
+  const dash = `${8 * scale} ${7 * scale}`;
+  return `<line x1="${horizontal.primaryBoundary}" y1="${box.top}" x2="${horizontal.primaryBoundary}" y2="${box.bottom}" class="separator" stroke="${MENU_TABLE_STYLE.separator}" stroke-width="${width}" stroke-dasharray="${dash}" opacity="0.72"/>
+    <line x1="${horizontal.secondaryBoundary}" y1="${box.top}" x2="${horizontal.secondaryBoundary}" y2="${box.bottom}" class="separator" stroke="${MENU_TABLE_STYLE.separator}" stroke-width="${width}" stroke-dasharray="${dash}" opacity="0.72"/>`;
 }
 
 function bottleMarkup(x, y, scale, stroke) {
@@ -370,42 +371,42 @@ function bottleMarkup(x, y, scale, stroke) {
 
 function priceMarkup(value, x, baseline, scale, toneColor, typography) {
   const parts = priceParts(value);
-  const attributes = textAttributes({ size: 36 * scale, weight: 900, fill: toneColor, letterSpacing: -0.45 * scale }, typography);
+  const attributes = textAttributes({ size: 48 * scale, weight: 900, fill: toneColor, letterSpacing: -0.8 * scale }, typography);
   if (!parts) return `<text x="${x}" y="${baseline}" class="price" ${attributes}>—</text>`;
-  return `<text x="${x}" y="${baseline}" class="price" ${attributes}>${escapeXml(parts.whole)}<tspan class="cents" dx="2" dy="${-14 * scale}" font-size="${18 * scale}" font-weight="900" fill="${toneColor}">${escapeXml(parts.cents)}</tspan></text>`;
+  return `<text x="${x}" y="${baseline}" class="price" ${attributes}>${escapeXml(parts.whole)}<tspan class="cents" dx="2" dy="${-18 * scale}" font-size="${22 * scale}" font-weight="900" fill="${toneColor}">${escapeXml(parts.cents)}</tspan></text>`;
 }
 
 function promotionMarkup(line, x, box, scale, typography) {
   if (!line.promotion || !line.promotionText) return { markup: '', width: 0 };
-  const text = truncateText(line.promotionText, 12);
-  const width = Math.min(126 * scale, Math.max(70 * scale, (text.length * 8 + 22) * scale));
-  const height = 24 * scale;
-  const top = box.top + 5 * scale;
-  const notch = 8 * scale;
+  const text = truncateText(line.promotionText, 14);
+  const width = Math.min(160 * scale, Math.max(84 * scale, (text.length * 9 + 24) * scale));
+  const height = 28 * scale;
+  const top = box.top + 6 * scale;
+  const notch = 9 * scale;
   return {
     width,
     markup: `<path d="M${x} ${top}H${x + width - notch}L${x + width} ${top + height / 2}L${x + width - notch} ${top + height}H${x}Z" fill="${MENU_TABLE_STYLE.promotion}"/>
-      <text x="${x + (width - notch) / 2}" y="${top + 17 * scale}" class="promotion" ${textAttributes({ size: 14 * scale, weight: 900, fill: '#FFFFFF', letterSpacing: 0.1 * scale, anchor: 'middle' }, typography)}>${escapeXml(text)}</text>`
+      <text x="${x + (width - notch) / 2}" y="${top + 20 * scale}" class="promotion" ${textAttributes({ size: 16 * scale, weight: 900, fill: '#FFFFFF', letterSpacing: 0.1 * scale, anchor: 'middle' }, typography)}>${escapeXml(text)}</text>`
   };
 }
 
 function sectionMarkup(line, box, horizontal, palette, scale, typography) {
   const title = String(line.name || 'Меню').toUpperCase();
-  const titleSize = 42 * scale;
-  const titleMax = fitCharacters(horizontal.nameWidth - 24 * scale, titleSize, 0.54);
-  const baseline = box.top + box.height * 0.74;
-  const labelY = box.top + box.height * 0.71;
+  const titleSize = 50 * scale;
+  const titleMax = fitCharacters(horizontal.nameWidth - 34 * scale, titleSize, 0.54);
+  const baseline = box.top + box.height * 0.70;
+  const labelY = box.top + box.height * 0.69;
   const primaryCenter = (horizontal.primaryBoundary + horizontal.secondaryBoundary) / 2;
   const secondaryCenter = (horizontal.secondaryBoundary + horizontal.right) / 2;
-  const radius = Math.max(5, 9 * scale);
+  const radius = Math.max(6, 11 * scale);
   const labelMarkup = line.showPriceLabels ? `
-      ${bottleMarkup(horizontal.primaryBoundary + 28 * scale, box.top + 4 * scale, 0.62 * scale, palette.sectionText)}
-      <text x="${primaryCenter + 18 * scale}" y="${labelY}" class="price-label" ${textAttributes({ size: 31 * scale, weight: 900, fill: palette.sectionText, letterSpacing: -0.35 * scale, anchor: 'middle' }, typography)}>1 л.</text>
-      ${bottleMarkup(horizontal.secondaryBoundary + 28 * scale, box.top + 4 * scale, 0.62 * scale, palette.sectionText)}
-      <text x="${secondaryCenter + 18 * scale}" y="${labelY}" class="price-label" ${textAttributes({ size: 31 * scale, weight: 900, fill: palette.sectionText, letterSpacing: -0.35 * scale, anchor: 'middle' }, typography)}>1,5 л.</text>` : '';
+      ${bottleMarkup(horizontal.primaryBoundary + 25 * scale, box.top + 8 * scale, 0.66 * scale, palette.sectionText)}
+      <text x="${primaryCenter + 18 * scale}" y="${labelY}" class="price-label" ${textAttributes({ size: 36 * scale, weight: 900, fill: palette.sectionText, letterSpacing: -0.4 * scale, anchor: 'middle' }, typography)}>1 л</text>
+      ${bottleMarkup(horizontal.secondaryBoundary + 25 * scale, box.top + 8 * scale, 0.66 * scale, palette.sectionText)}
+      <text x="${secondaryCenter + 18 * scale}" y="${labelY}" class="price-label" ${textAttributes({ size: 36 * scale, weight: 900, fill: palette.sectionText, letterSpacing: -0.4 * scale, anchor: 'middle' }, typography)}>1,5 л</text>` : '';
   return `<g class="table-section">
     <rect x="${horizontal.left}" y="${box.top}" width="${horizontal.tableWidth}" height="${box.height}" rx="${radius}" ry="${radius}" fill="${palette.accent}"/>
-    <text x="${horizontal.left + 8 * scale}" y="${baseline}" class="section-title" ${textAttributes({ size: titleSize, weight: 900, fill: palette.sectionText, letterSpacing: -0.75 * scale }, typography)}>${escapeXml(truncateText(title, titleMax))}</text>
+    <text x="${horizontal.left + 18 * scale}" y="${baseline}" class="section-title" ${textAttributes({ size: titleSize, weight: 900, fill: palette.sectionText, letterSpacing: -0.9 * scale }, typography)}>${escapeXml(truncateText(title, titleMax))}</text>
     ${verticalSeparatorsMarkup(box, horizontal, scale)}
     ${labelMarkup}
   </g>`;
@@ -413,46 +414,47 @@ function sectionMarkup(line, box, horizontal, palette, scale, typography) {
 
 function itemMarkup(line, box, horizontal, palette, scale, typography) {
   const toneColor = line.tone === 'accent' ? palette.accentText : palette.primaryText;
-  const metaColor = line.tone === 'accent' ? mix(toneColor, palette.background, 0.22) : palette.secondaryText;
-  const nameX = horizontal.left + 7 * scale;
+  const metaColor = line.tone === 'accent'
+    ? mix(toneColor, palette.background, 0.10)
+    : mix(toneColor, palette.background, 0.20);
+  const nameX = horizontal.left + 18 * scale;
   const promotion = promotionMarkup(line, nameX, box, scale, typography);
-  const contentX = nameX + (promotion.width ? promotion.width + 10 * scale : 0);
-  const mainLabel = line.strength ? `${line.name} · ${line.strength}` : line.name;
-  const titleSize = 26 * scale;
-  const metaSize = 13 * scale;
-  const availableNameWidth = horizontal.primaryBoundary - contentX - 12 * scale;
-  const mainMax = fitCharacters(availableNameWidth, titleSize, 0.55);
-  const metaMax = fitCharacters(availableNameWidth, metaSize, 0.53);
-  const mainBaseline = box.top + 24 * scale;
-  const metaBaseline = box.top + 47 * scale;
-  const priceBaseline = box.top + 35 * scale;
+  const contentX = nameX + (promotion.width ? promotion.width + 12 * scale : 0);
+  const titleSize = 42 * scale;
+  const metaSize = 22 * scale;
+  const availableNameWidth = horizontal.primaryBoundary - contentX - 20 * scale;
+  const mainMax = fitCharacters(availableNameWidth, titleSize, 0.54);
+  const metaMax = fitCharacters(availableNameWidth, metaSize, 0.51);
+  const mainBaseline = box.top + 34 * scale;
+  const metaBaseline = box.top + 65 * scale;
+  const priceBaseline = box.top + 50 * scale;
 
   return `<g class="table-item tone-${line.tone === 'accent' ? 'accent' : 'light'}">
     ${promotion.markup}
-    <text x="${contentX}" y="${mainBaseline}" class="item-name" ${textAttributes({ size: titleSize, weight: 900, fill: toneColor, letterSpacing: -0.35 * scale }, typography)}>${escapeXml(truncateText(String(mainLabel || '').toUpperCase(), mainMax))}</text>
-    ${line.metadata ? `<text x="${contentX}" y="${metaBaseline}" class="item-meta" ${textAttributes({ size: metaSize, weight: 650, fill: metaColor, letterSpacing: 0.05 * scale }, typography)}>${escapeXml(truncateText(line.metadata, metaMax))}</text>` : ''}
-    ${priceMarkup(line.pricePrimary, horizontal.primaryBoundary + 8 * scale, priceBaseline, scale, toneColor, typography)}
-    ${priceMarkup(line.priceSecondary, horizontal.secondaryBoundary + 8 * scale, priceBaseline, scale, toneColor, typography)}
+    <text x="${contentX}" y="${mainBaseline}" class="item-name" ${textAttributes({ size: titleSize, weight: 900, fill: toneColor, letterSpacing: -0.7 * scale }, typography)}>${escapeXml(truncateText(String(line.name || '').toUpperCase(), mainMax))}</text>
+    ${line.metadata ? `<text x="${contentX}" y="${metaBaseline}" class="item-meta" ${textAttributes({ size: metaSize, weight: 650, fill: metaColor, letterSpacing: 0.02 * scale }, typography)}>${escapeXml(truncateText(line.metadata, metaMax))}</text>` : ''}
+    ${priceMarkup(line.pricePrimary, horizontal.primaryBoundary + 12 * scale, priceBaseline, scale, toneColor, typography)}
+    ${priceMarkup(line.priceSecondary, horizontal.secondaryBoundary + 12 * scale, priceBaseline, scale, toneColor, typography)}
     ${verticalSeparatorsMarkup(box, horizontal, scale)}
     ${separatorMarkup(box.bottom, horizontal, scale)}
   </g>`;
 }
 
 function packagingMarkup(line, box, horizontal, palette, scale, typography) {
-  const gap = 12 * scale;
+  const gap = 14 * scale;
   const cellWidth = (horizontal.tableWidth - gap) / 2;
-  const top = box.top + 3 * scale;
-  const height = box.height - 6 * scale;
+  const top = box.top + 4 * scale;
+  const height = box.height - 8 * scale;
   const cells = line.items.map((item, index) => {
     const x = horizontal.left + index * (cellWidth + gap);
     const toneColor = item.tone === 'accent' ? palette.accentText : palette.primaryText;
-    const nameMax = fitCharacters(cellWidth - 190 * scale, 21 * scale, 0.56);
+    const nameMax = fitCharacters(cellWidth - 220 * scale, 24 * scale, 0.56);
     const parts = priceParts(item.unitPrice);
     const price = parts ? `${parts.whole},${parts.cents}` : '—';
     return `<g class="packaging-cell tone-${item.tone === 'accent' ? 'accent' : 'light'}">
-      <rect x="${x}" y="${top}" width="${cellWidth}" height="${height}" rx="6" fill="${MENU_TABLE_STYLE.packagingBackground}" stroke="${toneColor}" stroke-width="${Math.max(1.4, 1.8 * scale)}"/>
-      <text x="${x + 14 * scale}" y="${box.top + 32 * scale}" class="packaging-name" ${textAttributes({ size: 21 * scale, weight: 850, fill: toneColor }, typography)}>${escapeXml(truncateText(item.name, nameMax))}</text>
-      <text x="${x + cellWidth - 14 * scale}" y="${box.top + 32 * scale}" class="packaging-price" ${textAttributes({ size: 21 * scale, weight: 900, fill: toneColor, anchor: 'end' }, typography)}>${escapeXml(price)}</text>
+      <rect x="${x}" y="${top}" width="${cellWidth}" height="${height}" rx="7" fill="${MENU_TABLE_STYLE.packagingBackground}" stroke="${toneColor}" stroke-width="${Math.max(1.4, 1.8 * scale)}"/>
+      <text x="${x + 16 * scale}" y="${box.top + 38 * scale}" class="packaging-name" ${textAttributes({ size: 24 * scale, weight: 850, fill: toneColor }, typography)}>${escapeXml(truncateText(item.name, nameMax))}</text>
+      <text x="${x + cellWidth - 16 * scale}" y="${box.top + 38 * scale}" class="packaging-price" ${textAttributes({ size: 24 * scale, weight: 900, fill: toneColor, anchor: 'end' }, typography)}>${escapeXml(price)}</text>
     </g>`;
   }).join('\n');
   return `<g class="table-packaging">${cells}${separatorMarkup(box.bottom, horizontal, scale)}</g>`;

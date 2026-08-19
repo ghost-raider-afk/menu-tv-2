@@ -81,7 +81,7 @@ test('canonical table keeps prices separate and builds second line only from cat
   assert.equal(lines[1].name, 'Бавария');
   assert.equal(lines[1].strength, '4,6%');
   assert.equal(lines[1].producer, 'ООО «Портал»');
-  assert.equal(lines[1].metadata, 'ООО «Портал» · светлое · нефильтрованное');
+  assert.equal(lines[1].metadata, 'ООО «Портал» · 4,6% · светлое · нефильтрованное');
   assert.equal(lines[1].pricePrimary, '179.00');
   assert.equal(lines[1].priceSecondary, '268.50');
   assert.equal(lines[2].kind, 'packaging');
@@ -89,8 +89,9 @@ test('canonical table keeps prices separate and builds second line only from cat
 
   const layout = buildRenderLayout(model, lines);
   const svg = buildTableSvg(model, lines, layout);
-  assert.match(svg, /БАВАРИЯ · 4,6%/);
-  assert.match(svg, /ООО «Портал» · светлое · нефильтрованное/);
+  assert.match(svg, /class="item-name"[^>]*>БАВАРИЯ<\/text>/);
+  assert.doesNotMatch(svg, /class="item-name"[^>]*4,6%/);
+  assert.match(svg, /ООО «Портал» · 4,6% · светлое · нефильтрованное/);
   assert.doesNotMatch(svg, /°/);
   assert.match(svg, />179<tspan/);
 });
