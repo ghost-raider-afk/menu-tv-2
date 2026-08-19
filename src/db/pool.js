@@ -7,8 +7,8 @@ export function createDatabasePool(dbConfig) {
     database: dbConfig.database,
     user: dbConfig.user,
     password: dbConfig.password,
-    max: 5,
-    idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 5_000
+    max: dbConfig.poolMax,
+    idleTimeoutMillis: dbConfig.idleTimeoutMs,
+    connectionTimeoutMillis: dbConfig.connectionTimeoutMs
   });
 }
