@@ -1,4 +1,5 @@
-import { buildDisplayLines, buildRenderModel } from './renderer.js';
+import { buildDisplayLines, buildRenderLayout, buildRenderModel } from './renderer.js';
+import { parseResolution } from './settings.js';
 
 function textNode(tag, className, text) {
   const node = document.createElement(tag);
@@ -61,20 +62,38 @@ function renderItem(line) {
 function renderPackaging(line) {
   const row = document.createElement('div');
   row.className = 'menu-preview-packaging-line';
+  const content = document.createElement('div');
+  content.className = 'menu-preview-packaging-content';
   line.items.forEach((item) => {
     const card = document.createElement('div');
     card.className = `menu-preview-packaging tone-${item.tone}`;
     card.append(textNode('strong', '', item.name), priceNode(item.unitPrice));
-    row.append(card);
+    content.append(card);
   });
+  row.append(content, textNode('span', 'menu-preview-price-spacer', ''), textNode('span', 'menu-preview-price-spacer', ''));
   return row;
 }
 
+function applyPreviewTypography(target, scale) {
+  const unit = (base) => `${(base / 19.2) * scale}cqw`;
+  target.style.setProperty('--menu-section-font', unit(31));
+  target.style.setProperty('--menu-price-label-font', unit(23));
+  target.style.setProperty('--menu-item-font', unit(27));
+  target.style.setProperty('--menu-producer-font', unit(13));
+  target.style.setProperty('--menu-detail-font', unit(12));
+  target.style.setProperty('--menu-price-whole-font', unit(32));
+  target.style.setProperty('--menu-price-cents-font', unit(17));
+  target.style.setProperty('--menu-packaging-font', unit(20));
+  target.style.setProperty('--menu-promotion-font', unit(12));
+}
+
 export function renderPreview(editorState, { screen, products, packaging, target }) {
-  if (!target) return;
-  const model = buildRenderModel(editorState);
+  if (!target) return null;
+  const resolution = parseResolution(screen?.resolution);
+  const model = buildRenderModel(editorState, resolution);
   const settings = model.settings;
   const lines = buildDisplayLines(model, { products, packaging, fallbackTitle: screen?.name || 'Меню' });
+  const renderLayout = buildRenderLayout(model, lines);
 
   target.style.setProperty('--menu-background', settings.background_color || '#101828');
   target.style.setProperty('--menu-accent', settings.accent_color || '#F4C915');
@@ -83,16 +102,24 @@ export function renderPreview(editorState, { screen, products, packaging, target
   target.style.backgroundImage = settings.background_image_url ? `url("${settings.background_image_url}")` : '';
   target.style.backgroundSize = '100% 100%';
   target.style.backgroundPosition = 'center';
+  target.style.aspectRatio = `${model.viewport.width} / ${model.viewport.height}`;
   target.dataset.fontScale = settings.font_scale || 'medium';
   target.dataset.tableWidth = settings.table_width || 'normal';
+  target.dataset.menuFits = renderLayout.vertical.fits ? 'true' : 'false';
+  target.classList.toggle('is-overflowing', !renderLayout.vertical.fits);
+  applyPreviewTypography(target, renderLayout.vertical.scale);
   target.replaceChildren();
 
   const table = document.createElement('div');
   table.className = 'menu-preview-table tv-board-table';
+  table.style.top = `${(renderLayout.vertical.top / model.viewport.height) * 100}%`;
+  table.style.height = `${(renderLayout.vertical.usedHeight / model.viewport.height) * 100}%`;
+  table.style.gridTemplateRows = `repeat(${Math.max(lines.length, 1)}, minmax(0, 1fr))`;
   lines.forEach((line) => {
     if (line.kind === 'section') table.append(renderSection(line));
     else if (line.kind === 'item') table.append(renderItem(line));
     else if (line.kind === 'packaging') table.append(renderPackaging(line));
   });
   target.append(table);
+  return { model, lines, layout: renderLayout };
 }
