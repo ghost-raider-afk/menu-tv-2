@@ -67,6 +67,47 @@ async function createEditorFixture(page, { rows = 1 } = {}) {
   return { screen, product };
 }
 
+async function createReferenceDensityFixture(page) {
+  const { screen, product } = await createEditorFixture(page, { rows: 0 });
+  const editor = await (await page.request.get(`/api/screens/${screen.id}/editor`)).json();
+  const sections = [
+    ['ПИВО СВЕТЛОЕ НЕФИЛЬТРОВАННОЕ', 4],
+    ['ПИВО ТЕМНОЕ ФИЛЬТРОВАННОЕ', 5],
+    ['АЛКОГОЛЬНЫЕ НАПИТКИ', 7]
+  ];
+  const rows = [];
+  let itemIndex = 0;
+  sections.forEach(([name, count], sectionIndex) => {
+    rows.push({ id: `reference-section-${sectionIndex}`, kind: 'section', name, enabled: true });
+    for (let index = 0; index < count; index += 1) {
+      rows.push({ id: `reference-item-${itemIndex}`, kind: 'item', product_id: product.id, enabled: true });
+      itemIndex += 1;
+    }
+  });
+  const saved = await page.request.put(`/api/screens/${screen.id}/draft`, {
+    data: {
+      revision: editor.draft.revision,
+      rows,
+      settings: {
+        background_color: '#101828',
+        accent_color: '#F4C915',
+        text_color: '#F8FAFC',
+        font_scale_percent: 100
+      },
+      screen: {
+        location_id: screen.location_id,
+        name: screen.name,
+        resolution: '1920×1080',
+        status: 'draft',
+        active: true,
+        template_id: null
+      }
+    }
+  });
+  expect(saved.status()).toBe(200);
+  return { screen };
+}
+
 for (const viewport of [{ width: 1920, height: 1080 }, { width: 1366, height: 768 }]) {
   test(`editor keeps professional table usable at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
@@ -108,6 +149,27 @@ for (const viewport of [{ width: 1920, height: 1080 }, { width: 1366, height: 76
     });
   });
 }
+
+test('reference density fills canonical table exactly at 100 percent', async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await login(page);
+  const { screen } = await createReferenceDensityFixture(page);
+  await page.goto(`/screen-editor.html?id=${screen.id}`);
+
+  const preview = page.locator('#editor-menu-preview');
+  const svg = preview.locator('svg.menu-table-svg');
+  await expect(svg).toBeVisible();
+  await expect(svg.locator('.table-section')).toHaveCount(3);
+  await expect(svg.locator('.table-item')).toHaveCount(16);
+  await expect(preview).toHaveAttribute('data-font-scale-effective', '100');
+  await expect(page.locator('#editor-font-scale-effective')).toContainText('Фактически: 100%');
+  await expect(svg.locator('line[y1="1032"]')).toHaveCount(1);
+
+  await test.info().attach('reference-density-1920x1080.png', {
+    body: await page.screenshot({ fullPage: true }),
+    contentType: 'image/png'
+  });
+});
 
 test('reference geometry, manual scale and automatic fitting use one SVG renderer', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
