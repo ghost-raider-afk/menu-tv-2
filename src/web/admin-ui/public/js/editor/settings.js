@@ -15,5 +15,8 @@ export function normaliseEditorSettings(settings = {}) {
 export function parseResolution(value, fallback = { width: 1920, height: 1080 }) {
   const match = String(value || '').match(/^(\d{3,5})[×x](\d{3,5})$/);
   if (!match) return { ...fallback };
-  return { width: Math.min(1920, Math.max(1, Number(match[1]))), height: Math.min(1080, Math.max(1, Number(match[2]))) };
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1) return { ...fallback };
+  return { width, height };
 }
