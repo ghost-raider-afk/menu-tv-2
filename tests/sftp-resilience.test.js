@@ -45,12 +45,12 @@ test('staging cleanup removes only unreferenced keys', async () => {
   }
 });
 
-test('unsafe staging keys cannot escape the staging directory', async () => {
+test('unsafe staging keys are rejected before any filesystem access', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'menu-tv-sftp-storage-'));
   const storage = new SftpStorage(root);
   try {
     assert.throws(() => storage.stagedPath('../outside.jpg'), /Недопустимый/);
-    assert.equal(await storage.removeStaged('../outside.jpg'), false);
+    await assert.rejects(() => storage.removeStaged('../outside.jpg'), /Недопустимый/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
