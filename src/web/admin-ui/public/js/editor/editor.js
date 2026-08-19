@@ -7,7 +7,7 @@ import { updateSettings } from './commands.js';
 import { createEditorHistory } from './history.js';
 import { normaliseEditorSettings } from './settings.js';
 import { appendRow, renderRows } from './rows.js';
-import { bindSettingsProperties, readEditorSettings, readScreenProperties, writeEditorSettings, writeScreenProperties } from './properties.js';
+import { bindScreenProperties, bindSettingsProperties, readEditorSettings, readScreenProperties, syncDeliveryControls, writeEditorSettings, writeScreenProperties } from './properties.js';
 import { applySelectedTemplate, populateTemplateSelect } from './templates.js';
 import { renderPreview } from './preview.js';
 import { serializeDraft } from './serializer.js';
@@ -26,6 +26,26 @@ function populateEditor(screen, templates, editorState) {
   writeScreenProperties(screen);
   writeEditorSettings(editorState.settings);
   populateTemplateSelect(templates, editorState);
+  syncDeliveryControls(screen, editorState);
+}
+
+function setDirtyState(editorState) {
+  const target = element('editor-dirty-state');
+  if (!target) return;
+  target.textContent = editorState.dirty
+    ? 'Есть несохранённые изменения. Публикация заблокирована до сохранения.'
+    : 'Все изменения сохранены.';
+  target.classList.toggle('is-dirty', editorState.dirty);
+}
+
+function setLayoutWarning(preview, screen) {
+  const target = element('editor-layout-warning');
+  if (!target) return;
+  const overflowing = preview && preview.layout?.vertical?.fits === false;
+  target.classList.toggle('is-hidden', !overflowing);
+  target.textContent = overflowing
+    ? `Меню не помещается в ${screen?.resolution || 'текущее разрешение'}. Уменьшите размер текста или количество строк.`
+    : '';
 }
 
 export function initialiseScreenEditor() {
@@ -46,8 +66,30 @@ export function initialiseScreenEditor() {
   const previewTarget = element('editor-menu-preview');
   const rowsTarget = element('editor-menu-rows');
   const rowsEmpty = element('editor-menu-empty');
-  const refreshPreview = (screenOverride = screen) => renderPreview(editorState, { screen: screenOverride, products, packaging, target: previewTarget });
-  const refreshRows = () => renderRows(editorState, { target: rowsTarget, empty: rowsEmpty, products, packaging, onChange: refreshPreview });
+
+  const refreshPreview = (screenOverride = editorState.screen || screen) => renderPreview(editorState, {
+    screen: screenOverride,
+    products,
+    packaging,
+    target: previewTarget
+  });
+
+  const refreshEditorView = () => {
+    const activeScreen = editorState.screen || screen;
+    const preview = refreshPreview(activeScreen);
+    setLayoutWarning(preview, activeScreen);
+    setDirtyState(editorState);
+    syncDeliveryControls(screen || activeScreen, editorState);
+    return preview;
+  };
+
+  const refreshRows = () => renderRows(editorState, {
+    target: rowsTarget,
+    empty: rowsEmpty,
+    products,
+    packaging,
+    onChange: refreshEditorView
+  });
 
   const load = async () => {
     const editor = await api.get(`${API.screens}/${screenId}/editor`);
@@ -67,18 +109,19 @@ export function initialiseScreenEditor() {
     history.clear();
     populateEditor(screen, templates, editorState);
     refreshRows();
-    refreshPreview();
+    refreshEditorView();
   };
   void load().catch((error) => setEditorMessage(error.message));
 
-  bindSettingsProperties(editorState, refreshPreview);
-  element('editor-add-section')?.addEventListener('click', () => { history.checkpoint(); appendRow(editorState, 'section'); refreshRows(); refreshPreview(); });
-  element('editor-add-item')?.addEventListener('click', () => { history.checkpoint(); appendRow(editorState, 'item'); refreshRows(); refreshPreview(); });
-  element('editor-add-packaging')?.addEventListener('click', () => { history.checkpoint(); appendRow(editorState, 'packaging'); refreshRows(); refreshPreview(); });
+  bindSettingsProperties(editorState, refreshEditorView);
+  bindScreenProperties(editorState, refreshEditorView);
+  element('editor-add-section')?.addEventListener('click', () => { history.checkpoint(); appendRow(editorState, 'section'); refreshRows(); refreshEditorView(); });
+  element('editor-add-item')?.addEventListener('click', () => { history.checkpoint(); appendRow(editorState, 'item'); refreshRows(); refreshEditorView(); });
+  element('editor-add-packaging')?.addEventListener('click', () => { history.checkpoint(); appendRow(editorState, 'packaging'); refreshRows(); refreshEditorView(); });
   element('editor-template-apply')?.addEventListener('click', () => {
     applySelectedTemplate(editorState, templates, {
       checkpoint: history.checkpoint,
-      onApplied: () => { refreshRows(); refreshPreview(); }
+      onApplied: () => { refreshRows(); refreshEditorView(); }
     });
   });
 
@@ -89,10 +132,11 @@ export function initialiseScreenEditor() {
     try {
       updateSettings(editorState, readEditorSettings(editorState.settings));
       const screenPayload = {
-        ...readScreenProperties(screen),
+        ...readScreenProperties(editorState.screen || screen),
         template_id: editorState.templateId
       };
       const preview = refreshPreview(screenPayload);
+      setLayoutWarning(preview, screenPayload);
       if (!preview?.layout?.vertical?.fits) {
         throw new Error(`Меню не помещается в ${screenPayload.resolution}. Уменьшите размер текста или количество строк.`);
       }
@@ -124,10 +168,10 @@ export function initialiseScreenEditor() {
 
       populateEditor(screen, templates, editorState);
       refreshRows();
-      refreshPreview();
+      refreshEditorView();
       await loadNotifications();
       if (jpegPrepared) setEditorMessage('Монитор и меню сохранены. JPEG автоматически собран и подготовлен к публикации.', 'success');
-      else setEditorMessage(`Меню сохранено, но автоматическая сборка JPEG не завершена: ${jpegError?.message || 'неизвестная ошибка'}. Можно использовать ручную загрузку JPEG.`, 'error');
+      else setEditorMessage(`Меню сохранено, но автоматическая сборка JPEG не завершена: ${jpegError?.message || 'неизвестная ошибка'}. Можно использовать ручную загрузку JPEG после проверки.`, 'error');
     } catch (error) {
       setEditorMessage(error.message);
     } finally {
@@ -136,6 +180,7 @@ export function initialiseScreenEditor() {
   });
 
   element('editor-upload')?.addEventListener('click', async () => {
+    if (editorState.dirty) return setEditorMessage('Сначала сохраните изменения меню. Ручной JPEG должен соответствовать сохранённой версии.');
     const file = element('editor-source-file')?.files?.[0];
     if (!file) return setEditorMessage('Выберите JPEG-файл меню.');
     const button = element('editor-upload');
@@ -144,6 +189,7 @@ export function initialiseScreenEditor() {
       screen = await api.put(`${API.screens}/${screenId}/source`, file, { headers: { 'Content-Type': 'image/jpeg' } });
       editorState.screen = structuredClone(screen);
       populateEditor(screen, templates, editorState);
+      refreshEditorView();
       setEditorMessage('JPEG подготовлен. После проверки опубликуйте его на телевизор.', 'success');
       await loadNotifications();
     } catch (error) {
@@ -154,12 +200,14 @@ export function initialiseScreenEditor() {
   });
 
   element('editor-publish')?.addEventListener('click', async () => {
+    if (editorState.dirty) return setEditorMessage('Сначала сохраните изменения. Нельзя публиковать JPEG от предыдущей версии меню.');
     const button = element('editor-publish');
     setPending(button, true, 'Публикуем…');
     try {
       screen = await api.post(`${API.screens}/${screenId}/publish`);
       editorState.screen = structuredClone(screen);
       populateEditor(screen, templates, editorState);
+      refreshEditorView();
       setEditorMessage('JPEG опубликован в папке SFTP торговой точки.', 'success');
       await loadNotifications();
     } catch (error) {
