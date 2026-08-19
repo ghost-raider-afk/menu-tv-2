@@ -38,6 +38,21 @@ function setDirtyState(editorState) {
   target.classList.toggle('is-dirty', editorState.dirty);
 }
 
+function setFontScaleState(preview) {
+  const target = element('editor-font-scale-effective');
+  if (!target) return;
+  const vertical = preview?.layout?.vertical;
+  if (!vertical) {
+    target.textContent = 'Фактический масштаб будет рассчитан после загрузки меню.';
+    target.classList.remove('is-auto-reduced');
+    return;
+  }
+  target.textContent = vertical.autoReduced
+    ? `Задано ${vertical.requestedPercent}%, автоматически применено ${vertical.effectivePercent}% для вмещения всех строк.`
+    : `Фактически: ${vertical.effectivePercent}%. Автоматическое уменьшение не требуется.`;
+  target.classList.toggle('is-auto-reduced', vertical.autoReduced);
+}
+
 function setLayoutWarning(preview, screen) {
   const target = element('editor-layout-warning');
   if (!target) return;
@@ -49,7 +64,7 @@ function setLayoutWarning(preview, screen) {
   const overflowing = preview?.layout?.vertical?.fits === false;
   target.classList.toggle('is-hidden', !overflowing);
   target.textContent = overflowing
-    ? `Меню не помещается в ${screen?.resolution || 'текущее разрешение'}. Уменьшите размер текста или количество строк.`
+    ? `Меню не помещается в ${screen?.resolution || 'текущее разрешение'} даже при минимальном автоматическом масштабе. Сократите количество строк.`
     : '';
 }
 
@@ -83,6 +98,7 @@ export function initialiseScreenEditor() {
     const activeScreen = editorState.screen || screen;
     const preview = refreshPreview(activeScreen);
     setLayoutWarning(preview, activeScreen);
+    setFontScaleState(preview);
     setDirtyState(editorState);
     syncDeliveryControls(screen || activeScreen, editorState);
     return preview;
@@ -142,9 +158,10 @@ export function initialiseScreenEditor() {
       };
       const preview = refreshPreview(screenPayload);
       setLayoutWarning(preview, screenPayload);
+      setFontScaleState(preview);
       if (preview?.invalidResolution) throw new Error('Укажите разрешение в формате 1920×1080.');
       if (!preview?.layout?.vertical?.fits) {
-        throw new Error(`Меню не помещается в ${screenPayload.resolution}. Уменьшите размер текста или количество строк.`);
+        throw new Error(`Меню не помещается в ${screenPayload.resolution} даже при минимальном автоматическом масштабе. Сократите количество строк.`);
       }
 
       const saved = await api.put(`${API.screens}/${screenId}/draft`, serializeDraft(editorState, screenPayload));
