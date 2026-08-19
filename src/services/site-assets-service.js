@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { ValidationError } from '../shared/errors.js';
+import { validateImage } from './image-validation.js';
 
 export function siteSettingsResponse(settings, config) {
   const version = encodeURIComponent(settings.updated_at || '0');
@@ -15,13 +16,48 @@ export function siteSettingsResponse(settings, config) {
   };
 }
 
-function fileExtensionForSiteImage(kind, bytes) {
-  const isPng = bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-  const isJpeg = bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-  const isWebp = bytes.length > 12 && bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP';
-  const isIco = bytes.length > 4 && bytes.subarray(0, 4).equals(Buffer.from([0x00, 0x00, 0x01, 0x00]));
-  if (kind === 'logo') return isPng ? 'png' : isJpeg ? 'jpg' : isWebp ? 'webp' : null;
-  return isPng ? 'png' : isIco ? 'ico' : null;
+function inspectIco(bytes) {
+  if (!Buffer.isBuffer(bytes) || bytes.length < 22) return null;
+  if (!bytes.subarray(0, 4).equals(Buffer.from([0x00, 0x00, 0x01, 0x00]))) return null;
+  const count = bytes.readUInt16LE(4);
+  if (count < 1 || bytes.length < 6 + count * 16) return null;
+  let maxWidth = 0;
+  let maxHeight = 0;
+  for (let index = 0; index < count; index += 1) {
+    const offset = 6 + index * 16;
+    const width = bytes[offset] || 256;
+    const height = bytes[offset + 1] || 256;
+    const size = bytes.readUInt32LE(offset + 8);
+    const imageOffset = bytes.readUInt32LE(offset + 12);
+    if (!size || imageOffset + size > bytes.length) return null;
+    maxWidth = Math.max(maxWidth, width);
+    maxHeight = Math.max(maxHeight, height);
+  }
+  return { type: 'ico', width: maxWidth, height: maxHeight };
+}
+
+function validateSiteImage(kind, bytes, config) {
+  if (kind === 'favicon') {
+    const ico = inspectIco(bytes);
+    if (ico) {
+      if (ico.width > 256 || ico.height > 256) throw new ValidationError('Favicon ICO не должен превышать 256×256.');
+      return ico;
+    }
+    return validateImage(bytes, {
+      allowedTypes: ['png'],
+      maxWidth: 512,
+      maxHeight: 512,
+      maxPixels: 512 * 512,
+      label: 'Favicon'
+    });
+  }
+  return validateImage(bytes, {
+    allowedTypes: ['png', 'jpeg', 'webp'],
+    maxWidth: config.screenMaxWidth,
+    maxHeight: config.screenMaxHeight,
+    maxPixels: config.screenMaxWidth * config.screenMaxHeight,
+    label: 'Логотип'
+  });
 }
 
 export async function replaceSiteImage({ kind, bytes, config, store, username }) {
@@ -29,8 +65,8 @@ export async function replaceSiteImage({ kind, bytes, config, store, username })
   if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > maxBytes) {
     throw new ValidationError(`Размер ${kind === 'logo' ? 'логотипа' : 'favicon'} недопустим.`);
   }
-  const extension = fileExtensionForSiteImage(kind, bytes);
-  if (!extension) throw new ValidationError(kind === 'logo' ? 'Логотип должен быть PNG, JPEG или WebP.' : 'Favicon должен быть PNG или ICO.');
+  const info = validateSiteImage(kind, bytes, config);
+  const extension = info.type === 'jpeg' ? 'jpg' : info.type;
   const filename = `site-${kind}.${extension}`;
   const temporary = `${config.siteAssetsRoot}/.${filename}.${crypto.randomUUID()}.tmp`;
   await mkdir(config.siteAssetsRoot, { recursive: true, mode: 0o770 });
