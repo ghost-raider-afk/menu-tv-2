@@ -59,6 +59,18 @@ export function createScreensRepository(pool) {
       return rowCount ? getScreen(id) : null;
     },
 
+    async invalidatePreparedAsset(screenId) {
+      const { rows } = await pool.query(
+        `UPDATE screens SET prepared_asset_key = NULL, prepared_asset_sha256 = NULL, prepared_asset_size = NULL,
+         prepared_draft_revision = NULL, publication_pending_sha256 = NULL, publication_started_at = NULL,
+         status = 'draft', updated_at = $1
+         WHERE id = $2 AND publication_pending_sha256 IS NULL
+         RETURNING prepared_asset_key`,
+        [isoNow(), screenId]
+      );
+      return rows[0] || null;
+    },
+
     async deleteScreen(id) {
       const { rowCount } = await pool.query('DELETE FROM screens WHERE id = $1', [id]);
       return rowCount > 0;
