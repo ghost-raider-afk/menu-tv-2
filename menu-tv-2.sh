@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.1.11"
+SCRIPT_VERSION="1.1.12"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
@@ -381,10 +381,13 @@ ensure_sftp_env() {
   [[ -n "$(env_value SFTP_PUBLIC_HOST "$env_file")" ]] || set_env_value "$env_file" SFTP_PUBLIC_HOST "$domain"
   [[ -n "$(env_value SFTP_PORT "$env_file")" ]] || set_env_value "$env_file" SFTP_PORT "2022"
   [[ -n "$(env_value SFTP_API_URL "$env_file")" ]] || set_env_value "$env_file" SFTP_API_URL "http://sftp:8080"
+  [[ -n "$(env_value SFTP_API_TIMEOUT_MS "$env_file")" ]] || set_env_value "$env_file" SFTP_API_TIMEOUT_MS "5000"
   [[ -n "$(env_value SFTP_STORAGE_ROOT "$env_file")" ]] || set_env_value "$env_file" SFTP_STORAGE_ROOT "/srv/menu-tv-sftp"
+  [[ -n "$(env_value SFTP_STAGING_MAX_AGE_HOURS "$env_file")" ]] || set_env_value "$env_file" SFTP_STAGING_MAX_AGE_HOURS "24"
   [[ -n "$(env_value SITE_ASSETS_ROOT "$env_file")" ]] || set_env_value "$env_file" SITE_ASSETS_ROOT "/srv/menu-tv-site-assets"
   [[ -n "$(env_value SITE_LOGO_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" SITE_LOGO_MAX_BYTES "2097152"
   [[ -n "$(env_value SITE_FAVICON_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" SITE_FAVICON_MAX_BYTES "524288"
+  [[ -n "$(env_value TEMPLATE_BACKGROUND_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" TEMPLATE_BACKGROUND_MAX_BYTES "12582912"
   [[ -n "$(env_value GENERATED_PASSWORD_LENGTH "$env_file")" ]] || set_env_value "$env_file" GENERATED_PASSWORD_LENGTH "10"
   [[ -n "$(env_value LOGIN_MAX_ATTEMPTS "$env_file")" ]] || set_env_value "$env_file" LOGIN_MAX_ATTEMPTS "8"
   [[ -n "$(env_value LOGIN_WINDOW_MINUTES "$env_file")" ]] || set_env_value "$env_file" LOGIN_WINDOW_MINUTES "15"
@@ -496,7 +499,7 @@ wait_for_database() {
 }
 
 verify_application() {
-  compose exec -T "$APP_SERVICE" node -e "fetch('http://127.0.0.1:8080/healthz').then((r) => { if (!r.ok) process.exit(1); return r.json(); }).then((body) => process.exit(body.service === 'menu-tv-2.0' ? 0 : 1)).catch(() => process.exit(1))"
+  compose exec -T "$APP_SERVICE" node -e "fetch('http://127.0.0.1:8080/readyz').then((r) => { if (!r.ok) process.exit(1); return r.json(); }).then((body) => process.exit(body.service === 'menu-tv-2.0' && body.status === 'ready' ? 0 : 1)).catch(() => process.exit(1))"
 }
 
 verify_sftp() {
