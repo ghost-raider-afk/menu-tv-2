@@ -34,6 +34,11 @@ export function createScreensRepository(pool) {
 
     getScreen,
 
+    async lockScreen(id) {
+      const { rowCount } = await pool.query('SELECT id FROM screens WHERE id = $1 FOR UPDATE', [id]);
+      return rowCount > 0;
+    },
+
     async createScreen({ location_id, name, resolution = '1920×1080', status = 'draft', active = true, template_id = null }) {
       const now = isoNow();
       const { rows } = await pool.query(
@@ -60,15 +65,14 @@ export function createScreensRepository(pool) {
     },
 
     async invalidatePreparedAsset(screenId) {
-      const { rows } = await pool.query(
+      const { rowCount } = await pool.query(
         `UPDATE screens SET prepared_asset_key = NULL, prepared_asset_sha256 = NULL, prepared_asset_size = NULL,
          prepared_draft_revision = NULL, publication_pending_sha256 = NULL, publication_started_at = NULL,
          status = 'draft', updated_at = $1
-         WHERE id = $2 AND publication_pending_sha256 IS NULL
-         RETURNING prepared_asset_key`,
+         WHERE id = $2 AND publication_pending_sha256 IS NULL`,
         [isoNow(), screenId]
       );
-      return rows[0] || null;
+      return rowCount > 0;
     },
 
     async deleteScreen(id) {
