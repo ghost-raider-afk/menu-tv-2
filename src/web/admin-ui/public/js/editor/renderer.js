@@ -425,8 +425,8 @@ function itemMarkup(line, box, horizontal, palette, scale, typography) {
   const availableNameWidth = horizontal.primaryBoundary - contentX - 20 * scale;
   const mainMax = fitCharacters(availableNameWidth, titleSize, 0.54);
   const metaMax = fitCharacters(availableNameWidth, metaSize, 0.51);
-  const mainBaseline = box.top + 38 * scale;
-  const metaBaseline = box.top + 64 * scale;
+  const mainBaseline = box.top + 34 * scale;
+  const metaBaseline = box.top + 65 * scale;
   const priceBaseline = box.top + 50 * scale;
 
   return `<g class="table-item tone-${line.tone === 'accent' ? 'accent' : 'light'}">
