@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import { ValidationError } from '../shared/errors.js';
 
 const JPEG_SOF = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf]);
@@ -89,16 +90,40 @@ export function inspectImage(bytes) {
   return jpegInfo(bytes) || pngInfo(bytes) || webpInfo(bytes);
 }
 
-export function validateImage(bytes, { allowedTypes, maxWidth, maxHeight, maxPixels, label = 'Изображение' }) {
-  const info = inspectImage(bytes);
-  if (!info || !allowedTypes.includes(info.type)) {
+async function decodeImage(bytes, { maxPixels, label }) {
+  try {
+    const pipeline = sharp(bytes, { failOn: 'error', limitInputPixels: maxPixels, sequentialRead: true });
+    const metadata = await pipeline.metadata();
+    if (!metadata.width || !metadata.height || !metadata.format) throw new Error('missing metadata');
+    if (metadata.pages && metadata.pages > 1) throw new ValidationError(`${label}: анимированные и многостраничные изображения не поддерживаются.`);
+    await pipeline.clone().resize({ width: 1, height: 1, fit: 'fill' }).toBuffer();
+    return {
+      type: metadata.format === 'jpg' ? 'jpeg' : metadata.format,
+      width: metadata.width,
+      height: metadata.height,
+      orientation: metadata.orientation || 1
+    };
+  } catch (error) {
+    if (error instanceof ValidationError) throw error;
+    throw new ValidationError(`${label}: файл не удалось полностью декодировать как изображение.`);
+  }
+}
+
+export async function validateImage(bytes, { allowedTypes, maxWidth, maxHeight, maxPixels, label = 'Изображение' }) {
+  const structural = inspectImage(bytes);
+  if (!structural || !allowedTypes.includes(structural.type)) {
     throw new ValidationError(`${label}: формат или структура файла не поддерживается.`);
   }
-  const pixels = info.width * info.height;
-  if (info.width > maxWidth || info.height > maxHeight || pixels > maxPixels) {
+  const structuralPixels = structural.width * structural.height;
+  if (structural.width > maxWidth || structural.height > maxHeight || structuralPixels > maxPixels) {
     throw new ValidationError(`${label}: максимальный размер — ${maxWidth}×${maxHeight}, не более ${maxPixels} пикселей.`);
   }
-  return info;
+
+  const decoded = await decodeImage(bytes, { maxPixels, label });
+  if (!allowedTypes.includes(decoded.type) || decoded.width !== structural.width || decoded.height !== structural.height) {
+    throw new ValidationError(`${label}: структура файла не совпадает с декодированным изображением.`);
+  }
+  return decoded;
 }
 
 export function parseResolution(value) {
@@ -107,18 +132,20 @@ export function parseResolution(value) {
   return { width: Number(match[1]), height: Number(match[2]) };
 }
 
-export function validateScreenJpeg(bytes, resolution) {
+export async function validateScreenJpeg(bytes, resolution, maxPixels) {
   const expected = parseResolution(resolution);
   if (!expected) throw new ValidationError('У монитора указано некорректное разрешение.');
-  const info = validateImage(bytes, {
+  if (!Number.isSafeInteger(maxPixels) || maxPixels < 1) throw new Error('IMAGE_MAX_PIXELS должен быть передан в проверку JPEG.');
+  const info = await validateImage(bytes, {
     allowedTypes: ['jpeg'],
     maxWidth: expected.width,
     maxHeight: expected.height,
-    maxPixels: expected.width * expected.height,
+    maxPixels: Math.min(maxPixels, expected.width * expected.height),
     label: 'JPEG монитора'
   });
   if (info.width !== expected.width || info.height !== expected.height) {
     throw new ValidationError(`JPEG монитора должен иметь разрешение ${expected.width}×${expected.height}.`);
   }
+  if (info.orientation !== 1) throw new ValidationError('JPEG монитора не должен содержать EXIF-поворот.');
   return info;
 }
