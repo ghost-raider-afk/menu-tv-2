@@ -95,13 +95,17 @@ export function renderPreview(editorState, { screen, products, packaging, target
   const settings = model.settings;
   const lines = buildDisplayLines(model, { products, packaging, fallbackTitle: screen?.name || 'Меню' });
   const renderLayout = buildRenderLayout(model, lines);
+  const palette = renderLayout.palette;
 
-  target.style.setProperty('--menu-background', settings.background_color || '#101828');
-  target.style.setProperty('--menu-accent', settings.accent_color || '#F4C915');
-  target.style.setProperty('--menu-text', settings.text_color || '#F8FAFC');
-  target.style.backgroundColor = settings.background_color || '#101828';
+  target.style.setProperty('--menu-background', palette.background);
+  target.style.setProperty('--menu-accent', palette.accent);
+  target.style.setProperty('--menu-section-text', palette.sectionText);
+  target.style.setProperty('--menu-text-readable', palette.primaryText);
+  target.style.setProperty('--menu-accent-readable', palette.accentText);
+  target.style.setProperty('--menu-table-overlay', String(palette.imageBackdropOpacity));
+  target.style.backgroundColor = palette.background;
   target.style.backgroundImage = settings.background_image_url ? `url("${settings.background_image_url}")` : '';
-  target.style.backgroundSize = '100% 100%';
+  target.style.backgroundSize = 'cover';
   target.style.backgroundPosition = 'center';
   target.style.aspectRatio = `${model.viewport.width} / ${model.viewport.height}`;
   target.dataset.fontScale = settings.font_scale || 'medium';
