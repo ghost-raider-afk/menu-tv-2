@@ -1,6 +1,6 @@
-HEAD=4e1cc4a95faeb9c272fe90b4de58d2dc8a0c7fcd
+HEAD=1f898be58167e8674323422f22c7a7312f072f85
 
-added 114 packages, and audited 115 packages in 3s
+added 114 packages, and audited 115 packages in 2s
 
 36 packages are looking for funding
   run `npm fund` for details
@@ -19,84 +19,84 @@ npm_ci_status=0
 > menu-tv-2@0.1.0 test
 > node --test
 
-✔ public liveness/readiness, visual default and protected session work (361.915333ms)
-✔ locations, screens and templates persist through modular PostgreSQL repositories (178.435664ms)
-✔ catalogue draft uses revision locking and preserves required linkage and prices (195.595476ms)
-{"timestamp":"2026-08-19T05:49:22.403Z","level":"error","message":"HTTP request failed","method":"PUT","path":"/api/screens/3/source","actor":"admin","error":{"name":"Error","message":"cannot cast type list to text\n\n🐜 This seems to be an execution error, which means that your request syntax seems okay,\n    but the resulting statement cannot be executed → Probably not a pg-mem error.\n\n*️⃣ Failed SQL statement: UPDATE screens SET prepared_asset_key = '3-060ee7e0-89ba-4f66-a172-b79cfda8f9b8.jpg', prepared_asset_sha256 = '7dc2e98844a4f8164d5aa038b5a6f148edd72c081b0b1a48350e48c474f4279a', prepared_asset_size = '12508',\n         prepared_draft_revision = '1', publication_pending_sha256 = NULL, publication_started_at = NULL,\n         status = 'ready', updated_at = '2026-08-19T05:49:22.399Z'\n         WHERE id = '3' AND publication_pending_sha256 IS NULL\n           AND '1' = (SELECT revision FROM screen_drafts WHERE screen_id = '3');\n\n👉 You can file an issue at https://github.com/oguimbal/pg-mem along with a way to reproduce this error (if you can), and  the stacktrace:\n\n","stack":"Error: cannot cast type list to text\n\n🐜 This seems to be an execution error, which means that your request syntax seems okay,\n    but the resulting statement cannot be executed → Probably not a pg-mem error.\n\n*️⃣ Failed SQL statement: UPDATE screens SET prepared_asset_key = '3-060ee7e0-89ba-4f66-a172-b79cfda8f9b8.jpg', prepared_asset_sha256 = '7dc2e98844a4f8164d5aa038b5a6f148edd72c081b0b1a48350e48c474f4279a', prepared_asset_size = '12508',\n         prepared_draft_revision = '1', publication_pending_sha256 = NULL, publication_started_at = NULL,\n         status = 'ready', updated_at = '2026-08-19T05:49:22.399Z'\n         WHERE id = '3' AND publication_pending_sha256 IS NULL\n           AND '1' = (SELECT revision FROM screen_drafts WHERE screen_id = '3');\n\n👉 You can file an issue at https://github.com/oguimbal/pg-mem along with a way to reproduce this error (if you can), and  the stacktrace:\n\n\n    at /home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:4299:19\n    at Array.reduce (<anonymous>)\n    at reconciliateTypesRaw (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:4292:10)\n    at reconciliateTypes (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:4287:12)\n    at buildComparison (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:12786:63)\n    at buildBinaryFilter (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:12697:20)\n    at _buildFilter (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:12664:20)\n    at /home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:12637:22\n    at StackOf.usingValue (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1192:24)\n    at buildFilter (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:12631:40)"}}
-✖ SFTP access, validated JPEG staging and recoverable publication work through service boundary (208.473322ms)
-✔ profile, site settings and password change remain independent from SFTPGo users table (198.509841ms)
-✔ server is a thin application assembly layer (8.395915ms)
-✔ database facade lives only in db index and contains no domain SQL (5.0424ms)
-✔ SFTP facade lives only in sftp index and is composed from client storage and publisher (3.042221ms)
-✔ configuration has one modular entrypoint and no legacy config file (3.2971ms)
-✔ fresh PostgreSQL schema uses TV Menu 1 visual default without overwriting a changed accent (1.401457ms)
-✔ runtime limits are controlled by environment values (2.863777ms)
-✔ runtime config refuses missing env values instead of using code fallbacks (0.781594ms)
-✔ runtime booleans must be explicit true or false (0.468307ms)
-✔ generated SFTP password respects configured length and character classes (1.236357ms)
-✔ shell uses dynamic viewport height and explicit layer tokens (8.589408ms)
-✔ hidden switches expose a keyboard focus indicator (2.292627ms)
-✔ preview aspect ratio is driven by monitor resolution and table has one canonical SVG owner (3.161295ms)
-✔ preview and final image share the exact canonical SVG and fit logic (4.354248ms)
-✔ site accent derives contrast colors instead of reusing arbitrary accent as text (1.411478ms)
-✖ screen creation rolls back screen and draft together after a later failure (257.030333ms)
-✖ stale draft revision rolls back screen metadata changed earlier in the transaction (79.405812ms)
-✔ all pages use the single final CSS entrypoint and contain no legacy shell (13.103546ms)
-✔ CSS architecture has one permanent entrypoint and TV Menu 1 identity tokens (5.028076ms)
-✔ shell is composed from dedicated permanent components (2.050563ms)
-✖ menu editor owns one canonical reference-geometry SVG table (7.89157ms)
-✔ legacy frontend files are physically absent (5.921989ms)
-✔ frontend modules resolve as a complete ES module graph (50.407432ms)
-✔ image inspector reads dimensions from real JPEG and PNG files (40.533855ms)
-✔ screen JPEG is fully decoded and must exactly match monitor resolution (61.996598ms)
-✔ structurally plausible but truncated image is rejected by full decoder (8.098498ms)
-✔ image limits reject decompression-bomb dimensions before decoding tiny payload (0.435186ms)
-✔ positive ids reject trailing characters and unsafe integers (2.692486ms)
-✔ site refresh interval rejects numeric prefixes with junk suffixes (256.86413ms)
-✔ current password is verified as entered while complexity applies only to the new password (0.433682ms)
-✔ environment integer parser rejects partial numeric strings (1.171566ms)
-✔ login limiter blocks after configured number of failures and resets on success (1.364387ms)
-✔ canonical table geometry is locked to the supplied 2048x1152 reference (2.37606ms)
-✔ one canonical SVG contains sections, producer and both price columns (5.769432ms)
-✔ font scale automatically reduces to fit but respects manual maximum (1.265271ms)
-✔ menu that cannot fit even at minimum scale is explicitly rejected by layout (0.77336ms)
-✔ legacy menu settings are migrated once into canonical font scale percent (90.125505ms)
-✔ menu settings contract stores only canonical renderer fields (2.650819ms)
-✔ menu font scale has one validated range (0.943909ms)
-✔ client cannot inject arbitrary template asset URL (0.302437ms)
-✔ staged JPEG is bound to the exact current draft revision (41.394159ms)
-✔ staging race removes the new orphan when draft changed before DB commit (36.883556ms)
-✔ pending publication is recovered by target SHA without rewriting the file (1.261895ms)
-✔ SFTPGo management requests fail with a bounded timeout (27.277843ms)
-✔ staging cleanup removes only unreferenced keys (11.597698ms)
-✔ unsafe staging keys are rejected before any filesystem access (2.902116ms)
-✔ failed database update removes only the new site asset and keeps the previous file (31.313644ms)
-✔ successful site asset update switches to a unique file then removes the previous asset (20.4875ms)
-✔ canonical table geometry is locked to the supplied 2048x1152 reference (2.278411ms)
-✔ reference row set exactly fills the reference table at 100 percent (5.705482ms)
-✔ overflow automatically reduces scale while preserving exact horizontal reference columns (2.764892ms)
-✔ template background replacement preserves assets referenced by saved screen drafts (68.90638ms)
-✔ editor commands mutate only Editor State and track dirty revision (2.311552ms)
-✔ template application replaces editor rows/settings locally (1.394112ms)
-✔ renderer model filters disabled rows and respects arbitrary monitor aspect ratio (0.598872ms)
-✔ template background survives settings normalization and uses canonical defaults (0.531917ms)
-✔ canonical table keeps prices separate and places producer next to product name (2.877373ms)
-✔ board geometry is locked to the supplied reference and leaves artwork on the right (0.209593ms)
-✔ automatic font fitting reduces scale and refuses silent clipping (0.699711ms)
-✔ shared application errors expose stable HTTP status values (1.015574ms)
+✔ public liveness/readiness, visual default and protected session work (287.898274ms)
+✔ locations, screens and templates persist through modular PostgreSQL repositories (178.033733ms)
+✔ catalogue draft uses revision locking and preserves required linkage and prices (188.370139ms)
+{"timestamp":"2026-08-19T05:51:05.946Z","level":"error","message":"HTTP request failed","method":"PUT","path":"/api/screens/3/source","actor":"admin","error":{"name":"Error","message":"cannot cast type list to text\n\n🐜 This seems to be an execution error, which means that your request syntax seems okay,\n    but the resulting statement cannot be executed → Probably not a pg-mem error.\n\n*️⃣ Failed SQL statement: UPDATE screens SET prepared_asset_key = '3-363a7a6f-06ed-4909-8476-101a74c5e0ac.jpg', prepared_asset_sha256 = '7dc2e98844a4f8164d5aa038b5a6f148edd72c081b0b1a48350e48c474f4279a', prepared_asset_size = '12508',\n         prepared_draft_revision = '1', publication_pending_sha256 = NULL, publication_started_at = NULL,\n         status = 'ready', updated_at = '2026-08-19T05:51:05.940Z'\n         WHERE id = '3' AND publication_pending_sha256 IS NULL\n           AND '1' = (SELECT revision FROM screen_drafts WHERE screen_id = '3');\n\n👉 You can file an issue at https://github.com/oguimbal/pg-mem along with a way to reproduce this error (if you can), and  the stacktrace:\n\n","stack":"Error: cannot cast type list to text\n\n🐜 This seems to be an execution error, which means that your request syntax seems okay,\n    but the resulting statement cannot be executed → Probably not a pg-mem error.\n\n*️⃣ Failed SQL statement: UPDATE screens SET prepared_asset_key = '3-363a7a6f-06ed-4909-8476-101a74c5e0ac.jpg', prepared_asset_sha256 = '7dc2e98844a4f8164d5aa038b5a6f148edd72c081b0b1a48350e48c474f4279a', prepared_asset_size = '12508',\n         prepared_draft_revision = '1', publication_pending_sha256 = NULL, publication_started_at = NULL,\n         status = 'ready', updated_at = '2026-08-19T05:51:05.940Z'\n         WHERE id = '3' AND publication_pending_sha256 IS NULL\n           AND '1' = (SELECT revision FROM screen_drafts WHERE screen_id = '3');\n\n👉 You can file an issue at https://github.com/oguimbal/pg-mem along with a way to reproduce this error (if you can), and  the stacktrace:\n\n\n    at /home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:4299:19\n    at Array.reduce (<anonymous>)\n    at reconciliateTypesRaw (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:4292:10)\n    at reconciliateTypes (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:4287:12)\n    at buildComparison (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:12786:63)\n    at buildBinaryFilter (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:12697:20)\n    at _buildFilter (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:12664:20)\n    at /home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:12637:22\n    at StackOf.usingValue (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1192:24)\n    at buildFilter (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:12631:40)"}}
+✖ SFTP access, validated JPEG staging and recoverable publication work through service boundary (183.74139ms)
+✔ profile, site settings and password change remain independent from SFTPGo users table (211.486951ms)
+✔ server is a thin application assembly layer (6.807134ms)
+✔ database facade lives only in db index and contains no domain SQL (5.902227ms)
+✔ SFTP facade lives only in sftp index and is composed from client storage and publisher (2.281567ms)
+✔ configuration has one modular entrypoint and no legacy config file (3.917207ms)
+✔ fresh PostgreSQL schema uses TV Menu 1 visual default without overwriting a changed accent (2.010257ms)
+✔ runtime limits are controlled by environment values (1.762712ms)
+✔ runtime config refuses missing env values instead of using code fallbacks (0.647288ms)
+✔ runtime booleans must be explicit true or false (1.836745ms)
+✔ generated SFTP password respects configured length and character classes (0.784825ms)
+✔ shell uses dynamic viewport height and explicit layer tokens (10.697461ms)
+✔ hidden switches expose a keyboard focus indicator (3.307807ms)
+✔ preview aspect ratio is driven by monitor resolution and table has one canonical SVG owner (3.127795ms)
+✔ preview and final image share the exact canonical SVG and fit logic (5.090491ms)
+✔ site accent derives contrast colors instead of reusing arbitrary accent as text (1.466165ms)
+✖ screen creation rolls back screen and draft together after a later failure (264.141524ms)
+✖ stale draft revision rolls back screen metadata changed earlier in the transaction (73.764619ms)
+✔ all pages use the single final CSS entrypoint and contain no legacy shell (14.812608ms)
+✔ CSS architecture has one permanent entrypoint and TV Menu 1 identity tokens (5.80521ms)
+✔ shell is composed from dedicated permanent components (2.244611ms)
+✔ menu editor owns one professional semantic table and one canonical reference renderer (4.303461ms)
+✔ legacy frontend files are physically absent (2.704476ms)
+✔ frontend modules resolve as a complete ES module graph (44.291854ms)
+✔ image inspector reads dimensions from real JPEG and PNG files (40.853228ms)
+✔ screen JPEG is fully decoded and must exactly match monitor resolution (46.271445ms)
+✔ structurally plausible but truncated image is rejected by full decoder (5.812511ms)
+✔ image limits reject decompression-bomb dimensions before decoding tiny payload (0.743403ms)
+✔ positive ids reject trailing characters and unsafe integers (1.518264ms)
+✔ site refresh interval rejects numeric prefixes with junk suffixes (21.137854ms)
+✔ current password is verified as entered while complexity applies only to the new password (0.494447ms)
+✔ environment integer parser rejects partial numeric strings (1.103177ms)
+✔ login limiter blocks after configured number of failures and resets on success (1.806149ms)
+✔ canonical table geometry is locked to the supplied 2048x1152 reference (1.978319ms)
+✔ one canonical SVG contains sections, producer and both price columns (4.561391ms)
+✔ font scale automatically reduces to fit but respects manual maximum (1.353055ms)
+✔ menu that cannot fit even at minimum scale is explicitly rejected by layout (0.644934ms)
+✔ legacy menu settings are migrated once into canonical font scale percent (68.658855ms)
+✔ menu settings contract stores only canonical renderer fields (2.266193ms)
+✔ menu font scale has one validated range (0.819208ms)
+✔ client cannot inject arbitrary template asset URL (0.302787ms)
+✔ staged JPEG is bound to the exact current draft revision (46.462747ms)
+✔ staging race removes the new orphan when draft changed before DB commit (29.032921ms)
+✔ pending publication is recovered by target SHA without rewriting the file (0.899299ms)
+✔ SFTPGo management requests fail with a bounded timeout (26.681439ms)
+✔ staging cleanup removes only unreferenced keys (10.426792ms)
+✔ unsafe staging keys are rejected before any filesystem access (2.620729ms)
+✔ failed database update removes only the new site asset and keeps the previous file (26.927711ms)
+✔ successful site asset update switches to a unique file then removes the previous asset (18.144041ms)
+✔ canonical table geometry is locked to the supplied 2048x1152 reference (2.06517ms)
+✔ reference row set exactly fills the reference table at 100 percent (3.719329ms)
+✔ overflow automatically reduces scale while preserving exact horizontal reference columns (2.54162ms)
+✔ template background replacement preserves assets referenced by saved screen drafts (77.498285ms)
+✔ editor commands mutate only Editor State and track dirty revision (1.466967ms)
+✔ template application replaces editor rows/settings locally (1.293925ms)
+✔ renderer model filters disabled rows and respects arbitrary monitor aspect ratio (0.561579ms)
+✔ template background survives settings normalization and uses canonical defaults (0.592615ms)
+✔ canonical table keeps prices separate and places producer next to product name (2.175216ms)
+✔ board geometry is locked to the supplied reference and leaves artwork on the right (0.217459ms)
+✔ automatic font fitting reduces scale and refuses silent clipping (0.659737ms)
+✔ shared application errors expose stable HTTP status values (0.902894ms)
 ℹ tests 64
 ℹ suites 0
-ℹ pass 60
-ℹ fail 4
+ℹ pass 61
+ℹ fail 3
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 1812.722342
+ℹ duration_ms 1746.374992
 
 ✖ failing tests:
 
 test at tests/api.test.js:263:1
-✖ SFTP access, validated JPEG staging and recoverable publication work through service boundary (208.473322ms)
+✖ SFTP access, validated JPEG staging and recoverable publication work through service boundary (183.74139ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
   
   500 !== 200
@@ -114,7 +114,7 @@ test at tests/api.test.js:263:1
   }
 
 test at tests/database-transactions.test.js:14:1
-✖ screen creation rolls back screen and draft together after a later failure (257.030333ms)
+✖ screen creation rolls back screen and draft together after a later failure (264.141524ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
   
   1 !== 0
@@ -131,7 +131,7 @@ test at tests/database-transactions.test.js:14:1
   }
 
 test at tests/database-transactions.test.js:34:1
-✖ stale draft revision rolls back screen metadata changed earlier in the transaction (79.405812ms)
+✖ stale draft revision rolls back screen metadata changed earlier in the transaction (73.764619ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
   + actual - expected
   
@@ -146,247 +146,6 @@ test at tests/database-transactions.test.js:34:1
     actual: 'Must roll back',
     expected: 'Original name',
     operator: 'strictEqual',
-    diff: 'simple'
-  }
-
-test at tests/frontend-architecture.test.js:41:1
-✖ menu editor owns one canonical reference-geometry SVG table (7.89157ms)
-  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /editor-menu-table-head/. Input:
-  
-  "import { addRow, moveRow, removeRow, updateRow } from './commands.js';\n" +
-    "import { makeButton, price } from '../core/dom.js';\n" +
-    '\n' +
-    'export function createEditorRow(kind) {\n' +
-    '  return {\n' +
-    '    id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,\n' +
-    '    kind,\n' +
-    '    enabled: true,\n' +
-    "    ...(kind === 'section'\n" +
-    "      ? { name: 'Новый раздел' }\n" +
-    "      : kind === 'item'\n" +
-    "        ? { product_id: '', characteristics: '', promotion: false, promotion_text: '' }\n" +
-    "        : { packaging_id: '' })\n" +
-    '  };\n' +
-    '}\n' +
-    '\n' +
-    'function td(className, ...children) {\n' +
-    "  const node = document.createElement('td');\n" +
-    '  node.className = className;\n' +
-    '  node.append(...children.filter(Boolean));\n' +
-    '  return node;\n' +
-    '}\n' +
-    '\n' +
-    "function text(value, className = '') {\n" +
-    "  const node = document.createElement('span');\n" +
-    '  if (className) node.className = className;\n' +
-    '  node.textContent = value;\n' +
-    '  return node;\n' +
-    '}\n' +
-    '\n' +
-    'function controlButton(label, title, tone, action) {\n' +
-    '  const button = makeButton(label, tone, action);\n' +
-    "  button.classList.add('editor-row-action');\n" +
-    '  button.title = title;\n' +
-    "  button.setAttribute('aria-label', title);\n" +
-    '  return button;\n' +
-    '}\n' +
-    '\n' +
-    'function actionButtons(editorState, row, index, refresh) {\n' +
-    "  const controls = document.createElement('div');\n" +
-    "  controls.className = 'editor-row-actions';\n" +
-    "  const up = controlButton('↑', 'Переместить выше', '', () => { moveRow(editorState, row.id, index - 1); refresh(); });\n" +
-    "  const down = controlButton('↓', 'Переместить ниже', '', () => { moveRow(editorState, row.id, index + 1); refresh(); });\n" +
-    '  up.disabled = index === 0;\n' +
-    '  down.disabled = index >= editorState.rows.length - 1;\n' +
-    '  controls.append(\n' +
-    '    up,\n' +
-    '    down,\n' +
-    "    controlButton(row.enabled === false ? '○' : '●', row.enabled === false ? 'Показать строку' : 'Скрыть строку', '', () => {\n" +
-    '      updateRow(editorState, row.id, { enabled: row.enabled === false });\n' +
-    '      refresh();\n' +
-    '    }),\n' +
-    "    controlButton('×', 'Удалить строку', 'danger', () => { removeRow(editorState, row.id); refresh(); })\n" +
-    '  );\n' +
-    '  return controls;\n' +
-    '}\n' +
-    '\n' +
-    'function orderCell(index, kind) {\n' +
-    "  const wrap = document.createElement('div');\n" +
-    "  wrap.className = 'editor-row-order';\n" +
-    "  wrap.append(text(String(index + 1), 'editor-row-number'), text(kind, 'editor-row-kind'));\n" +
-    '  return wrap;\n' +
-    '}\n' +
-    '\n' +
-    'function sectionRow(editorState, row, index, refresh, onChange) {\n' +
-    "  const line = document.createElement('tr');\n" +
-    "  line.className = `editor-menu-table-section${row.enabled === false ? ' is-disabled' : ''}`;\n" +
-    '  line.dataset.rowId = row.id;\n' +
-    '\n' +
-    "  const input = document.createElement('input');\n" +
-    "  input.className = 'editor-section-name';\n" +
-    '  input.maxLength = 100;\n' +
-    "  input.value = row.name || '';\n" +
-    "  input.placeholder = 'Название раздела';\n" +
-    "  input.addEventListener('input', () => { updateRow(editorState, row.id, { name: input.value }); onChange?.(); });\n" +
-    '\n' +
-    "  const titleCell = td('editor-menu-position editor-section-cell', input);\n" +
-    '  titleCell.colSpan = 3;\n' +
-    '  line.append(\n' +
-    "    td('editor-menu-order', orderCell(index, 'Раздел')),\n" +
-    '    titleCell,\n' +
-    "    td('editor-menu-price editor-menu-price-label', text(index === 0 ? '1,0 л' : '—')),\n" +
-    "    td('editor-menu-price editor-menu-price-label', text(index === 0 ? '1,5 л' : '—')),\n" +
-    "    td('editor-menu-actions', actionButtons(editorState, row, index, refresh))\n" +
-    '  );\n' +
-    '  return line;\n' +
-    '}\n' +
-    '\n' +
-    'function productSelect(row, products, refresh, editorState) {\n' +
-    "  const select = document.createElement('select');\n" +
-    "  select.className = 'editor-product-select';\n" +
-    '  select.append(\n' +
-    "    new Option('Выберите продукцию', ''),\n" +
-    '    ...products\n' +
-    '      .filter((item) => item.active || Number(item.id) === Number(row.product_id))\n' +
-    '      .map((item) => new Option(item.name, String(item.id)))\n' +
-    '  );\n' +
-    "  select.value = row.product_id ? String(row.product_id) : '';\n" +
-    "  select.addEventListener('change', () => {\n" +
-    '    updateRow(editorState, row.id, { product_id: select.value });\n' +
-    '    refresh();\n' +
-    '  });\n' +
-    '  return select;\n' +
-    '}\n' +
-    '\n' +
-    'function detailsEditor(editorState, row, product, onChange) {\n' +
-    "  const wrap = document.createElement('div');\n" +
-    "  wrap.className = 'editor-details-stack';\n" +
-    "  const subtitle = document.createElement('input');\n" +
-    '  subtitle.maxLength = 180;\n' +
-    "  subtitle.value = row.characteristics || '';\n" +
-    "  subtitle.placeholder = product?.characteristics || 'Дополнительная подпись';\n" +
-    "  subtitle.addEventListener('input', () => { updateRow(editorState, row.id, { characteristics: subtitle.value }); onChange?.(); });\n" +
-    '\n' +
-    "  const promotion = document.createElement('div');\n" +
-    "  promotion.className = 'editor-promotion-control';\n" +
-    "  const toggle = document.createElement('label');\n" +
-    "  toggle.className = 'editor-promotion-toggle';\n" +
-    "  const check = document.createElement('input');\n" +
-    "  check.type = 'checkbox';\n" +
-    '  check.checked = row.promotion === true;\n' +
-    "  toggle.append(check, text('Акция'));\n" +
-    "  const promotionText = document.createElement('input');\n" +
-    '  promotionText.maxLength = 80;\n' +
-    "  promotionText.value = row.promotion_text || '';\n" +
-    "  promotionText.placeholder = 'Текст акции';\n" +
-    '  promotionText.disabled = !check.checked;\n' +
-    "  check.addEventListener('change', () => {\n" +
-    '    updateRow(editorState, row.id, { promotion: check.checked });\n' +
-    '    promotionText.disabled = !check.checked;\n' +
-    '    onChange?.();\n' +
-    '  });\n' +
-    "  promotionText.addEventListener('input', () => { updateRow(editorState, row.id, { promotion_text: promotionText.value }); onChange?.(); });\n" +
-    '  promotion.append(toggle, promotionText);\n' +
-    '  wrap.append(subtitle, promotion);\n' +
-    '  return wrap;\n' +
-    '}\n' +
-    '\n' +
-    'function itemRow(editorState, row, index, products, refresh, onChange) {\n' +
-    "  const line = document.createElement('tr');\n" +
-    "  line.className = `editor-menu-table-item${row.enabled === false ? ' is-disabled' : ''}`;\n" +
-    '  line.dataset.rowId = row.id;\n' +
-    '  const product = products.find((item) => Number(item.id) === Number(row.product_id));\n' +
-    "  const productMeta = document.createElement('div');\n" +
-    "  productMeta.className = 'editor-product-meta';\n" +
-    '  productMeta.append(\n' +
-    "    text(product?.strength ? `Крепость: ${product.strength}` : 'Крепость не указана'),\n" +
-    "    text(product?.filtration && product.filtration !== 'none' ? product.filtration : '', 'editor-product-filter')\n" +
-    '  );\n' +
-    '\n' +
-    '  line.append(\n' +
-    "    td('editor-menu-order', orderCell(index, 'Продукция')),\n" +
-    "    td('editor-menu-position', productSelect(row, products, refresh, editorState), productMeta),\n" +
-    "    td('editor-menu-producer', text(product?.producer || '—', product?.producer ? '' : 'editor-muted')),\n" +
-    "    td('editor-menu-details', detailsEditor(editorState, row, product, onChange)),\n" +
-    "    td('editor-menu-price', text(product?.price_primary ? price(product.price_primary) : '—')),\n" +
-    "    td('editor-menu-price', text(product?.price_secondary ? price(product.price_secondary) : '—')),\n" +
-    "    td('editor-menu-actions', actionButtons(editorState, row, index, refresh))\n" +
-    '  );\n' +
-    '  return line;\n' +
-    '}\n' +
-    '\n' +
-    'function packagingRow(editorState, row, index, packaging, refresh) {\n' +
-    "  const line = document.createElement('tr');\n" +
-    "  line.className = `editor-menu-table-packaging${row.enabled === false ? ' is-disabled' : ''}`;\n" +
-    '  line.dataset.rowId = row.id;\n' +
-    '  const selected = packaging.find((item) => Number(item.id) === Number(row.packaging_id));\n' +
-    "  const select = document.createElement('select');\n" +
-    '  select.append(\n' +
-    "    new Option('Выберите тару', ''),\n" +
-    '    ...packaging\n' +
-    '      .filter((item) => item.active || Number(item.id) === Number(row.packaging_id))\n' +
-    '      .map((item) => new Option(item.name, String(item.id)))\n' +
-    '  );\n' +
-    "  select.value = row.packaging_id ? String(row.packaging_id) : '';\n" +
-    "  select.addEventListener('change', () => {\n" +
-    '    updateRow(editorState, row.id, { packaging_id: select.value });\n' +
-    '    refresh();\n' +
-    '  });\n' +
-    '\n' +
-    '  line.append(\n' +
-    "    td('editor-menu-order', orderCell(index, 'Тара')),\n" +
-    "    td('editor-menu-position', select),\n" +
-    "    td('editor-menu-producer', text('—', 'editor-muted')),\n" +
-    "    td('editor-menu-details', text('Цена за единицу тары', 'editor-muted')),\n" +
-    "    td('editor-menu-price', text(selected?.unit_price ? `${price(selected.unit_price)} / шт.` : '—')),\n" +
-    "    td('editor-menu-price', text('—', 'editor-muted')),\n" +
-    "    td('editor-menu-actions', actionButtons(editorState, row, index, refresh))\n" +
-    '  );\n' +
-    '  return line;\n' +
-    '}\n' +
-    '\n' +
-    'function buildTable(editorState, options) {\n' +
-    "  const table = document.createElement('table');\n" +
-    "  table.className = 'editor-menu-editor-table';\n" +
-    '  table.innerHTML = `<colgroup><col class="col-order"><col class="col-position"><col class="col-producer"><col class="col-details"><col class="col-price"><col class="col-price"><col class="col-actions"></colgroup><thead><tr><th>№</th><th>Позиция</th><th>Производитель</th><th>Подпись / акция</th><th>1,0 л</th><th>1,5 л</th><th aria-label="Управление"></th></tr></thead>`;\n' +
-    "  const body = document.createElement('tbody');\n" +
-    '  const refresh = () => {\n' +
-    '    renderRows(editorState, options);\n' +
-    '    options.onChange?.();\n' +
-    '  };\n' +
-    '  editorState.rows.forEach((row, index) => {\n' +
-    "    if (row.kind === 'section') body.append(sectionRow(editorState, row, index, refresh, options.onChange));\n" +
-    "    else if (row.kind === 'item') body.append(itemRow(editorState, row, index, options.products, refresh, options.onChange));\n" +
-    "    else if (row.kind === 'packaging') body.append(packagingRow(editorState, row, index, options.packaging, refresh));\n" +
-    '  });\n' +
-    '  table.append(body);\n' +
-    '  return table;\n' +
-    '}\n' +
-    '\n' +
-    'export function renderRows(editorState, { target, empty, products, packaging, onChange }) {\n' +
-    '  if (!target) return;\n' +
-    '  target.replaceChildren();\n' +
-    '  if (editorState.rows.length) {\n' +
-    "    const scroll = document.createElement('div');\n" +
-    "    scroll.className = 'editor-menu-table-scroll';\n" +
-    '    scroll.append(buildTable(editorState, { target, empty, products, packaging, onChange }));\n' +
-    '    target.append(scroll);\n' +
-    '  }\n' +
-    "  empty?.classList.toggle('is-hidden', editorState.rows.length !== 0);\n" +
-    '}\n' +
-    '\n' +
-    'export function appendRow(editorState, kind) {\n' +
-    '  addRow(editorState, createEditorRow(kind));\n' +
-    '}\n'
-  
-      at TestContext.<anonymous> (file:///home/runner/work/menu-tv-2/menu-tv-2/tests/frontend-architecture.test.js:52:10)
-      at async Test.run (node:internal/test_runner/test:1389:7)
-      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
-    generatedMessage: true,
-    code: 'ERR_ASSERTION',
-    actual: 'import { addRow, moveRow, removeRow, updateRow } from \'./commands.js\';\nimport { makeButton, price } from \'../core/dom.js\';\n\nexport function createEditorRow(kind) {\n  return {\n    id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,\n    kind,\n    enabled: true,\n    ...(kind === \'section\'\n      ? { name: \'Новый раздел\' }\n      : kind === \'item\'\n        ? { product_id: \'\', characteristics: \'\', promotion: false, promotion_text: \'\' }\n        : { packaging_id: \'\' })\n  };\n}\n\nfunction td(className, ...children) {\n  const node = document.createElement(\'td\');\n  node.className = className;\n  node.append(...children.filter(Boolean));\n  return node;\n}\n\nfunction text(value, className = \'\') {\n  const node = document.createElement(\'span\');\n  if (className) node.className = className;\n  node.textContent = value;\n  return node;\n}\n\nfunction controlButton(label, title, tone, action) {\n  const button = makeButton(label, tone, action);\n  button.classList.add(\'editor-row-action\');\n  button.title = title;\n  button.setAttribute(\'aria-label\', title);\n  return button;\n}\n\nfunction actionButtons(editorState, row, index, refresh) {\n  const controls = document.createElement(\'div\');\n  controls.className = \'editor-row-actions\';\n  const up = controlButton(\'↑\', \'Переместить выше\', \'\', () => { moveRow(editorState, row.id, index - 1); refresh(); });\n  const down = controlButton(\'↓\', \'Переместить ниже\', \'\', () => { moveRow(editorState, row.id, index + 1); refresh(); });\n  up.disabled = index === 0;\n  down.disabled = index >= editorState.rows.length - 1;\n  controls.append(\n    up,\n    down,\n    controlButton(row.enabled === false ? \'○\' : \'●\', row.enabled === false ? \'Показать строку\' : \'Скрыть строку\', \'\', () => {\n      updateRow(editorState, row.id, { enabled: row.enabled === false });\n      refresh();\n    }),\n    controlButton(\'×\', \'Удалить строку\', \'danger\', () => { removeRow(editorState, row.id); refresh(); })\n  );\n  return controls;\n}\n\nfunction orderCell(index, kind) {\n  const wrap = document.createElement(\'div\');\n  wrap.className = \'editor-row-order\';\n  wrap.append(text(String(index + 1), \'editor-row-number\'), text(kind, \'editor-row-kind\'));\n  return wrap;\n}\n\nfunction sectionRow(editorState, row, index, refresh, onChange) {\n  const line = document.createElement(\'tr\');\n  line.className = `editor-menu-table-section${row.enabled === false ? \' is-disabled\' : \'\'}`;\n  line.dataset.rowId = row.id;\n\n  const input = document.createElement(\'input\');\n  input.className = \'editor-section-name\';\n  input.maxLength = 100;\n  input.value = row.name || \'\';\n  input.placeholder = \'Название раздела\';\n  input.addEventListener(\'input\', () => { updateRow(editorState, row.id, { name: input.value }); onChange?.(); });\n\n  const titleCell = td(\'editor-menu-position editor-section-cell\', input);\n  titleCell.colSpan = 3;\n  line.append(\n    td(\'editor-menu-order\', orderCell(index, \'Раздел\')),\n    titleCell,\n    td(\'editor-menu-price editor-menu-price-label\', text(index === 0 ? \'1,0 л\' : \'—\')),\n    td(\'editor-menu-price editor-menu-price-label\', text(index === 0 ? \'1,5 л\' : \'—\')),\n    td(\'editor-menu-actions\', actionButtons(editorState, row, index, refresh))\n  );\n  return line;\n}\n\nfunction productSelect(row, products, refresh, editorState) {\n  const select = document.createElement(\'select\');\n  select.className = \'editor-product-select\';\n  select.append(\n    new Option(\'Выберите продукцию\', \'\'),\n    ...products\n      .filter((item) => item.active || Number(item.id) === Number(row.product_id))\n      .map((item) => new Option(item.name, String(item.id)))\n  );\n  select.value = row.product_id ? String(row.product_id) : \'\';\n  select.addEventListener(\'change\', () => {\n    updateRow(editorState, row.id, { product_id: select.value });\n    refresh();\n  });\n  return select;\n}\n\nfunction detailsEditor(editorState, row, product, onChange) {\n  const wrap = document.createElement(\'div\');\n  wrap.className = \'editor-details-stack\';\n  const subtitle = document.createElement(\'input\');\n  subtitle.maxLength = 180;\n  subtitle.value = row.characteristics || \'\';\n  subtitle.placeholder = product?.characteristics || \'Дополнительная подпись\';\n  subtitle.addEventListener(\'input\', () => { updateRow(editorState, row.id, { characteristics: subtitle.value }); onChange?.(); });\n\n  const promotion = document.createElement(\'div\');\n  promotion.className = \'editor-promotion-control\';\n  const toggle = document.createElement(\'label\');\n  toggle.className = \'editor-promotion-toggle\';\n  const check = document.createElement(\'input\');\n  check.type = \'checkbox\';\n  check.checked = row.promotion === true;\n  toggle.append(check, text(\'Акция\'));\n  const promotionText = document.createElement(\'input\');\n  promotionText.maxLength = 80;\n  promotionText.value = row.promotion_text || \'\';\n  promotionText.placeholder = \'Текст акции\';\n  promotionText.disabled = !check.checked;\n  check.addEventListener(\'change\', () => {\n    updateRow(editorState, row.id, { promotion: check.checked });\n    promotionText.disabled = !check.checked;\n    onChange?.();\n  });\n  promotionText.addEventListener(\'input\', () => { updateRow(editorState, row.id, { promotion_text: promotionText.value }); onChange?.(); });\n  promotion.append(toggle, promotionText);\n  wrap.append(subtitle, promotion);\n  return wrap;\n}\n\nfunction itemRow(editorState, row, index, products, refresh, onChange) {\n  const line = document.createElement(\'tr\');\n  line.className = `editor-menu-table-item${row.enabled === false ? \' is-disabled\' : \'\'}`;\n  line.dataset.rowId = row.id;\n  const product = products.find((item) => Number(item.id) === Number(row.product_id));\n  const productMeta = document.createElement(\'div\');\n  productMeta.className = \'editor-product-meta\';\n  productMeta.append(\n    text(product?.strength ? `Крепость: ${product.strength}` : \'Крепость не указана\'),\n    text(product?.filtration && product.filtration !== \'none\' ? product.filtration : \'\', \'editor-product-filter\')\n  );\n\n  line.append(\n    td(\'editor-menu-order\', orderCell(index, \'Продукция\')),\n    td(\'editor-menu-position\', productSelect(row, products, refresh, editorState), productMeta),\n    td(\'editor-menu-producer\', text(product?.producer || \'—\', product?.producer ? \'\' : \'editor-muted\')),\n    td(\'editor-menu-details\', detailsEditor(editorState, row, product, onChange)),\n    td(\'editor-menu-price\', text(product?.price_primary ? price(product.price_primary) : \'—\')),\n    td(\'editor-menu-price\', text(product?.price_secondary ? price(product.price_secondary) : \'—\')),\n    td(\'editor-menu-actions\', actionButtons(editorState, row, index, refresh))\n  );\n  return line;\n}\n\nfunction packagingRow(editorState, row, index, packaging, refresh) {\n  const line = document.createElement(\'tr\');\n  line.className = `editor-menu-table-packaging${row.enabled === false ? \' is-disabled\' : \'\'}`;\n  line.dataset.rowId = row.id;\n  const selected = packaging.find((item) => Number(item.id) === Number(row.packaging_id));\n  const select = document.createElement(\'select\');\n  select.append(\n    new Option(\'Выберите тару\', \'\'),\n    ...packaging\n      .filter((item) => item.active || Number(item.id) === Number(row.packaging_id))\n      .map((item) => new Option(item.name, String(item.id)))\n  );\n  select.value = row.packaging_id ? String(row.packaging_id) : \'\';\n  select.addEventListener(\'change\', () => {\n    updateRow(editorState, row.id, { packaging_id: select.value });\n    refresh();\n  });\n\n  line.append(\n    td(\'editor-menu-order\', orderCell(index, \'Тара\')),\n    td(\'editor-menu-position\', select),\n    td(\'editor-menu-producer\', text(\'—\', \'editor-muted\')),\n    td(\'editor-menu-details\', text(\'Цена за единицу тары\', \'editor-muted\')),\n    td(\'editor-menu-price\', text(selected?.unit_price ? `${price(selected.unit_price)} / шт.` : \'—\')),\n    td(\'editor-menu-price\', text(\'—\', \'editor-muted\')),\n    td(\'editor-menu-actions\', actionButtons(editorState, row, index, refresh))\n  );\n  return line;\n}\n\nfunction buildTable(editorState, options) {\n  const table = document.createElement(\'table\');\n  table.className = \'editor-menu-editor-table\';\n  table.innerHTML = `<colgroup><col class="col-order"><col class="col-position"><col class="col-producer"><col class="col-details"><col class="col-price"><col class="col-price"><col class="col-actions"></colgroup><thead><tr><th>№</th><th>Позиция</th><th>Производитель</th><th>Подпись / акция</th><th>1,0 л</th><th>1,5 л</th><th aria-label="Управление"></th></tr></thead>`;\n  const body = document.createElement(\'tbody\');\n  const refresh = () => {\n    renderRows(editorState, options);\n    options.onChange?.();\n  };\n  editorState.rows.forEach((row, index) => {\n    if (row.kind === \'section\') body.append(sectionRow(editorState, row, index, refresh, options.onChange));\n    else if (row.kind === \'item\') body.append(itemRow(editorState, row, index, options.products, refresh, options.onChange));\n    else if (row.kind === \'packaging\') body.append(packagingRow(editorState, row, index, options.packaging, refresh));\n  });\n  table.append(body);\n  return table;\n}\n\nexport function renderRows(editorState, { target, empty, products, packaging, onChange }) {\n  if (!target) return;\n  target.replaceChildren();\n  if (editorState.rows.length) {\n    const scroll = document.createElement(\'div\');\n    scroll.className = \'editor-menu-table-scroll\';\n    scroll.append(buildTable(editorState, { target, empty, products, packaging, onChange }));\n    target.append(scroll);\n  }\n  empty?.classList.toggle(\'is-hidden\', editorState.rows.length !== 0);\n}\n\nexport function appendRow(editorState, kind) {\n  addRow(editorState, createEditorRow(kind));\n}\n',
-    expected: /editor-menu-table-head/,
-    operator: 'match',
     diff: 'simple'
   }
 npm_check_status=1
