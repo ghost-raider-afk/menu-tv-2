@@ -75,7 +75,7 @@ function renderPackaging(line) {
 }
 
 function applyPreviewTypography(target, scale, viewportWidth) {
-  const width = Math.max(1, Number(viewportWidth) || 1920);
+  const width = Math.max(1, Number(viewportWidth));
   const unit = (base) => `${((base * scale) / width) * 100}cqw`;
   target.style.setProperty('--menu-section-font', unit(31));
   target.style.setProperty('--menu-price-label-font', unit(23));
@@ -91,6 +91,14 @@ function applyPreviewTypography(target, scale, viewportWidth) {
 export function renderPreview(editorState, { screen, products, packaging, target }) {
   if (!target) return null;
   const resolution = parseResolution(screen?.resolution);
+  if (!resolution) {
+    target.classList.add('is-invalid-resolution');
+    target.classList.remove('is-overflowing');
+    target.style.aspectRatio = '16 / 9';
+    target.replaceChildren(textNode('p', 'editor-preview-invalid', 'Укажите разрешение в формате 1920×1080'));
+    return { invalidResolution: true };
+  }
+  target.classList.remove('is-invalid-resolution');
   const model = buildRenderModel(editorState, resolution);
   const settings = model.settings;
   const lines = buildDisplayLines(model, { products, packaging, fallbackTitle: screen?.name || 'Меню' });
