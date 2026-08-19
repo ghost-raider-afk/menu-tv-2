@@ -32,6 +32,32 @@ export function validateNewPassword(value, config, field = 'Пароль') {
   return newPasswordInput(value, field, config);
 }
 
+export function generatePassword(config) {
+  const minimum = Number.parseInt(config?.passwordMinLength, 10);
+  const maximum = Number.parseInt(config?.passwordMaxLength, 10);
+  const preferred = Number.parseInt(config?.generatedPasswordLength, 10);
+  if (!Number.isInteger(minimum) || !Number.isInteger(maximum) || minimum < 10 || maximum < minimum) {
+    throw new Error('Некорректная конфигурация длины пароля.');
+  }
+
+  const targetLength = Math.min(maximum, Math.max(minimum, Number.isInteger(preferred) ? preferred : minimum));
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower = 'abcdefghjkmnpqrstuvwxyz';
+  const digits = '23456789';
+  const special = '!%+,.:@^_~-';
+  const alphabet = `${upper}${lower}${digits}${special}`;
+  const take = (characters) => characters[crypto.randomInt(characters.length)];
+  const characters = [take(upper), take(lower), take(digits), take(special)];
+
+  while (characters.length < targetLength) characters.push(take(alphabet));
+  for (let index = characters.length - 1; index > 0; index -= 1) {
+    const swapIndex = crypto.randomInt(index + 1);
+    [characters[index], characters[swapIndex]] = [characters[swapIndex], characters[index]];
+  }
+
+  return newPasswordInput(characters.join(''), 'Пароль', config);
+}
+
 export async function hashPassword(password) {
   const salt = crypto.randomBytes(16);
   const derived = await scrypt(password, salt, 64);
