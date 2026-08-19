@@ -122,6 +122,7 @@ function mountFrontend(app, requirePageSession) {
       const extension = path.extname(filename).toLowerCase();
       if (extension === '.html') {
         response.setHeader('Cache-Control', 'no-store');
+        response.setHeader('Clear-Site-Data', '"cache"');
         return;
       }
       if (extension === '.js' || extension === '.css') {
