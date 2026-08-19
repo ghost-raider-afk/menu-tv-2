@@ -21,7 +21,7 @@ function renderTemplates() {
   const rows = state.templates.map((template) => {
     const settings = normaliseEditorSettings(template.settings || {});
     const background = settings.background_image_url ? 'с фоном' : 'стандартный фон';
-    return recordRow(template.name, `${template.description || 'Без описания'} · ${template.active ? 'активен' : 'неактивен'} · ${background} · мониторов: ${template.assigned_screens || 0} · ${settings.font_scale === 'large' ? 'крупный текст' : settings.font_scale === 'small' ? 'компактный текст' : 'обычный текст'}`, [makeButton('Изменить', '', () => editTemplate(template)), makeButton('Удалить', 'danger', () => void deleteTemplate(template))]);
+    return recordRow(template.name, `${template.description || 'Без описания'} · ${template.active ? 'активен' : 'неактивен'} · ${background} · масштаб ${settings.font_scale_percent}% · мониторов: ${template.assigned_screens || 0}`, [makeButton('Изменить', '', () => editTemplate(template)), makeButton('Удалить', 'danger', () => void deleteTemplate(template))]);
   });
   refreshList(list, empty, rows);
 }
@@ -51,8 +51,7 @@ function resetTemplateForm() {
   element('template-background-color').value = '#101828';
   element('template-accent-color').value = '#F4C915';
   element('template-text-color').value = '#F8FAFC';
-  element('template-font-scale').value = 'medium';
-  element('template-table-width').value = 'normal';
+  element('template-font-scale').value = '100';
   element('template-background-file').value = '';
   element('template-form-title').textContent = 'Новый шаблон';
   element('template-submit').textContent = 'Создать шаблон';
@@ -70,8 +69,7 @@ function editTemplate(template) {
   element('template-background-color').value = settings.background_color;
   element('template-accent-color').value = settings.accent_color;
   element('template-text-color').value = settings.text_color;
-  element('template-font-scale').value = settings.font_scale;
-  element('template-table-width').value = settings.table_width;
+  element('template-font-scale').value = String(settings.font_scale_percent);
   element('template-background-file').value = '';
   element('template-form-title').textContent = 'Редактирование шаблона';
   element('template-submit').textContent = 'Сохранить шаблон';
@@ -158,8 +156,7 @@ export function initialiseTemplates() {
           background_color: element('template-background-color').value,
           accent_color: element('template-accent-color').value,
           text_color: element('template-text-color').value,
-          font_scale: element('template-font-scale').value,
-          table_width: element('template-table-width').value
+          font_scale_percent: element('template-font-scale').value
         })
       };
       let saved = state.editingTemplateId ? await api.put(`${API.templates}/${state.editingTemplateId}`, payload) : await api.post(API.templates, payload);
