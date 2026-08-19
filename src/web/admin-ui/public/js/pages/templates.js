@@ -3,9 +3,14 @@ import { api } from '../core/api.js';
 import { state } from '../core/state.js';
 import { element, setMessage, clearMessage, setPending, makeButton, recordRow, refreshList } from '../core/dom.js';
 import { loadNotifications } from '../core/notifications.js';
+import { MENU_FONT_OPTIONS } from '../editor/renderer.js';
 import { normaliseEditorSettings } from '../editor/settings.js';
 
 const LAST_TEMPLATE_KEY = 'menu-tv-last-template-id';
+
+function fontLabel(key) {
+  return MENU_FONT_OPTIONS.find((font) => font.key === key)?.label || 'Arial Narrow';
+}
 
 async function loadTemplates() {
   state.templates = await api.get(API.templates);
@@ -21,7 +26,7 @@ function renderTemplates() {
   const rows = state.templates.map((template) => {
     const settings = normaliseEditorSettings(template.settings || {});
     const background = settings.background_image_url ? 'с фоном' : 'стандартный фон';
-    return recordRow(template.name, `${template.description || 'Без описания'} · ${template.active ? 'активен' : 'неактивен'} · ${background} · масштаб ${settings.font_scale_percent}% · мониторов: ${template.assigned_screens || 0}`, [makeButton('Изменить', '', () => editTemplate(template)), makeButton('Удалить', 'danger', () => void deleteTemplate(template))]);
+    return recordRow(template.name, `${template.description || 'Без описания'} · ${template.active ? 'активен' : 'неактивен'} · ${background} · ${fontLabel(settings.font_family)} · масштаб ${settings.font_scale_percent}% · мониторов: ${template.assigned_screens || 0}`, [makeButton('Изменить', '', () => editTemplate(template)), makeButton('Удалить', 'danger', () => void deleteTemplate(template))]);
   });
   refreshList(list, empty, rows);
 }
@@ -52,6 +57,7 @@ function resetTemplateForm() {
   element('template-accent-color').value = '#F4C915';
   element('template-text-color').value = '#F8FAFC';
   element('template-font-scale').value = '100';
+  element('template-font-family').value = 'arial-narrow';
   element('template-background-file').value = '';
   element('template-form-title').textContent = 'Новый шаблон';
   element('template-submit').textContent = 'Создать шаблон';
@@ -70,6 +76,7 @@ function editTemplate(template) {
   element('template-accent-color').value = settings.accent_color;
   element('template-text-color').value = settings.text_color;
   element('template-font-scale').value = String(settings.font_scale_percent);
+  element('template-font-family').value = settings.font_family;
   element('template-background-file').value = '';
   element('template-form-title').textContent = 'Редактирование шаблона';
   element('template-submit').textContent = 'Сохранить шаблон';
@@ -156,7 +163,8 @@ export function initialiseTemplates() {
           background_color: element('template-background-color').value,
           accent_color: element('template-accent-color').value,
           text_color: element('template-text-color').value,
-          font_scale_percent: element('template-font-scale').value
+          font_scale_percent: element('template-font-scale').value,
+          font_family: element('template-font-family').value
         })
       };
       let saved = state.editingTemplateId ? await api.put(`${API.templates}/${state.editingTemplateId}`, payload) : await api.post(API.templates, payload);
