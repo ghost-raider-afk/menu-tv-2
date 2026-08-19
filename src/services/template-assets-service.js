@@ -24,11 +24,11 @@ export async function replaceTemplateBackground(template, bytes, { store, config
   if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > config.templateBackgroundMaxBytes) {
     throw new ValidationError('Размер фонового изображения шаблона недопустим.');
   }
-  const info = validateImage(bytes, {
+  const info = await validateImage(bytes, {
     allowedTypes: ['png', 'jpeg', 'webp'],
     maxWidth: config.screenMaxWidth,
     maxHeight: config.screenMaxHeight,
-    maxPixels: config.screenMaxWidth * config.screenMaxHeight,
+    maxPixels: config.imageMaxPixels,
     label: 'Фон шаблона'
   });
   const extension = info.type === 'jpeg' ? 'jpg' : info.type;
