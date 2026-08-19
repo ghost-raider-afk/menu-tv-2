@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import path from 'node:path';
 import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { ValidationError } from '../shared/errors.js';
 import { validateImage } from './image-validation.js';
@@ -36,7 +37,7 @@ function inspectIco(bytes) {
   return { type: 'ico', width: maxWidth, height: maxHeight };
 }
 
-function validateSiteImage(kind, bytes, config) {
+async function validateSiteImage(kind, bytes, config) {
   if (kind === 'favicon') {
     const ico = inspectIco(bytes);
     if (ico) {
@@ -47,7 +48,7 @@ function validateSiteImage(kind, bytes, config) {
       allowedTypes: ['png'],
       maxWidth: 512,
       maxHeight: 512,
-      maxPixels: 512 * 512,
+      maxPixels: Math.min(config.imageMaxPixels, 512 * 512),
       label: 'Favicon'
     });
   }
@@ -55,9 +56,13 @@ function validateSiteImage(kind, bytes, config) {
     allowedTypes: ['png', 'jpeg', 'webp'],
     maxWidth: config.screenMaxWidth,
     maxHeight: config.screenMaxHeight,
-    maxPixels: config.screenMaxWidth * config.screenMaxHeight,
+    maxPixels: config.imageMaxPixels,
     label: 'Логотип'
   });
+}
+
+function safeAssetFilename(filename) {
+  return typeof filename === 'string' && /^site-(?:logo|favicon)-[0-9a-f-]{36}\.(?:jpg|png|webp|ico)$/i.test(filename);
 }
 
 export async function replaceSiteImage({ kind, bytes, config, store, username }) {
@@ -65,16 +70,28 @@ export async function replaceSiteImage({ kind, bytes, config, store, username })
   if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > maxBytes) {
     throw new ValidationError(`Размер ${kind === 'logo' ? 'логотипа' : 'favicon'} недопустим.`);
   }
-  const info = validateSiteImage(kind, bytes, config);
+  const info = await validateSiteImage(kind, bytes, config);
   const extension = info.type === 'jpeg' ? 'jpg' : info.type;
-  const filename = `site-${kind}.${extension}`;
-  const temporary = `${config.siteAssetsRoot}/.${filename}.${crypto.randomUUID()}.tmp`;
+  const filename = `site-${kind}-${crypto.randomUUID()}.${extension}`;
+  const target = path.join(config.siteAssetsRoot, filename);
+  const temporary = path.join(config.siteAssetsRoot, `.${filename}.tmp`);
+
   await mkdir(config.siteAssetsRoot, { recursive: true, mode: 0o770 });
   await writeFile(temporary, bytes, { mode: 0o640 });
-  await rename(temporary, `${config.siteAssetsRoot}/${filename}`);
+  await rename(temporary, target);
+
   const previous = await store.getSiteSettings();
-  const updated = await store.setSiteAsset(kind, filename, username);
+  let updated;
+  try {
+    updated = await store.setSiteAsset(kind, filename, username);
+  } catch (error) {
+    await unlink(target).catch(() => undefined);
+    throw error;
+  }
+
   const previousFilename = kind === 'logo' ? previous.logo_filename : previous.favicon_filename;
-  if (previousFilename && previousFilename !== filename) await unlink(`${config.siteAssetsRoot}/${previousFilename}`).catch(() => undefined);
+  if (previousFilename && previousFilename !== filename && safeAssetFilename(previousFilename)) {
+    await unlink(path.join(config.siteAssetsRoot, previousFilename)).catch(() => undefined);
+  }
   return updated;
 }
