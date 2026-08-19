@@ -31,12 +31,21 @@ function loadImage(url) {
   });
 }
 
-async function drawBackground(ctx, settings, width, height) {
-  ctx.fillStyle = settings.background_color || '#101828';
+function drawImageCover(ctx, image, width, height) {
+  const imageWidth = image.naturalWidth || image.width;
+  const imageHeight = image.naturalHeight || image.height;
+  const scale = Math.max(width / imageWidth, height / imageHeight);
+  const drawWidth = imageWidth * scale;
+  const drawHeight = imageHeight * scale;
+  ctx.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+}
+
+async function drawBackground(ctx, settings, palette, width, height) {
+  ctx.fillStyle = palette.background;
   ctx.fillRect(0, 0, width, height);
   if (!settings.background_image_url) return;
   const image = await loadImage(settings.background_image_url);
-  ctx.drawImage(image, 0, 0, width, height);
+  drawImageCover(ctx, image, width, height);
 }
 
 function roundedRect(ctx, x, y, width, height, radius) {
@@ -96,17 +105,38 @@ function drawPrice(ctx, value, x, centerY, tone, scale) {
   ctx.fillText(parts.cents, x + wholeWidth + 2 * scale, centerY - 7 * scale);
 }
 
-function drawSection(ctx, line, layout) {
-  const { left, top, tableWidth, rowHeight, scale, accent, primaryBoundary, secondaryBoundary, right } = layout;
-  ctx.fillStyle = accent;
+function drawCompactPriceRight(ctx, value, rightX, centerY, tone, scale) {
+  const parts = priceParts(value);
+  ctx.fillStyle = tone;
+  if (!parts) {
+    ctx.font = `900 ${Math.max(15, Math.round(20 * scale))}px Arial, sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('—', rightX, centerY);
+    return;
+  }
+  const wholeSize = Math.max(15, Math.round(20 * scale));
+  const centsSize = Math.max(9, Math.round(11 * scale));
+  ctx.font = `900 ${centsSize}px Arial, sans-serif`;
+  const centsWidth = ctx.measureText(parts.cents).width;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(parts.cents, rightX, centerY - 5 * scale);
+  ctx.font = `900 ${wholeSize}px Arial, sans-serif`;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(parts.whole, rightX - centsWidth - 2 * scale, centerY);
+}
+
+function drawSection(ctx, line, layout, palette) {
+  const { left, top, tableWidth, rowHeight, scale, primaryBoundary, secondaryBoundary, right } = layout;
+  ctx.fillStyle = palette.accent;
   ctx.fillRect(left, top + 1, tableWidth, rowHeight - 3);
 
-  ctx.fillStyle = MENU_TABLE_STYLE.darkText;
+  ctx.fillStyle = palette.sectionText;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   ctx.font = `900 ${Math.max(23, Math.round(31 * scale))}px Arial, sans-serif`;
-  const titleRight = line.showPriceLabels ? primaryBoundary : right;
-  ctx.fillText(fitText(ctx, line.name || 'Меню', titleRight - left - 22 * scale), left + 10 * scale, top + rowHeight / 2 + 1);
+  ctx.fillText(fitText(ctx, line.name || 'Меню', primaryBoundary - left - 22 * scale), left + 10 * scale, top + rowHeight / 2 + 1);
 
   drawColumnSeparators(ctx, layout);
 
@@ -133,10 +163,10 @@ function drawPromotion(ctx, text, x, centerY, scale) {
   return width;
 }
 
-function drawItem(ctx, line, layout) {
-  const { left, right, top, rowHeight, scale, accent, primaryBoundary, secondaryBoundary } = layout;
+function drawItem(ctx, line, layout, palette) {
+  const { left, right, top, rowHeight, scale, primaryBoundary, secondaryBoundary } = layout;
   const centerY = top + rowHeight / 2;
-  const tone = line.tone === 'accent' ? accent : MENU_TABLE_STYLE.lightText;
+  const tone = line.tone === 'accent' ? palette.accentText : palette.primaryText;
   const bodySize = Math.max(20, Math.round(27 * scale));
   const producerSize = Math.max(11, Math.round(13 * scale));
   const detailSize = Math.max(10, Math.round(12 * scale));
@@ -186,8 +216,8 @@ function drawItem(ctx, line, layout) {
   drawPrice(ctx, line.priceSecondary, secondaryBoundary + 13 * scale, centerY, tone, scale);
 }
 
-function drawPackaging(ctx, line, layout) {
-  const { left, right, top, rowHeight, scale, accent, primaryBoundary } = layout;
+function drawPackaging(ctx, line, layout, palette) {
+  const { left, right, top, rowHeight, scale, primaryBoundary } = layout;
   drawDashedLine(ctx, left, top + rowHeight - 2, right, top + rowHeight - 2, scale, 0.82);
   drawColumnSeparators(ctx, layout);
 
@@ -196,9 +226,9 @@ function drawPackaging(ctx, line, layout) {
   const cellWidth = (contentWidth - gap) / 2;
   line.items.forEach((item, index) => {
     const x = left + index * (cellWidth + gap);
-    const tone = item.tone === 'accent' ? accent : MENU_TABLE_STYLE.lightText;
+    const tone = item.tone === 'accent' ? palette.accentText : palette.primaryText;
     ctx.fillStyle = 'rgba(18,24,32,.92)';
-    ctx.strokeStyle = accent;
+    ctx.strokeStyle = palette.accent;
     ctx.lineWidth = Math.max(1, 1.4 * scale);
     roundedRect(ctx, x + 2, top + 5, cellWidth - 4, rowHeight - 10, 4 * scale);
     ctx.fill();
@@ -208,9 +238,7 @@ function drawPackaging(ctx, line, layout) {
     ctx.textAlign = 'left';
     ctx.font = `900 ${Math.max(17, Math.round(20 * scale))}px Arial, sans-serif`;
     ctx.fillText(fitText(ctx, item.name, cellWidth - 145 * scale), x + 12 * scale, top + rowHeight / 2);
-    ctx.textAlign = 'right';
-    const parts = priceParts(item.unitPrice);
-    ctx.fillText(parts ? `${parts.whole},${parts.cents}` : '—', x + cellWidth - 12 * scale, top + rowHeight / 2);
+    drawCompactPriceRight(ctx, item.unitPrice, x + cellWidth - 12 * scale, top + rowHeight / 2, tone, scale);
   });
 }
 
@@ -233,21 +261,27 @@ export async function renderFinalJpeg(editorState, { screen, products, packaging
   const settings = model.settings || {};
   const table = renderLayout.horizontal;
   const vertical = renderLayout.vertical;
-  const accent = settings.accent_color || MENU_TABLE_STYLE.defaultAccent;
+  const palette = renderLayout.palette;
 
-  await drawBackground(ctx, settings, width, height);
+  await drawBackground(ctx, settings, palette, width, height);
+  if (palette.imageBackdropOpacity > 0) {
+    ctx.save();
+    ctx.globalAlpha = palette.imageBackdropOpacity;
+    ctx.fillStyle = MENU_TABLE_STYLE.imageBackdrop;
+    ctx.fillRect(table.left, vertical.top, table.tableWidth, vertical.usedHeight);
+    ctx.restore();
+  }
 
   lines.forEach((line, index) => {
     const layout = {
       ...table,
       top: vertical.top + index * vertical.rowHeight,
       rowHeight: vertical.rowHeight,
-      scale: vertical.scale,
-      accent
+      scale: vertical.scale
     };
-    if (line.kind === 'section') drawSection(ctx, line, layout);
-    else if (line.kind === 'item') drawItem(ctx, line, layout);
-    else if (line.kind === 'packaging') drawPackaging(ctx, line, layout);
+    if (line.kind === 'section') drawSection(ctx, line, layout, palette);
+    else if (line.kind === 'item') drawItem(ctx, line, layout, palette);
+    else if (line.kind === 'packaging') drawPackaging(ctx, line, layout, palette);
   });
 
   return canvasBlob(canvas);
