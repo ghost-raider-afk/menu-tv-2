@@ -1,4 +1,4 @@
-HEAD=f8e09586af93bf5488cd7816797402dbebd24a90
+HEAD=ebfbc8204036c78bfe4089f386ff6ac1db3f3692
 
 added 114 packages, and audited 115 packages in 2s
 
@@ -19,71 +19,70 @@ npm_ci_status=0
 > menu-tv-2@0.1.0 test
 > node --test
 
-✔ public liveness/readiness, visual default and protected session work (322.079156ms)
-✔ locations, screens and templates persist through modular PostgreSQL repositories (168.652302ms)
-✔ catalogue draft uses revision locking and preserves required linkage and prices (143.119734ms)
-{"timestamp":"2026-08-19T05:58:57.200Z","level":"error","message":"HTTP request failed","method":"POST","path":"/api/screens/3/publish","actor":"admin","error":{"name":"Error","message":"column \"prepared_draft_revision\" does not exist\n\n🐜 This seems to be an execution error, which means that your request syntax seems okay,\n    but the resulting statement cannot be executed → Probably not a pg-mem error.\n\n*️⃣ Failed SQL statement: UPDATE screens SET publication_pending_sha256 = prepared_asset_sha256, publication_started_at = '2026-08-19T05:58:57.197Z', updated_at = '2026-08-19T05:58:57.197Z'\n         WHERE id = '3' AND publication_pending_sha256 IS NULL\n           AND prepared_asset_key IS NOT NULL AND prepared_asset_sha256 = '7dc2e98844a4f8164d5aa038b5a6f148edd72c081b0b1a48350e48c474f4279a'\n           AND prepared_draft_revision IS NOT NULL\n           AND EXISTS (SELECT 1 FROM screen_drafts d WHERE d.screen_id = '3' AND d.revision = prepared_draft_revision);\n\n👉 You can file an issue at https://github.com/oguimbal/pg-mem along with a way to reproduce this error (if you can), and  the stacktrace:\n\n","stack":"Error: column \"prepared_draft_revision\" does not exist\n\n🐜 This seems to be an execution error, which means that your request syntax seems okay,\n    but the resulting statement cannot be executed → Probably not a pg-mem error.\n\n*️⃣ Failed SQL statement: UPDATE screens SET publication_pending_sha256 = prepared_asset_sha256, publication_started_at = '2026-08-19T05:58:57.197Z', updated_at = '2026-08-19T05:58:57.197Z'\n         WHERE id = '3' AND publication_pending_sha256 IS NULL\n           AND prepared_asset_key IS NOT NULL AND prepared_asset_sha256 = '7dc2e98844a4f8164d5aa038b5a6f148edd72c081b0b1a48350e48c474f4279a'\n           AND prepared_draft_revision IS NOT NULL\n           AND EXISTS (SELECT 1 FROM screen_drafts d WHERE d.screen_id = '3' AND d.revision = prepared_draft_revision);\n\n👉 You can file an issue at https://github.com/oguimbal/pg-mem along with a way to reproduce this error (if you can), and  the stacktrace:\n\n\n    at _buildValueReal (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1528:19)\n    at _buildValue (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1488:11)\n    at buildBinary (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1699:22)\n    at _buildValueReal (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1508:20)\n    at _buildValue (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1488:11)\n    at buildBinary (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1699:22)\n    at _buildValueReal (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1508:20)\n    at _buildValue (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1488:11)\n    at buildValue (/home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:1461:17)\n    at /home/runner/work/menu-tv-2/menu-tv-2/node_modules/pg-mem/index.js:12633:59"}}
-✖ SFTP access, validated JPEG staging and recoverable publication work through service boundary (150.180372ms)
-✔ profile, site settings and password change remain independent from SFTPGo users table (194.733679ms)
-✔ server is a thin application assembly layer (8.318348ms)
-✔ database facade lives only in db index and contains no domain SQL (3.572725ms)
-✔ SFTP facade lives only in sftp index and is composed from client storage and publisher (1.934349ms)
-✔ configuration has one modular entrypoint and no legacy config file (3.314053ms)
-✔ fresh PostgreSQL schema uses TV Menu 1 visual default without overwriting a changed accent (1.539081ms)
-✔ runtime limits are controlled by environment values (1.696865ms)
-✔ every declared runtime env value is mandatory and has no code fallback (6.862662ms)
-✔ runtime booleans must be explicit true or false (0.318133ms)
-✔ generated SFTP password respects configured length and character classes (0.736163ms)
-✔ shell uses dynamic viewport height and explicit layer tokens (6.107043ms)
-✔ hidden switches expose a keyboard focus indicator (1.595166ms)
-✔ preview aspect ratio is driven by monitor resolution and table has one canonical SVG owner (2.461199ms)
-✔ preview and final image share the exact canonical SVG and fit logic (3.132744ms)
-✔ site accent derives contrast colors instead of reusing arbitrary accent as text (1.353174ms)
-✔ transaction commits work performed through repositories bound to one acquired client (2.328655ms)
-✔ transaction always rolls back and releases the same client after a later failure (1.075196ms)
-✔ all pages use the single final CSS entrypoint and contain no legacy shell (11.091581ms)
-✔ CSS architecture has one permanent entrypoint and TV Menu 1 identity tokens (3.445458ms)
-✔ shell is composed from dedicated permanent components (1.451407ms)
-✔ menu editor owns one professional semantic table and one canonical reference renderer (2.676042ms)
-✔ legacy frontend files are physically absent (1.950849ms)
-✔ frontend modules resolve as a complete ES module graph (44.554748ms)
-✔ image inspector reads dimensions from real JPEG and PNG files (35.738381ms)
-✔ screen JPEG is fully decoded and must exactly match monitor resolution (45.642908ms)
-✔ structurally plausible but truncated image is rejected by full decoder (7.239708ms)
-✔ image limits reject decompression-bomb dimensions before decoding tiny payload (0.626489ms)
-✔ positive ids reject trailing characters and unsafe integers (1.956099ms)
-✔ site refresh interval rejects numeric prefixes with junk suffixes (52.777437ms)
-✔ current password is verified as entered while complexity applies only to the new password (0.471349ms)
-✔ environment integer parser rejects partial numeric strings (1.188587ms)
-✔ login limiter blocks after configured number of failures and resets on success (1.526157ms)
-✔ canonical table geometry is locked to the supplied 2048x1152 reference (1.589596ms)
-✔ one canonical SVG contains sections, producer and both price columns (2.839016ms)
-✔ font scale automatically reduces to fit but respects manual maximum (0.794442ms)
-✔ menu that cannot fit even at minimum scale is explicitly rejected by layout (0.492669ms)
-✔ legacy menu settings are migrated once into canonical font scale percent (114.550456ms)
-✔ menu settings contract stores only canonical renderer fields (1.769681ms)
-✔ menu font scale has one validated range (0.644783ms)
-✔ client cannot inject arbitrary template asset URL (0.245689ms)
-✔ staged JPEG is bound to the exact current draft revision (71.098412ms)
-✔ staging race removes the new orphan when draft changed before DB commit (42.199447ms)
-✔ pending publication is recovered by target SHA without rewriting the file (0.753816ms)
-✔ SFTPGo management requests fail with a bounded timeout (27.872687ms)
-✔ staging cleanup removes only unreferenced keys (8.610102ms)
-✔ unsafe staging keys are rejected before any filesystem access (1.581751ms)
-✔ failed database update removes only the new site asset and keeps the previous file (28.975946ms)
-✔ successful site asset update switches to a unique file then removes the previous asset (18.543253ms)
-✔ canonical table geometry is locked to the supplied 2048x1152 reference (1.575639ms)
-✔ reference row set exactly fills the reference table at 100 percent (2.346978ms)
-✔ overflow automatically reduces scale while preserving exact horizontal reference columns (2.009139ms)
-✔ template background replacement preserves assets referenced by saved screen drafts (72.840219ms)
-✔ editor commands mutate only Editor State and track dirty revision (1.823602ms)
-✔ template application replaces editor rows/settings locally (1.353214ms)
-✔ renderer model filters disabled rows and respects arbitrary monitor aspect ratio (0.76124ms)
-✔ template background survives settings normalization and uses canonical defaults (0.409595ms)
-✔ canonical table keeps prices separate and places producer next to product name (2.456413ms)
-✔ board geometry is locked to the supplied reference and leaves artwork on the right (0.268611ms)
-✔ automatic font fitting reduces scale and refuses silent clipping (3.516202ms)
-✔ shared application errors expose stable HTTP status values (0.96515ms)
+✔ public liveness/readiness, visual default and protected session work (381.477196ms)
+✔ locations, screens and templates persist through modular PostgreSQL repositories (178.155237ms)
+✔ catalogue draft uses revision locking and preserves required linkage and prices (188.423464ms)
+✖ SFTP access, validated JPEG staging and recoverable publication work through service boundary (150.607922ms)
+✔ profile, site settings and password change remain independent from SFTPGo users table (220.330906ms)
+✔ server is a thin application assembly layer (10.846362ms)
+✔ database facade lives only in db index and contains no domain SQL (5.409962ms)
+✔ SFTP facade lives only in sftp index and is composed from client storage and publisher (2.963645ms)
+✔ configuration has one modular entrypoint and no legacy config file (2.594544ms)
+✔ fresh PostgreSQL schema uses TV Menu 1 visual default without overwriting a changed accent (1.269345ms)
+✔ runtime limits are controlled by environment values (1.957242ms)
+✔ every declared runtime env value is mandatory and has no code fallback (5.107628ms)
+✔ runtime booleans must be explicit true or false (0.305351ms)
+✔ generated SFTP password respects configured length and character classes (0.788104ms)
+✔ shell uses dynamic viewport height and explicit layer tokens (11.414146ms)
+✔ hidden switches expose a keyboard focus indicator (3.107354ms)
+✔ preview aspect ratio is driven by monitor resolution and table has one canonical SVG owner (3.531657ms)
+✔ preview and final image share the exact canonical SVG and fit logic (3.338496ms)
+✔ site accent derives contrast colors instead of reusing arbitrary accent as text (1.50701ms)
+✔ transaction commits work performed through repositories bound to one acquired client (2.594194ms)
+✔ transaction always rolls back and releases the same client after a later failure (1.121008ms)
+✔ all pages use the single final CSS entrypoint and contain no legacy shell (13.560972ms)
+✔ CSS architecture has one permanent entrypoint and TV Menu 1 identity tokens (4.877606ms)
+✔ shell is composed from dedicated permanent components (2.235764ms)
+✔ menu editor owns one professional semantic table and one canonical reference renderer (3.690716ms)
+✔ legacy frontend files are physically absent (2.968414ms)
+✔ frontend modules resolve as a complete ES module graph (36.777351ms)
+✔ image inspector reads dimensions from real JPEG and PNG files (40.144542ms)
+✔ screen JPEG is fully decoded and must exactly match monitor resolution (38.824925ms)
+✔ structurally plausible but truncated image is rejected by full decoder (4.844695ms)
+✔ image limits reject decompression-bomb dimensions before decoding tiny payload (0.538818ms)
+✔ positive ids reject trailing characters and unsafe integers (1.5288ms)
+✔ site refresh interval rejects numeric prefixes with junk suffixes (264.622205ms)
+✔ current password is verified as entered while complexity applies only to the new password (0.377647ms)
+✔ environment integer parser rejects partial numeric strings (0.964464ms)
+✔ login limiter blocks after configured number of failures and resets on success (1.474108ms)
+✔ canonical table geometry is locked to the supplied 2048x1152 reference (2.364965ms)
+✔ one canonical SVG contains sections, producer and both price columns (3.984304ms)
+✔ font scale automatically reduces to fit but respects manual maximum (1.185709ms)
+✔ menu that cannot fit even at minimum scale is explicitly rejected by layout (0.543768ms)
+✔ legacy menu settings are migrated once into canonical font scale percent (92.956603ms)
+✔ menu settings contract stores only canonical renderer fields (2.038114ms)
+✔ menu font scale has one validated range (0.859067ms)
+✔ client cannot inject arbitrary template asset URL (0.341029ms)
+✔ staged JPEG is bound to the exact current draft revision (43.778359ms)
+✔ staging race removes the new orphan when draft changed before DB commit (32.56495ms)
+✔ pending publication is recovered by target SHA without rewriting the file (0.82321ms)
+✔ SFTPGo management requests fail with a bounded timeout (27.772323ms)
+✔ staging cleanup removes only unreferenced keys (9.031177ms)
+✔ unsafe staging keys are rejected before any filesystem access (2.241835ms)
+✔ failed database update removes only the new site asset and keeps the previous file (33.559378ms)
+✔ successful site asset update switches to a unique file then removes the previous asset (22.215065ms)
+✔ canonical table geometry is locked to the supplied 2048x1152 reference (1.604853ms)
+✔ reference row set exactly fills the reference table at 100 percent (2.799047ms)
+✔ overflow automatically reduces scale while preserving exact horizontal reference columns (1.853959ms)
+✔ template background replacement preserves assets referenced by saved screen drafts (76.157283ms)
+✔ editor commands mutate only Editor State and track dirty revision (2.992657ms)
+✔ template application replaces editor rows/settings locally (1.392786ms)
+✔ renderer model filters disabled rows and respects arbitrary monitor aspect ratio (0.779428ms)
+✔ template background survives settings normalization and uses canonical defaults (0.618888ms)
+✔ canonical table keeps prices separate and places producer next to product name (2.717114ms)
+✔ board geometry is locked to the supplied reference and leaves artwork on the right (0.213609ms)
+✔ automatic font fitting reduces scale and refuses silent clipping (1.001605ms)
+✔ shared application errors expose stable HTTP status values (1.051247ms)
 ℹ tests 64
 ℹ suites 0
 ℹ pass 63
@@ -91,15 +90,15 @@ npm_ci_status=0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 1655.863666
+ℹ duration_ms 1758.685529
 
 ✖ failing tests:
 
 test at tests/api.test.js:263:1
-✖ SFTP access, validated JPEG staging and recoverable publication work through service boundary (150.180372ms)
+✖ SFTP access, validated JPEG staging and recoverable publication work through service boundary (150.607922ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
   
-  500 !== 200
+  409 !== 200
   
       at TestContext.<anonymous> (file:///home/runner/work/menu-tv-2/menu-tv-2/tests/api.test.js:311:10)
       at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
@@ -107,7 +106,7 @@ test at tests/api.test.js:263:1
       at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
     generatedMessage: true,
     code: 'ERR_ASSERTION',
-    actual: 500,
+    actual: 409,
     expected: 200,
     operator: 'strictEqual',
     diff: 'simple'
