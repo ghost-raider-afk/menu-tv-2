@@ -41,7 +41,12 @@ function setDirtyState(editorState) {
 function setLayoutWarning(preview, screen) {
   const target = element('editor-layout-warning');
   if (!target) return;
-  const overflowing = preview && preview.layout?.vertical?.fits === false;
+  if (preview?.invalidResolution) {
+    target.classList.remove('is-hidden');
+    target.textContent = 'Укажите разрешение в формате 1920×1080.';
+    return;
+  }
+  const overflowing = preview?.layout?.vertical?.fits === false;
   target.classList.toggle('is-hidden', !overflowing);
   target.textContent = overflowing
     ? `Меню не помещается в ${screen?.resolution || 'текущее разрешение'}. Уменьшите размер текста или количество строк.`
@@ -137,6 +142,7 @@ export function initialiseScreenEditor() {
       };
       const preview = refreshPreview(screenPayload);
       setLayoutWarning(preview, screenPayload);
+      if (preview?.invalidResolution) throw new Error('Укажите разрешение в формате 1920×1080.');
       if (!preview?.layout?.vertical?.fits) {
         throw new Error(`Меню не помещается в ${screenPayload.resolution}. Уменьшите размер текста или количество строк.`);
       }
