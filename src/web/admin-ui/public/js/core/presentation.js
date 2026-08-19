@@ -10,17 +10,79 @@ function imageElement(url, label) {
   return image;
 }
 
+function rgb(hex) {
+  const match = String(hex || '').trim().match(/^#([0-9a-f]{6})$/i);
+  if (!match) return null;
+  const value = Number.parseInt(match[1], 16);
+  return { r: (value >> 16) & 255, g: (value >> 8) & 255, b: value & 255 };
+}
+
+function hex({ r, g, b }) {
+  return `#${[r, g, b].map((value) => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+}
+
+function mix(source, target, amount) {
+  const left = rgb(source);
+  const right = rgb(target);
+  if (!left || !right) return source;
+  return hex({
+    r: left.r + (right.r - left.r) * amount,
+    g: left.g + (right.g - left.g) * amount,
+    b: left.b + (right.b - left.b) * amount
+  });
+}
+
+function luminance(value) {
+  const color = rgb(value);
+  if (!color) return 0;
+  const channel = (input) => {
+    const normalized = input / 255;
+    return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b);
+}
+
+function contrast(left, right) {
+  const a = luminance(left);
+  const b = luminance(right);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+function foregroundFor(background) {
+  return contrast(background, '#111111') >= contrast(background, '#FFFFFF') ? '#111111' : '#FFFFFF';
+}
+
+function accessibleAccentText(accent, theme) {
+  const background = theme === 'dark' ? '#151D29' : '#FFFFFF';
+  const target = theme === 'dark' ? '#FFFFFF' : '#000000';
+  if (contrast(accent, background) >= 4.5) return accent;
+  for (let step = 1; step <= 10; step += 1) {
+    const candidate = mix(accent, target, step / 10);
+    if (contrast(candidate, background) >= 4.5) return candidate;
+  }
+  return target;
+}
+
+function applyAccentColor(accent) {
+  if (!rgb(accent)) return;
+  const theme = currentTheme();
+  const root = document.documentElement;
+  root.style.setProperty('--brand-accent', accent);
+  root.style.setProperty('--ui-accent', accent);
+  root.style.setProperty('--brand-accent-hover', mix(accent, theme === 'dark' ? '#FFFFFF' : '#000000', 0.12));
+  root.style.setProperty('--ui-accent-hover', mix(accent, theme === 'dark' ? '#FFFFFF' : '#000000', 0.12));
+  root.style.setProperty('--brand-accent-contrast', foregroundFor(accent));
+  root.style.setProperty('--ui-accent-contrast', foregroundFor(accent));
+  root.style.setProperty('--brand-accent-text', accessibleAccentText(accent, theme));
+  root.style.setProperty('--ui-accent-text', accessibleAccentText(accent, theme));
+}
+
 export function applyPresentation(site) {
   if (!site) return;
   const name = site.app_name || site.application_name || 'ТВ МЕНЮ';
   document.title = name;
   document.querySelectorAll('[data-app-name]').forEach((node) => { node.textContent = name; });
-  if (site.accent_color) {
-    document.documentElement.style.setProperty('--brand-accent', site.accent_color);
-    document.documentElement.style.setProperty('--ui-accent', site.accent_color);
-    document.documentElement.style.setProperty('--brand-accent-hover', site.accent_color);
-    document.documentElement.style.setProperty('--ui-accent-hover', site.accent_color);
-  }
+  if (site.accent_color) applyAccentColor(site.accent_color);
   document.querySelectorAll('.brand-mark').forEach((mark) => {
     mark.replaceChildren();
     if (site.logo_url) mark.append(imageElement(site.logo_url, 'Логотип'));
@@ -58,6 +120,7 @@ export function applyTheme(theme) {
     : requested;
   document.documentElement.dataset.theme = actual;
   document.documentElement.dataset.themePreference = requested;
+  if (state.site?.accent_color) applyAccentColor(state.site.accent_color);
   try { window.localStorage.setItem('menu-tv-theme', requested); } catch { /* Storage can be unavailable. */ }
   const toggle = element('theme-toggle');
   if (toggle) {
