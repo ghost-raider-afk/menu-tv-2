@@ -23,6 +23,13 @@ function state(count = 4, scale = 100) {
   };
 }
 
+function rendered(count = 4, scale = 100) {
+  const model = buildRenderModel(state(count, scale), { width: 1920, height: 1080 });
+  const lines = buildDisplayLines(model, { products: [product] });
+  const layout = buildRenderLayout(model, lines);
+  return { model, lines, layout, svg: buildTableSvg(model, lines, layout) };
+}
+
 test('canonical table geometry is locked to the supplied 2048x1152 reference', () => {
   assert.deepEqual({
     width: MENU_REFERENCE.width,
@@ -44,10 +51,7 @@ test('canonical table geometry is locked to the supplied 2048x1152 reference', (
 });
 
 test('one canonical SVG contains sections, producer and both price columns', () => {
-  const model = buildRenderModel(state(), { width: 1920, height: 1080 });
-  const lines = buildDisplayLines(model, { products: [product] });
-  const layout = buildRenderLayout(model, lines);
-  const svg = buildTableSvg(model, lines, layout);
+  const { svg } = rendered();
   assert.match(svg, /viewBox="0 0 2048 1152"/);
   assert.match(svg, /x1="1231"/);
   assert.match(svg, /x1="1417"/);
@@ -58,26 +62,29 @@ test('one canonical SVG contains sections, producer and both price columns', () 
   assert.match(svg, />268<tspan/);
 });
 
+test('canonical SVG is CSP-safe and carries its visual presentation without inline style blocks', () => {
+  const { svg } = rendered();
+  assert.doesNotMatch(svg, /<style[\s>]/i);
+  assert.match(svg, /class="item-name"[^>]*fill="#F8FAFC"/);
+  assert.match(svg, /class="separator"[^>]*stroke="#E2E6EA"[^>]*stroke-dasharray=/);
+  assert.match(svg, /class="section-title"[^>]*fill="#101317"/);
+  assert.match(svg, /font-family="Arial Narrow, Liberation Sans Narrow, DejaVu Sans Condensed, Arial, sans-serif"/);
+});
+
 test('font scale automatically reduces to fit but respects manual maximum', () => {
-  const model = buildRenderModel(state(25, 100), { width: 1920, height: 1080 });
-  const lines = buildDisplayLines(model, { products: [product] });
-  const layout = buildRenderLayout(model, lines);
+  const { layout } = rendered(25, 100);
   assert.equal(layout.vertical.fits, true);
   assert.equal(layout.vertical.autoReduced, true);
   assert.ok(layout.vertical.effectivePercent < 100);
   assert.ok(layout.vertical.effectivePercent >= MENU_REFERENCE.fontScaleMinPercent);
 
-  const manualModel = buildRenderModel(state(4, 82), { width: 1920, height: 1080 });
-  const manualLines = buildDisplayLines(manualModel, { products: [product] });
-  const manual = buildRenderLayout(manualModel, manualLines);
+  const manual = rendered(4, 82).layout;
   assert.equal(manual.vertical.effectivePercent, 82);
   assert.equal(manual.vertical.autoReduced, false);
 });
 
 test('menu that cannot fit even at minimum scale is explicitly rejected by layout', () => {
-  const model = buildRenderModel(state(50, 130), { width: 1920, height: 1080 });
-  const lines = buildDisplayLines(model, { products: [product] });
-  const layout = buildRenderLayout(model, lines);
+  const { layout } = rendered(50, 130);
   assert.equal(layout.vertical.effectivePercent, MENU_REFERENCE.fontScaleMinPercent);
   assert.equal(layout.vertical.fits, false);
 });
