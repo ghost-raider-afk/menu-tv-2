@@ -62,7 +62,10 @@ async function validateSiteImage(kind, bytes, config) {
 }
 
 function safeAssetFilename(filename) {
-  return typeof filename === 'string' && /^site-(?:logo|favicon)-[0-9a-f-]{36}\.(?:jpg|png|webp|ico)$/i.test(filename);
+  return typeof filename === 'string' && (
+    /^site-(?:logo|favicon)-[0-9a-f-]{36}\.(?:jpg|png|webp|ico)$/i.test(filename) ||
+    /^site-(?:logo|favicon)\.(?:jpg|png|webp|ico)$/i.test(filename)
+  );
 }
 
 export async function replaceSiteImage({ kind, bytes, config, store, username }) {
