@@ -86,7 +86,7 @@ export function createScreensRepository(pool) {
          prepared_draft_revision = $4, publication_pending_sha256 = NULL, publication_started_at = NULL,
          status = 'ready', updated_at = $5
          WHERE id = $6 AND publication_pending_sha256 IS NULL
-           AND $4 = (SELECT revision FROM screen_drafts WHERE screen_id = $6)`,
+           AND EXISTS (SELECT 1 FROM screen_drafts d WHERE d.screen_id = $6 AND d.revision = $4)`,
         [asset.key, asset.sha256, asset.size, draftRevision, isoNow(), screenId]
       );
       return rowCount ? getScreen(screenId) : null;
@@ -98,7 +98,7 @@ export function createScreensRepository(pool) {
          WHERE id = $2 AND publication_pending_sha256 IS NULL
            AND prepared_asset_key IS NOT NULL AND prepared_asset_sha256 = $3
            AND prepared_draft_revision IS NOT NULL
-           AND prepared_draft_revision = (SELECT revision FROM screen_drafts WHERE screen_id = $2)`,
+           AND EXISTS (SELECT 1 FROM screen_drafts d WHERE d.screen_id = $2 AND d.revision = prepared_draft_revision)`,
         [isoNow(), screenId, expectedSha256]
       );
       return rowCount ? getScreen(screenId) : null;
