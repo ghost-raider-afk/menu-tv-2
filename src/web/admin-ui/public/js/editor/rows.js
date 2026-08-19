@@ -1,5 +1,6 @@
 import { addRow, moveRow, removeRow, updateRow } from './commands.js';
 import { makeButton, price } from '../core/dom.js';
+import { formatProductMetadata, formatStrength } from './renderer.js';
 
 export function createEditorRow(kind) {
   return {
@@ -9,7 +10,7 @@ export function createEditorRow(kind) {
     ...(kind === 'section'
       ? { name: 'Новый раздел' }
       : kind === 'item'
-        ? { product_id: '', characteristics: '', promotion: false, promotion_text: '' }
+        ? { product_id: '', promotion: false, promotion_text: '' }
         : { packaging_id: '' })
   };
 }
@@ -79,7 +80,7 @@ function sectionRow(editorState, row, index, refresh, onChange) {
   line.append(
     td('editor-menu-order', orderCell(index, 'Раздел')),
     titleCell,
-    td('editor-menu-price editor-menu-price-label', text(index === 0 ? '1,0 л' : '—')),
+    td('editor-menu-price editor-menu-price-label', text(index === 0 ? '1 л' : '—')),
     td('editor-menu-price editor-menu-price-label', text(index === 0 ? '1,5 л' : '—')),
     td('editor-menu-actions', actionButtons(editorState, row, index, refresh))
   );
@@ -103,15 +104,12 @@ function productSelect(row, products, refresh, editorState) {
   return select;
 }
 
-function detailsEditor(editorState, row, product, onChange) {
-  const wrap = document.createElement('div');
-  wrap.className = 'editor-details-stack';
-  const subtitle = document.createElement('input');
-  subtitle.maxLength = 180;
-  subtitle.value = row.characteristics || '';
-  subtitle.placeholder = product?.characteristics || 'Дополнительная подпись';
-  subtitle.addEventListener('input', () => { updateRow(editorState, row.id, { characteristics: subtitle.value }); onChange?.(); });
+function databaseMetadata(product) {
+  if (!product) return 'Продукция не выбрана';
+  return [formatStrength(product.strength), formatProductMetadata(product)].filter(Boolean).join(' · ') || 'Характеристики не указаны';
+}
 
+function promotionEditor(editorState, row, onChange) {
   const promotion = document.createElement('div');
   promotion.className = 'editor-promotion-control';
   const toggle = document.createElement('label');
@@ -123,7 +121,7 @@ function detailsEditor(editorState, row, product, onChange) {
   const promotionText = document.createElement('input');
   promotionText.maxLength = 80;
   promotionText.value = row.promotion_text || '';
-  promotionText.placeholder = 'Текст акции';
+  promotionText.placeholder = 'Текст';
   promotionText.disabled = !check.checked;
   check.addEventListener('change', () => {
     updateRow(editorState, row.id, { promotion: check.checked });
@@ -132,8 +130,7 @@ function detailsEditor(editorState, row, product, onChange) {
   });
   promotionText.addEventListener('input', () => { updateRow(editorState, row.id, { promotion_text: promotionText.value }); onChange?.(); });
   promotion.append(toggle, promotionText);
-  wrap.append(subtitle, promotion);
-  return wrap;
+  return promotion;
 }
 
 function itemRow(editorState, row, index, products, refresh, onChange) {
@@ -141,18 +138,12 @@ function itemRow(editorState, row, index, products, refresh, onChange) {
   line.className = `editor-menu-table-item${row.enabled === false ? ' is-disabled' : ''}`;
   line.dataset.rowId = row.id;
   const product = products.find((item) => Number(item.id) === Number(row.product_id));
-  const productMeta = document.createElement('div');
-  productMeta.className = 'editor-product-meta';
-  productMeta.append(
-    text(product?.strength ? `Крепость: ${product.strength}` : 'Крепость не указана'),
-    text(product?.filtration && product.filtration !== 'none' ? product.filtration : '', 'editor-product-filter')
-  );
 
   line.append(
     td('editor-menu-order', orderCell(index, 'Продукция')),
-    td('editor-menu-position', productSelect(row, products, refresh, editorState), productMeta),
-    td('editor-menu-producer', text(product?.producer || '—', product?.producer ? '' : 'editor-muted')),
-    td('editor-menu-details', detailsEditor(editorState, row, product, onChange)),
+    td('editor-menu-position', productSelect(row, products, refresh, editorState)),
+    td('editor-menu-producer', text(databaseMetadata(product), product ? 'editor-product-database-meta' : 'editor-muted')),
+    td('editor-menu-details', promotionEditor(editorState, row, onChange)),
     td('editor-menu-price', text(product?.price_primary ? price(product.price_primary) : '—')),
     td('editor-menu-price', text(product?.price_secondary ? price(product.price_secondary) : '—')),
     td('editor-menu-actions', actionButtons(editorState, row, index, refresh))
@@ -181,8 +172,8 @@ function packagingRow(editorState, row, index, packaging, refresh) {
   line.append(
     td('editor-menu-order', orderCell(index, 'Тара')),
     td('editor-menu-position', select),
-    td('editor-menu-producer', text('—', 'editor-muted')),
-    td('editor-menu-details', text('Цена за единицу тары', 'editor-muted')),
+    td('editor-menu-producer', text('Цена за единицу тары', 'editor-muted')),
+    td('editor-menu-details', text('—', 'editor-muted')),
     td('editor-menu-price', text(selected?.unit_price ? `${price(selected.unit_price)} / шт.` : '—')),
     td('editor-menu-price', text('—', 'editor-muted')),
     td('editor-menu-actions', actionButtons(editorState, row, index, refresh))
@@ -193,7 +184,7 @@ function packagingRow(editorState, row, index, packaging, refresh) {
 function buildTable(editorState, options) {
   const table = document.createElement('table');
   table.className = 'editor-menu-editor-table';
-  table.innerHTML = `<colgroup><col class="col-order"><col class="col-position"><col class="col-producer"><col class="col-details"><col class="col-price"><col class="col-price"><col class="col-actions"></colgroup><thead><tr><th>№</th><th>Позиция</th><th>Производитель</th><th>Подпись / акция</th><th>1,0 л</th><th>1,5 л</th><th aria-label="Управление"></th></tr></thead>`;
+  table.innerHTML = `<colgroup><col class="col-order"><col class="col-position"><col class="col-producer"><col class="col-details"><col class="col-price"><col class="col-price"><col class="col-actions"></colgroup><thead><tr><th>№</th><th>Позиция</th><th>Данные из базы</th><th>Акция</th><th>1 л</th><th>1,5 л</th><th aria-label="Управление"></th></tr></thead>`;
   const body = document.createElement('tbody');
   const refresh = () => {
     renderRows(editorState, options);
