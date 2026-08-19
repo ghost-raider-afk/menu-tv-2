@@ -55,6 +55,11 @@ export function updateSettings(state, patch) {
   return markEditorChanged(state);
 }
 
+export function updateScreen(state, patch) {
+  state.screen = { ...(state.screen || {}), ...structuredClone(patch || {}) };
+  return markEditorChanged(state);
+}
+
 export function applyTemplate(state, template) {
   if (!template || typeof template !== 'object') throw new TypeError('Шаблон не задан.');
   state.rows = structuredClone(Array.isArray(template.rows) ? template.rows : []);
