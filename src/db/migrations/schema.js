@@ -1,5 +1,16 @@
 import { isoNow } from '../helpers.js';
 
+async function ensureTemplateForeignKey(pool) {
+  try {
+    await pool.query(
+      'ALTER TABLE screens ADD CONSTRAINT screens_template_id_fkey FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE SET NULL'
+    );
+  } catch (error) {
+    const duplicate = error?.code === '42710' || /already exists|duplicate/i.test(String(error?.message || ''));
+    if (!duplicate) throw error;
+  }
+}
+
 export async function initialiseSchema(pool) {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS sftp_directories (
@@ -168,14 +179,9 @@ export async function initialiseSchema(pool) {
     UPDATE site_settings SET accent_color = '#F4C915' WHERE accent_color = '#2563EB' AND COALESCE(updated_by, '') = '';
     UPDATE screens SET template_id = NULL
       WHERE template_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM templates t WHERE t.id = screens.template_id);
-    DO $$
-    BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'screens_template_id_fkey') THEN
-        ALTER TABLE screens ADD CONSTRAINT screens_template_id_fkey
-          FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE SET NULL;
-      END IF;
-    END $$;
   `);
+
+  await ensureTemplateForeignKey(pool);
 
   const now = isoNow();
   await pool.query(
