@@ -7,7 +7,7 @@ import { createSftpAccessService } from '../../services/sftp-access-service.js';
 export function createSftpRouter({ store, sftp, config }) {
   const router = express.Router();
   const access = createSftpAccessService({ store, sftp, config });
-  const publish = createPublishService({ store, sftp });
+  const publish = createPublishService({ store, sftp, config });
 
   router.get('/sftp/connection', (_request, response) => response.json(access.connection()));
   router.get('/sftp/directories', async (_request, response) => response.json(await access.directoriesWithStatus()));
