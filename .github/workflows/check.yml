@@ -142,10 +142,11 @@ jobs:
         uses: actions/checkout@v4
       - name: Check installer syntax
         run: bash -n menu-tv-2.sh
-      - name: Check installer test ref
+      - name: Check installer ref
         run: |
-          MENU_TV_REF=agent/backend-modularization bash menu-tv-2.sh help | grep -F 'Ветка/реф: agent/backend-modularization'
-          MENU_TV_REF=agent/backend-modularization bash menu-tv-2.sh help | grep -F 'Версия скрипта: 1.1.13'
+          TEST_REF="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          MENU_TV_REF="$TEST_REF" bash menu-tv-2.sh help | grep -F "Ветка/реф: $TEST_REF"
+          MENU_TV_REF="$TEST_REF" bash menu-tv-2.sh help | grep -F 'Версия скрипта: 1.1.13'
       - name: Prepare clean-install environment
         run: |
           cp .env.example .env
@@ -168,6 +169,8 @@ jobs:
       - name: Smoke test application workflow
         run: |
           docker compose --project-name menu-tv-2-ci --env-file .env exec -T app node --input-type=module <<'NODE'
+          import sharp from 'sharp';
+
           const base = 'http://127.0.0.1:8080';
           const health = await fetch(`${base}/healthz`);
           if (!health.ok || (await health.json()).service !== 'menu-tv-2.0') throw new Error('health check failed');
@@ -203,7 +206,7 @@ jobs:
           });
           if (templateResponse.status !== 201) throw new Error(`template create failed: ${templateResponse.status}`);
           const template = await templateResponse.json();
-          const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2pXQAAAAASUVORK5CYII=', 'base64');
+          const png = await sharp({ create: { width: 16, height: 16, channels: 4, background: { r: 16, g: 24, b: 40, alpha: 1 } } }).png().toBuffer();
           const backgroundResponse = await fetch(`${base}/api/templates/${template.id}/background`, { method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/png' }, body: png });
           if (!backgroundResponse.ok) throw new Error(`template background upload failed: ${backgroundResponse.status}`);
           const templateWithBackground = await backgroundResponse.json();
