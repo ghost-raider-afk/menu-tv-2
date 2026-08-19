@@ -38,7 +38,7 @@ function renderTemplateBackground(settings = {}) {
     if (label) label.textContent = normalized.background_image_url ? 'Фон шаблона' : 'Стандартный фон';
   }
   if (status) status.textContent = normalized.background_image_url
-    ? 'Фоновое изображение загружено и будет применяться вместе с шаблоном.'
+    ? 'Фоновое изображение загружено. Оно сохраняет пропорции и заполняет экран с обрезкой по краям при необходимости.'
     : (state.editingTemplateId ? 'Используется цвет фона.' : 'Для нового шаблона можно выбрать файл сейчас — он загрузится после создания.');
   if (remove instanceof HTMLButtonElement) remove.disabled = !state.editingTemplateId || !normalized.background_image_url;
 }
@@ -53,7 +53,6 @@ function resetTemplateForm() {
   element('template-text-color').value = '#F8FAFC';
   element('template-font-scale').value = 'medium';
   element('template-table-width').value = 'normal';
-  element('template-menu-title').value = '';
   element('template-background-file').value = '';
   element('template-form-title').textContent = 'Новый шаблон';
   element('template-submit').textContent = 'Создать шаблон';
@@ -73,7 +72,6 @@ function editTemplate(template) {
   element('template-text-color').value = settings.text_color;
   element('template-font-scale').value = settings.font_scale;
   element('template-table-width').value = settings.table_width;
-  element('template-menu-title').value = settings.title;
   element('template-background-file').value = '';
   element('template-form-title').textContent = 'Редактирование шаблона';
   element('template-submit').textContent = 'Сохранить шаблон';
@@ -161,8 +159,7 @@ export function initialiseTemplates() {
           accent_color: element('template-accent-color').value,
           text_color: element('template-text-color').value,
           font_scale: element('template-font-scale').value,
-          table_width: element('template-table-width').value,
-          title: element('template-menu-title').value.trim()
+          table_width: element('template-table-width').value
         })
       };
       let saved = state.editingTemplateId ? await api.put(`${API.templates}/${state.editingTemplateId}`, payload) : await api.post(API.templates, payload);
