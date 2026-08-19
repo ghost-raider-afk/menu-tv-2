@@ -12,12 +12,12 @@
     <div class="app-shell">
       <div class="app-content">
         <main class="main-content editor-content">
-          <div class="page-heading"><p class="eyebrow">МОНИТОР</p><h1>Редактор меню</h1><p>Меню собирается из общей базы продукции и тары. Первый раздел является верхней шапкой таблицы.</p></div>
+          <div class="page-heading"><p class="eyebrow">МОНИТОР</p><h1>Редактор меню</h1><p>Меню собирается из общей базы продукции и тары. Геометрия итоговой таблицы зафиксирована по эталону ТВ МЕНЮ1, а первый раздел является верхней шапкой таблицы.</p></div>
           <form id="screen-editor-form" class="editor-workspace">
             <div class="editor-main-column">
               <section class="settings-card editor-menu-card">
                 <div class="card-heading"><div><p class="eyebrow">СОДЕРЖИМОЕ</p><h2>Строки меню</h2></div><div class="editor-add-actions"><button class="button button-secondary" id="editor-add-section" type="button">+ Раздел</button><button class="button button-secondary" id="editor-add-item" type="button">+ Продукция</button><button class="button button-secondary" id="editor-add-packaging" type="button">+ Тара</button></div></div>
-                <p class="muted-copy">Цена продукции и тары берётся из каталога и не редактируется здесь.</p>
+                <p class="muted-copy">Цена продукции и тары берётся из каталога и не редактируется здесь. Производитель выводится компактно рядом с названием продукции.</p>
                 <div class="editor-menu-rows" id="editor-menu-rows"></div><p class="empty-state" id="editor-menu-empty">В меню ещё нет строк.</p>
               </section>
               <section class="settings-card editor-preview-card">
@@ -42,9 +42,16 @@
                 <div class="form-grid">
                   <label class="field"><span>Фон</span><input id="editor-background-color" type="color" /></label>
                   <label class="field"><span>Акцент</span><input id="editor-accent-color" type="color" /></label>
-                  <label class="field"><span>Основной текст</span><input id="editor-text-color" type="color" /></label>
-                  <label class="field"><span>Размер текста</span><select id="editor-font-scale"><option value="small">Компактный</option><option value="medium">Обычный</option><option value="large">Крупный</option></select></label>
-                  <label class="field field-full"><span>Ширина таблицы</span><select id="editor-table-width"><option value="compact">Компактная</option><option value="normal">Обычная</option><option value="wide">Широкая</option></select></label>
+                  <label class="field field-full"><span>Основной текст</span><input id="editor-text-color" type="color" /></label>
+                  <div class="field field-full font-scale-field">
+                    <span>Масштаб шрифта</span>
+                    <div class="font-scale-control">
+                      <input id="editor-font-scale" type="range" min="55" max="130" step="1" value="100" aria-label="Масштаб шрифта" />
+                      <label class="font-scale-number"><input id="editor-font-scale-number" type="number" min="55" max="130" step="1" value="100" aria-label="Масштаб шрифта в процентах" /><span>%</span></label>
+                    </div>
+                    <small id="editor-font-scale-effective">Фактически: 100%.</small>
+                    <small>Если строк много, таблица автоматически уменьшает шрифт и высоту строк до вмещения. Здесь задаётся желаемый максимальный масштаб.</small>
+                  </div>
                 </div>
               </section>
               <section class="settings-card screen-delivery-card">
