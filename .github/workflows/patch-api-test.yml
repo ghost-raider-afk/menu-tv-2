@@ -1,0 +1,48 @@
+name: patch-api-test
+
+on:
+  push:
+    branches:
+      - agent/backend-modularization
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/backend-modularization
+      - name: Align integration test with sharp and runtime config
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('tests/api.test.js')
+          s = p.read_text()
+          if "import sharp from 'sharp';" not in s:
+            s = s.replace("import test from 'node:test';", "import test from 'node:test';\nimport sharp from 'sharp';", 1)
+          s = s.replace("  loginMaxAttempts: 8,\n", "  loginMaxAttempts: 8,\n  loginIpMaxAttempts: 32,\n", 1)
+          s = s.replace("  screenMaxHeight: 1080,\n", "  screenMaxHeight: 1080,\n  imageMaxPixels: 40_000_000,\n  healthReadinessCacheMs: 0,\n", 1)
+          s = s.replace("  db: { host: 'db', port: 5432, database: 'menu_tv_2', user: 'menu_tv_2', password: 'p'.repeat(32) },", "  db: { host: 'db', port: 5432, database: 'menu_tv_2', user: 'menu_tv_2', password: 'p'.repeat(32), poolMax: 5, connectionTimeoutMs: 5000, idleTimeoutMs: 30000 },", 1)
+          s = s.replace("  sftp: { publicHost: 'tv.example.test', port: 2022, stagingMaxAgeHours: 24 },", "  sftp: { apiUrl: 'http://127.0.0.1:18080', apiTimeoutMs: 1000, adminUsername: 'test', adminPassword: 'a'.repeat(32), storageRoot: '/tmp/menu-tv-test-sftp', publicHost: 'tv.example.test', port: 2022, stagingMaxAgeHours: 24 },", 1)
+          start = s.index('function jpegFor(width, height) {')
+          end = s.index('\n}\n\nclass FakeSftpService', start) + 2
+          s = s[:start] + "async function jpegFor(width, height) {\n  return sharp({ create: { width, height, channels: 3, background: { r: 20, g: 30, b: 40 } } }).jpeg({ quality: 85 }).toBuffer();\n}" + s[end:]
+          s = s.replace('body: jpegFor(1280, 720)', 'body: await jpegFor(1280, 720)')
+          s = s.replace('body: jpegFor(1920, 1080)', 'body: await jpegFor(1920, 1080)')
+          s = s.replace("font_scale: 'medium', table_width: 'normal', title: 'CI меню'", "font_scale_percent: 100")
+          s = s.replace("font_scale: 'medium', table_width: 'normal'", "font_scale_percent: 100")
+          p.write_text(s)
+          PY
+          node --check tests/api.test.js
+      - name: Commit integration test
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add tests/api.test.js
+          git diff --cached --quiet && exit 0
+          git commit -m 'Align API integration test with decoded images'
+          git push origin HEAD:agent/backend-modularization
