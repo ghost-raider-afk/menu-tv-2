@@ -52,9 +52,7 @@ function foregroundFor(background) {
   return contrast(background, '#111111') >= contrast(background, '#FFFFFF') ? '#111111' : '#FFFFFF';
 }
 
-function accessibleAccentText(accent, theme) {
-  const background = theme === 'dark' ? '#151D29' : '#FFFFFF';
-  const target = theme === 'dark' ? '#FFFFFF' : '#000000';
+function accessibleAccentText(accent, background, target) {
   if (contrast(accent, background) >= 4.5) return accent;
   for (let step = 1; step <= 10; step += 1) {
     const candidate = mix(accent, target, step / 10);
@@ -67,14 +65,17 @@ function applyAccentColor(accent) {
   if (!rgb(accent)) return;
   const theme = currentTheme();
   const root = document.documentElement;
+  const panelBackground = theme === 'dark' ? '#151D29' : '#FFFFFF';
   root.style.setProperty('--brand-accent', accent);
   root.style.setProperty('--ui-accent', accent);
   root.style.setProperty('--brand-accent-hover', mix(accent, theme === 'dark' ? '#FFFFFF' : '#000000', 0.12));
   root.style.setProperty('--ui-accent-hover', mix(accent, theme === 'dark' ? '#FFFFFF' : '#000000', 0.12));
   root.style.setProperty('--brand-accent-contrast', foregroundFor(accent));
   root.style.setProperty('--ui-accent-contrast', foregroundFor(accent));
-  root.style.setProperty('--brand-accent-text', accessibleAccentText(accent, theme));
-  root.style.setProperty('--ui-accent-text', accessibleAccentText(accent, theme));
+  root.style.setProperty('--brand-accent-text', accessibleAccentText(accent, panelBackground, theme === 'dark' ? '#FFFFFF' : '#000000'));
+  root.style.setProperty('--ui-accent-text', accessibleAccentText(accent, panelBackground, theme === 'dark' ? '#FFFFFF' : '#000000'));
+  root.style.setProperty('--brand-accent-on-dark', accessibleAccentText(accent, '#151D29', '#FFFFFF'));
+  root.style.setProperty('--ui-accent-on-dark', accessibleAccentText(accent, '#151D29', '#FFFFFF'));
 }
 
 export function applyPresentation(site) {
