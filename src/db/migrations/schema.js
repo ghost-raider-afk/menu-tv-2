@@ -32,6 +32,8 @@ export async function initialiseSchema(pool) {
       prepared_asset_key TEXT,
       prepared_asset_sha256 TEXT,
       prepared_asset_size BIGINT,
+      publication_pending_sha256 TEXT,
+      publication_started_at TIMESTAMPTZ,
       published_sha256 TEXT,
       published_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL,
@@ -75,6 +77,7 @@ export async function initialiseSchema(pool) {
       screen_id BIGINT PRIMARY KEY REFERENCES screens(id) ON DELETE CASCADE,
       rows_json TEXT NOT NULL DEFAULT '[]',
       settings_json TEXT NOT NULL DEFAULT '{}',
+      revision BIGINT NOT NULL DEFAULT 1,
       updated_at TIMESTAMPTZ NOT NULL
     );
     CREATE TABLE IF NOT EXISTS user_preferences (
@@ -133,10 +136,13 @@ export async function initialiseSchema(pool) {
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_key TEXT;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_sha256 TEXT;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_size BIGINT;
+    ALTER TABLE screens ADD COLUMN IF NOT EXISTS publication_pending_sha256 TEXT;
+    ALTER TABLE screens ADD COLUMN IF NOT EXISTS publication_started_at TIMESTAMPTZ;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS published_sha256 TEXT;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
     ALTER TABLE templates ADD COLUMN IF NOT EXISTS rows_json TEXT NOT NULL DEFAULT '[]';
     ALTER TABLE templates ADD COLUMN IF NOT EXISTS settings_json TEXT NOT NULL DEFAULT '{}';
+    ALTER TABLE screen_drafts ADD COLUMN IF NOT EXISTS revision BIGINT NOT NULL DEFAULT 1;
     ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT '';
     ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
     ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS job_title TEXT NOT NULL DEFAULT '';
@@ -160,6 +166,15 @@ export async function initialiseSchema(pool) {
     UPDATE screens SET delivery_filename = 'monitor-' || id::text || '.jpg' WHERE delivery_filename IS NULL;
     UPDATE web_users SET password_changed_at = created_at WHERE password_changed_at IS NULL;
     UPDATE site_settings SET accent_color = '#F4C915' WHERE accent_color = '#2563EB' AND COALESCE(updated_by, '') = '';
+    UPDATE screens SET template_id = NULL
+      WHERE template_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM templates t WHERE t.id = screens.template_id);
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'screens_template_id_fkey') THEN
+        ALTER TABLE screens ADD CONSTRAINT screens_template_id_fkey
+          FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE SET NULL;
+      END IF;
+    END $$;
   `);
 
   const now = isoNow();
