@@ -93,12 +93,13 @@ test('board table is left aligned and leaves the right side for template artwork
 });
 
 test('vertical layout scales font and refuses silent clipping', () => {
-  const small = buildVerticalLayout(1080, 18, 'small');
-  const medium = buildVerticalLayout(1080, 18, 'medium');
-  const large = buildVerticalLayout(1080, 18, 'large');
+  const small = buildVerticalLayout(1080, 22, 'small');
+  const medium = buildVerticalLayout(1080, 22, 'medium');
+  const large = buildVerticalLayout(1080, 22, 'large');
   assert.ok(small.minRowHeight < medium.minRowHeight);
   assert.ok(medium.minRowHeight < large.minRowHeight);
   assert.equal(small.fits, true);
+  assert.equal(medium.fits, true);
   assert.equal(large.fits, false);
 
   const state = createEditorState({
