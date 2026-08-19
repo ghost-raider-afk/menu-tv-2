@@ -79,8 +79,6 @@ test('canonical table keeps prices separate and builds second line only from cat
   assert.equal(lines[0].kind, 'section');
   assert.equal(lines[0].showPriceLabels, true);
   assert.equal(lines[1].name, 'Бавария');
-  assert.equal(lines[1].strength, '4,6%');
-  assert.equal(lines[1].producer, 'ООО «Портал»');
   assert.equal(lines[1].metadata, 'ООО «Портал» · 4,6% · светлое · нефильтрованное');
   assert.equal(lines[1].pricePrimary, '179.00');
   assert.equal(lines[1].priceSecondary, '268.50');
@@ -89,20 +87,22 @@ test('canonical table keeps prices separate and builds second line only from cat
 
   const layout = buildRenderLayout(model, lines);
   const svg = buildTableSvg(model, lines, layout);
-  assert.match(svg, /class="item-name"[^>]*>БАВАРИЯ<\/text>/);
+  assert.match(svg, /class="item-name"[^>]*>Бавария<\/text>/);
   assert.doesNotMatch(svg, /class="item-name"[^>]*4,6%/);
   assert.match(svg, /ООО «Портал» · 4,6% · светлое · нефильтрованное/);
   assert.doesNotMatch(svg, /°/);
+  assert.match(svg, /class="price"[^>]*text-anchor="end"/);
   assert.match(svg, />179<tspan/);
 });
 
-test('board horizontal geometry stays locked to the supplied reference and leaves artwork on the right', () => {
-  assert.equal(MENU_REFERENCE.tableX, 15);
-  assert.equal(MENU_REFERENCE.tableRight, 1605);
-  assert.equal(MENU_REFERENCE.tableWidth, 1590);
-  assert.equal(MENU_REFERENCE.primaryBoundary, 1231);
-  assert.equal(MENU_REFERENCE.secondaryBoundary, 1417);
-  assert.ok(MENU_REFERENCE.tableRight < MENU_REFERENCE.width * 0.8);
+test('board horizontal geometry is the supplied TV Menu 1 reference and leaves artwork on the right', () => {
+  assert.equal(MENU_REFERENCE.width, 1920);
+  assert.equal(MENU_REFERENCE.tableX, 56);
+  assert.equal(MENU_REFERENCE.tableRight, 1430);
+  assert.equal(MENU_REFERENCE.tableWidth, 1374);
+  assert.equal(MENU_REFERENCE.rightZoneX, 1495);
+  assert.equal(MENU_REFERENCE.secondaryPriceX, 1405);
+  assert.ok(MENU_REFERENCE.tableRight < MENU_REFERENCE.rightZoneX);
 });
 
 test('automatic font fitting reduces scale and refuses silent clipping', () => {
