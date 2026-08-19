@@ -2,17 +2,10 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { ValidationError } from '../shared/errors.js';
+import { validateImage } from './image-validation.js';
 
 const TEMPLATE_BACKGROUND_PREFIX = '/site-assets/templates/';
 const SAFE_BACKGROUND = /^background-[0-9a-f-]{36}\.(?:jpg|png|webp)$/i;
-
-function backgroundExtension(bytes) {
-  if (!Buffer.isBuffer(bytes) || bytes.length < 4) return null;
-  const isPng = bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-  const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-  const isWebp = bytes.length >= 12 && bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP';
-  return isPng ? 'png' : isJpeg ? 'jpg' : isWebp ? 'webp' : null;
-}
 
 function localPathForUrl(url, config) {
   if (typeof url !== 'string' || !url.startsWith(TEMPLATE_BACKGROUND_PREFIX)) return null;
@@ -31,8 +24,14 @@ export async function replaceTemplateBackground(template, bytes, { store, config
   if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > config.templateBackgroundMaxBytes) {
     throw new ValidationError('Размер фонового изображения шаблона недопустим.');
   }
-  const extension = backgroundExtension(bytes);
-  if (!extension) throw new ValidationError('Фон шаблона должен быть PNG, JPEG или WebP.');
+  const info = validateImage(bytes, {
+    allowedTypes: ['png', 'jpeg', 'webp'],
+    maxWidth: config.screenMaxWidth,
+    maxHeight: config.screenMaxHeight,
+    maxPixels: config.screenMaxWidth * config.screenMaxHeight,
+    label: 'Фон шаблона'
+  });
+  const extension = info.type === 'jpeg' ? 'jpg' : info.type;
 
   const filename = `background-${crypto.randomUUID()}.${extension}`;
   const relativePath = `templates/${filename}`;
