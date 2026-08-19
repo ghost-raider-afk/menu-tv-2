@@ -74,8 +74,9 @@ function renderPackaging(line) {
   return row;
 }
 
-function applyPreviewTypography(target, scale) {
-  const unit = (base) => `${(base / 19.2) * scale}cqw`;
+function applyPreviewTypography(target, scale, viewportWidth) {
+  const width = Math.max(1, Number(viewportWidth) || 1920);
+  const unit = (base) => `${((base * scale) / width) * 100}cqw`;
   target.style.setProperty('--menu-section-font', unit(31));
   target.style.setProperty('--menu-price-label-font', unit(23));
   target.style.setProperty('--menu-item-font', unit(27));
@@ -107,7 +108,7 @@ export function renderPreview(editorState, { screen, products, packaging, target
   target.dataset.tableWidth = settings.table_width || 'normal';
   target.dataset.menuFits = renderLayout.vertical.fits ? 'true' : 'false';
   target.classList.toggle('is-overflowing', !renderLayout.vertical.fits);
-  applyPreviewTypography(target, renderLayout.vertical.scale);
+  applyPreviewTypography(target, renderLayout.vertical.scale, model.viewport.width);
   target.replaceChildren();
 
   const table = document.createElement('div');
