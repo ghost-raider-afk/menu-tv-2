@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.1.13"
+SCRIPT_VERSION="1.1.14"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
@@ -59,6 +59,7 @@ Menu TV 2.0 — управление независимым приложение
   sudo $PROGRAM_NAME update
   sudo $PROGRAM_NAME check-script-update
   sudo $PROGRAM_NAME update-script
+  sudo $PROGRAM_NAME admin-info
   sudo $PROGRAM_NAME remove
   sudo $PROGRAM_NAME remove-script
   sudo $PROGRAM_NAME purge
@@ -725,6 +726,57 @@ show_credentials() {
   printf 'Пароли больше не выводятся командами status. Сохраните их в менеджер паролей.\n'
 }
 
+administrator_usernames() {
+  local query="SELECT username FROM web_users WHERE role = 'administrator' AND active = TRUE ORDER BY username;"
+  compose exec -T "$DB_SERVICE" sh -ec 'PGPASSWORD="$POSTGRES_PASSWORD" exec psql -qtAX -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "$1"' sh "$query"
+}
+
+show_administrator_data() {
+  require_root
+  [[ -d "$INSTALL_DIR" && -f "$INSTALL_DIR/.env" ]] || die "Menu TV 2.0 не установлен: $INSTALL_DIR"
+  local env_file="$INSTALL_DIR/.env" domain usernames username password
+  local credentials_color_url credentials_color_login credentials_color_password
+  domain="$(env_value MENU_TV_2_DOMAIN "$env_file")"
+  [[ -n "$domain" ]] || die "MENU_TV_2_DOMAIN в .env не настроен."
+  if ! usernames="$(administrator_usernames 2>/dev/null)"; then
+    die "Не удалось получить администратора из PostgreSQL. Проверьте, что контейнер базы данных запущен."
+  fi
+  [[ -n "$usernames" ]] || die "В PostgreSQL нет активной учётной записи администратора."
+
+  password="$(env_value BOOTSTRAP_ADMIN_PASSWORD "$env_file")"
+  [[ -n "$password" ]] || password="$(env_value ADMIN_PASSWORD "$env_file")"
+
+  CREDENTIALS_COLOR_RESET=''
+  credentials_color_url=''
+  credentials_color_login=''
+  credentials_color_password=''
+  if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+    CREDENTIALS_COLOR_RESET=$'\033[0m'
+    credentials_color_url=$'\033[1;36m'
+    credentials_color_login=$'\033[1;32m'
+    credentials_color_password=$'\033[1;33m'
+  fi
+
+  printf '\n+------------------------------------------------------------------------------+\n'
+  credentials_box_text '  ТВ МЕНЮ — ДАННЫЕ АДМИНИСТРАТОРА'
+  printf '|------------------------------------------------------------------------------|\n'
+  credentials_box_value 'Веб-адрес' "https://$domain" "$credentials_color_url"
+  while IFS= read -r username; do
+    [[ -n "$username" ]] || continue
+    credentials_box_value 'Логин администратора' "$username" "$credentials_color_login"
+  done <<< "$usernames"
+  if [[ -n "$password" ]]; then
+    credentials_box_value 'Пароль администратора' "$password" "$credentials_color_password"
+  else
+    credentials_box_value 'Пароль администратора' 'не хранится в открытом виде' ''
+  fi
+  printf '+------------------------------------------------------------------------------+\n'
+  if [[ -z "$password" ]]; then
+    printf 'Текущий пароль восстановить невозможно: в PostgreSQL хранится только его хеш.\n'
+    printf 'Изменить известный пароль можно в веб-интерфейсе через профиль администратора.\n'
+  fi
+}
+
 cleanup_failed_install() {
   warn "Установка не завершилась. Удаляются только созданные ресурсы Menu TV 2.0."
   if [[ -f "$INSTALL_DIR/.env" ]]; then
@@ -907,6 +959,7 @@ menu() {
     printf '  4. Удалить скрипт\n'
     printf '  5. Удалить проект и скрипт\n'
     printf '  6. Проверить обновления скрипта\n'
+    printf '  7. Вывести данные администратора\n'
     printf '  0. Выход\n'
     printf '============================================\n'
     read -r -p 'Выберите действие: ' action
@@ -917,8 +970,9 @@ menu() {
       4) remove_script; return ;;
       5) purge_project; return ;;
       6) update_script ;;
+      7) show_administrator_data ;;
       0) return ;;
-      *) warn "Выберите пункт от 0 до 6." ;;
+      *) warn "Выберите пункт от 0 до 7." ;;
     esac
   done
 }
@@ -930,6 +984,7 @@ main() {
     update) update_app ;;
     check-script-update) check_script_update ;;
     update-script) update_script ;;
+    admin-info) show_administrator_data ;;
     remove) remove_project ;;
     remove-script) remove_script ;;
     purge) purge_project ;;
