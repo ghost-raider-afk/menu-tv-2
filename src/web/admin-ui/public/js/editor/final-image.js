@@ -1,7 +1,5 @@
-import { buildDisplayLines, buildRenderModel, buildTableLayout, MENU_TABLE_STYLE } from './renderer.js';
+import { buildDisplayLines, buildRenderLayout, buildRenderModel, MENU_TABLE_STYLE } from './renderer.js';
 import { parseResolution } from './settings.js';
-
-const FONT_SCALE = { small: 0.88, medium: 1, large: 1.15 };
 
 function fitText(ctx, text, maxWidth) {
   const source = String(text || '');
@@ -189,7 +187,7 @@ function drawItem(ctx, line, layout) {
 }
 
 function drawPackaging(ctx, line, layout) {
-  const { left, right, top, rowHeight, scale, accent, primaryBoundary, secondaryBoundary } = layout;
+  const { left, right, top, rowHeight, scale, accent, primaryBoundary } = layout;
   drawDashedLine(ctx, left, top + rowHeight - 2, right, top + rowHeight - 2, scale, 0.82);
   drawColumnSeparators(ctx, layout);
 
@@ -220,6 +218,11 @@ export async function renderFinalJpeg(editorState, { screen, products, packaging
   const resolution = parseResolution(screen?.resolution);
   const model = buildRenderModel(editorState, resolution);
   const lines = buildDisplayLines(model, { products, packaging, fallbackTitle: screen?.name || 'Меню' });
+  const renderLayout = buildRenderLayout(model, lines);
+  if (!renderLayout.vertical.fits) {
+    throw new Error(`Меню не помещается в ${model.viewport.width}×${model.viewport.height}. Уменьшите размер текста или количество строк.`);
+  }
+
   const { width, height } = model.viewport;
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -228,24 +231,18 @@ export async function renderFinalJpeg(editorState, { screen, products, packaging
   if (!ctx) throw new Error('Браузер не поддерживает Canvas 2D.');
 
   const settings = model.settings || {};
-  const scale = FONT_SCALE[settings.font_scale] || 1;
-  const table = buildTableLayout(width, settings.table_width);
+  const table = renderLayout.horizontal;
+  const vertical = renderLayout.vertical;
   const accent = settings.accent_color || MENU_TABLE_STYLE.defaultAccent;
 
   await drawBackground(ctx, settings, width, height);
 
-  const tableTop = Math.round(height * 0.055);
-  const tableBottom = Math.round(height * 0.12);
-  const availableHeight = height - tableTop - tableBottom;
-  const naturalHeight = Math.floor(availableHeight / Math.max(lines.length, 1));
-  const rowHeight = clamp(naturalHeight, Math.round(38 * scale), Math.round(58 * scale));
-
   lines.forEach((line, index) => {
     const layout = {
       ...table,
-      top: tableTop + index * rowHeight,
-      rowHeight,
-      scale,
+      top: vertical.top + index * vertical.rowHeight,
+      rowHeight: vertical.rowHeight,
+      scale: vertical.scale,
       accent
     };
     if (line.kind === 'section') drawSection(ctx, line, layout);
