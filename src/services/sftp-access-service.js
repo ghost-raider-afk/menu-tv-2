@@ -1,3 +1,4 @@
+import { logger } from '../logger/index.js';
 import { ConflictError, NotFoundError } from '../shared/errors.js';
 import { generateSftpPassword } from '../sftp/index.js';
 
@@ -33,11 +34,17 @@ export function createSftpAccessService({ store, sftp, config }) {
       try {
         bound = await store.bindLocationSftp(locationId, input);
       } catch (error) {
-        await sftp.removeUser(input.username).catch(() => undefined);
+        await sftp.removeUser(input.username).catch((cleanupError) => logger.warn('SFTP user rollback failed after binding error', {
+          username: input.username,
+          error: cleanupError
+        }));
         throw error;
       }
       if (!bound) {
-        await sftp.removeUser(input.username).catch(() => undefined);
+        await sftp.removeUser(input.username).catch((cleanupError) => logger.warn('SFTP user rollback failed after binding conflict', {
+          username: input.username,
+          error: cleanupError
+        }));
         throw new ConflictError('Точка уже получила SFTP-привязку. Обновите страницу.');
       }
       return {
@@ -52,7 +59,15 @@ export function createSftpAccessService({ store, sftp, config }) {
       if (!location.sftp_username) throw new ConflictError('У точки нет SFTP-доступа.');
       const password = generateSftpPassword(config.generatedPasswordLength);
       await sftp.resetPassword({ username: location.sftp_username, password });
-      await store.touchLocationSftpPassword(location.id);
+      try {
+        await store.touchLocationSftpPassword(location.id);
+      } catch (error) {
+        logger.warn('SFTP password changed but issuance timestamp could not be recorded', {
+          location_id: location.id,
+          username: location.sftp_username,
+          error
+        });
+      }
       return {
         location,
         credentials: { host: config.sftp.publicHost, port: config.sftp.port, username: location.sftp_username, password }
