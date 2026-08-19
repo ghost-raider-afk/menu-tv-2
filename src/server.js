@@ -75,10 +75,21 @@ function configureSecurity(app, config) {
 }
 
 function mountPublicRoutes(app, { store, config }) {
+  let readiness = { checkedAt: 0, ok: false };
   app.get('/healthz', (_request, response) => response.json({ status: 'ok', service: 'menu-tv-2.0' }));
   app.get('/readyz', async (_request, response) => {
-    await store.pool.query('SELECT 1');
-    response.json({ status: 'ready', service: 'menu-tv-2.0' });
+    const now = Date.now();
+    if (now - readiness.checkedAt <= config.healthReadinessCacheMs) {
+      return response.status(readiness.ok ? 200 : 503).json({ status: readiness.ok ? 'ready' : 'not_ready', service: 'menu-tv-2.0' });
+    }
+    try {
+      await store.pool.query('SELECT 1');
+      readiness = { checkedAt: now, ok: true };
+      return response.json({ status: 'ready', service: 'menu-tv-2.0' });
+    } catch {
+      readiness = { checkedAt: now, ok: false };
+      return response.status(503).json({ status: 'not_ready', service: 'menu-tv-2.0' });
+    }
   });
   app.use('/site-assets', express.static(config.siteAssetsRoot, { etag: true, maxAge: '1d', immutable: true }));
   app.get('/api/public/config', async (_request, response) => {
