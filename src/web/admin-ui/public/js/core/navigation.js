@@ -6,7 +6,6 @@ const SECTION_BY_PAGE = Object.freeze({
   screens: 'monitors',
   'screen-editor': 'monitors',
   catalog: 'catalog',
-  templates: 'settings',
   settings: 'settings',
   profile: 'settings'
 });
@@ -17,7 +16,6 @@ const PAGE_TITLES = Object.freeze({
   screens: 'Мониторы',
   'screen-editor': 'Редактор меню',
   catalog: 'Каталог',
-  templates: 'Шаблоны',
   settings: 'Настройки сайта',
   profile: 'Профиль'
 });
@@ -26,7 +24,7 @@ const CONTEXT_LINKS = Object.freeze({
   overview: Object.freeze([['Обзор', '/']]),
   monitors: Object.freeze([['Торговые точки', '/locations.html'], ['Мониторы', '/screens.html']]),
   catalog: Object.freeze([['Продукция', '/catalog.html#products'], ['Тара', '/catalog.html#packaging']]),
-  settings: Object.freeze([['Шаблоны', '/templates.html'], ['Настройки сайта', '/settings.html'], ['Профиль', '/profile.html']])
+  settings: Object.freeze([['Настройки сайта', '/settings.html'], ['Профиль', '/profile.html']])
 });
 
 export const PRIMARY_ROUTES = Object.freeze([

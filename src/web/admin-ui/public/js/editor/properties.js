@@ -6,7 +6,11 @@ const SETTINGS_INPUTS = Object.freeze([
   'editor-background-color',
   'editor-accent-color',
   'editor-text-color',
-  'editor-font-family'
+  'editor-font-family',
+  'editor-table-x',
+  'editor-table-y',
+  'editor-table-width',
+  'editor-table-height'
 ]);
 
 const SCREEN_INPUTS = Object.freeze([
@@ -38,7 +42,11 @@ export function readEditorSettings(baseSettings = {}) {
     accent_color: element('editor-accent-color').value,
     text_color: element('editor-text-color').value,
     font_scale_percent: fontScaleValue(),
-    font_family: element('editor-font-family').value
+    font_family: element('editor-font-family').value,
+    table_x: element('editor-table-x').value,
+    table_y: element('editor-table-y').value,
+    table_width_px: element('editor-table-width').value,
+    table_height_px: element('editor-table-height').value
   });
 }
 
@@ -48,7 +56,13 @@ export function writeEditorSettings(settings) {
   element('editor-accent-color').value = normalized.accent_color;
   element('editor-text-color').value = normalized.text_color;
   element('editor-font-family').value = normalized.font_family;
+  element('editor-table-x').value = String(normalized.table_x);
+  element('editor-table-y').value = String(normalized.table_y);
+  element('editor-table-width').value = String(normalized.table_width_px);
+  element('editor-table-height').value = String(normalized.table_height_px);
   syncFontScaleInputs(normalized.font_scale_percent);
+  const backgroundState = element('editor-background-state');
+  if (backgroundState) backgroundState.textContent = normalized.background_image_url ? 'Фон загружен' : 'Без изображения';
   return normalized;
 }
 
@@ -58,7 +72,9 @@ export function writeScreenProperties(screen) {
   element('editor-resolution').value = screen.resolution || '';
   element('editor-status').value = screen.status === 'published' ? 'ready' : screen.status;
   element('editor-active').checked = screen.active !== false;
-  element('editor-sftp-path').textContent = screen.sftp_path || 'Для точки ещё не настроен SFTP-каталог';
+  element('editor-sftp-path').textContent = screen.sftp_path || 'SFTP не настроен';
+  const identity = element('editor-toolbar-title');
+  if (identity) identity.textContent = `${screen.location_name || 'Точка'} · ${screen.name || 'Монитор'}`;
 }
 
 export function readScreenProperties(screen) {

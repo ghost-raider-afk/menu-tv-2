@@ -8,13 +8,14 @@ export async function seedDemoData(pool) {
     'INSERT INTO locations (name, address, active, created_at, updated_at) VALUES ($1, $2, TRUE, $3, $3) RETURNING id',
     ['Демонстрационная точка', 'Пример адреса', now]
   );
-  await pool.query(
-    'INSERT INTO screens (location_id, name, resolution, status, active, created_at, updated_at) VALUES ($1, $2, $3, $4, TRUE, $5, $5)',
-    [location.rows[0].id, 'Экран у кассы', '1920×1080', 'ready', now]
+  const screen = await pool.query(
+    'INSERT INTO screens (location_id, name, resolution, status, active, created_at, updated_at) VALUES ($1, $2, $3, $4, TRUE, $5, $5) RETURNING id',
+    [location.rows[0].id, 'Экран у кассы', '1920×1080', 'draft', now]
   );
+  await pool.query('UPDATE screens SET delivery_filename = $1 WHERE id = $2', [`monitor-${screen.rows[0].id}.jpg`, screen.rows[0].id]);
   await pool.query(
-    'INSERT INTO templates (name, description, active, created_at, updated_at) VALUES ($1, $2, TRUE, $3, $3)',
-    ['Светлое меню', 'Базовый демонстрационный шаблон', now]
+    'INSERT INTO screen_drafts (screen_id, rows_json, settings_json, revision, updated_at) VALUES ($1, $2, $3, 1, $4)',
+    [screen.rows[0].id, '[]', '{}', now]
   );
   return true;
 }

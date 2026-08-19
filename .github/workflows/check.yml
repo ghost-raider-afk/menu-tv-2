@@ -81,7 +81,7 @@ jobs:
       SITE_ASSETS_ROOT: /tmp/menu-tv-2-browser-assets
       SITE_LOGO_MAX_BYTES: '2097152'
       SITE_FAVICON_MAX_BYTES: '524288'
-      TEMPLATE_BACKGROUND_MAX_BYTES: '12582912'
+      SCREEN_BACKGROUND_MAX_BYTES: '20971520'
       HEALTH_READINESS_CACHE_MS: '0'
       SFTP_PUBLIC_HOST: localhost
       SFTP_PORT: '2022'
@@ -146,7 +146,11 @@ jobs:
         run: |
           TEST_REF="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
           MENU_TV_REF="$TEST_REF" bash menu-tv-2.sh help | grep -F "Ветка/реф: $TEST_REF"
-          MENU_TV_REF="$TEST_REF" bash menu-tv-2.sh help | grep -F 'Версия скрипта: 1.1.14'
+          MENU_TV_REF="$TEST_REF" bash menu-tv-2.sh help | grep -F 'Версия скрипта: 1.2.0'
+      - name: Check canonical environment
+        run: |
+          grep -Fx 'SCREEN_BACKGROUND_MAX_BYTES=20971520' .env.example
+          ! grep -q 'TEMPLATE_BACKGROUND_MAX_BYTES' .env.example
       - name: Prepare clean-install environment
         run: |
           cp .env.example .env
@@ -180,7 +184,7 @@ jobs:
 
           const cssResponse = await fetch(`${base}/css/index.css`);
           const css = await cssResponse.text();
-          if (!cssResponse.ok || !css.includes('./shell.css') || !css.includes('./editor/editor.css') || /tv1/i.test(css)) throw new Error('final CSS entrypoint invalid');
+          if (!cssResponse.ok || !css.includes('./shell.css') || !css.includes('./editor/editor.css') || /templates\.css|tv1/i.test(css)) throw new Error('final CSS entrypoint invalid');
           const legacyCss = await fetch(`${base}/style.css`);
           if (legacyCss.ok) throw new Error('legacy style.css is still served');
 
@@ -200,37 +204,60 @@ jobs:
           const cookie = sessionCookie.split(';', 1)[0].trim();
           const jsonHeaders = { 'Content-Type': 'application/json', Cookie: cookie };
 
-          const templateResponse = await fetch(`${base}/api/templates`, {
-            method: 'POST', headers: jsonHeaders,
-            body: JSON.stringify({ name: 'CI шаблон', description: 'Проверка фона', active: true, settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC', font_scale_percent: 100 } })
+          const templatesGone = await fetch(`${base}/api/templates`, { headers: { Cookie: cookie } });
+          if (templatesGone.status !== 404) throw new Error(`legacy templates API still exists: ${templatesGone.status}`);
+
+          const siteResponse = await fetch(`${base}/api/settings/site`, { headers: { Cookie: cookie } });
+          if (!siteResponse.ok) throw new Error('site settings load failed');
+          const site = await siteResponse.json();
+          const siteUpdate = await fetch(`${base}/api/settings/site`, {
+            method: 'PUT', headers: jsonHeaders,
+            body: JSON.stringify({
+              application_name: site.app_name,
+              accent_color: site.accent_color,
+              timezone: site.timezone,
+              date_format: site.date_format,
+              dashboard_refresh_seconds: site.dashboard_refresh_seconds,
+              default_screen_resolution: site.default_screen_resolution,
+              signin_logo_size: 7
+            })
           });
-          if (templateResponse.status !== 201) throw new Error(`template create failed: ${templateResponse.status}`);
-          const template = await templateResponse.json();
-          const png = await sharp({ create: { width: 16, height: 16, channels: 4, background: { r: 16, g: 24, b: 40, alpha: 1 } } }).png().toBuffer();
-          const backgroundResponse = await fetch(`${base}/api/templates/${template.id}/background`, { method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/png' }, body: png });
-          if (!backgroundResponse.ok) throw new Error(`template background upload failed: ${backgroundResponse.status}`);
-          const templateWithBackground = await backgroundResponse.json();
-          const backgroundUrl = templateWithBackground.settings?.background_image_url;
-          if (!/^\/site-assets\/templates\/background-[0-9a-f-]{36}\.png$/i.test(backgroundUrl || '')) throw new Error('template background URL invalid');
-          const backgroundAsset = await fetch(`${base}${backgroundUrl}`);
-          if (!backgroundAsset.ok || Buffer.compare(Buffer.from(await backgroundAsset.arrayBuffer()), png) !== 0) throw new Error('template background asset not served');
+          if (!siteUpdate.ok || Number((await siteUpdate.json()).signin_logo_size) !== 7) throw new Error('signin logo size setting failed');
 
           const locationResponse = await fetch(`${base}/api/locations`, { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name: 'CI точка', address: 'CI' }) });
           if (locationResponse.status !== 201) throw new Error(`location create failed: ${locationResponse.status}`);
           const location = await locationResponse.json();
-          const screenResponse = await fetch(`${base}/api/locations/${location.id}/screens`, { method: 'POST', headers: { Cookie: cookie } });
+
+          const screenResponse = await fetch(`${base}/api/locations/${location.id}/screens`, { method: 'POST', headers: jsonHeaders, body: '{}' });
           if (screenResponse.status !== 201) throw new Error(`screen create failed: ${screenResponse.status}`);
           const screen = await screenResponse.json();
           const editorResponse = await fetch(`${base}/api/screens/${screen.id}/editor`, { headers: { Cookie: cookie } });
           if (!editorResponse.ok) throw new Error(`editor load failed: ${editorResponse.status}`);
-          const editor = await editorResponse.json();
+          let editor = await editorResponse.json();
           if (!Number.isInteger(Number(editor.draft?.revision)) || Number(editor.draft.revision) < 1) throw new Error('draft revision missing');
+          if ('templates' in editor || 'template_id' in editor.screen) throw new Error('template data leaked into editor contract');
+
+          const png = await sharp({ create: { width: 16, height: 16, channels: 4, background: { r: 16, g: 24, b: 40, alpha: 1 } } }).png().toBuffer();
+          const backgroundResponse = await fetch(`${base}/api/screens/${screen.id}/background`, {
+            method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/png', 'X-Draft-Revision': String(editor.draft.revision) }, body: png
+          });
+          if (!backgroundResponse.ok) throw new Error(`screen background upload failed: ${backgroundResponse.status}`);
+          const backgroundSaved = await backgroundResponse.json();
+          const backgroundUrl = backgroundSaved.draft?.settings?.background_image_url;
+          if (!/^\/site-assets\/screens\/background-[0-9a-f-]{36}\.png$/i.test(backgroundUrl || '')) throw new Error('screen background URL invalid');
+          const backgroundAsset = await fetch(`${base}${backgroundUrl}`);
+          if (!backgroundAsset.ok || Buffer.compare(Buffer.from(await backgroundAsset.arrayBuffer()), png) !== 0) throw new Error('screen background asset not served');
+          editor = backgroundSaved;
 
           const draftPayload = {
             revision: Number(editor.draft.revision),
             rows: [{ id: 'ci-section', kind: 'section', name: 'CI раздел', enabled: true }],
-            settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC', font_scale_percent: 100 },
-            screen: { location_id: screen.location_id, name: screen.name, resolution: screen.resolution, status: screen.status, active: screen.active, template_id: template.id }
+            settings: {
+              ...editor.draft.settings,
+              background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC', font_scale_percent: 100,
+              table_x: 56, table_y: 15, table_width_px: 1374, table_height_px: 925
+            },
+            screen: { location_id: screen.location_id, name: screen.name, resolution: screen.resolution, status: screen.status, active: screen.active }
           };
           const draftSave = await fetch(`${base}/api/screens/${screen.id}/draft`, { method: 'PUT', headers: jsonHeaders, body: JSON.stringify(draftPayload) });
           if (!draftSave.ok) throw new Error(`draft save failed: ${draftSave.status}`);
@@ -239,9 +266,27 @@ jobs:
           const staleSave = await fetch(`${base}/api/screens/${screen.id}/draft`, { method: 'PUT', headers: jsonHeaders, body: JSON.stringify(draftPayload) });
           if (staleSave.status !== 409) throw new Error(`stale editor write was not rejected: ${staleSave.status}`);
 
+          const cloneResponse = await fetch(`${base}/api/locations/${location.id}/screens`, {
+            method: 'POST', headers: jsonHeaders, body: JSON.stringify({ source_screen_id: screen.id })
+          });
+          if (cloneResponse.status !== 201) throw new Error(`screen clone failed: ${cloneResponse.status}`);
+          const clone = await cloneResponse.json();
+          if (clone.id === screen.id || clone.prepared_asset_key) throw new Error('screen clone is not independent');
+          const cloneEditor = await (await fetch(`${base}/api/screens/${clone.id}/editor`, { headers: { Cookie: cookie } })).json();
+          if (cloneEditor.draft.rows?.[0]?.name !== 'CI раздел' || cloneEditor.draft.settings?.background_image_url !== backgroundUrl) throw new Error('screen content clone failed');
+
+          const locationCloneResponse = await fetch(`${base}/api/locations/${location.id}/clone`, {
+            method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name: 'CI точка копия', address: 'CI clone', active: true })
+          });
+          if (locationCloneResponse.status !== 201) throw new Error(`location clone failed: ${locationCloneResponse.status}`);
+          const locationClone = await locationCloneResponse.json();
+          if (locationClone.id === location.id || locationClone.sftp_directory_id) throw new Error('location clone copied identity or SFTP');
+          const allScreens = await (await fetch(`${base}/api/screens`, { headers: { Cookie: cookie } })).json();
+          if (allScreens.filter((item) => item.location_id === locationClone.id).length !== 2) throw new Error('location monitor cloning failed');
+
           const rendererResponse = await fetch(`${base}/js/editor/renderer.js`);
           const rendererSource = await rendererResponse.text();
-          if (!rendererResponse.ok || !rendererSource.includes('MENU_REFERENCE') || !rendererSource.includes('buildTableSvg') || !rendererSource.includes('font_scale_percent') || !rendererSource.includes('autoReduced')) throw new Error('canonical TV Menu table renderer contract missing');
+          if (!rendererResponse.ok || !rendererSource.includes('MENU_REFERENCE') || !rendererSource.includes('buildTableSvg') || !rendererSource.includes('table_width_px') || !rendererSource.includes('autoReduced')) throw new Error('canonical monitor renderer contract missing');
           NODE
       - name: Smoke test SFTP service
         run: docker compose --project-name menu-tv-2-ci --env-file .env exec -T sftp sftpgo ping

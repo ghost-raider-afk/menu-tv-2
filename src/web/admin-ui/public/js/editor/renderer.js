@@ -13,9 +13,6 @@ export const MENU_FONT_OPTIONS = Object.freeze([
   Object.freeze({ key: 'system-sans', label: 'Системный sans-serif', family: 'Arial, sans-serif', weightFloor: 400 })
 ]);
 
-// Pixel geometry measured from the supplied TV Menu 1 1920x1080 reference.
-// Typography ratios come from TV Menu 1 renderer; TV1_REFERENCE_SCALE maps its
-// 1.05 reference output to 100% in TV Menu 2 so the editor opens at parity.
 export const MENU_REFERENCE = Object.freeze({
   width: 1920,
   height: 1080,
@@ -24,6 +21,7 @@ export const MENU_REFERENCE = Object.freeze({
   tableWidth: 1374,
   tableTop: 15,
   tableBottom: 940,
+  tableHeight: 925,
   rowHeight: 53.5,
   sectionInset: 4,
   separatorInset: 9,
@@ -275,8 +273,17 @@ export function buildDisplayLines(model, { products = [], packaging = [], fallba
   return Object.freeze(lines);
 }
 
+function tableFrame(model) {
+  const x = clamp(Math.round(numeric(model.settings.table_x, MENU_REFERENCE.tableX)), 0, Math.max(0, model.viewport.width - 1));
+  const y = clamp(Math.round(numeric(model.settings.table_y, MENU_REFERENCE.tableTop)), 0, Math.max(0, model.viewport.height - 1));
+  const width = clamp(Math.round(numeric(model.settings.table_width_px, MENU_REFERENCE.tableWidth)), 1, Math.max(1, model.viewport.width - x));
+  const height = clamp(Math.round(numeric(model.settings.table_height_px, MENU_REFERENCE.tableHeight)), 1, Math.max(1, model.viewport.height - y));
+  return Object.freeze({ x, y, width, height });
+}
+
 export function buildRenderLayout(model, lines) {
-  const available = MENU_REFERENCE.tableBottom - MENU_REFERENCE.tableTop;
+  const frame = tableFrame(model);
+  const available = frame.height;
   const baseHeight = Math.max(1, lines.length * MENU_REFERENCE.rowHeight);
   const requestedPercent = requestedFontScalePercent(model.settings);
   const fitPercent = (available / baseHeight) * 100;
@@ -284,27 +291,30 @@ export function buildRenderLayout(model, lines) {
   const scale = effectivePercent / 100;
   const rowHeight = MENU_REFERENCE.rowHeight * scale;
   const fits = baseHeight * scale <= available + 0.5;
-  const boxes = lines.map((line, index) => Object.freeze({
-    top: MENU_REFERENCE.tableTop + index * rowHeight,
+  const boxes = lines.map((_line, index) => Object.freeze({
+    top: frame.y + index * rowHeight,
     height: rowHeight,
-    bottom: MENU_REFERENCE.tableTop + (index + 1) * rowHeight,
+    bottom: frame.y + (index + 1) * rowHeight,
     gapBefore: 0
   }));
-  const secondaryPriceX = MENU_REFERENCE.secondaryPriceX;
-  const primaryPriceX = secondaryPriceX - MENU_REFERENCE.priceColumnGap * scale;
+  const scaleX = frame.width / MENU_REFERENCE.tableWidth;
+  const secondaryPriceX = frame.x + (MENU_REFERENCE.secondaryPriceX - MENU_REFERENCE.tableX) * scaleX;
+  const primaryPriceX = secondaryPriceX - MENU_REFERENCE.priceColumnGap * scaleX;
 
   return Object.freeze({
+    frame,
     horizontal: Object.freeze({
-      left: MENU_REFERENCE.tableX,
-      right: MENU_REFERENCE.tableRight,
-      tableWidth: MENU_REFERENCE.tableWidth,
+      left: frame.x,
+      right: frame.x + frame.width,
+      tableWidth: frame.width,
+      scaleX,
       primaryPriceX,
       secondaryPriceX,
-      nameWidth: primaryPriceX - MENU_REFERENCE.tableX
+      nameWidth: primaryPriceX - frame.x
     }),
     vertical: Object.freeze({
-      top: MENU_REFERENCE.tableTop,
-      bottom: MENU_REFERENCE.tableBottom,
+      top: frame.y,
+      bottom: frame.y + frame.height,
       availableHeight: available,
       baseContentHeight: baseHeight,
       requestedPercent: Math.round(requestedPercent * 10) / 10,
@@ -336,7 +346,7 @@ function textAttributes({ size, weight = 400, fill, letterSpacing = 0, anchor = 
 
 function separatorMarkup(box, horizontal, scale) {
   const y = box.bottom - 2 * scale;
-  return `<line x1="${horizontal.left + MENU_REFERENCE.separatorInset}" y1="${y}" x2="${horizontal.right}" y2="${y}" class="separator" stroke="${MENU_TABLE_STYLE.separator}" stroke-width="${Math.max(1, scale)}" stroke-dasharray="${6 * scale} ${7 * scale}" opacity="0.65"/>`;
+  return `<line x1="${horizontal.left + MENU_REFERENCE.separatorInset * horizontal.scaleX}" y1="${y}" x2="${horizontal.right}" y2="${y}" class="separator" stroke="${MENU_TABLE_STYLE.separator}" stroke-width="${Math.max(1, scale)}" stroke-dasharray="${6 * scale} ${7 * scale}" opacity="0.65"/>`;
 }
 
 function priceMarkup(value, x, baseline, scale, toneColor, typography) {
@@ -367,7 +377,7 @@ function sectionMarkup(line, box, horizontal, palette, scale, typography) {
   const title = String(line.name || 'Меню');
   const baseline = box.top + 35 * fontScale;
   const titleWidth = line.showPriceLabels
-    ? horizontal.primaryPriceX - horizontal.left - 45
+    ? horizontal.primaryPriceX - horizontal.left - 45 * horizontal.scaleX
     : horizontal.tableWidth;
   const maximumCharacters = Math.max(16, Math.floor(titleWidth / (17 * fontScale)));
   const labels = line.showPriceLabels
@@ -377,7 +387,7 @@ function sectionMarkup(line, box, horizontal, palette, scale, typography) {
   const rectHeight = Math.max(1, box.height - MENU_REFERENCE.sectionInset * scale);
   return `<g class="table-section">
     <rect x="${horizontal.left}" y="${box.top}" width="${horizontal.tableWidth}" height="${rectHeight}" rx="5" ry="5" fill="${palette.accent}"/>
-    <text x="${horizontal.left + 19}" y="${baseline}" class="section-title" ${textAttributes({ size: 28 * fontScale, weight: 700, fill: palette.sectionText, letterSpacing: 0.3 }, typography)}>${escapeXml(truncateText(title, maximumCharacters))}</text>
+    <text x="${horizontal.left + 19 * horizontal.scaleX}" y="${baseline}" class="section-title" ${textAttributes({ size: 28 * fontScale, weight: 700, fill: palette.sectionText, letterSpacing: 0.3 }, typography)}>${escapeXml(truncateText(title, maximumCharacters))}</text>
     ${labels}
   </g>`;
 }
@@ -386,14 +396,12 @@ function itemMarkup(line, box, horizontal, palette, scale, typography) {
   const fontScale = TV1_REFERENCE_SCALE * scale;
   const toneColor = line.tone === 'accent' ? palette.accentText : palette.primaryText;
   const metaColor = line.tone === 'accent' ? palette.accentSecondaryText : palette.secondaryText;
-  const nameX = horizontal.left + 22;
+  const nameX = horizontal.left + 22 * horizontal.scaleX;
   const promotion = promotionMarkup(line, nameX, box, scale, typography);
   const itemNameX = nameX + (promotion.width ? promotion.width + 11 * fontScale : 0);
-  const nameCharacters = Math.max(8, Math.floor((horizontal.primaryPriceX - itemNameX - 30) / (13 * fontScale)));
-  const metaCharacters = Math.max(18, Math.floor((horizontal.primaryPriceX - nameX - 30) / (7 * fontScale)));
+  const nameCharacters = Math.max(8, Math.floor((horizontal.primaryPriceX - itemNameX - 30 * horizontal.scaleX) / (13 * fontScale)));
+  const metaCharacters = Math.max(18, Math.floor((horizontal.primaryPriceX - nameX - 30 * horizontal.scaleX) / (7 * fontScale)));
   const priceBaseline = box.top + 35 * fontScale;
-  // TV Menu 1 uses 25/43. A one-unit outward adjustment preserves the
-  // reference appearance while preventing overlap with taller Linux fallbacks.
   const nameBaseline = line.metadata ? box.top + 24 * fontScale : priceBaseline;
   const metaBaseline = box.top + 44 * fontScale;
 
@@ -409,19 +417,19 @@ function itemMarkup(line, box, horizontal, palette, scale, typography) {
 
 function packagingMarkup(line, box, horizontal, palette, scale, typography) {
   const fontScale = TV1_REFERENCE_SCALE * scale;
-  const gap = 12;
+  const gap = 12 * horizontal.scaleX;
   const cellWidth = (horizontal.tableWidth - gap) / 2;
   const baseline = box.top + 34 * fontScale;
   const cells = line.items.map((item, index) => {
     const x = horizontal.left + index * (cellWidth + gap);
     const toneColor = item.tone === 'accent' ? palette.accentText : palette.primaryText;
-    const maximumCharacters = Math.max(8, Math.floor((cellWidth - 180 * fontScale) / (11 * fontScale)));
+    const maximumCharacters = Math.max(8, Math.floor((cellWidth - 180 * horizontal.scaleX) / (11 * fontScale)));
     const parts = priceParts(item.unitPrice);
     const price = parts ? `${parts.whole},${parts.cents}` : '—';
     return `<g class="packaging-cell tone-${item.tone === 'accent' ? 'accent' : 'light'}">
       <rect x="${x}" y="${box.top + 2}" width="${cellWidth}" height="${Math.max(1, box.height - 6)}" rx="7" fill="${MENU_TABLE_STYLE.packagingBackground}" stroke="${toneColor}" stroke-width="1.5" opacity="0.96"/>
-      <text x="${x + 16}" y="${baseline}" class="packaging-name" ${textAttributes({ size: 21 * fontScale, weight: 700, fill: toneColor }, typography)}>${escapeXml(truncateText(item.name, maximumCharacters))}</text>
-      <text x="${x + cellWidth - 15}" y="${baseline}" class="packaging-price" ${textAttributes({ size: 21 * fontScale, weight: 700, fill: toneColor, anchor: 'end' }, typography)}>${escapeXml(price)}</text>
+      <text x="${x + 16 * horizontal.scaleX}" y="${baseline}" class="packaging-name" ${textAttributes({ size: 21 * fontScale, weight: 700, fill: toneColor }, typography)}>${escapeXml(truncateText(item.name, maximumCharacters))}</text>
+      <text x="${x + cellWidth - 15 * horizontal.scaleX}" y="${baseline}" class="packaging-price" ${textAttributes({ size: 21 * fontScale, weight: 700, fill: toneColor, anchor: 'end' }, typography)}>${escapeXml(price)}</text>
     </g>`;
   }).join('\n');
   return `<g class="table-packaging">${separatorMarkup(box, horizontal, scale)}${cells}</g>`;
@@ -437,7 +445,7 @@ export function buildTableSvg(model, lines, layout = buildRenderLayout(model, li
     return itemMarkup(line, box, horizontal, palette, scale, typography);
   }).join('\n');
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" class="menu-table-svg" width="${model.viewport.width}" height="${model.viewport.height}" viewBox="0 0 ${MENU_REFERENCE.width} ${MENU_REFERENCE.height}" preserveAspectRatio="xMinYMin meet" aria-label="Предпросмотр таблицы меню" font-family="${escapeXml(typography.family)}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" class="menu-table-svg" width="${model.viewport.width}" height="${model.viewport.height}" viewBox="0 0 ${model.viewport.width} ${model.viewport.height}" preserveAspectRatio="xMinYMin meet" aria-label="Предпросмотр таблицы меню" font-family="${escapeXml(typography.family)}">
     ${content}
   </svg>`;
 }

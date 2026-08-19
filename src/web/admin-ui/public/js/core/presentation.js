@@ -82,6 +82,7 @@ export function applyPresentation(site) {
   if (!site) return;
   const name = site.app_name || site.application_name || 'ТВ МЕНЮ';
   document.title = name;
+  document.documentElement.dataset.signinLogoSize = String(Math.max(1, Math.min(7, Number(site.signin_logo_size) || 1)));
   document.querySelectorAll('[data-app-name]').forEach((node) => { node.textContent = name; });
   if (site.accent_color) applyAccentColor(site.accent_color);
   document.querySelectorAll('.brand-mark').forEach((mark) => {

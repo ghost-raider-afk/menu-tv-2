@@ -1,16 +1,5 @@
 import { isoNow } from '../helpers.js';
 
-async function ensureTemplateForeignKey(pool) {
-  try {
-    await pool.query(
-      'ALTER TABLE screens ADD CONSTRAINT screens_template_id_fkey FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE SET NULL'
-    );
-  } catch (error) {
-    const duplicate = error?.code === '42710' || /already exists|duplicate/i.test(String(error?.message || ''));
-    if (!duplicate) throw error;
-  }
-}
-
 export async function initialiseSchema(pool) {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS sftp_directories (
@@ -34,7 +23,6 @@ export async function initialiseSchema(pool) {
     CREATE TABLE IF NOT EXISTS screens (
       id BIGSERIAL PRIMARY KEY,
       location_id BIGINT NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
-      template_id BIGINT,
       name TEXT NOT NULL,
       resolution TEXT NOT NULL DEFAULT '1920×1080',
       status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'ready', 'published')),
@@ -52,16 +40,6 @@ export async function initialiseSchema(pool) {
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL,
       UNIQUE(location_id, name)
-    );
-    CREATE TABLE IF NOT EXISTS templates (
-      id BIGSERIAL PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
-      description TEXT NOT NULL DEFAULT '',
-      active BOOLEAN NOT NULL DEFAULT TRUE,
-      rows_json TEXT NOT NULL DEFAULT '[]',
-      settings_json TEXT NOT NULL DEFAULT '{}',
-      created_at TIMESTAMPTZ NOT NULL,
-      updated_at TIMESTAMPTZ NOT NULL
     );
     CREATE TABLE IF NOT EXISTS catalog_products (
       id BIGSERIAL PRIMARY KEY,
@@ -120,6 +98,7 @@ export async function initialiseSchema(pool) {
       accent_color TEXT NOT NULL DEFAULT '#F4C915',
       logo_filename TEXT NOT NULL DEFAULT '',
       favicon_filename TEXT NOT NULL DEFAULT '',
+      signin_logo_size SMALLINT NOT NULL DEFAULT 1 CHECK(signin_logo_size BETWEEN 1 AND 7),
       timezone TEXT NOT NULL DEFAULT 'Europe/Moscow',
       date_format TEXT NOT NULL DEFAULT 'DD.MM.YYYY',
       dashboard_refresh_seconds INTEGER NOT NULL DEFAULT 45,
@@ -143,7 +122,6 @@ export async function initialiseSchema(pool) {
     ALTER TABLE locations ADD COLUMN IF NOT EXISTS sftp_username TEXT;
     ALTER TABLE locations ADD COLUMN IF NOT EXISTS sftp_password_issued_at TIMESTAMPTZ;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS delivery_filename TEXT;
-    ALTER TABLE screens ADD COLUMN IF NOT EXISTS template_id BIGINT;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_key TEXT;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_sha256 TEXT;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_size BIGINT;
@@ -153,8 +131,6 @@ export async function initialiseSchema(pool) {
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS published_sha256 TEXT;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS published_draft_revision BIGINT;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
-    ALTER TABLE templates ADD COLUMN IF NOT EXISTS rows_json TEXT NOT NULL DEFAULT '[]';
-    ALTER TABLE templates ADD COLUMN IF NOT EXISTS settings_json TEXT NOT NULL DEFAULT '{}';
     ALTER TABLE screen_drafts ADD COLUMN IF NOT EXISTS revision BIGINT NOT NULL DEFAULT 1;
     ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT '';
     ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
@@ -172,6 +148,7 @@ export async function initialiseSchema(pool) {
     ALTER TABLE site_settings ALTER COLUMN accent_color SET DEFAULT '#F4C915';
     ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS logo_filename TEXT NOT NULL DEFAULT '';
     ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS favicon_filename TEXT NOT NULL DEFAULT '';
+    ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS signin_logo_size SMALLINT NOT NULL DEFAULT 1;
     CREATE UNIQUE INDEX IF NOT EXISTS locations_sftp_directory_id_unique ON locations(sftp_directory_id) WHERE sftp_directory_id IS NOT NULL;
     CREATE UNIQUE INDEX IF NOT EXISTS locations_sftp_username_unique ON locations(sftp_username) WHERE sftp_username IS NOT NULL;
     CREATE INDEX IF NOT EXISTS activity_events_created_at_index ON activity_events(created_at DESC);
@@ -179,11 +156,8 @@ export async function initialiseSchema(pool) {
     UPDATE screens SET delivery_filename = 'monitor-' || id::text || '.jpg' WHERE delivery_filename IS NULL;
     UPDATE web_users SET password_changed_at = created_at WHERE password_changed_at IS NULL;
     UPDATE site_settings SET accent_color = '#F4C915' WHERE accent_color = '#2563EB' AND COALESCE(updated_by, '') = '';
-    UPDATE screens SET template_id = NULL
-      WHERE template_id IS NOT NULL AND template_id NOT IN (SELECT id FROM templates);
+    UPDATE site_settings SET signin_logo_size = 1 WHERE signin_logo_size IS NULL OR signin_logo_size < 1 OR signin_logo_size > 7;
   `);
-
-  await ensureTemplateForeignKey(pool);
 
   const now = isoNow();
   await pool.query(

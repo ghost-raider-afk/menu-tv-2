@@ -8,7 +8,6 @@ export function createEditorState(initial = {}) {
     rows: clone(Array.isArray(initial.rows) ? initial.rows : []),
     settings: clone(initial.settings && typeof initial.settings === 'object' ? initial.settings : {}),
     selectedRowId: initial.selectedRowId ?? null,
-    templateId: initial.templateId ?? null,
     dirty: initial.dirty === true,
     revision: Number.isInteger(initial.revision) ? initial.revision : 0,
     draftRevision: Number.isInteger(initial.draftRevision) ? initial.draftRevision : 0

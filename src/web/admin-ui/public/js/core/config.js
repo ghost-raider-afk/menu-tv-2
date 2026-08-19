@@ -10,7 +10,6 @@ export const API = Object.freeze({
   notifications: '/api/notifications',
   locations: '/api/locations',
   screens: '/api/screens',
-  templates: '/api/templates',
   products: '/api/catalog/products',
   packaging: '/api/catalog/packaging',
   sftpDirectories: '/api/sftp/directories',

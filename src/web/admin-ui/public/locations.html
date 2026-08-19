@@ -12,45 +12,45 @@
     <div class="app-shell">
       <div class="app-content">
         <main class="main-content workspace-content">
-          <div class="page-heading"><p class="eyebrow">СТРУКТУРА</p><h1>Торговые точки и SFTP</h1><p>Сначала создайте точку, затем вручную создайте папку и один SFTP-доступ для неё. Все телевизоры точки используют эту папку.</p></div>
+          <div class="page-heading compact-heading"><div><p class="eyebrow">СТРУКТУРА</p><h1>Торговые точки</h1></div><p>Точки, копирование структуры и SFTP-доступ.</p></div>
           <div class="workspace-grid">
             <section class="settings-card">
               <div class="card-heading"><div><p class="eyebrow">ТОЧКА</p><h2 id="location-form-title">Новая точка</h2></div><button class="text-button is-hidden" id="cancel-location-edit" type="button">Отменить</button></div>
               <form id="location-form" class="form-grid">
-                <label class="field field-full"><span>Название точки</span><input id="location-name" maxlength="120" required /></label>
-                <label class="field field-full"><span>Адрес</span><input id="location-address" maxlength="300" /></label>
+                <label class="field field-full" id="location-copy-field"><span>Создать</span><select id="location-copy-source"><option value="">Пустая точка</option></select><small>При выборе образца копируются мониторы, меню и оформление. SFTP не копируется.</small></label>
+                <label class="field"><span>Название точки</span><input id="location-name" maxlength="120" required /></label>
+                <label class="field"><span>Адрес</span><input id="location-address" maxlength="300" /></label>
                 <label class="toggle-row field-full"><span><strong>Активна</strong><small>Точка доступна для работы с мониторами.</small></span><input id="location-active" type="checkbox" checked /><i aria-hidden="true"></i></label>
                 <p class="form-message is-hidden field-full" id="location-message" role="status"></p>
                 <div class="form-actions field-full"><button class="button button-primary" id="location-submit" type="submit">Создать точку</button></div>
               </form>
             </section>
             <section class="settings-card">
-              <div class="card-heading"><div><p class="eyebrow">СПИСОК</p><h2>Все торговые точки</h2></div><button class="button button-secondary" id="refresh-locations" type="button">Обновить</button></div>
+              <div class="card-heading"><div><p class="eyebrow">СПИСОК</p><h2>Все точки</h2></div><button class="button button-secondary" id="refresh-locations" type="button">Обновить</button></div>
               <div class="record-list" data-locations-list></div>
               <p class="empty-state is-hidden" data-locations-empty>Торговых точек пока нет.</p>
             </section>
           </div>
           <div class="workspace-grid sftp-grid">
             <section class="settings-card">
-              <div class="card-heading"><div><p class="eyebrow">ПАПКИ SFTP</p><h2>Каталоги телевизоров</h2></div></div>
-              <p class="muted-copy">Сервер для CX Проводника: <strong id="sftp-connection">—</strong>. Имя папки задаёт администратор; автоматически папки не создаются.</p>
-              <form id="sftp-directory-form" class="form-grid">
-                <label class="field field-full"><span>Имя новой папки</span><input id="sftp-directory-name" maxlength="64" placeholder="Например, point-center" required /></label>
-                <p class="form-message is-hidden field-full" id="sftp-message" role="status"></p>
-                <div class="form-actions field-full"><button class="button button-secondary" id="sftp-directory-submit" type="submit">Создать папку</button></div>
+              <div class="card-heading"><div><p class="eyebrow">SFTP</p><h2>Каталоги телевизоров</h2></div><strong class="compact-value" id="sftp-connection">—</strong></div>
+              <form id="sftp-directory-form" class="compact-inline-form">
+                <label class="field"><span>Новая папка</span><input id="sftp-directory-name" maxlength="64" placeholder="point-center" required /></label>
+                <button class="button button-secondary" id="sftp-directory-submit" type="submit">Создать</button>
               </form>
+              <p class="form-message is-hidden" id="sftp-message" role="status"></p>
               <div class="record-list" data-sftp-directories-list></div>
               <p class="empty-state is-hidden" data-sftp-directories-empty>SFTP-папки пока не созданы.</p>
             </section>
             <section class="settings-card">
-              <div class="card-heading"><div><p class="eyebrow">ДОСТУП ТОЧКИ</p><h2>Привязка и пользователь SFTP</h2></div></div>
+              <div class="card-heading"><div><p class="eyebrow">ДОСТУП</p><h2>Привязка SFTP</h2></div></div>
               <form id="sftp-binding-form" class="form-grid">
-                <label class="field field-full"><span>Торговая точка</span><select id="sftp-location" required></select></label>
-                <label class="field field-full"><span>Папка SFTP</span><select id="sftp-directory" required></select></label>
-                <label class="field field-full"><span>Логин для телевизоров</span><input id="sftp-username" maxlength="32" placeholder="Например, point_center" required /></label>
+                <label class="field"><span>Торговая точка</span><select id="sftp-location" required></select></label>
+                <label class="field"><span>Папка SFTP</span><select id="sftp-directory" required></select></label>
+                <label class="field field-full"><span>Логин телевизоров</span><input id="sftp-username" maxlength="32" placeholder="point_center" required /></label>
                 <p class="muted-copy field-full" id="sftp-binding-state">Выберите торговую точку.</p>
                 <p class="form-message is-hidden field-full" id="sftp-credentials" role="status"></p>
-                <div class="form-actions field-full"><button class="button button-primary" id="sftp-bind-submit" type="submit">Привязать доступ</button><button class="button button-secondary is-hidden" id="sftp-reset-password" type="button">Новый пароль</button><button class="button button-secondary is-hidden" id="sftp-unbind" type="button">Отключить SFTP</button></div>
+                <div class="form-actions field-full"><button class="button button-primary" id="sftp-bind-submit" type="submit">Привязать</button><button class="button button-secondary is-hidden" id="sftp-reset-password" type="button">Новый пароль</button><button class="button button-secondary is-hidden" id="sftp-unbind" type="button">Отключить</button></div>
               </form>
             </section>
           </div>
