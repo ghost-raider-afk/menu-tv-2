@@ -85,21 +85,19 @@ export function createScreensRepository(pool) {
         `UPDATE screens SET prepared_asset_key = $1, prepared_asset_sha256 = $2, prepared_asset_size = $3,
          prepared_draft_revision = $4, publication_pending_sha256 = NULL, publication_started_at = NULL,
          status = 'ready', updated_at = $5
-         WHERE id = $6 AND publication_pending_sha256 IS NULL
-           AND EXISTS (SELECT 1 FROM screen_drafts d WHERE d.screen_id = $6 AND d.revision = $4)`,
+         WHERE id = $6 AND publication_pending_sha256 IS NULL`,
         [asset.key, asset.sha256, asset.size, draftRevision, isoNow(), screenId]
       );
       return rowCount ? getScreen(screenId) : null;
     },
 
-    async markPublicationStarted(screenId, expectedSha256) {
+    async markPublicationStarted(screenId, expectedSha256, expectedDraftRevision) {
       const { rowCount } = await pool.query(
         `UPDATE screens SET publication_pending_sha256 = prepared_asset_sha256, publication_started_at = $1, updated_at = $1
          WHERE id = $2 AND publication_pending_sha256 IS NULL
            AND prepared_asset_key IS NOT NULL AND prepared_asset_sha256 = $3
-           AND prepared_draft_revision IS NOT NULL
-           AND EXISTS (SELECT 1 FROM screen_drafts d WHERE d.screen_id = $2 AND d.revision = prepared_draft_revision)`,
-        [isoNow(), screenId, expectedSha256]
+           AND prepared_draft_revision = $4`,
+        [isoNow(), screenId, expectedSha256, expectedDraftRevision]
       );
       return rowCount ? getScreen(screenId) : null;
     },
