@@ -1,5 +1,10 @@
 import { isoNow, jsonValue, normaliseMenuRecord, normaliseRow } from './helpers.js';
 
+function normaliseDraft(row, screenId) {
+  const record = normaliseMenuRecord(row) || { screen_id: screenId, rows: [], settings: {}, revision: 0 };
+  return { ...record, revision: Number(record.revision || 0) };
+}
+
 export function createScreensRepository(pool) {
   async function getScreen(id) {
     const { rows } = await pool.query(
@@ -36,12 +41,13 @@ export function createScreensRepository(pool) {
          VALUES ($1, $2, $3, $4, $5, $6, $7, $7) RETURNING id`,
         [location_id, name, resolution, status, active, template_id, now]
       );
-      await pool.query('UPDATE screens SET delivery_filename = $1 WHERE id = $2', [`monitor-${rows[0].id}.jpg`, rows[0].id]);
+      const id = Number(rows[0].id);
+      await pool.query('UPDATE screens SET delivery_filename = $1 WHERE id = $2', [`monitor-${id}.jpg`, id]);
       await pool.query(
-        'INSERT INTO screen_drafts (screen_id, rows_json, settings_json, updated_at) VALUES ($1, $2, $3, $4)',
-        [rows[0].id, '[]', '{}', now]
+        'INSERT INTO screen_drafts (screen_id, rows_json, settings_json, revision, updated_at) VALUES ($1, $2, $3, 1, $4)',
+        [id, '[]', '{}', now]
       );
-      return getScreen(rows[0].id);
+      return getScreen(id);
     },
 
     async updateScreen(id, { location_id, name, resolution = '1920×1080', status = 'draft', active = true, template_id = null }) {
@@ -61,19 +67,51 @@ export function createScreensRepository(pool) {
     async savePreparedAsset(screenId, asset) {
       const { rowCount } = await pool.query(
         `UPDATE screens SET prepared_asset_key = $1, prepared_asset_sha256 = $2, prepared_asset_size = $3,
+         publication_pending_sha256 = NULL, publication_started_at = NULL,
          status = 'ready', updated_at = $4 WHERE id = $5`,
         [asset.key, asset.sha256, asset.size, isoNow(), screenId]
       );
       return rowCount ? getScreen(screenId) : null;
     },
 
-    async markScreenPublished(screenId) {
+    async markPublicationStarted(screenId, expectedSha256) {
       const { rowCount } = await pool.query(
-        `UPDATE screens SET status = 'published', published_sha256 = prepared_asset_sha256,
-         published_at = $1, updated_at = $1 WHERE id = $2 AND prepared_asset_key IS NOT NULL`,
-        [isoNow(), screenId]
+        `UPDATE screens SET publication_pending_sha256 = prepared_asset_sha256, publication_started_at = $1, updated_at = $1
+         WHERE id = $2 AND prepared_asset_key IS NOT NULL AND prepared_asset_sha256 = $3`,
+        [isoNow(), screenId, expectedSha256]
       );
       return rowCount ? getScreen(screenId) : null;
+    },
+
+    async clearPublicationPending(screenId, expectedSha256) {
+      await pool.query(
+        `UPDATE screens SET publication_pending_sha256 = NULL, publication_started_at = NULL, updated_at = $1
+         WHERE id = $2 AND publication_pending_sha256 = $3`,
+        [isoNow(), screenId, expectedSha256]
+      );
+      return getScreen(screenId);
+    },
+
+    async markScreenPublished(screenId, expectedSha256) {
+      const { rowCount } = await pool.query(
+        `UPDATE screens SET status = 'published', published_sha256 = $1, published_at = $2,
+         publication_pending_sha256 = NULL, publication_started_at = NULL,
+         prepared_asset_key = NULL, prepared_asset_sha256 = NULL, prepared_asset_size = NULL,
+         updated_at = $2
+         WHERE id = $3 AND publication_pending_sha256 = $1`,
+        [expectedSha256, isoNow(), screenId]
+      );
+      return rowCount ? getScreen(screenId) : null;
+    },
+
+    async listPendingPublications() {
+      const { rows } = await pool.query(
+        `SELECT s.*, l.name AS location_name, d.name AS sftp_directory_name
+         FROM screens s JOIN locations l ON l.id = s.location_id
+         LEFT JOIN sftp_directories d ON d.id = l.sftp_directory_id
+         WHERE s.publication_pending_sha256 IS NOT NULL AND s.publication_started_at IS NOT NULL`
+      );
+      return rows.map(normaliseRow);
     },
 
     async nextScreenName(locationId) {
@@ -83,20 +121,32 @@ export function createScreensRepository(pool) {
 
     async getScreenDraft(screenId) {
       const { rows } = await pool.query('SELECT * FROM screen_drafts WHERE screen_id = $1', [screenId]);
-      return normaliseMenuRecord(rows[0]) || { screen_id: screenId, rows: [], settings: {} };
+      return normaliseDraft(rows[0], screenId);
     },
 
-    async saveScreenDraft(screenId, { rows, settings }) {
+    async saveScreenDraft(screenId, { rows, settings }, expectedRevision) {
       const now = isoNow();
-      await pool.query(
-        `INSERT INTO screen_drafts (screen_id, rows_json, settings_json, updated_at)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (screen_id) DO UPDATE SET rows_json = EXCLUDED.rows_json,
-         settings_json = EXCLUDED.settings_json, updated_at = EXCLUDED.updated_at`,
-        [screenId, JSON.stringify(rows), JSON.stringify(settings), now]
-      );
-      const { rows: saved } = await pool.query('SELECT * FROM screen_drafts WHERE screen_id = $1', [screenId]);
-      return normaliseMenuRecord(saved[0]);
+      let saved;
+      if (Number.isInteger(expectedRevision) && expectedRevision > 0) {
+        const result = await pool.query(
+          `UPDATE screen_drafts SET rows_json = $1, settings_json = $2, revision = revision + 1, updated_at = $3
+           WHERE screen_id = $4 AND revision = $5 RETURNING *`,
+          [JSON.stringify(rows), JSON.stringify(settings), now, screenId, expectedRevision]
+        );
+        saved = result.rows[0];
+        if (!saved) return null;
+      } else {
+        const result = await pool.query(
+          `INSERT INTO screen_drafts (screen_id, rows_json, settings_json, revision, updated_at)
+           VALUES ($1, $2, $3, 1, $4)
+           ON CONFLICT (screen_id) DO UPDATE SET rows_json = EXCLUDED.rows_json,
+           settings_json = EXCLUDED.settings_json, revision = screen_drafts.revision + 1, updated_at = EXCLUDED.updated_at
+           RETURNING *`,
+          [screenId, JSON.stringify(rows), JSON.stringify(settings), now]
+        );
+        saved = result.rows[0];
+      }
+      return normaliseDraft(saved, screenId);
     },
 
     async screensUsingCatalog(kind, catalogId) {
