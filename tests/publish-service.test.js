@@ -1,29 +1,24 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import test from 'node:test';
+import sharp from 'sharp';
 import { createPublishService } from '../src/services/publish-service.js';
 
-function jpegFor(width, height) {
-  const bytes = Buffer.alloc(17);
-  let offset = 0;
-  bytes[offset++] = 0xff; bytes[offset++] = 0xd8;
-  bytes[offset++] = 0xff; bytes[offset++] = 0xc0;
-  bytes.writeUInt16BE(11, offset); offset += 2;
-  bytes[offset++] = 8;
-  bytes.writeUInt16BE(height, offset); offset += 2;
-  bytes.writeUInt16BE(width, offset); offset += 2;
-  bytes[offset++] = 1; bytes[offset++] = 1; bytes[offset++] = 0x11; bytes[offset++] = 0;
-  bytes[offset++] = 0xff; bytes[offset++] = 0xd9;
-  return bytes;
+const config = Object.freeze({ imageMaxPixels: 40000000 });
+
+async function jpegFor(width, height) {
+  return sharp({
+    create: { width, height, channels: 3, background: { r: 20, g: 30, b: 40 } }
+  }).jpeg({ quality: 85 }).toBuffer();
 }
 
 test('staged JPEG is bound to the exact current draft revision', async () => {
-  const bytes = jpegFor(1920, 1080);
+  const bytes = await jpegFor(320, 180);
   const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
   let savedRevision = null;
   const removed = [];
   const store = {
-    async getScreen() { return { id: 7, resolution: '1920×1080', publication_pending_sha256: null, prepared_asset_key: '7-old.jpg' }; },
+    async getScreen() { return { id: 7, resolution: '320×180', publication_pending_sha256: null, prepared_asset_key: '7-old.jpg' }; },
     async getScreenDraft() { return { revision: 12 }; },
     async savePreparedAsset(_id, asset, revision) {
       savedRevision = revision;
@@ -34,7 +29,7 @@ test('staged JPEG is bound to the exact current draft revision', async () => {
     async stageJpeg() { return { key: '7-new.jpg', sha256, size: bytes.length }; },
     async removeStaged(key) { removed.push(key); return true; }
   };
-  const service = createPublishService({ store, sftp });
+  const service = createPublishService({ store, sftp, config });
   const screen = await service.stageJpeg(7, bytes);
   assert.equal(savedRevision, 12);
   assert.equal(screen.prepared_draft_revision, 12);
@@ -42,11 +37,11 @@ test('staged JPEG is bound to the exact current draft revision', async () => {
 });
 
 test('staging race removes the new orphan when draft changed before DB commit', async () => {
-  const bytes = jpegFor(1920, 1080);
+  const bytes = await jpegFor(320, 180);
   const sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
   const removed = [];
   const store = {
-    async getScreen() { return { id: 8, resolution: '1920×1080', publication_pending_sha256: null, prepared_asset_key: null }; },
+    async getScreen() { return { id: 8, resolution: '320×180', publication_pending_sha256: null, prepared_asset_key: null }; },
     async getScreenDraft() { return { revision: 3 }; },
     async savePreparedAsset() { return null; }
   };
@@ -54,7 +49,7 @@ test('staging race removes the new orphan when draft changed before DB commit', 
     async stageJpeg() { return { key: '8-race.jpg', sha256, size: bytes.length }; },
     async removeStaged(key) { removed.push(key); return true; }
   };
-  const service = createPublishService({ store, sftp });
+  const service = createPublishService({ store, sftp, config });
   await assert.rejects(() => service.stageJpeg(8, bytes), /Меню изменилось/);
   assert.deepEqual(removed, ['8-race.jpg']);
 });
@@ -84,7 +79,7 @@ test('pending publication is recovered by target SHA without rewriting the file'
     async publish() { publishCalls += 1; },
     async removeStaged(key) { removed.push(key); }
   };
-  const service = createPublishService({ store, sftp });
+  const service = createPublishService({ store, sftp, config });
   const result = await service.publish(9);
   assert.equal(result.status, 'published');
   assert.equal(marked, 1);
