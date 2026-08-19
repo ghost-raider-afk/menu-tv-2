@@ -11,29 +11,48 @@ import { createCatalogRepository } from './catalog.js';
 import { createTemplatesRepository } from './templates.js';
 import { createSftpRepository } from './sftp.js';
 
+function createRepositories(queryable) {
+  const locations = createLocationsRepository(queryable);
+  return Object.assign(
+    {},
+    createOverviewRepository(queryable),
+    createUsersRepository(queryable),
+    createSettingsRepository(queryable),
+    createNotificationsRepository(queryable),
+    locations,
+    createScreensRepository(queryable),
+    createCatalogRepository(queryable),
+    createTemplatesRepository(queryable),
+    createSftpRepository(queryable, { getLocation: locations.getLocation })
+  );
+}
+
 export class MenuTvStore {
   constructor(dbConfig, { seedDemoData: enableDemoSeed = false, pool = null } = {}) {
     this.pool = pool ?? createDatabasePool(dbConfig);
     this.seedDemoData = enableDemoSeed;
-
-    const locations = createLocationsRepository(this.pool);
-    Object.assign(
-      this,
-      createOverviewRepository(this.pool),
-      createUsersRepository(this.pool),
-      createSettingsRepository(this.pool),
-      createNotificationsRepository(this.pool),
-      locations,
-      createScreensRepository(this.pool),
-      createCatalogRepository(this.pool),
-      createTemplatesRepository(this.pool),
-      createSftpRepository(this.pool, { getLocation: locations.getLocation })
-    );
+    Object.assign(this, createRepositories(this.pool));
   }
 
   async init() {
     await initialiseSchema(this.pool);
     if (this.seedDemoData) await seedDemoData(this.pool);
+  }
+
+  async transaction(run) {
+    if (typeof run !== 'function') throw new TypeError('Транзакция требует функцию выполнения.');
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await run(createRepositories(client));
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async close() {
