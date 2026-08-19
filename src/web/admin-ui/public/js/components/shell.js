@@ -14,7 +14,7 @@ function savedCollapsedState() {
   catch { return false; }
 }
 
-function wireContext(shell, rail, context, section) {
+function wireContext(shell, rail, context, header, section) {
   if (savedCollapsedState()) setCollapsed(shell, context, true);
   context.querySelector('.ui-context-close')?.addEventListener('click', () => setCollapsed(shell, context, true));
   rail.querySelectorAll('.ui-rail-button').forEach((link) => {
@@ -27,6 +27,9 @@ function wireContext(shell, rail, context, section) {
   shell.querySelector('.main-content')?.addEventListener('pointerdown', () => {
     if (window.innerWidth <= 1180) setCollapsed(shell, context, true);
   }, { passive: true });
+  header.addEventListener('pointerdown', () => {
+    if (window.innerWidth <= 1180 && !context.classList.contains('is-collapsed')) setCollapsed(shell, context, true);
+  }, { capture: true, passive: true });
 }
 
 export function initialiseShell() {
@@ -45,6 +48,6 @@ export function initialiseShell() {
   shell.prepend(context);
   shell.prepend(rail);
 
-  wireContext(shell, rail, context, section);
+  wireContext(shell, rail, context, header, section);
   initialiseHeader();
 }
