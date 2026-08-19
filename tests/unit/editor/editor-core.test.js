@@ -108,7 +108,7 @@ test('board horizontal geometry is the supplied TV Menu 1 reference and leaves a
 test('automatic font fitting reduces scale and refuses silent clipping', () => {
   const state = createEditorState({
     settings: { font_scale_percent: 100, font_family: 'arial-narrow' },
-    rows: Array.from({ length: 30 }, (_, index) => ({ id: `section-${index}`, kind: 'section', name: `Раздел ${index}`, enabled: true }))
+    rows: Array.from({ length: 32 }, (_, index) => ({ id: `section-${index}`, kind: 'section', name: `Раздел ${index}`, enabled: true }))
   });
   const model = buildRenderModel(state, { width: 1920, height: 1080 });
   const lines = buildDisplayLines(model);
