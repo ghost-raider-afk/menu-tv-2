@@ -38,6 +38,10 @@ export function createSftpRepository(pool, { getLocation }) {
       const { rowCount } = await pool.query('DELETE FROM sftp_directories WHERE id = $1', [id]);
       return rowCount > 0;
     },
+    async getLocationBySftpUsername(username) {
+      const { rows } = await pool.query('SELECT id FROM locations WHERE sftp_username = $1 LIMIT 1', [username]);
+      return rows[0] ? getLocation(rows[0].id) : null;
+    },
     async bindLocationSftp(locationId, { directoryId, username }) {
       const { rowCount } = await pool.query(
         `UPDATE locations SET sftp_directory_id = $1, sftp_username = $2,
