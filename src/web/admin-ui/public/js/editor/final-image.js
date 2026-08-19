@@ -244,6 +244,7 @@ function drawPackaging(ctx, line, layout, palette) {
 
 export async function renderFinalJpeg(editorState, { screen, products, packaging }) {
   const resolution = parseResolution(screen?.resolution);
+  if (!resolution) throw new Error('Укажите разрешение в формате 1920×1080.');
   const model = buildRenderModel(editorState, resolution);
   const lines = buildDisplayLines(model, { products, packaging, fallbackTitle: screen?.name || 'Меню' });
   const renderLayout = buildRenderLayout(model, lines);
