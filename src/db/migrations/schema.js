@@ -43,9 +43,11 @@ export async function initialiseSchema(pool) {
       prepared_asset_key TEXT,
       prepared_asset_sha256 TEXT,
       prepared_asset_size BIGINT,
+      prepared_draft_revision BIGINT,
       publication_pending_sha256 TEXT,
       publication_started_at TIMESTAMPTZ,
       published_sha256 TEXT,
+      published_draft_revision BIGINT,
       published_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL,
@@ -147,9 +149,11 @@ export async function initialiseSchema(pool) {
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_key TEXT;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_sha256 TEXT;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_size BIGINT;
+    ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_draft_revision BIGINT;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS publication_pending_sha256 TEXT;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS publication_started_at TIMESTAMPTZ;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS published_sha256 TEXT;
+    ALTER TABLE screens ADD COLUMN IF NOT EXISTS published_draft_revision BIGINT;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
     ALTER TABLE templates ADD COLUMN IF NOT EXISTS rows_json TEXT NOT NULL DEFAULT '[]';
     ALTER TABLE templates ADD COLUMN IF NOT EXISTS settings_json TEXT NOT NULL DEFAULT '{}';
