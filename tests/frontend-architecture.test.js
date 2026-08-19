@@ -58,13 +58,15 @@ test('menu editor owns one compact semantic table and one canonical renderer', a
   assert.match(preview, /applyPreviewTypography/);
   assert.match(finalImage, /buildTableSvg/);
   assert.match(renderer, /formatProductMetadata/);
+  assert.match(renderer, /formatStrength\(product\?\.strength/);
   assert.match(renderer, /beverageColorLabel/);
   assert.match(renderer, /filtrationLabel/);
   assert.match(renderer, /tableX: 15/);
   assert.match(renderer, /tableRight: 1605/);
   assert.match(renderer, /primaryBoundary: 1231/);
   assert.match(renderer, /secondaryBoundary: 1417/);
-  assert.match(renderer, /sectionGap: 10/);
+  assert.match(renderer, /sectionGap: 12/);
+  assert.match(renderer, /itemHeight: 72/);
   assert.match(renderer, /viewBox="0 0 \$\{MENU_REFERENCE\.width\} \$\{MENU_REFERENCE\.height\}"/);
   assert.match(editorCss, /\.editor-menu-editor-table/);
   assert.match(editorCss, /\.editor-menu-table-scroll/);
