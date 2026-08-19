@@ -1,5 +1,6 @@
 import express from 'express';
 import { menuDraftInput, positiveId, screenInput } from '../../contracts/input.js';
+import { logger } from '../../logger/index.js';
 import { activity, conflict, notFound } from '../helpers.js';
 
 function requestedTemplateId(body, screen) {
@@ -8,7 +9,16 @@ function requestedTemplateId(body, screen) {
   return value === null || value === '' ? null : positiveId(value, 'template_id');
 }
 
-export function createScreensRouter({ store, config }) {
+async function removeStagedBestEffort(sftp, key, context = {}) {
+  if (!key || typeof sftp?.removeStaged !== 'function') return;
+  await sftp.removeStaged(key).catch((error) => logger.warn('Stale screen staging file could not be removed', {
+    staged_key: key,
+    ...context,
+    error
+  }));
+}
+
+export function createScreensRouter({ store, sftp, config }) {
   const router = express.Router();
 
   router.get('/screens', async (_request, response) => response.json(await store.listScreens()));
@@ -33,6 +43,9 @@ export function createScreensRouter({ store, config }) {
     const result = await store.transaction(async (tx) => {
       const current = await tx.getScreen(id);
       if (!current) throw notFound();
+      if (current.publication_pending_sha256) {
+        throw conflict('Сейчас выполняется публикация этого монитора. Дождитесь её завершения и повторите сохранение.');
+      }
 
       const draft = await menuDraftInput(request.body, tx, config.menuDraftMaxBytes);
       const templateId = requestedTemplateId(request.body, current);
@@ -66,11 +79,16 @@ export function createScreensRouter({ store, config }) {
       if (!saved) {
         throw conflict('Меню уже было изменено в другом окне. Обновите редактор и повторите изменения.', { expected_revision: expectedRevision });
       }
-      return { screen: updatedScreen, draft: saved };
+      return {
+        screen: await tx.getScreen(id),
+        draft: saved,
+        invalidatedAssetKey: current.prepared_asset_key || null
+      };
     });
 
+    await removeStagedBestEffort(sftp, result.invalidatedAssetKey, { screen_id: id });
     await activity(store, request, { action: 'screen.draft.saved', entity_type: 'screen', entity_id: id, message: `Сохранён черновик меню монитора «${result.screen.name}».` });
-    response.json(result);
+    response.json({ screen: result.screen, draft: result.draft });
   });
 
   router.post('/locations/:id/screens', async (request, response) => {
@@ -121,6 +139,9 @@ export function createScreensRouter({ store, config }) {
       if (input.template_id && !await tx.getTemplate(input.template_id)) throw notFound();
       const current = await tx.getScreen(id);
       if (!current) throw notFound();
+      if (current.publication_pending_sha256) {
+        throw conflict('Сейчас выполняется публикация этого монитора. Повторите изменение после её завершения.');
+      }
       if (current.published_at && current.location_id !== input.location_id) {
         throw conflict('Опубликованный телевизор нельзя перенести в другую точку: его SFTP-путь должен остаться стабильным.');
       }
@@ -136,9 +157,14 @@ export function createScreensRouter({ store, config }) {
     const id = positiveId(request.params.id, 'id');
     const screen = await store.transaction(async (tx) => {
       const current = await tx.getScreen(id);
-      if (!current || !await tx.deleteScreen(id)) throw notFound();
+      if (!current) throw notFound();
+      if (current.publication_pending_sha256) {
+        throw conflict('Сейчас выполняется публикация этого монитора. Дождитесь её завершения перед удалением.');
+      }
+      if (!await tx.deleteScreen(id)) throw notFound();
       return current;
     });
+    await removeStagedBestEffort(sftp, screen.prepared_asset_key, { screen_id: screen.id });
     await activity(store, request, { action: 'screen.deleted', entity_type: 'screen', entity_id: screen.id, message: `Удалён монитор «${screen.name}».` });
     response.status(204).end();
   });
