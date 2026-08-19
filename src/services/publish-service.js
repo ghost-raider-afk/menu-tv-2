@@ -1,5 +1,6 @@
 import { logger } from '../logger/index.js';
 import { ConflictError, NotFoundError } from '../shared/errors.js';
+import { validateScreenJpeg } from './image-validation.js';
 
 function publicationMatches(screen, info) {
   return Boolean(
@@ -28,6 +29,7 @@ export function createPublishService({ store, sftp }) {
     async stageJpeg(screenId, bytes) {
       const screen = await store.getScreen(screenId);
       if (!screen) throw new NotFoundError();
+      validateScreenJpeg(bytes, screen.resolution);
       const previousKey = screen.prepared_asset_key;
       const asset = await sftp.stageJpeg(screen.id, bytes);
       let updated;
