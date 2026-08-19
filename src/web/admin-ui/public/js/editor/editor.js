@@ -13,6 +13,27 @@ import { renderPreview } from './preview.js';
 import { serializeDraft } from './serializer.js';
 import { renderFinalJpeg } from './final-image.js';
 
+const EDITOR_LOADING_CONTROLS = Object.freeze([
+  'editor-name',
+  'editor-resolution',
+  'editor-status',
+  'editor-active',
+  'editor-template',
+  'editor-template-apply',
+  'editor-background-color',
+  'editor-accent-color',
+  'editor-text-color',
+  'editor-font-scale',
+  'editor-font-scale-number',
+  'editor-add-section',
+  'editor-add-item',
+  'editor-add-packaging',
+  'editor-source-file',
+  'editor-upload',
+  'editor-publish',
+  'editor-save'
+]);
+
 function editorScreenId() {
   const id = Number(new URLSearchParams(window.location.search).get('id'));
   return Number.isInteger(id) && id > 0 ? id : null;
@@ -20,6 +41,14 @@ function editorScreenId() {
 
 function setEditorMessage(message, kind = 'error') {
   setMessage('screen-editor-message', message, kind);
+}
+
+function setEditorLoading(form, loading) {
+  form.setAttribute('aria-busy', loading ? 'true' : 'false');
+  EDITOR_LOADING_CONTROLS.forEach((id) => {
+    const control = element(id);
+    if (control && 'disabled' in control) control.disabled = loading;
+  });
 }
 
 function populateEditor(screen, templates, editorState) {
@@ -87,6 +116,8 @@ export function initialiseScreenEditor() {
   const rowsTarget = element('editor-menu-rows');
   const rowsEmpty = element('editor-menu-empty');
 
+  setEditorLoading(form, true);
+
   const refreshPreview = (screenOverride = editorState.screen || screen) => renderPreview(editorState, {
     screen: screenOverride,
     products,
@@ -130,6 +161,7 @@ export function initialiseScreenEditor() {
     history.clear();
     populateEditor(screen, templates, editorState);
     refreshRows();
+    setEditorLoading(form, false);
     refreshEditorView();
   };
   void load().catch((error) => setEditorMessage(error.message));
