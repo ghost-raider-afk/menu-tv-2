@@ -40,6 +40,8 @@ export function loadConfig(env = process.env) {
     }),
     sftp: Object.freeze({
       apiUrl: env.SFTP_API_URL?.trim() || 'http://sftp:8080',
+      apiTimeoutMs: integer('SFTP_API_TIMEOUT_MS', env.SFTP_API_TIMEOUT_MS, '5000', { minimum: 500, maximum: 60000 }),
+      stagingMaxAgeHours: integer('SFTP_STAGING_MAX_AGE_HOURS', env.SFTP_STAGING_MAX_AGE_HOURS, '24', { minimum: 1, maximum: 720 }),
       adminUsername: required('SFTP_ADMIN_USERNAME', env.SFTP_ADMIN_USERNAME),
       adminPassword: generatedValue('SFTP_ADMIN_PASSWORD', env.SFTP_ADMIN_PASSWORD, 32),
       storageRoot: env.SFTP_STORAGE_ROOT?.trim() || '/srv/menu-tv-sftp',
