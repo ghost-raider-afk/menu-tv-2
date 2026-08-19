@@ -14,7 +14,7 @@ export const MENU_REFERENCE = Object.freeze({
   tableBottom: 1032,
   firstSectionHeight: 62,
   sectionHeight: 54,
-  sectionGap: 14,
+  sectionGap: 15,
   itemHeight: 48,
   packagingHeight: 54,
   fontScaleMinPercent: 55,
@@ -28,9 +28,7 @@ export const MENU_TABLE_STYLE = Object.freeze({
   darkText: '#101317',
   separator: '#E2E6EA',
   packagingBackground: '#101419',
-  promotion: '#D92D35',
-  imageBackdrop: '#070A0E',
-  imageBackdropOpacity: 0.58
+  promotion: '#D92D35'
 });
 
 function clamp(value, min, max) {
@@ -145,14 +143,12 @@ function baseContentHeight(lines) {
 export function buildMenuPalette(settings = {}) {
   const background = normalizeHex(settings.background_color, MENU_TABLE_STYLE.defaultBackground);
   const accent = normalizeHex(settings.accent_color, MENU_TABLE_STYLE.defaultAccent);
-  const effectiveBodyBackground = settings.background_image_url ? MENU_TABLE_STYLE.imageBackdrop : background;
   return Object.freeze({
     background,
     accent,
     sectionText: foregroundFor(accent),
-    primaryText: readableColor(settings.text_color, effectiveBodyBackground),
-    accentText: readableColor(accent, effectiveBodyBackground),
-    imageBackdropOpacity: settings.background_image_url ? MENU_TABLE_STYLE.imageBackdropOpacity : 0
+    primaryText: readableColor(settings.text_color, background),
+    accentText: readableColor(accent, background)
   });
 }
 
@@ -342,7 +338,7 @@ function sectionMarkup(line, box, horizontal, palette, scale) {
       <text x="${secondaryCenter + 18 * scale}" y="${labelY}" class="price-label" text-anchor="middle">1,5л.</text>` : '';
   return `<g class="table-section">
     <rect x="${horizontal.left}" y="${box.top}" width="${horizontal.tableWidth}" height="${box.height}" fill="${palette.accent}"/>
-    <text x="${horizontal.left + 3 * scale}" y="${baseline}" class="section-title">${escapeXml(truncateText(title, titleMax))}</text>
+    <text x="${horizontal.left + 1 * scale}" y="${baseline}" class="section-title">${escapeXml(truncateText(title, titleMax))}</text>
     ${verticalSeparatorsMarkup(box, horizontal, scale)}
     ${separatorMarkup(box.bottom, horizontal, scale)}
     ${labelMarkup}
@@ -351,7 +347,7 @@ function sectionMarkup(line, box, horizontal, palette, scale) {
 
 function itemMarkup(line, box, horizontal, scale) {
   const tone = line.tone === 'accent' ? 'accent' : 'light';
-  const nameX = horizontal.left + 4 * scale;
+  const nameX = horizontal.left + 1 * scale;
   const promotion = promotionMarkup(line, nameX, box, scale);
   const contentX = nameX + (promotion.width ? promotion.width + 11 * scale : 0);
   const mainLabel = line.strength ? `${line.name} - ${line.strength}` : line.name;
@@ -372,8 +368,8 @@ function itemMarkup(line, box, horizontal, scale) {
     <text x="${contentX}" y="${mainBaseline}" class="item-name tone-${tone}">${escapeXml(fittedMain)}</text>
     ${line.producer ? `<text x="${producerX}" y="${mainBaseline}" class="producer tone-${tone}">${escapeXml(truncateText(line.producer, producerMax))}</text>` : ''}
     ${line.characteristics ? `<text x="${contentX}" y="${detailBaseline}" class="details tone-${tone}">${escapeXml(truncateText(line.characteristics, detailMax))}</text>` : ''}
-    ${priceMarkup(line.pricePrimary, horizontal.primaryBoundary + 8 * scale, priceBaseline, scale, tone)}
-    ${priceMarkup(line.priceSecondary, horizontal.secondaryBoundary + 8 * scale, priceBaseline, scale, tone)}
+    ${priceMarkup(line.pricePrimary, horizontal.primaryBoundary + 3 * scale, priceBaseline, scale, tone)}
+    ${priceMarkup(line.priceSecondary, horizontal.secondaryBoundary + 3 * scale, priceBaseline, scale, tone)}
     ${verticalSeparatorsMarkup(box, horizontal, scale)}
     ${separatorMarkup(box.bottom, horizontal, scale)}
   </g>`;
@@ -408,13 +404,10 @@ export function buildTableSvg(model, lines, layout = buildRenderLayout(model, li
     if (line.kind === 'packaging') return packagingMarkup(line, box, horizontal, scale);
     return itemMarkup(line, box, horizontal, scale);
   }).join('\n');
-  const backdrop = palette.imageBackdropOpacity > 0
-    ? `<rect x="${horizontal.left}" y="${vertical.top}" width="${horizontal.tableWidth}" height="${vertical.usedHeight}" fill="${MENU_TABLE_STYLE.imageBackdrop}" opacity="${palette.imageBackdropOpacity}"/>`
-    : '';
 
   return `<svg xmlns="http://www.w3.org/2000/svg" class="menu-table-svg" width="${model.viewport.width}" height="${model.viewport.height}" viewBox="0 0 ${MENU_REFERENCE.width} ${MENU_REFERENCE.height}" preserveAspectRatio="xMinYMin meet" aria-label="Предпросмотр таблицы меню">
     <style>
-      text{font-family:"Arial Narrow",Arial,"DejaVu Sans",sans-serif}
+      text{font-family:"Arial Narrow","Liberation Sans Narrow","DejaVu Sans Condensed",Arial,sans-serif;font-stretch:condensed}
       .separator{stroke:${MENU_TABLE_STYLE.separator};stroke-dasharray:${8 * scale} ${7 * scale};opacity:.92}
       .section-title{font-size:${50 * scale}px;font-weight:900;letter-spacing:-1.1px;fill:${palette.sectionText}}
       .price-label{font-size:${36 * scale}px;font-weight:900;letter-spacing:-.6px;fill:${palette.sectionText}}
@@ -429,7 +422,6 @@ export function buildTableSvg(model, lines, layout = buildRenderLayout(model, li
       .tone-light{fill:${palette.primaryText};color:${palette.primaryText}}
       .tone-accent{fill:${palette.accentText};color:${palette.accentText}}
     </style>
-    ${backdrop}
     ${content}
   </svg>`;
 }
