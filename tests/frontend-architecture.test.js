@@ -55,6 +55,7 @@ test('menu editor owns one compact semantic table and one canonical renderer', a
   assert.match(rows, /<th>1,5 л<\/th>/);
   assert.doesNotMatch(rows, /editor-menu-table-head/);
   assert.match(preview, /buildTableSvg/);
+  assert.match(preview, /applyPreviewTypography/);
   assert.match(finalImage, /buildTableSvg/);
   assert.match(renderer, /formatProductMetadata/);
   assert.match(renderer, /beverageColorLabel/);
@@ -70,8 +71,11 @@ test('menu editor owns one compact semantic table and one canonical renderer', a
   assert.match(editorCss, /\.menu-table-svg/);
   assert.doesNotMatch(editorCss, /\.tv-board-table/);
   assert.doesNotMatch(editorCss, /!important/);
-  assert.match(editorCss, /\.editor-main-column\{display:grid;min-width:0;gap:0/);
-  assert.match(editorCss, /\.editor-preview-card\{min-width:0;padding:0;border-top:0/);
+  assert.match(editorCss, /\.editor-main-column\s*\{[\s\S]*?display\s*:\s*grid;[\s\S]*?min-width\s*:\s*0;[\s\S]*?gap\s*:\s*0;/);
+  assert.match(editorCss, /\.editor-preview-card\s*\{[\s\S]*?min-width\s*:\s*0;[\s\S]*?padding\s*:\s*0;[\s\S]*?border-top\s*:\s*0;/);
+  assert.match(editorCss, /\.editor-menu-editor-table tbody tr\s*\{\s*height\s*:\s*25px;/);
+  assert.match(editorCss, /height\s*:\s*22px;[\s\S]*?font-size\s*:\s*11px;/);
+  assert.match(editorCss, /\.editor-row-order\s*\{[\s\S]*?display\s*:\s*flex;/);
   assert.match(editorHtml, /class="editor-main-column"[\s\S]*editor-menu-card[\s\S]*editor-preview-card/);
   assert.match(editorHtml, /id="editor-font-scale"/);
   assert.match(editorHtml, /id="editor-font-scale-number"/);

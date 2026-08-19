@@ -33,7 +33,7 @@ test('preview aspect ratio is driven by monitor resolution and table has one can
   ]);
   assert.match(preview, /target\.style\.aspectRatio = `\$\{model\.viewport\.width\} \/ \$\{model\.viewport\.height\}`/);
   assert.match(preview, /buildTableSvg/);
-  assert.match(editorCss, /container-type:inline-size/);
+  assert.match(editorCss, /container-type\s*:\s*inline-size/);
   assert.match(editorCss, /\.menu-table-svg/);
   assert.doesNotMatch(editorCss, /\.tv-board-table/);
   assert.doesNotMatch(settings, /Math\.min\(1920/);
