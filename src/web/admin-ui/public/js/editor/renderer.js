@@ -257,6 +257,7 @@ export function buildDisplayLines(model, { products = [], packaging = [], fallba
         tone,
         name: product?.name || row.name || 'Продукция не выбрана',
         strength: formatStrength(product?.strength || ''),
+        producer: product?.producer || '',
         metadata: formatProductMetadata(product),
         promotion: row.promotion === true,
         promotionText: row.promotion_text || row.promotionText || '',
@@ -417,14 +418,14 @@ function itemMarkup(line, box, horizontal, palette, scale, typography) {
   const promotion = promotionMarkup(line, nameX, box, scale, typography);
   const contentX = nameX + (promotion.width ? promotion.width + 10 * scale : 0);
   const mainLabel = line.strength ? `${line.name} · ${line.strength}` : line.name;
-  const titleSize = 29 * scale;
-  const metaSize = 14 * scale;
+  const titleSize = 26 * scale;
+  const metaSize = 13 * scale;
   const availableNameWidth = horizontal.primaryBoundary - contentX - 12 * scale;
   const mainMax = fitCharacters(availableNameWidth, titleSize, 0.55);
   const metaMax = fitCharacters(availableNameWidth, metaSize, 0.53);
-  const mainBaseline = box.top + 28 * scale;
-  const metaBaseline = box.top + 45 * scale;
-  const priceBaseline = box.top + 36 * scale;
+  const mainBaseline = box.top + 24 * scale;
+  const metaBaseline = box.top + 47 * scale;
+  const priceBaseline = box.top + 35 * scale;
 
   return `<g class="table-item tone-${line.tone === 'accent' ? 'accent' : 'light'}">
     ${promotion.markup}
