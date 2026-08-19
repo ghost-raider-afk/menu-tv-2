@@ -27,12 +27,12 @@
                 <label class="field"><span>Фильтрация</span><select id="product-filtration"><option value="none">Не указана</option><option value="filtered">Фильтрованное</option><option value="unfiltered">Нефильтрованное</option></select></label>
                 <label class="toggle-row"><span><strong>Алкогольная продукция</strong><small>Используется как свойство записи.</small></span><input id="product-alcoholic" type="checkbox" /><i aria-hidden="true"></i></label>
                 <label class="toggle-row"><span><strong>Активна</strong><small>Доступна для добавления в меню.</small></span><input id="product-active" type="checkbox" checked /><i aria-hidden="true"></i></label>
-                <p class="form-message is-hidden field-full" id="product-message" role="status"></p>
+                <p class="form-message is-hidden field-full" id="product-message" role="status" aria-live="polite"></p>
                 <div class="form-actions field-full"><button class="button button-primary" id="product-submit" type="submit">Добавить продукцию</button></div>
               </form>
             </section>
             <section class="settings-card">
-              <div class="card-heading"><div><p class="eyebrow">ПРОДУКЦИЯ</p><h2>Список</h2></div><button class="button button-secondary" id="refresh-catalog" type="button">Обновить</button></div>
+              <div class="card-heading"><div><p class="eyebrow">ПРОДУКЦИЯ</p><h2>Список</h2></div><div class="list-tools"><input class="list-filter" id="product-filter" type="search" placeholder="Поиск продукции" aria-label="Поиск продукции" /><button class="button button-secondary" id="refresh-catalog" type="button">Обновить</button></div></div>
               <div class="record-list" data-products-list></div><p class="empty-state is-hidden" data-products-empty>Продукции пока нет.</p>
             </section>
             <section class="settings-card" id="packaging">
@@ -41,12 +41,12 @@
                 <label class="field field-full"><span>Название тары</span><input id="packaging-name" maxlength="120" placeholder="Например, бутылка ПЭТ 1,5 л" required /></label>
                 <label class="field"><span>Цена, ₽</span><input id="packaging-price" inputmode="decimal" maxlength="16" placeholder="12" required /></label>
                 <label class="toggle-row"><span><strong>Активна</strong><small>Доступна для добавления в меню.</small></span><input id="packaging-active" type="checkbox" checked /><i aria-hidden="true"></i></label>
-                <p class="form-message is-hidden field-full" id="packaging-message" role="status"></p>
+                <p class="form-message is-hidden field-full" id="packaging-message" role="status" aria-live="polite"></p>
                 <div class="form-actions field-full"><button class="button button-primary" id="packaging-submit" type="submit">Добавить тару</button></div>
               </form>
             </section>
             <section class="settings-card">
-              <div class="card-heading"><div><p class="eyebrow">ТАРА</p><h2>Список</h2></div></div>
+              <div class="card-heading"><div><p class="eyebrow">ТАРА</p><h2>Список</h2></div><input class="list-filter" id="packaging-filter" type="search" placeholder="Поиск тары" aria-label="Поиск тары" /></div>
               <div class="record-list" data-packaging-list></div><p class="empty-state is-hidden" data-packaging-empty>Тара пока не добавлена.</p>
             </section>
           </div>
