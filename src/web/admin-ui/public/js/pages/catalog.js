@@ -4,6 +4,15 @@ import { state } from '../core/state.js';
 import { element, setMessage, clearMessage, setPending, makeButton, recordRow, refreshList, price } from '../core/dom.js';
 import { loadNotifications } from '../core/notifications.js';
 
+function normalizedQuery(id) {
+  return String(element(id)?.value || '').trim().toLocaleLowerCase('ru-RU');
+}
+
+function matchesQuery(values, query) {
+  if (!query) return true;
+  return values.some((value) => String(value || '').toLocaleLowerCase('ru-RU').includes(query));
+}
+
 async function loadCatalog() {
   const [products, packaging] = await Promise.all([api.get(API.products), api.get(API.packaging)]);
   state.products = products;
@@ -16,11 +25,16 @@ function renderCatalogProducts() {
   const list = document.querySelector('[data-products-list]');
   const empty = document.querySelector('[data-products-empty]');
   if (!list || !empty) return;
-  const rows = state.products.map((product) => recordRow(
+  const query = normalizedQuery('product-filter');
+  const products = state.products.filter((product) => matchesQuery([
+    product.name, product.producer, product.characteristics, product.strength
+  ], query));
+  const rows = products.map((product) => recordRow(
     product.name,
     [product.producer || 'Производитель не указан', product.characteristics || product.strength || 'Без характеристик', `1 л: ${price(product.price_primary)} · 1,5 л: ${price(product.price_secondary)}`, product.active ? 'активна' : 'скрыта'].join(' · '),
     [makeButton('Изменить', '', () => editProduct(product)), makeButton('Удалить', 'danger', () => void deleteProduct(product))]
   ));
+  empty.textContent = query && state.products.length ? 'По запросу ничего не найдено.' : 'Продукции пока нет.';
   refreshList(list, empty, rows);
 }
 
@@ -28,7 +42,10 @@ function renderCatalogPackaging() {
   const list = document.querySelector('[data-packaging-list]');
   const empty = document.querySelector('[data-packaging-empty]');
   if (!list || !empty) return;
-  const rows = state.packaging.map((item) => recordRow(item.name, `${price(item.unit_price)} · ${item.active ? 'активна' : 'скрыта'}`, [makeButton('Изменить', '', () => editPackaging(item)), makeButton('Удалить', 'danger', () => void deletePackaging(item))]));
+  const query = normalizedQuery('packaging-filter');
+  const packaging = state.packaging.filter((item) => matchesQuery([item.name], query));
+  const rows = packaging.map((item) => recordRow(item.name, `${price(item.unit_price)} · ${item.active ? 'активна' : 'скрыта'}`, [makeButton('Изменить', '', () => editPackaging(item)), makeButton('Удалить', 'danger', () => void deletePackaging(item))]));
+  empty.textContent = query && state.packaging.length ? 'По запросу ничего не найдено.' : 'Тара пока не добавлена.';
   refreshList(list, empty, rows);
 }
 
@@ -105,6 +122,8 @@ export function initialiseCatalog() {
   if (!(productForm instanceof HTMLFormElement) || !(packagingForm instanceof HTMLFormElement)) return;
   void loadCatalog().catch((error) => setMessage('product-message', error.message));
   element('refresh-catalog')?.addEventListener('click', () => { void loadCatalog(); });
+  element('product-filter')?.addEventListener('input', renderCatalogProducts);
+  element('packaging-filter')?.addEventListener('input', renderCatalogPackaging);
   element('cancel-product-edit')?.addEventListener('click', resetProductForm);
   element('cancel-packaging-edit')?.addEventListener('click', resetPackagingForm);
   productForm.addEventListener('submit', async (event) => {
