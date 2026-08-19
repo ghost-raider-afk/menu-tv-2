@@ -128,7 +128,7 @@ export function createScreensRouter({ store, sftp, config }) {
 
   router.put('/screens/:id', async (request, response) => {
     const id = positiveId(request.params.id, 'id');
-    const record = await store.transaction(async (tx) => {
+    const result = await store.transaction(async (tx) => {
       const siteSettings = await tx.getSiteSettings();
       const input = screenInput(request.body, {
         defaultScreenResolution: siteSettings.default_screen_resolution,
@@ -145,12 +145,21 @@ export function createScreensRouter({ store, sftp, config }) {
       if (current.published_at && current.location_id !== input.location_id) {
         throw conflict('Опубликованный телевизор нельзя перенести в другую точку: его SFTP-путь должен остаться стабильным.');
       }
+
+      const presentationChanged = current.name !== input.name || current.resolution !== input.resolution;
+      const invalidatedAssetKey = presentationChanged ? current.prepared_asset_key || null : null;
+      if (presentationChanged && current.prepared_asset_key) {
+        await tx.invalidatePreparedAsset(id);
+        input.status = 'draft';
+      }
+
       const updated = await tx.updateScreen(id, input);
       if (!updated) throw notFound();
-      return updated;
+      return { record: updated, invalidatedAssetKey };
     });
-    await activity(store, request, { action: 'screen.updated', entity_type: 'screen', entity_id: record.id, message: `Обновлён монитор «${record.name}».` });
-    response.json(record);
+    await removeStagedBestEffort(sftp, result.invalidatedAssetKey, { screen_id: id });
+    await activity(store, request, { action: 'screen.updated', entity_type: 'screen', entity_id: result.record.id, message: `Обновлён монитор «${result.record.name}».` });
+    response.json(result.record);
   });
 
   router.delete('/screens/:id', async (request, response) => {
