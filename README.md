@@ -82,11 +82,14 @@ sudo menu-tv-2.0 update
 
 ## Чистая установка
 
-На чистой Ubuntu VPS:
+На полностью чистой Ubuntu VPS сначала загрузите актуальный установщик:
 
 ```bash
-sudo menu-tv-2.0 install
+curl -fsSL https://raw.githubusercontent.com/ghost-raider-afk/menu-tv-2/main/menu-tv-2.sh -o /tmp/menu-tv-2.sh
+sudo bash /tmp/menu-tv-2.sh install
 ```
+
+После первой успешной установки системная команда `menu-tv-2.0` создаётся автоматически. Повторно скачивать bootstrap-скрипт не требуется.
 
 Установщик разворачивает:
 - приложение Node.js;
