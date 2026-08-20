@@ -310,7 +310,7 @@ async function loadPlayer() {
 async function registerOfflinePlayer() {
   if (!('serviceWorker' in navigator)) return;
   try {
-    await navigator.serviceWorker.register('/player-sw.js', { scope: '/' });
+    await navigator.serviceWorker.register('/player-sw.js', { scope: '/player' });
     await navigator.serviceWorker.ready;
   } catch (error) {
     console.warn('Offline TV player service worker could not start', error);
