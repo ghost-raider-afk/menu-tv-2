@@ -19,7 +19,7 @@ const EDITOR_LOADING_CONTROLS = Object.freeze([
   'editor-table-x', 'editor-table-y', 'editor-table-width', 'editor-table-height',
   'editor-background-file', 'editor-background-upload', 'editor-background-remove',
   'editor-add-section', 'editor-add-item', 'editor-add-packaging',
-  'editor-source-file', 'editor-upload', 'editor-publish', 'editor-save'
+  'editor-publish', 'editor-save'
 ]);
 
 function editorScreenId() {
@@ -275,26 +275,6 @@ export function initialiseScreenEditor() {
       setEditorMessage('Фон удалён.', 'success');
     } catch (error) {
       setEditorMessage(error.message);
-    }
-  });
-
-  element('editor-upload')?.addEventListener('click', async () => {
-    if (editorState.dirty) return setEditorMessage('Сначала сохраните изменения меню.');
-    const file = element('editor-source-file')?.files?.[0];
-    if (!file) return setEditorMessage('Выберите JPEG-файл меню.');
-    const button = element('editor-upload');
-    setPending(button, true, 'Загружаем…');
-    try {
-      screen = await api.put(`${API.screens}/${screenId}/source`, file, { headers: { 'Content-Type': 'image/jpeg' } });
-      editorState.screen = structuredClone(screen);
-      populateEditor(screen, editorState);
-      refreshEditorView();
-      setEditorMessage('JPEG подготовлен к публикации.', 'success');
-      await loadNotifications();
-    } catch (error) {
-      setEditorMessage(error.message);
-    } finally {
-      setPending(button, false, 'Загружаем…');
     }
   });
 

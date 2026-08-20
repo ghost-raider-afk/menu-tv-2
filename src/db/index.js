@@ -2,6 +2,7 @@ import { createDatabasePool } from './pool.js';
 import { initialiseSchema } from './migrations/schema.js';
 import { migrateLegacyMenuSettings } from './migrations/menu-settings.js';
 import { retireLegacyTemplates } from './migrations/template-retirement.js';
+import { migrateScreenNumbering } from './migrations/screen-numbering.js';
 import { seedDemoData } from './migrations/seed.js';
 import { createOverviewRepository } from './overview.js';
 import { createUsersRepository } from './users.js';
@@ -38,6 +39,7 @@ export class MenuTvStore {
     await initialiseSchema(this.pool);
     await migrateLegacyMenuSettings(this.pool);
     await retireLegacyTemplates(this.pool);
+    await migrateScreenNumbering(this.pool);
     if (this.seedDemoData) await seedDemoData(this.pool);
   }
 

@@ -208,6 +208,8 @@ test('SFTP access, validated JPEG staging and recoverable publication work throu
   assert.equal(binding.status, 201);
   assert.match((await binding.json()).credentials.password, /^[A-Za-z0-9]{10}$/);
   const screen = await createScreen(cookie, location.id);
+  assert.equal(screen.location_number, 1);
+  assert.equal(screen.delivery_filename, 'monitor-1.jpg');
   const wrongSize = await fetch(`${baseUrl}/api/screens/${screen.id}/source`, { method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/jpeg' }, body: await jpegFor(1280, 720) });
   assert.equal(wrongSize.status, 400);
   const source = await fetch(`${baseUrl}/api/screens/${screen.id}/source`, { method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/jpeg' }, body: await jpegFor(1920, 1080) });
@@ -221,7 +223,7 @@ test('SFTP access, validated JPEG staging and recoverable publication work throu
   assert.equal(published.status, 'published');
   assert.equal(published.prepared_asset_key, null);
   assert.ok(!sftp.assets.has(stagedKey));
-  assert.ok(sftp.publications.has(`point-api/monitor-${screen.id}.jpg`));
+  assert.ok(sftp.publications.has('point-api/monitor-1.jpg'));
 });
 
 test('site settings persist seven login logo sizes and password remains PostgreSQL-only', async () => {
