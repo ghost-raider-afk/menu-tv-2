@@ -44,6 +44,15 @@ test('offline player keeps its shell, motion engine, context and same-origin ass
   assert.match(player, /Нет связи с сервером\. ТВ работает по последней сохранённой версии меню/);
 });
 
+test('static TV background stays inside the exact player screen bounds', async () => {
+  const css = await read('src/web/admin-ui/public/css/player.css');
+  const rule = css.match(/\.tv-player-stage \.animation-screen-background \{([\s\S]*?)\}/)?.[1] || '';
+  assert.match(rule, /inset:\s*0;/);
+  assert.match(rule, /transform:\s*none;/);
+  assert.doesNotMatch(rule, /inset:\s*-\d/);
+  assert.doesNotMatch(rule, /scale\(/);
+});
+
 test('player context includes the saved global animation profile', async () => {
   const routes = await read('src/api/device/public-routes.js');
   assert.match(routes, /store\.getAnimationSettings\(\)/);
