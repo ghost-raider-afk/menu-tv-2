@@ -174,7 +174,11 @@ test('login logo size setting has seven visible levels', async ({ page }) => {
   await size.selectOption('7');
   await page.locator('#site-settings-submit').click();
   await expect(page.locator('#site-settings-message')).toContainText('сохранены');
+  const logout = await page.request.post('/api/auth/logout');
+  expect(logout.status()).toBe(204);
+  await page.context().clearCookies();
   await page.goto('/signin.html');
+  await expect(page).toHaveURL(/\/signin\.html$/);
   await expect(page.locator('html')).toHaveAttribute('data-signin-logo-size', '7');
   const mark = page.locator('.signin-brand .brand-mark');
   expect((await mark.boundingBox())?.width).toBeGreaterThanOrEqual(95);
