@@ -5,7 +5,7 @@ import { retireLegacyTemplates } from './migrations/template-retirement.js';
 import { migrateScreenNumbering } from './migrations/screen-numbering.js';
 import { migrateAnimationSettings } from './migrations/animation-settings.js';
 import { migrateAnimationProfileLibrary } from './migrations/animation-profile-library.js';
-import { migratePlayerWorkspaces } from './migrations/player-workspaces.js';
+import { migratePlayerDeviceAuth } from './migrations/player-device-auth.js';
 import { seedDemoData } from './migrations/seed.js';
 import { createOverviewRepository } from './overview.js';
 import { createUsersRepository } from './users.js';
@@ -50,7 +50,7 @@ export class MenuTvStore {
     await migrateAnimationSettings(this.pool);
     await migrateAnimationProfileLibrary(this.pool);
     if (this.seedDemoData) await seedDemoData(this.pool);
-    await migratePlayerWorkspaces(this.pool);
+    await migratePlayerDeviceAuth(this.pool);
   }
 
   async transaction(run) {
