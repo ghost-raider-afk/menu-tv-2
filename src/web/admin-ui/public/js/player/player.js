@@ -1,9 +1,5 @@
-import {
-  buildDisplayLines,
-  buildRenderLayout,
-  buildRenderModel,
-  buildTableSvg
-} from '../editor/renderer.js';
+import { AnimationPreviewPlayer } from '../motion/preview-player.js';
+import { renderAnimationScreenPreview } from '../motion/screen-preview.js';
 
 const ACTIVATION_STORAGE_KEY = 'tv-menu.device-activation';
 const PLAYER_CONTEXT_STORAGE_KEY = 'tv-menu.player-context.v1';
@@ -20,6 +16,7 @@ const playerMessage = document.querySelector('[data-player-message]');
 let pollTimer = null;
 let refreshTimer = null;
 let wakeLock = null;
+let motionPlayer = null;
 let playerRefreshMs = 5000;
 
 function setHidden(element, hidden) {
@@ -86,9 +83,15 @@ async function enterImmersiveMode() {
   }
 }
 
+function stopPlayerMotion() {
+  motionPlayer?.destroy();
+  if (playerStage) delete playerStage.dataset.motionMode;
+}
+
 function showActivationScreen() {
   if (refreshTimer) clearTimeout(refreshTimer);
   refreshTimer = null;
+  stopPlayerMotion();
   setHidden(player, true);
   setHidden(activationView, false);
   setHidden(playerMessage, true);
@@ -172,13 +175,6 @@ async function createActivation() {
   }
 }
 
-function resolutionOf(screen) {
-  const match = String(screen?.resolution || '').match(/(\d+)\D+(\d+)/);
-  const width = Number(match?.[1]) || 1920;
-  const height = Number(match?.[2]) || 1080;
-  return { width, height };
-}
-
 function sameOriginAsset(value) {
   const text = String(value || '').trim();
   if (!text) return '';
@@ -196,19 +192,23 @@ async function warmPlayerAssetCache(context) {
   await fetch(background, { cache: 'reload' }).catch(() => undefined);
 }
 
+function playerMotion() {
+  if (!motionPlayer) motionPlayer = new AnimationPreviewPlayer({ stage: playerStage });
+  return motionPlayer;
+}
+
 function renderPlayerContext(context) {
-  const viewport = resolutionOf(context.screen);
-  const model = buildRenderModel(context.draft, viewport);
-  const lines = buildDisplayLines(model, {
-    products: context.products || [],
-    packaging: context.packaging || [],
-    fallbackTitle: context.screen?.name || 'Меню'
+  stopPlayerMotion();
+  const backgroundUrl = sameOriginAsset(context?.draft?.settings?.background_image_url);
+  const rendered = renderAnimationScreenPreview(playerStage, context, {
+    fallbackTitle: context.screen?.name || 'Меню',
+    backgroundUrl
   });
-  const layout = buildRenderLayout(model, lines);
-  playerStage.innerHTML = buildTableSvg(model, lines, layout);
-  playerStage.style.backgroundColor = model.settings.background_color || '#101828';
-  const background = sameOriginAsset(model.settings.background_image_url);
-  playerStage.style.backgroundImage = background ? `url(${JSON.stringify(background)})` : 'none';
+
+  const animation = context?.animation;
+  if (!rendered?.invalidResolution && animation?.enabled === true && animation.profile) {
+    playerMotion().restart(animation.profile);
+  }
   playerRefreshMs = Math.max(2000, Number(context.refresh_interval_ms) || 5000);
 }
 
