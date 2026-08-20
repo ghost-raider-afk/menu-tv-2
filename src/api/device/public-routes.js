@@ -179,11 +179,12 @@ export function createDevicePublicRouter({ store, config }) {
     const session = await resolveDeviceSession(store, config, request, response);
     if (!session) return response.status(401).json({ error: 'Телевизор не авторизован.' });
 
-    const [screen, draft, products, packaging] = await Promise.all([
+    const [screen, draft, products, packaging, animation] = await Promise.all([
       store.getScreen(session.screen_id),
       store.getScreenDraft(session.screen_id),
       store.listProducts(),
-      store.listPackaging()
+      store.listPackaging(),
+      store.getAnimationSettings()
     ]);
     if (!screen || screen.active === false) {
       response.setHeader('Set-Cookie', deviceSessionCookie('', config, 0));
@@ -204,6 +205,7 @@ export function createDevicePublicRouter({ store, config }) {
       draft: { rows: draft.rows || [], settings: draft.settings || {}, revision: draft.revision },
       products: catalog.products,
       packaging: catalog.packaging,
+      animation: animation || { enabled: false, preset_id: '', profile: {} },
       refresh_interval_ms: config.playerRefreshSeconds * 1000
     });
   });
