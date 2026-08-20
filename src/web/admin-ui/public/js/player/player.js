@@ -24,7 +24,9 @@ let lastRenderedFingerprint = '';
 let playerRefreshMs = 5000;
 
 function setHidden(element, hidden) {
-  element?.classList.toggle('is-hidden', hidden);
+  if (!element) return;
+  element.hidden = Boolean(hidden);
+  element.classList.toggle('is-hidden', Boolean(hidden));
 }
 
 function showBootScreen(message = 'Проверяем авторизацию телевизора…') {
