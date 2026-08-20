@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ТВ МЕНЮ — Подключить ТВ</title>
+    <title>ТВ МЕНЮ — Подключение ТВ</title>
     <script src="/theme-bootstrap.js"></script>
     <link rel="stylesheet" href="/css/index.css" />
     <link rel="stylesheet" href="/css/connect-tv.css" />
@@ -12,52 +12,62 @@
   <body data-page="connect-tv">
     <div class="app-shell">
       <div class="app-content">
-        <main class="main-content">
+        <main class="main-content connect-tv-page">
           <div class="page-heading compact-heading">
             <div>
-              <p class="eyebrow">МОНИТОРЫ</p>
-              <h1>Подключить ТВ</h1>
+              <p class="eyebrow">ТЕЛЕВИЗОРЫ</p>
+              <h1>Подключение ТВ</h1>
             </div>
             <div class="compact-heading-actions">
-              <span>QR-код связывает конкретный телевизор с выбранным монитором.</span>
+              <span>Подключение, привязка и отзыв авторизации физических телевизоров.</span>
             </div>
           </div>
 
           <p class="form-message is-hidden" id="connect-tv-message" role="status"></p>
 
-          <section class="connect-tv-grid">
-            <article class="connect-tv-card" data-connect-step="scan">
-              <div class="connect-tv-step">1</div>
-              <h2>Сканировать QR</h2>
-              <p>Наведите камеру телефона на QR-код, показанный на телевизоре.</p>
-              <div class="connect-tv-camera-wrap is-hidden" data-camera-wrap>
-                <video class="connect-tv-camera" data-camera autoplay playsinline muted></video>
-                <div class="connect-tv-camera-frame" aria-hidden="true"></div>
+          <section class="connect-tv-section" aria-labelledby="connect-new-tv-title">
+            <div class="connect-tv-section-heading">
+              <div>
+                <p class="eyebrow">НОВОЕ УСТРОЙСТВО</p>
+                <h2 id="connect-new-tv-title">Подключить телевизор</h2>
+                <p>Откройте <strong>/player</strong> на телевизоре, затем выполните три шага.</p>
               </div>
-              <button class="button button-primary" type="button" data-start-scan>Сканировать QR</button>
-              <div class="connect-tv-divider"><span>или</span></div>
-              <label class="field-label" for="connect-tv-code">6-значный резервный код</label>
-              <div class="connect-tv-code-row">
-                <input class="form-input connect-tv-code" id="connect-tv-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123 456" />
-                <button class="button button-secondary" type="button" data-use-code>Продолжить</button>
-              </div>
-              <p class="connect-tv-device is-hidden" data-device-found></p>
-            </article>
+            </div>
 
-            <article class="connect-tv-card is-disabled" data-connect-step="location">
-              <div class="connect-tv-step">2</div>
-              <h2>Торговая точка</h2>
-              <p>Выберите точку, где физически установлен этот телевизор.</p>
-              <div class="connect-tv-options" data-location-options></div>
-            </article>
+            <div class="connect-tv-grid">
+              <article class="connect-tv-card" data-connect-step="scan">
+                <div class="connect-tv-step">1</div>
+                <h3>Получить телевизор</h3>
+                <p>Отсканируйте QR-код с экрана ТВ или введите резервный код.</p>
+                <div class="connect-tv-camera-wrap is-hidden" data-camera-wrap>
+                  <video class="connect-tv-camera" data-camera autoplay playsinline muted></video>
+                  <div class="connect-tv-camera-frame" aria-hidden="true"></div>
+                </div>
+                <button class="button button-primary connect-tv-main-action" type="button" data-start-scan>Сканировать QR</button>
+                <div class="connect-tv-divider"><span>или</span></div>
+                <label class="field-label" for="connect-tv-code">6-значный резервный код</label>
+                <div class="connect-tv-code-row">
+                  <input class="form-input connect-tv-code" id="connect-tv-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123 456" />
+                  <button class="button button-secondary" type="button" data-use-code>Продолжить</button>
+                </div>
+                <p class="connect-tv-device is-hidden" data-device-found></p>
+              </article>
 
-            <article class="connect-tv-card is-disabled" data-connect-step="screen">
-              <div class="connect-tv-step">3</div>
-              <h2>Конкретный монитор</h2>
-              <p>Выберите монитор, который этот телевизор должен показывать.</p>
-              <div class="connect-tv-options" data-screen-options></div>
-              <button class="button button-primary connect-tv-authorize" type="button" data-authorize disabled>Авторизовать</button>
-            </article>
+              <article class="connect-tv-card is-disabled" data-connect-step="location">
+                <div class="connect-tv-step">2</div>
+                <h3>Выбрать точку</h3>
+                <p>Укажите торговую точку, где физически установлен этот телевизор.</p>
+                <div class="connect-tv-options" data-location-options></div>
+              </article>
+
+              <article class="connect-tv-card is-disabled" data-connect-step="screen">
+                <div class="connect-tv-step">3</div>
+                <h3>Выбрать монитор</h3>
+                <p>Выберите конкретный экран, который должен показывать телевизор.</p>
+                <div class="connect-tv-options" data-screen-options></div>
+                <button class="button button-primary connect-tv-authorize" type="button" data-authorize disabled>Авторизовать телевизор</button>
+              </article>
+            </div>
           </section>
 
           <section class="connect-tv-success is-hidden" data-connect-success>
@@ -69,14 +79,14 @@
             </div>
           </section>
 
-          <section class="connect-tv-bindings">
+          <section class="connect-tv-bindings" aria-labelledby="connected-tv-title">
             <div class="connect-tv-bindings-heading">
               <div>
-                <p class="eyebrow">АВТОРИЗОВАННЫЕ УСТРОЙСТВА</p>
-                <h2>Подключённые телевизоры</h2>
-                <p>Здесь можно отменить авторизацию телевизора. После отключения устройство вернётся к экрану подключения.</p>
+                <p class="eyebrow">УПРАВЛЕНИЕ УСТРОЙСТВАМИ</p>
+                <h2 id="connected-tv-title">Подключённые телевизоры</h2>
+                <p>Контроль активных привязок. Отключение сразу отзывает Device Session на сервере.</p>
               </div>
-              <button class="button button-secondary" type="button" data-refresh-bindings>Обновить</button>
+              <button class="button button-secondary" type="button" data-refresh-bindings>Обновить список</button>
             </div>
             <div class="connect-tv-bindings-list" data-device-bindings>
               <p class="connect-tv-bindings-empty">Загрузка подключений…</p>
