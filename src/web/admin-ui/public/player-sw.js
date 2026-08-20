@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'tv-menu-player-shell-v4';
+const SHELL_CACHE = 'tv-menu-player-shell-v5';
 const DATA_CACHE = 'tv-menu-player-data-v1';
 const PLAYER_CONTEXT = '/api/device/player-context';
 const SHELL_ASSETS = [
@@ -75,15 +75,27 @@ async function playerContext(request) {
   }
 }
 
-async function shellAsset(request) {
-  const cache = await caches.open(SHELL_CACHE);
+async function refreshShellAsset(cache, request) {
   try {
     const response = await networkWithTimeout(request, 4000);
     if (response.ok) await cache.put(request, response.clone());
-    return response.ok ? response : ((await cache.match(request)) || response);
+    return response.ok ? response : null;
   } catch {
-    return (await cache.match(request)) || Response.error();
+    return null;
   }
+}
+
+async function shellAsset(request, event) {
+  const cache = await caches.open(SHELL_CACHE);
+  const cached = await cache.match(request);
+  const refresh = refreshShellAsset(cache, request);
+
+  if (cached) {
+    event.waitUntil(refresh);
+    return cached;
+  }
+
+  return (await refresh) || Response.error();
 }
 
 async function assetRequest(request) {
@@ -113,7 +125,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (SHELL_ASSETS.includes(url.pathname)) {
-    event.respondWith(shellAsset(event.request));
+    event.respondWith(shellAsset(event.request, event));
     return;
   }
 
