@@ -56,9 +56,9 @@ test('authenticated page bootstrap uses one context API request', async () => {
 });
 
 test('authenticated navigation uses one persistent client-side shell', async () => {
-  const [application, router, shell, sidebar, context, header, screens] = await Promise.all([
+  const [application, router, shell, sidebar, context, header, screens, navigation] = await Promise.all([
     read('js/application.js'), read('js/core/router.js'), read('js/components/shell.js'), read('js/components/sidebar.js'),
-    read('js/components/context-panel.js'), read('js/components/header.js'), read('js/pages/screens.js')
+    read('js/components/context-panel.js'), read('js/components/header.js'), read('js/pages/screens.js'), read('js/core/navigation.js')
   ]);
   assert.match(application, /createAppRouter/);
   assert.match(application, /router\.start\(\)/);
@@ -66,8 +66,11 @@ test('authenticated navigation uses one persistent client-side shell', async () 
   assert.match(router, /history\.pushState/);
   assert.match(router, /addEventListener\('popstate'/);
   assert.match(router, /main\.innerHTML = view\.mainHtml/);
-  assert.match(router, /PREFETCH_PATHS/);
+  assert.match(router, /PREFETCH_ROUTE_PATHS/);
   assert.match(router, /canLeaveCurrentPage/);
+  assert.match(router, /canonicalRoutePath/);
+  assert.match(navigation, /ROUTE_DEFINITIONS/);
+  assert.match(navigation, /PREFETCH_ROUTE_PATHS/);
   assert.match(shell, /refreshShellRoute/);
   assert.match(sidebar, /refreshSidebarActive/);
   assert.match(context, /refreshContextPanel/);
