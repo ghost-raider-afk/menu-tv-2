@@ -6,11 +6,10 @@ import { AnimationPreviewPlayer } from '../motion/preview-player.js';
 import { renderAnimationScreenEmpty, renderAnimationScreenPreview } from '../motion/screen-preview.js';
 
 const CONTROL_IDS = Object.freeze([
-  'animation-entrance', 'animation-direction', 'animation-easing', 'animation-distance', 'animation-scale',
-  'animation-blur', 'animation-opacity', 'animation-duration', 'animation-stagger', 'animation-section-delay',
-  'animation-item-delay', 'animation-price-delay', 'animation-hold', 'animation-section-emphasis',
-  'animation-price-emphasis', 'animation-shimmer', 'animation-glow', 'animation-background-motion',
-  'animation-ambient-speed', 'animation-intensity'
+  'animation-pattern', 'animation-flow-direction', 'animation-easing', 'animation-cycle',
+  'animation-event-duration', 'animation-wave-stagger', 'animation-travel', 'animation-scale-amount',
+  'animation-brightness', 'animation-section-effect', 'animation-item-effect', 'animation-price-effect',
+  'animation-background-effect', 'animation-background-zoom', 'animation-intensity'
 ]);
 
 let currentPresetId = DEFAULT_PRESET_ID;
@@ -32,57 +31,47 @@ function value(id) {
 
 function collectProfile() {
   return {
-    entrance: value('animation-entrance'),
-    direction: value('animation-direction'),
+    motion_version: 2,
+    pattern: value('animation-pattern'),
+    flow_direction: value('animation-flow-direction'),
     easing: value('animation-easing'),
-    duration_ms: number('animation-duration'),
-    stagger_ms: number('animation-stagger'),
-    distance_px: number('animation-distance'),
-    scale_from: number('animation-scale'),
-    opacity_from: number('animation-opacity'),
-    blur_px: number('animation-blur'),
-    section_delay_ms: number('animation-section-delay'),
-    item_delay_ms: number('animation-item-delay'),
-    price_delay_ms: number('animation-price-delay'),
-    section_emphasis: value('animation-section-emphasis'),
-    price_emphasis: value('animation-price-emphasis'),
-    shimmer: checked('animation-shimmer'),
-    glow: checked('animation-glow'),
-    background_motion: checked('animation-background-motion'),
-    ambient_speed_seconds: number('animation-ambient-speed'),
-    intensity: number('animation-intensity'),
-    hold_seconds: number('animation-hold')
+    cycle_seconds: number('animation-cycle'),
+    event_duration_ms: number('animation-event-duration'),
+    wave_stagger_ms: number('animation-wave-stagger'),
+    travel_px: number('animation-travel'),
+    scale_amount: number('animation-scale-amount'),
+    brightness_amount: number('animation-brightness'),
+    section_effect: value('animation-section-effect'),
+    item_effect: value('animation-item-effect'),
+    price_effect: value('animation-price-effect'),
+    background_effect: value('animation-background-effect'),
+    background_zoom_percent: number('animation-background-zoom'),
+    intensity: number('animation-intensity')
   };
 }
 
 function setValue(id, value) {
   const node = element(id);
   if (!node) return;
-  if (node instanceof HTMLInputElement && node.type === 'checkbox') node.checked = value === true;
-  else node.value = String(value);
+  node.value = String(value);
 }
 
 function populateProfile(profile) {
-  setValue('animation-entrance', profile.entrance);
-  setValue('animation-direction', profile.direction);
+  setValue('animation-pattern', profile.pattern);
+  setValue('animation-flow-direction', profile.flow_direction);
   setValue('animation-easing', profile.easing);
-  setValue('animation-duration', profile.duration_ms);
-  setValue('animation-stagger', profile.stagger_ms);
-  setValue('animation-distance', profile.distance_px);
-  setValue('animation-scale', profile.scale_from);
-  setValue('animation-opacity', profile.opacity_from);
-  setValue('animation-blur', profile.blur_px);
-  setValue('animation-section-delay', profile.section_delay_ms);
-  setValue('animation-item-delay', profile.item_delay_ms);
-  setValue('animation-price-delay', profile.price_delay_ms);
-  setValue('animation-section-emphasis', profile.section_emphasis);
-  setValue('animation-price-emphasis', profile.price_emphasis);
-  setValue('animation-shimmer', profile.shimmer);
-  setValue('animation-glow', profile.glow);
-  setValue('animation-background-motion', profile.background_motion);
-  setValue('animation-ambient-speed', profile.ambient_speed_seconds);
+  setValue('animation-cycle', profile.cycle_seconds);
+  setValue('animation-event-duration', profile.event_duration_ms);
+  setValue('animation-wave-stagger', profile.wave_stagger_ms);
+  setValue('animation-travel', profile.travel_px);
+  setValue('animation-scale-amount', profile.scale_amount);
+  setValue('animation-brightness', profile.brightness_amount);
+  setValue('animation-section-effect', profile.section_effect);
+  setValue('animation-item-effect', profile.item_effect);
+  setValue('animation-price-effect', profile.price_effect);
+  setValue('animation-background-effect', profile.background_effect);
+  setValue('animation-background-zoom', profile.background_zoom_percent);
   setValue('animation-intensity', profile.intensity);
-  setValue('animation-hold', profile.hold_seconds);
   updateIntensityOutput();
 }
 
@@ -94,8 +83,7 @@ function updatePresetSelection() {
   document.querySelectorAll('[data-animation-preset]').forEach((node) => {
     const active = node.dataset.animationPreset === currentPresetId;
     node.classList.toggle('active', active);
-    if (active) node.setAttribute('aria-pressed', 'true');
-    else node.setAttribute('aria-pressed', 'false');
+    node.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
   const label = element('animation-current-preset');
   if (label) label.textContent = presetName(currentPresetId);
@@ -109,8 +97,7 @@ function updateIntensityOutput() {
 function restartPreview() {
   cancelAnimationFrame(previewFrame);
   previewFrame = requestAnimationFrame(() => {
-    const profile = collectProfile();
-    player?.restart(profile);
+    player?.restart(collectProfile());
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) player?.pause();
   });
 }
@@ -225,7 +212,7 @@ async function loadSettings() {
   const settings = await api.get(API.animationSettings);
   currentPresetId = settings?.preset_id || DEFAULT_PRESET_ID;
   const base = PRESET_BY_ID.has(currentPresetId) ? profileForPreset(currentPresetId) : profileForPreset(DEFAULT_PRESET_ID);
-  const profile = { ...base, ...(settings?.profile || {}) };
+  const profile = { ...base, ...(settings?.profile || {}), motion_version: 2 };
   const enabled = element('animation-enabled');
   if (enabled) enabled.checked = settings?.enabled === true;
   populateProfile(profile);
@@ -245,7 +232,7 @@ async function saveSettings() {
     currentPresetId = saved.preset_id;
     populateProfile(saved.profile);
     updatePresetSelection();
-    setMessage('animation-message', 'Профиль анимации сохранён.', 'success');
+    setMessage('animation-message', 'Профиль постоянной анимации сохранён.', 'success');
   } catch (error) {
     setMessage('animation-message', error.message);
   } finally {
