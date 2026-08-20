@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test';
 
-test('admin frontend assets are always revalidated after a deployment', async ({ request }) => {
+test('admin frontend keeps browser cache between page loads and revalidates assets', async ({ request }) => {
   const page = await request.get('/signin.html');
   expect(page.ok()).toBeTruthy();
   expect(page.headers()['cache-control']).toContain('no-store');
-  expect(page.headers()['clear-site-data']).toBe('"cache"');
+  expect(page.headers()['clear-site-data']).toBeUndefined();
 
   for (const asset of ['/css/index.css', '/app.js', '/js/editor/renderer.js']) {
     const response = await request.get(asset);
