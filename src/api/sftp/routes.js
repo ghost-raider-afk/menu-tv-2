@@ -4,13 +4,48 @@ import { activity, notFound } from '../helpers.js';
 import { createPublishService } from '../../services/publish-service.js';
 import { createSftpAccessService } from '../../services/sftp-access-service.js';
 
+function publishedContentType(filename) {
+  const lower = String(filename || '').toLowerCase();
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.mp4')) return 'video/mp4';
+  if (lower.endsWith('.webm')) return 'video/webm';
+  if (lower.endsWith('.html')) return 'text/html; charset=utf-8';
+  return 'application/octet-stream';
+}
+
 export function createSftpRouter({ store, sftp, config }) {
   const router = express.Router();
   const access = createSftpAccessService({ store, sftp, config });
   const publish = createPublishService({ store, sftp, config });
 
   router.get('/sftp/connection', (_request, response) => response.json(access.connection()));
+  router.get('/sftp/overview', async (_request, response) => response.json(await access.overview()));
   router.get('/sftp/directories', async (_request, response) => response.json(await access.directoriesWithStatus()));
+  router.get('/sftp/directories/:id/files', async (request, response) => {
+    response.json(await access.directoryFiles(positiveId(request.params.id, 'id')));
+  });
+  router.get('/sftp/directories/:id/files/:filename/download', async (request, response) => {
+    const id = positiveId(request.params.id, 'id');
+    const result = await access.publishedFile(id, request.params.filename);
+    const filename = result.file.name;
+    response.set({
+      'Cache-Control': 'no-store',
+      'Content-Type': publishedContentType(filename),
+      'Content-Length': String(result.file.size),
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'X-Content-SHA256': result.file.sha256,
+      'Last-Modified': new Date(result.file.modified_at).toUTCString()
+    });
+    await activity(store, request, {
+      action: 'sftp_file.downloaded',
+      entity_type: 'sftp_directory',
+      entity_id: result.directory.id,
+      message: `Скачан опубликованный файл «${filename}» из SFTP-каталога «${result.directory.name}».`
+    });
+    response.end(result.file.bytes);
+  });
   router.post('/sftp/directories', async (request, response) => {
     const directory = await store.createSftpDirectory(sftpDirectoryInput(request.body));
     await activity(store, request, { action: 'sftp_directory.created', entity_type: 'sftp_directory', entity_id: directory.id, message: `Добавлен SFTP-каталог «${directory.name}».` });

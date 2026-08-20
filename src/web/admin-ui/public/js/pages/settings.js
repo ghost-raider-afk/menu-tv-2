@@ -16,7 +16,6 @@ function populateSiteForm(site) {
   element('site-refresh-seconds').value = String(site.dashboard_refresh_seconds);
   element('site-default-resolution').value = site.default_screen_resolution;
   element('site-session-ttl').textContent = `${site.session_ttl_hours} ч`;
-  element('site-sftp-port').textContent = String(site.sftp_port);
 }
 
 function applySiteSettings(site) {

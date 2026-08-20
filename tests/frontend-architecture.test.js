@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const root = new URL('../src/web/admin-ui/public/', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
-const htmlPages = ['index.html','locations.html','screens.html','screen-editor.html','catalog.html','settings.html','animation.html','profile.html','signin.html'];
+const htmlPages = ['index.html','locations.html','screens.html','screen-editor.html','catalog.html','settings.html','sftp-settings.html','animation.html','profile.html','signin.html'];
 
 test('all current pages use the single final CSS entrypoint', async () => {
   for (const page of htmlPages) {

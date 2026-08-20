@@ -17,7 +17,8 @@ export const API = Object.freeze({
   productsExport: '/api/catalog/products/export.csv',
   packaging: '/api/catalog/packaging',
   sftpDirectories: '/api/sftp/directories',
-  sftpConnection: '/api/sftp/connection'
+  sftpConnection: '/api/sftp/connection',
+  sftpOverview: '/api/sftp/overview'
 });
 
 export function pageName() {

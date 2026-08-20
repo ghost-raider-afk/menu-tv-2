@@ -31,6 +31,18 @@ export class SftpService {
     return this.storage.directoryStatus(name);
   }
 
+  directorySummary(name) {
+    return this.storage.directorySummary(name);
+  }
+
+  listPublishedFiles(name) {
+    return this.storage.listPublishedFiles(name);
+  }
+
+  readPublishedFile(directoryName, filename) {
+    return this.storage.readPublishedFile(directoryName, filename);
+  }
+
   provisionDirectory(name) {
     return this.storage.provisionDirectory(name);
   }
