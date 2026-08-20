@@ -23,6 +23,12 @@ export function loadConfig(env = process.env) {
     loginIpMaxAttempts: integer('LOGIN_IP_MAX_ATTEMPTS', env.LOGIN_IP_MAX_ATTEMPTS, { minimum: 1, maximum: 1000 }),
     loginWindowMinutes: integer('LOGIN_WINDOW_MINUTES', env.LOGIN_WINDOW_MINUTES, { minimum: 1, maximum: 1440 }),
     loginLimiterMaxEntries: integer('LOGIN_LIMITER_MAX_ENTRIES', env.LOGIN_LIMITER_MAX_ENTRIES, { minimum: 10, maximum: 100000 }),
+    player: Object.freeze({
+      pairingTtlMinutes: integer('PLAYER_PAIRING_TTL_MINUTES', env.PLAYER_PAIRING_TTL_MINUTES, { minimum: 2, maximum: 60 }),
+      pairingMaxPending: integer('PLAYER_PAIRING_MAX_PENDING', env.PLAYER_PAIRING_MAX_PENDING, { minimum: 10, maximum: 10000 }),
+      deviceSessionTtlDays: integer('PLAYER_DEVICE_SESSION_TTL_DAYS', env.PLAYER_DEVICE_SESSION_TTL_DAYS, { minimum: 30, maximum: 7300 }),
+      deviceSessionRefreshHours: integer('PLAYER_DEVICE_SESSION_REFRESH_HOURS', env.PLAYER_DEVICE_SESSION_REFRESH_HOURS, { minimum: 1, maximum: 720 })
+    }),
     jsonBodyMaxBytes: integer('JSON_BODY_MAX_BYTES', env.JSON_BODY_MAX_BYTES, { minimum: 1024, maximum: 10485760 }),
     menuDraftMaxBytes: integer('MENU_DRAFT_MAX_BYTES', env.MENU_DRAFT_MAX_BYTES, { minimum: 1024, maximum: 10485760 }),
     screenSourceMaxBytes: integer('SCREEN_SOURCE_MAX_BYTES', env.SCREEN_SOURCE_MAX_BYTES, { minimum: 1024, maximum: 52428800 }),
