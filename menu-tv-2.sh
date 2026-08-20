@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.1.15"
+SCRIPT_VERSION="1.2.0"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
@@ -408,7 +408,8 @@ ensure_sftp_env() {
   [[ -n "$(env_value SITE_ASSETS_ROOT "$env_file")" ]] || set_env_value "$env_file" SITE_ASSETS_ROOT "/srv/menu-tv-site-assets"
   [[ -n "$(env_value SITE_LOGO_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" SITE_LOGO_MAX_BYTES "2097152"
   [[ -n "$(env_value SITE_FAVICON_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" SITE_FAVICON_MAX_BYTES "524288"
-  [[ -n "$(env_value TEMPLATE_BACKGROUND_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" TEMPLATE_BACKGROUND_MAX_BYTES "12582912"
+  [[ -n "$(env_value SCREEN_BACKGROUND_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" SCREEN_BACKGROUND_MAX_BYTES "20971520"
+  delete_env_value "$env_file" TEMPLATE_BACKGROUND_MAX_BYTES
   [[ -n "$(env_value SFTP_PUBLIC_HOST "$env_file")" ]] || set_env_value "$env_file" SFTP_PUBLIC_HOST "$domain"
   [[ -n "$(env_value SFTP_PORT "$env_file")" ]] || set_env_value "$env_file" SFTP_PORT "2022"
   [[ -n "$(env_value SFTP_API_URL "$env_file")" ]] || set_env_value "$env_file" SFTP_API_URL "http://sftp:8080"
@@ -428,7 +429,7 @@ ensure_sftp_env() {
 validate_env() {
   local key value
   [[ -f "$INSTALL_DIR/.env" ]] || die "Отсутствует $INSTALL_DIR/.env"
-  for key in MENU_TV_2_DOMAIN POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD SESSION_SECRET SFTP_PUBLIC_HOST SFTP_PORT SFTP_ADMIN_USERNAME SFTP_ADMIN_PASSWORD; do
+  for key in MENU_TV_2_DOMAIN POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD SESSION_SECRET SFTP_PUBLIC_HOST SFTP_PORT SFTP_ADMIN_USERNAME SFTP_ADMIN_PASSWORD SCREEN_BACKGROUND_MAX_BYTES; do
     value="$(env_value "$key")"
     [[ -n "$value" && "$value" != replace-with-* ]] || die "$key в .env не настроен."
   done

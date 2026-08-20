@@ -11,6 +11,7 @@ import { hashPassword } from './services/password-service.js';
 import { createPublishService } from './services/publish-service.js';
 import { createSessionResolver } from './services/session-service.js';
 import { siteSettingsResponse } from './services/site-assets-service.js';
+import { migrateLegacyBackgroundAssets } from './services/legacy-background-migration.js';
 import { SftpService } from './sftp/index.js';
 import { createAuthRouter } from './api/auth/routes.js';
 import { createSessionRouter } from './api/session/routes.js';
@@ -20,18 +21,20 @@ import { createNotificationsRouter } from './api/notifications/routes.js';
 import { createCatalogRouter } from './api/catalog/routes.js';
 import { createLocationsRouter } from './api/locations/routes.js';
 import { createScreensRouter } from './api/screens/routes.js';
-import { createTemplatesRouter } from './api/templates/routes.js';
 import { createSftpRouter } from './api/sftp/routes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, 'web', 'admin-ui', 'public');
 const protectedPages = [
   '/', '/index.html', '/locations.html', '/screens.html', '/catalog.html',
-  '/screen-editor.html', '/templates.html', '/profile.html', '/settings.html'
+  '/screen-editor.html', '/profile.html', '/settings.html'
 ];
 
 async function initialiseStore(store, config) {
   await store.init();
+  await migrateLegacyBackgroundAssets(config.siteAssetsRoot).catch((error) => {
+    logger.warn('Legacy monitor backgrounds could not be migrated', { error });
+  });
   const bootstrapAdmin = config.bootstrapAdmin
     ? { username: config.bootstrapAdmin.username, passwordHash: await hashPassword(config.bootstrapAdmin.password) }
     : null;
@@ -94,7 +97,13 @@ function mountPublicRoutes(app, { store, config }) {
   app.use('/site-assets', express.static(config.siteAssetsRoot, { etag: true, maxAge: '1d', immutable: true }));
   app.get('/api/public/config', async (_request, response) => {
     const site = siteSettingsResponse(await store.getSiteSettings(), config);
-    response.json({ app_name: site.app_name, logo_url: site.logo_url, favicon_url: site.favicon_url, accent_color: site.accent_color });
+    response.json({
+      app_name: site.app_name,
+      logo_url: site.logo_url,
+      favicon_url: site.favicon_url,
+      accent_color: site.accent_color,
+      signin_logo_size: site.signin_logo_size
+    });
   });
 }
 
@@ -106,7 +115,6 @@ function mountProtectedApi(app, dependencies, requireApiSession) {
   app.use('/api/notifications', createNotificationsRouter(dependencies));
   app.use('/api/catalog', createCatalogRouter(dependencies));
   app.use('/api/locations', createLocationsRouter(dependencies));
-  app.use('/api/templates', createTemplatesRouter(dependencies));
   app.use('/api', createScreensRouter(dependencies));
   app.use('/api', createSftpRouter(dependencies));
 }

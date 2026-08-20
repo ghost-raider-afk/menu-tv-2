@@ -2,13 +2,8 @@ import express from 'express';
 import { menuDraftInput, positiveId, screenInput } from '../../contracts/input.js';
 import { menuSettingsInput } from '../../contracts/menu-settings.js';
 import { logger } from '../../logger/index.js';
+import { createScreenBackground, deleteScreenBackground } from '../../services/screen-background-service.js';
 import { activity, conflict, notFound } from '../helpers.js';
-
-function requestedTemplateId(body, screen) {
-  const value = body?.screen?.template_id ?? body?.template_id;
-  if (value === undefined) return screen.template_id;
-  return value === null || value === '' ? null : positiveId(value, 'template_id');
-}
 
 async function removeStagedBestEffort(sftp, key, context = {}) {
   if (!key || typeof sftp?.removeStaged !== 'function') return;
@@ -17,6 +12,33 @@ async function removeStagedBestEffort(sftp, key, context = {}) {
     ...context,
     error
   }));
+}
+
+function settingsOptions(config) {
+  return { allowBackgroundImage: true, maxWidth: config.screenMaxWidth, maxHeight: config.screenMaxHeight };
+}
+
+async function cloneScreen(tx, sourceId, targetLocationId, config) {
+  const source = await tx.getScreen(sourceId);
+  if (!source) throw notFound();
+  const draft = await tx.getScreenDraft(source.id);
+  const created = await tx.createScreen({
+    location_id: targetLocationId,
+    name: await tx.nextScreenName(targetLocationId),
+    resolution: source.resolution,
+    status: 'draft',
+    active: source.active !== false
+  });
+  const saved = await tx.saveScreenDraft(created.id, {
+    rows: structuredClone(draft.rows || []),
+    settings: menuSettingsInput(draft.settings || {}, settingsOptions(config))
+  }, 1);
+  if (!saved) throw conflict('Не удалось создать независимую копию монитора.');
+  return tx.getScreen(created.id);
+}
+
+function draftRevisionHeader(request) {
+  return positiveId(request.get('x-draft-revision'), 'x-draft-revision');
 }
 
 export function createScreensRouter({ store, sftp, config }) {
@@ -32,10 +54,10 @@ export function createScreensRouter({ store, sftp, config }) {
     const id = positiveId(request.params.id, 'id');
     const screen = await store.getScreen(id);
     if (!screen) throw notFound();
-    const [draft, products, packaging, templates] = await Promise.all([
-      store.getScreenDraft(id), store.listProducts(), store.listPackaging(), store.listTemplates()
+    const [draft, products, packaging] = await Promise.all([
+      store.getScreenDraft(id), store.listProducts(), store.listPackaging()
     ]);
-    response.json({ screen, draft, products, packaging, templates });
+    response.json({ screen, draft, products, packaging });
   });
 
   router.put('/screens/:id/draft', async (request, response) => {
@@ -50,22 +72,18 @@ export function createScreensRouter({ store, sftp, config }) {
       }
 
       const draft = await menuDraftInput(request.body, tx, config.menuDraftMaxBytes);
-      draft.settings = menuSettingsInput(draft.settings, { allowBackgroundImage: true });
-      const templateId = requestedTemplateId(request.body, current);
-      if (templateId && !await tx.getTemplate(templateId)) throw notFound();
-
+      draft.settings = menuSettingsInput(draft.settings, settingsOptions(config));
       let screenData = {
         location_id: current.location_id,
         name: current.name,
         resolution: current.resolution,
         status: current.status,
-        active: current.active,
-        template_id: templateId
+        active: current.active
       };
 
       if (request.body?.screen && typeof request.body.screen === 'object' && !Array.isArray(request.body.screen)) {
         const siteSettings = await tx.getSiteSettings();
-        screenData = screenInput({ ...request.body.screen, template_id: templateId }, {
+        screenData = screenInput(request.body.screen, {
           defaultScreenResolution: siteSettings.default_screen_resolution,
           maxWidth: config.screenMaxWidth,
           maxHeight: config.screenMaxHeight
@@ -94,22 +112,80 @@ export function createScreensRouter({ store, sftp, config }) {
     response.json({ screen: result.screen, draft: result.draft });
   });
 
+  router.put(
+    '/screens/:id/background',
+    express.raw({ type: ['image/jpeg', 'image/png', 'image/webp', 'application/octet-stream'], limit: config.screenBackgroundMaxBytes }),
+    async (request, response) => {
+      const id = positiveId(request.params.id, 'id');
+      const expectedRevision = draftRevisionHeader(request);
+      const asset = await createScreenBackground(request.body, config);
+      let previousUrl = '';
+      try {
+        const result = await store.transaction(async (tx) => {
+          if (!await tx.lockScreen(id)) throw notFound();
+          const screen = await tx.getScreen(id);
+          if (!screen) throw notFound();
+          if (screen.publication_pending_sha256) throw conflict('Дождитесь завершения публикации перед сменой фона.');
+          const draft = await tx.getScreenDraft(id);
+          previousUrl = draft.settings?.background_image_url || '';
+          const settings = menuSettingsInput({ ...draft.settings, background_image_url: asset.publicUrl }, settingsOptions(config));
+          const saved = await tx.saveScreenDraft(id, { rows: draft.rows || [], settings }, expectedRevision);
+          if (!saved) throw conflict('Черновик уже изменён в другом окне. Обновите редактор.');
+          return { screen: await tx.getScreen(id), draft: saved };
+        });
+        if (previousUrl && previousUrl !== asset.publicUrl) await deleteScreenBackground(previousUrl, { store, config });
+        await activity(store, request, { action: 'screen.background.updated', entity_type: 'screen', entity_id: id, message: `Обновлён фон монитора «${result.screen.name}».` });
+        response.json(result);
+      } catch (error) {
+        await deleteScreenBackground(asset.publicUrl, { store, config, force: true });
+        throw error;
+      }
+    }
+  );
+
+  router.delete('/screens/:id/background', async (request, response) => {
+    const id = positiveId(request.params.id, 'id');
+    const expectedRevision = draftRevisionHeader(request);
+    let previousUrl = '';
+    const result = await store.transaction(async (tx) => {
+      if (!await tx.lockScreen(id)) throw notFound();
+      const screen = await tx.getScreen(id);
+      if (!screen) throw notFound();
+      if (screen.publication_pending_sha256) throw conflict('Дождитесь завершения публикации перед удалением фона.');
+      const draft = await tx.getScreenDraft(id);
+      previousUrl = draft.settings?.background_image_url || '';
+      const settings = menuSettingsInput({ ...draft.settings, background_image_url: '' }, settingsOptions(config));
+      const saved = await tx.saveScreenDraft(id, { rows: draft.rows || [], settings }, expectedRevision);
+      if (!saved) throw conflict('Черновик уже изменён в другом окне. Обновите редактор.');
+      return { screen: await tx.getScreen(id), draft: saved };
+    });
+    if (previousUrl) await deleteScreenBackground(previousUrl, { store, config });
+    await activity(store, request, { action: 'screen.background.removed', entity_type: 'screen', entity_id: id, message: `Удалён фон монитора «${result.screen.name}».` });
+    response.json(result);
+  });
+
   router.post('/locations/:id/screens', async (request, response) => {
     const locationId = positiveId(request.params.id, 'id');
+    const sourceId = request.body?.source_screen_id ? positiveId(request.body.source_screen_id, 'source_screen_id') : null;
     const screen = await store.transaction(async (tx) => {
       const location = await tx.getLocation(locationId);
       if (!location) throw notFound();
+      if (sourceId) return cloneScreen(tx, sourceId, locationId, config);
       const siteSettings = await tx.getSiteSettings();
       return tx.createScreen({
         location_id: locationId,
         name: await tx.nextScreenName(locationId),
         resolution: siteSettings.default_screen_resolution,
         status: 'draft',
-        active: true,
-        template_id: null
+        active: true
       });
     });
-    await activity(store, request, { action: 'screen.created', entity_type: 'screen', entity_id: screen.id, message: `Добавлен монитор «${screen.name}» в точку «${screen.location_name}».` });
+    await activity(store, request, {
+      action: sourceId ? 'screen.cloned' : 'screen.created',
+      entity_type: 'screen',
+      entity_id: screen.id,
+      message: sourceId ? `Создан монитор «${screen.name}» по образцу другого монитора.` : `Добавлен монитор «${screen.name}» в точку «${screen.location_name}».`
+    });
     response.status(201).json(screen);
   });
 
@@ -122,7 +198,6 @@ export function createScreensRouter({ store, sftp, config }) {
         maxHeight: config.screenMaxHeight
       });
       if (!await tx.getLocation(input.location_id)) throw notFound();
-      if (input.template_id && !await tx.getTemplate(input.template_id)) throw notFound();
       return tx.createScreen(input);
     });
     await activity(store, request, { action: 'screen.created', entity_type: 'screen', entity_id: screen.id, message: `Добавлен монитор «${screen.name}».` });
@@ -140,23 +215,18 @@ export function createScreensRouter({ store, sftp, config }) {
         maxHeight: config.screenMaxHeight
       });
       if (!await tx.getLocation(input.location_id)) throw notFound();
-      if (input.template_id && !await tx.getTemplate(input.template_id)) throw notFound();
       const current = await tx.getScreen(id);
       if (!current) throw notFound();
-      if (current.publication_pending_sha256) {
-        throw conflict('Сейчас выполняется публикация этого монитора. Повторите изменение после её завершения.');
-      }
+      if (current.publication_pending_sha256) throw conflict('Сейчас выполняется публикация этого монитора. Повторите изменение после её завершения.');
       if (current.published_at && current.location_id !== input.location_id) {
         throw conflict('Опубликованный телевизор нельзя перенести в другую точку: его SFTP-путь должен остаться стабильным.');
       }
-
       const presentationChanged = current.name !== input.name || current.resolution !== input.resolution;
       const invalidatedAssetKey = presentationChanged ? current.prepared_asset_key || null : null;
       if (presentationChanged && current.prepared_asset_key) {
         await tx.invalidatePreparedAsset(id);
         input.status = 'draft';
       }
-
       const updated = await tx.updateScreen(id, input);
       if (!updated) throw notFound();
       return { record: updated, invalidatedAssetKey };
@@ -168,17 +238,19 @@ export function createScreensRouter({ store, sftp, config }) {
 
   router.delete('/screens/:id', async (request, response) => {
     const id = positiveId(request.params.id, 'id');
+    let backgroundUrl = '';
     const screen = await store.transaction(async (tx) => {
       if (!await tx.lockScreen(id)) throw notFound();
       const current = await tx.getScreen(id);
       if (!current) throw notFound();
-      if (current.publication_pending_sha256) {
-        throw conflict('Сейчас выполняется публикация этого монитора. Дождитесь её завершения перед удалением.');
-      }
+      if (current.publication_pending_sha256) throw conflict('Сейчас выполняется публикация этого монитора. Дождитесь её завершения перед удалением.');
+      const draft = await tx.getScreenDraft(id);
+      backgroundUrl = draft.settings?.background_image_url || '';
       if (!await tx.deleteScreen(id)) throw notFound();
       return current;
     });
     await removeStagedBestEffort(sftp, screen.prepared_asset_key, { screen_id: screen.id });
+    if (backgroundUrl) await deleteScreenBackground(backgroundUrl, { store, config });
     await activity(store, request, { action: 'screen.deleted', entity_type: 'screen', entity_id: screen.id, message: `Удалён монитор «${screen.name}».` });
     response.status(204).end();
   });

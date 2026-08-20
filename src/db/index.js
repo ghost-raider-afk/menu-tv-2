@@ -1,6 +1,7 @@
 import { createDatabasePool } from './pool.js';
 import { initialiseSchema } from './migrations/schema.js';
 import { migrateLegacyMenuSettings } from './migrations/menu-settings.js';
+import { retireLegacyTemplates } from './migrations/template-retirement.js';
 import { seedDemoData } from './migrations/seed.js';
 import { createOverviewRepository } from './overview.js';
 import { createUsersRepository } from './users.js';
@@ -9,7 +10,6 @@ import { createNotificationsRepository } from './notifications.js';
 import { createLocationsRepository } from './locations.js';
 import { createScreensRepository } from './screens.js';
 import { createCatalogRepository } from './catalog.js';
-import { createTemplatesRepository } from './templates.js';
 import { createSftpRepository } from './sftp.js';
 
 function createRepositories(queryable) {
@@ -23,7 +23,6 @@ function createRepositories(queryable) {
     locations,
     createScreensRepository(queryable),
     createCatalogRepository(queryable),
-    createTemplatesRepository(queryable),
     createSftpRepository(queryable, { getLocation: locations.getLocation })
   );
 }
@@ -38,6 +37,7 @@ export class MenuTvStore {
   async init() {
     await initialiseSchema(this.pool);
     await migrateLegacyMenuSettings(this.pool);
+    await retireLegacyTemplates(this.pool);
     if (this.seedDemoData) await seedDemoData(this.pool);
   }
 

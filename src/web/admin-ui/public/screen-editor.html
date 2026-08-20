@@ -12,58 +12,67 @@
     <div class="app-shell">
       <div class="app-content">
         <main class="main-content editor-content">
-          <div class="page-heading"><p class="eyebrow">МОНИТОР</p><h1>Редактор меню</h1><p>Меню собирается из общей базы продукции и тары. Геометрия итоговой таблицы следует стилю ТВ МЕНЮ1, а первый раздел является верхней шапкой таблицы.</p></div>
           <form id="screen-editor-form" class="editor-workspace" aria-busy="true">
-            <div class="editor-main-column">
-              <section class="settings-card editor-menu-card">
-                <div class="card-heading"><div><p class="eyebrow">СОДЕРЖИМОЕ</p><h2>Строки меню</h2></div><div class="editor-add-actions"><button class="button button-secondary" id="editor-add-section" type="button" disabled>+ Раздел</button><button class="button button-secondary" id="editor-add-item" type="button" disabled>+ Продукция</button><button class="button button-secondary" id="editor-add-packaging" type="button" disabled>+ Тара</button></div></div>
-                <p class="muted-copy">Цена и характеристики берутся из каталога. Вторая строка позиции формируется автоматически: производитель · светлое/тёмное · фильтрованное/нефильтрованное.</p>
-                <div class="editor-menu-rows" id="editor-menu-rows"></div><p class="empty-state" id="editor-menu-empty">В меню ещё нет строк.</p>
-              </section>
-              <section class="settings-card editor-preview-card">
-                <div class="editor-menu-preview" id="editor-menu-preview"></div>
-                <p class="editor-layout-warning is-hidden" id="editor-layout-warning" role="status"></p>
-              </section>
-            </div>
-            <aside class="editor-side">
-              <section class="settings-card">
-                <div class="card-heading"><div><p class="eyebrow">МОНИТОР</p><h2>Параметры</h2></div><a class="text-button" href="/screens.html">К списку</a></div>
-                <div class="form-grid">
-                  <label class="field"><span>Торговая точка</span><input id="editor-location" disabled /></label>
-                  <label class="field"><span>Название</span><input id="editor-name" maxlength="120" required disabled /></label>
-                  <label class="field"><span>Разрешение</span><input id="editor-resolution" maxlength="32" required disabled /></label>
-                  <label class="field"><span>Статус</span><select id="editor-status" disabled><option value="draft">Черновик</option><option value="ready">Готово к публикации</option></select></label>
-                  <label class="toggle-row field-full"><span><strong>Активен</strong><small>Монитор доступен для публикации.</small></span><input id="editor-active" type="checkbox" checked disabled /><i aria-hidden="true"></i></label>
-                </div>
-              </section>
-              <section class="settings-card">
-                <div class="card-heading"><div><p class="eyebrow">ШАБЛОН</p><h2>Оформление</h2></div></div>
-                <div class="template-apply"><label class="field"><span>Использовать шаблон</span><select id="editor-template" disabled></select></label><button class="button button-secondary" id="editor-template-apply" type="button" disabled>Применить</button><p class="template-current">Сейчас: <strong id="editor-template-current">—</strong></p></div>
-                <div class="form-grid">
-                  <label class="field"><span>Фон</span><input id="editor-background-color" type="color" disabled /></label>
-                  <label class="field"><span>Акцент</span><input id="editor-accent-color" type="color" disabled /></label>
-                  <label class="field field-full"><span>Основной текст</span><input id="editor-text-color" type="color" disabled /></label>
-                  <div class="field field-full font-scale-field">
-                    <span>Масштаб шрифта</span>
-                    <div class="font-scale-control">
-                      <input id="editor-font-scale" type="range" min="55" max="130" step="1" value="100" aria-label="Масштаб шрифта" disabled />
-                      <label class="font-scale-number"><input id="editor-font-scale-number" type="number" min="55" max="130" step="1" value="100" aria-label="Масштаб шрифта в процентах" disabled /><span>%</span></label>
+            <section class="editor-commandbar" aria-label="Настройки монитора">
+              <div class="editor-commandbar-identity">
+                <a class="editor-back" href="/screens.html" aria-label="К мониторам">←</a>
+                <div><strong id="editor-toolbar-title">Загрузка монитора…</strong><span id="editor-dirty-state">Загрузка…</span></div>
+              </div>
+              <div class="editor-commandbar-tools">
+                <details class="editor-tool-menu">
+                  <summary>Монитор</summary>
+                  <div class="editor-tool-popover editor-tool-popover-medium">
+                    <div class="compact-form-grid">
+                      <label class="field"><span>Торговая точка</span><input id="editor-location" disabled /></label>
+                      <label class="field"><span>Название</span><input id="editor-name" maxlength="120" required disabled /></label>
+                      <label class="field"><span>Разрешение</span><input id="editor-resolution" maxlength="32" required disabled /></label>
+                      <label class="field"><span>Статус</span><select id="editor-status" disabled><option value="draft">Черновик</option><option value="ready">Готово</option></select></label>
                     </div>
-                    <small id="editor-font-scale-effective">Фактически: 100%.</small>
-                    <small>Если строк много, таблица автоматически уменьшает шрифт и высоту строк до вмещения. Здесь задаётся желаемый максимальный масштаб.</small>
+                    <label class="toggle-row compact-toggle"><span><strong>Активен</strong><small>Доступен для публикации</small></span><input id="editor-active" type="checkbox" checked disabled /><i aria-hidden="true"></i></label>
                   </div>
-                  <label class="field field-full table-font-field"><span>Шрифт таблицы</span><select id="editor-font-family" disabled><option value="arial-narrow">Arial Narrow</option><option value="tahoma-bold">Tahoma Bold</option><option value="arial">Arial</option><option value="dejavu-condensed">DejaVu Sans Condensed</option><option value="liberation-narrow">Liberation Sans Narrow</option><option value="system-sans">Системный sans-serif</option></select><small>Шрифт применяется одновременно к предпросмотру и итоговому JPEG.</small></label>
-                </div>
-              </section>
-              <section class="settings-card screen-delivery-card">
-                <div class="card-heading"><div><p class="eyebrow">ДОСТАВКА</p><h2>JPEG для телевизора</h2></div></div>
-                <p class="delivery-path" id="editor-sftp-path">—</p>
-                <p class="draft-state" id="editor-dirty-state">Загрузка данных…</p>
-                <div class="delivery-actions"><input id="editor-source-file" type="file" accept="image/jpeg" disabled /><button class="button button-secondary" id="editor-upload" type="button" disabled>Загрузить JPEG вручную</button><button class="button button-primary" id="editor-publish" type="button" disabled>Опубликовать</button></div>
-              </section>
-              <p class="form-message is-hidden" id="screen-editor-message" role="status" aria-live="polite"></p>
-              <div class="form-actions"><button class="button button-primary button-wide" id="editor-save" type="submit" disabled>Сохранить монитор и меню</button></div>
-            </aside>
+                </details>
+                <details class="editor-tool-menu">
+                  <summary>Таблица</summary>
+                  <div class="editor-tool-popover editor-tool-popover-medium">
+                    <div class="geometry-grid">
+                      <label class="field"><span>X</span><input id="editor-table-x" type="number" min="0" step="1" disabled /></label>
+                      <label class="field"><span>Y</span><input id="editor-table-y" type="number" min="0" step="1" disabled /></label>
+                      <label class="field"><span>Ширина</span><input id="editor-table-width" type="number" min="1" step="1" disabled /></label>
+                      <label class="field"><span>Высота</span><input id="editor-table-height" type="number" min="1" step="1" disabled /></label>
+                    </div>
+                    <label class="field"><span>Шрифт таблицы</span><select id="editor-font-family" disabled><option value="arial-narrow">Arial Narrow</option><option value="tahoma-bold">Tahoma Bold</option><option value="arial">Arial</option><option value="dejavu-condensed">DejaVu Sans Condensed</option><option value="liberation-narrow">Liberation Sans Narrow</option><option value="system-sans">Системный sans-serif</option></select></label>
+                    <div class="field font-scale-field"><span>Масштаб шрифта</span><div class="font-scale-control"><input id="editor-font-scale" type="range" min="55" max="130" step="1" value="100" disabled /><label class="font-scale-number"><input id="editor-font-scale-number" type="number" min="55" max="130" step="1" value="100" disabled /><span>%</span></label></div><small id="editor-font-scale-effective">Фактически 100%.</small></div>
+                  </div>
+                </details>
+                <details class="editor-tool-menu">
+                  <summary>Оформление</summary>
+                  <div class="editor-tool-popover editor-tool-popover-wide">
+                    <div class="compact-form-grid compact-colors">
+                      <label class="field"><span>Фон</span><input id="editor-background-color" type="color" disabled /></label>
+                      <label class="field"><span>Акцент</span><input id="editor-accent-color" type="color" disabled /></label>
+                      <label class="field"><span>Текст</span><input id="editor-text-color" type="color" disabled /></label>
+                    </div>
+                    <div class="background-upload-block">
+                      <div><strong>Фоновое изображение</strong><small id="editor-background-state">Без изображения</small></div>
+                      <input id="editor-background-file" type="file" accept="image/png,image/jpeg,image/webp" disabled />
+                      <div class="inline-actions"><button class="button button-secondary" id="editor-background-upload" type="button" disabled>Загрузить</button><button class="button button-danger" id="editor-background-remove" type="button" disabled>Удалить</button></div>
+                      <small data-screen-background-limit>Лимит загрузки задаётся сервером.</small>
+                    </div>
+                  </div>
+                </details>
+                <details class="editor-tool-menu">
+                  <summary>Доставка</summary>
+                  <div class="editor-tool-popover editor-tool-popover-wide"><p class="delivery-path" id="editor-sftp-path">—</p><input id="editor-source-file" type="file" accept="image/jpeg" disabled /><div class="inline-actions"><button class="button button-secondary" id="editor-upload" type="button" disabled>JPEG вручную</button><button class="button button-primary" id="editor-publish" type="button" disabled>Опубликовать</button></div></div>
+                </details>
+                <div class="editor-add-actions" aria-label="Добавить строку"><button class="button button-secondary" id="editor-add-section" type="button" disabled>+ Раздел</button><button class="button button-secondary" id="editor-add-item" type="button" disabled>+ Продукция</button><button class="button button-secondary" id="editor-add-packaging" type="button" disabled>+ Тара</button></div>
+                <button class="button button-primary editor-save" id="editor-save" type="submit" disabled>Сохранить</button>
+              </div>
+            </section>
+            <p class="form-message is-hidden editor-message" id="screen-editor-message" role="status" aria-live="polite"></p>
+            <div class="editor-main-column">
+              <section class="settings-card editor-menu-card"><div class="editor-section-line"><div><p class="eyebrow">СОДЕРЖИМОЕ</p><h2>Строки меню</h2></div><span class="muted-copy">Цены и характеристики — из каталога</span></div><div class="editor-menu-rows" id="editor-menu-rows"></div><p class="empty-state" id="editor-menu-empty">В меню ещё нет строк.</p></section>
+              <section class="settings-card editor-preview-card"><div class="editor-preview-head"><strong>Предпросмотр</strong><span>Один renderer для preview и JPEG</span></div><div class="editor-menu-preview" id="editor-menu-preview"></div><p class="editor-layout-warning is-hidden" id="editor-layout-warning" role="status"></p></section>
+            </div>
           </form>
         </main>
       </div>

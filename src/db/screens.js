@@ -8,10 +8,9 @@ function normaliseDraft(row, screenId) {
 export function createScreensRepository(pool) {
   async function getScreen(id) {
     const { rows } = await pool.query(
-      `SELECT s.*, l.name AS location_name, t.name AS template_name, d.name AS sftp_directory_name,
+      `SELECT s.*, l.name AS location_name, d.name AS sftp_directory_name,
        CASE WHEN d.name IS NULL THEN NULL ELSE '/' || d.name || '/' || s.delivery_filename END AS sftp_path
        FROM screens s JOIN locations l ON l.id = s.location_id
-       LEFT JOIN templates t ON t.id = s.template_id
        LEFT JOIN sftp_directories d ON d.id = l.sftp_directory_id
        WHERE s.id = $1`,
       [id]
@@ -19,19 +18,31 @@ export function createScreensRepository(pool) {
     return normaliseRow(rows[0]);
   }
 
+  async function listScreensByLocation(locationId) {
+    const { rows } = await pool.query(
+      `SELECT s.*, l.name AS location_name, d.name AS sftp_directory_name,
+       CASE WHEN d.name IS NULL THEN NULL ELSE '/' || d.name || '/' || s.delivery_filename END AS sftp_path
+       FROM screens s JOIN locations l ON l.id = s.location_id
+       LEFT JOIN sftp_directories d ON d.id = l.sftp_directory_id
+       WHERE s.location_id = $1 ORDER BY s.name`,
+      [locationId]
+    );
+    return rows.map(normaliseRow);
+  }
+
   return Object.freeze({
     async listScreens() {
       const { rows } = await pool.query(
-        `SELECT s.*, l.name AS location_name, t.name AS template_name, d.name AS sftp_directory_name,
+        `SELECT s.*, l.name AS location_name, d.name AS sftp_directory_name,
          CASE WHEN d.name IS NULL THEN NULL ELSE '/' || d.name || '/' || s.delivery_filename END AS sftp_path
          FROM screens s JOIN locations l ON l.id = s.location_id
-         LEFT JOIN templates t ON t.id = s.template_id
          LEFT JOIN sftp_directories d ON d.id = l.sftp_directory_id
          ORDER BY l.name, s.name`
       );
       return rows.map(normaliseRow);
     },
 
+    listScreensByLocation,
     getScreen,
 
     async lockScreen(id) {
@@ -39,12 +50,12 @@ export function createScreensRepository(pool) {
       return rowCount > 0;
     },
 
-    async createScreen({ location_id, name, resolution = '1920×1080', status = 'draft', active = true, template_id = null }) {
+    async createScreen({ location_id, name, resolution = '1920×1080', status = 'draft', active = true }) {
       const now = isoNow();
       const { rows } = await pool.query(
-        `INSERT INTO screens (location_id, name, resolution, status, active, template_id, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $7) RETURNING id`,
-        [location_id, name, resolution, status, active, template_id, now]
+        `INSERT INTO screens (location_id, name, resolution, status, active, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $6) RETURNING id`,
+        [location_id, name, resolution, status, active, now]
       );
       const id = Number(rows[0].id);
       await pool.query('UPDATE screens SET delivery_filename = $1 WHERE id = $2', [`monitor-${id}.jpg`, id]);
@@ -55,11 +66,11 @@ export function createScreensRepository(pool) {
       return getScreen(id);
     },
 
-    async updateScreen(id, { location_id, name, resolution = '1920×1080', status = 'draft', active = true, template_id = null }) {
+    async updateScreen(id, { location_id, name, resolution = '1920×1080', status = 'draft', active = true }) {
       const { rowCount } = await pool.query(
         `UPDATE screens SET location_id = $1, name = $2, resolution = $3, status = $4,
-         active = $5, template_id = $6, updated_at = $7 WHERE id = $8`,
-        [location_id, name, resolution, status, active, template_id, isoNow(), id]
+         active = $5, updated_at = $6 WHERE id = $7`,
+        [location_id, name, resolution, status, active, isoNow(), id]
       );
       return rowCount ? getScreen(id) : null;
     },
@@ -178,6 +189,12 @@ export function createScreensRepository(pool) {
         [now, screenId]
       );
       return normaliseDraft(saved, screenId);
+    },
+
+    async isScreenBackgroundReferenced(url) {
+      if (!url) return false;
+      const { rows } = await pool.query('SELECT settings_json FROM screen_drafts');
+      return rows.some((row) => jsonValue(row.settings_json, {}).background_image_url === url);
     },
 
     async screensUsingCatalog(kind, catalogId) {

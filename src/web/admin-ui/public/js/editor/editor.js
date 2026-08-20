@@ -8,31 +8,18 @@ import { createEditorHistory } from './history.js';
 import { normaliseEditorSettings } from './settings.js';
 import { appendRow, renderRows } from './rows.js';
 import { bindScreenProperties, bindSettingsProperties, readEditorSettings, readScreenProperties, syncDeliveryControls, writeEditorSettings, writeScreenProperties } from './properties.js';
-import { applySelectedTemplate, populateTemplateSelect } from './templates.js';
 import { renderPreview } from './preview.js';
 import { serializeDraft } from './serializer.js';
 import { renderFinalJpeg } from './final-image.js';
 
 const EDITOR_LOADING_CONTROLS = Object.freeze([
-  'editor-name',
-  'editor-resolution',
-  'editor-status',
-  'editor-active',
-  'editor-template',
-  'editor-template-apply',
-  'editor-background-color',
-  'editor-accent-color',
-  'editor-text-color',
-  'editor-font-scale',
-  'editor-font-scale-number',
-  'editor-font-family',
-  'editor-add-section',
-  'editor-add-item',
-  'editor-add-packaging',
-  'editor-source-file',
-  'editor-upload',
-  'editor-publish',
-  'editor-save'
+  'editor-name', 'editor-resolution', 'editor-status', 'editor-active',
+  'editor-background-color', 'editor-accent-color', 'editor-text-color',
+  'editor-font-scale', 'editor-font-scale-number', 'editor-font-family',
+  'editor-table-x', 'editor-table-y', 'editor-table-width', 'editor-table-height',
+  'editor-background-file', 'editor-background-upload', 'editor-background-remove',
+  'editor-add-section', 'editor-add-item', 'editor-add-packaging',
+  'editor-source-file', 'editor-upload', 'editor-publish', 'editor-save'
 ]);
 
 function editorScreenId() {
@@ -52,19 +39,16 @@ function setEditorLoading(form, loading) {
   });
 }
 
-function populateEditor(screen, templates, editorState) {
+function populateEditor(screen, editorState) {
   writeScreenProperties(screen);
   writeEditorSettings(editorState.settings);
-  populateTemplateSelect(templates, editorState);
   syncDeliveryControls(screen, editorState);
 }
 
 function setDirtyState(editorState) {
   const target = element('editor-dirty-state');
   if (!target) return;
-  target.textContent = editorState.dirty
-    ? 'Есть несохранённые изменения. Публикация заблокирована до сохранения.'
-    : 'Все изменения сохранены.';
+  target.textContent = editorState.dirty ? 'Не сохранено' : 'Сохранено';
   target.classList.toggle('is-dirty', editorState.dirty);
 }
 
@@ -78,8 +62,8 @@ function setFontScaleState(preview) {
     return;
   }
   target.textContent = vertical.autoReduced
-    ? `Задано ${vertical.requestedPercent}%, автоматически применено ${vertical.effectivePercent}% для вмещения всех строк.`
-    : `Фактически: ${vertical.effectivePercent}%. Автоматическое уменьшение не требуется.`;
+    ? `Задано ${vertical.requestedPercent}%, применено ${vertical.effectivePercent}% для вмещения.`
+    : `Фактически ${vertical.effectivePercent}%.`;
   target.classList.toggle('is-auto-reduced', vertical.autoReduced);
 }
 
@@ -94,7 +78,7 @@ function setLayoutWarning(preview, screen) {
   const overflowing = preview?.layout?.vertical?.fits === false;
   target.classList.toggle('is-hidden', !overflowing);
   target.textContent = overflowing
-    ? `Меню не помещается в ${screen?.resolution || 'текущее разрешение'} даже при минимальном автоматическом масштабе. Сократите количество строк.`
+    ? `Таблица не помещается в заданную высоту на ${screen?.resolution || 'экране'}. Увеличьте высоту области или сократите строки.`
     : '';
 }
 
@@ -109,7 +93,6 @@ export function initialiseScreenEditor() {
   const editorState = createEditorState();
   const history = createEditorHistory(editorState);
   let screen = null;
-  let templates = [];
   let products = [];
   let packaging = [];
 
@@ -147,20 +130,18 @@ export function initialiseScreenEditor() {
   const load = async () => {
     const editor = await api.get(`${API.screens}/${screenId}/editor`);
     screen = editor.screen;
-    templates = editor.templates;
     products = editor.products;
     packaging = editor.packaging;
     replaceEditorState(editorState, {
       screen,
       rows: Array.isArray(editor.draft?.rows) ? editor.draft.rows : [],
       settings: normaliseEditorSettings(editor.draft?.settings || {}),
-      templateId: screen.template_id || null,
       dirty: false,
       revision: 0,
       draftRevision: Number(editor.draft?.revision || 0)
     });
     history.clear();
-    populateEditor(screen, templates, editorState);
+    populateEditor(screen, editorState);
     refreshRows();
     setEditorLoading(form, false);
     refreshEditorView();
@@ -172,12 +153,6 @@ export function initialiseScreenEditor() {
   element('editor-add-section')?.addEventListener('click', () => { history.checkpoint(); appendRow(editorState, 'section'); refreshRows(); refreshEditorView(); });
   element('editor-add-item')?.addEventListener('click', () => { history.checkpoint(); appendRow(editorState, 'item'); refreshRows(); refreshEditorView(); });
   element('editor-add-packaging')?.addEventListener('click', () => { history.checkpoint(); appendRow(editorState, 'packaging'); refreshRows(); refreshEditorView(); });
-  element('editor-template-apply')?.addEventListener('click', () => {
-    applySelectedTemplate(editorState, templates, {
-      checkpoint: history.checkpoint,
-      onApplied: () => { refreshRows(); refreshEditorView(); }
-    });
-  });
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -185,24 +160,18 @@ export function initialiseScreenEditor() {
     setPending(submit, true, 'Сохраняем…');
     try {
       updateSettings(editorState, readEditorSettings(editorState.settings));
-      const screenPayload = {
-        ...readScreenProperties(editorState.screen || screen),
-        template_id: editorState.templateId
-      };
+      const screenPayload = readScreenProperties(editorState.screen || screen);
       const preview = refreshPreview(screenPayload);
       setLayoutWarning(preview, screenPayload);
       setFontScaleState(preview);
       if (preview?.invalidResolution) throw new Error('Укажите разрешение в формате 1920×1080.');
-      if (!preview?.layout?.vertical?.fits) {
-        throw new Error(`Меню не помещается в ${screenPayload.resolution} даже при минимальном автоматическом масштабе. Сократите количество строк.`);
-      }
+      if (!preview?.layout?.vertical?.fits) throw new Error('Таблица не помещается в заданную область. Измените высоту, масштаб или количество строк.');
 
       const saved = await api.put(`${API.screens}/${screenId}/draft`, serializeDraft(editorState, screenPayload));
       replaceEditorState(editorState, {
         screen: saved.screen,
         rows: saved.draft.rows || [],
         settings: normaliseEditorSettings(saved.draft.settings || {}),
-        templateId: saved.screen.template_id || null,
         dirty: false,
         revision: editorState.revision,
         draftRevision: Number(saved.draft.revision || 0)
@@ -222,12 +191,12 @@ export function initialiseScreenEditor() {
         jpegError = error;
       }
 
-      populateEditor(screen, templates, editorState);
+      populateEditor(screen, editorState);
       refreshRows();
       refreshEditorView();
       await loadNotifications();
-      if (jpegPrepared) setEditorMessage('Монитор и меню сохранены. JPEG автоматически собран и подготовлен к публикации.', 'success');
-      else setEditorMessage(`Меню сохранено, но автоматическая сборка JPEG не завершена: ${jpegError?.message || 'неизвестная ошибка'}. Можно использовать ручную загрузку JPEG после проверки.`, 'error');
+      if (jpegPrepared) setEditorMessage('Сохранено. JPEG собран и готов к публикации.', 'success');
+      else setEditorMessage(`Меню сохранено, но JPEG не собран: ${jpegError?.message || 'неизвестная ошибка'}.`, 'error');
     } catch (error) {
       setEditorMessage(error.message);
     } finally {
@@ -235,8 +204,63 @@ export function initialiseScreenEditor() {
     }
   });
 
+  element('editor-background-upload')?.addEventListener('click', async () => {
+    if (editorState.dirty) return setEditorMessage('Сначала сохраните текущие изменения, затем загрузите фон.');
+    const file = element('editor-background-file')?.files?.[0];
+    if (!file) return setEditorMessage('Выберите PNG, JPEG или WebP до 20 МБ.');
+    const button = element('editor-background-upload');
+    setPending(button, true, 'Загружаем…');
+    try {
+      const result = await api.put(`${API.screens}/${screenId}/background`, file, {
+        headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-Draft-Revision': String(editorState.draftRevision) }
+      });
+      screen = result.screen;
+      replaceEditorState(editorState, {
+        screen,
+        rows: result.draft.rows || [],
+        settings: normaliseEditorSettings(result.draft.settings || {}),
+        dirty: false,
+        revision: editorState.revision,
+        draftRevision: Number(result.draft.revision || 0)
+      });
+      history.clear();
+      populateEditor(screen, editorState);
+      refreshEditorView();
+      setEditorMessage('Фон монитора загружен.', 'success');
+    } catch (error) {
+      setEditorMessage(error.message);
+    } finally {
+      setPending(button, false, 'Загружаем…');
+    }
+  });
+
+  element('editor-background-remove')?.addEventListener('click', async () => {
+    if (editorState.dirty) return setEditorMessage('Сначала сохраните текущие изменения.');
+    if (!editorState.settings.background_image_url) return;
+    try {
+      const result = await api.delete(`${API.screens}/${screenId}/background`, {
+        headers: { 'X-Draft-Revision': String(editorState.draftRevision) }
+      });
+      screen = result.screen;
+      replaceEditorState(editorState, {
+        screen,
+        rows: result.draft.rows || [],
+        settings: normaliseEditorSettings(result.draft.settings || {}),
+        dirty: false,
+        revision: editorState.revision,
+        draftRevision: Number(result.draft.revision || 0)
+      });
+      history.clear();
+      populateEditor(screen, editorState);
+      refreshEditorView();
+      setEditorMessage('Фон удалён.', 'success');
+    } catch (error) {
+      setEditorMessage(error.message);
+    }
+  });
+
   element('editor-upload')?.addEventListener('click', async () => {
-    if (editorState.dirty) return setEditorMessage('Сначала сохраните изменения меню. Ручной JPEG должен соответствовать сохранённой версии.');
+    if (editorState.dirty) return setEditorMessage('Сначала сохраните изменения меню.');
     const file = element('editor-source-file')?.files?.[0];
     if (!file) return setEditorMessage('Выберите JPEG-файл меню.');
     const button = element('editor-upload');
@@ -244,9 +268,9 @@ export function initialiseScreenEditor() {
     try {
       screen = await api.put(`${API.screens}/${screenId}/source`, file, { headers: { 'Content-Type': 'image/jpeg' } });
       editorState.screen = structuredClone(screen);
-      populateEditor(screen, templates, editorState);
+      populateEditor(screen, editorState);
       refreshEditorView();
-      setEditorMessage('JPEG подготовлен. После проверки опубликуйте его на телевизор.', 'success');
+      setEditorMessage('JPEG подготовлен к публикации.', 'success');
       await loadNotifications();
     } catch (error) {
       setEditorMessage(error.message);
@@ -256,15 +280,15 @@ export function initialiseScreenEditor() {
   });
 
   element('editor-publish')?.addEventListener('click', async () => {
-    if (editorState.dirty) return setEditorMessage('Сначала сохраните изменения. Нельзя публиковать JPEG от предыдущей версии меню.');
+    if (editorState.dirty) return setEditorMessage('Сначала сохраните изменения.');
     const button = element('editor-publish');
     setPending(button, true, 'Публикуем…');
     try {
       screen = await api.post(`${API.screens}/${screenId}/publish`);
       editorState.screen = structuredClone(screen);
-      populateEditor(screen, templates, editorState);
+      populateEditor(screen, editorState);
       refreshEditorView();
-      setEditorMessage('JPEG опубликован в папке SFTP торговой точки.', 'success');
+      setEditorMessage('JPEG опубликован в SFTP-папке торговой точки.', 'success');
       await loadNotifications();
     } catch (error) {
       setEditorMessage(error.message);

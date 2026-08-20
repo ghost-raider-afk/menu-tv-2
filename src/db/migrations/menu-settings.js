@@ -12,25 +12,26 @@ function migrateSettings(raw) {
     next.font_scale_percent = LEGACY_FONT_SCALE[next.font_scale] || 100;
     changed = true;
   }
-  for (const key of ['font_scale', 'table_width', 'title']) {
+  for (const key of ['font_scale', 'title']) {
     if (Object.hasOwn(next, key)) {
       delete next[key];
       changed = true;
     }
   }
+  if (Object.hasOwn(next, 'table_width') && !Object.hasOwn(next, 'table_width_px')) {
+    const width = Number(next.table_width);
+    if (Number.isFinite(width) && width > 0) next.table_width_px = Math.round(width);
+    delete next.table_width;
+    changed = true;
+  }
   return changed ? JSON.stringify(next) : null;
 }
 
-async function migrateTable(pool, table, idColumn) {
-  const result = await pool.query(`SELECT ${idColumn} AS id, settings_json FROM ${table}`);
+export async function migrateLegacyMenuSettings(pool) {
+  const result = await pool.query('SELECT screen_id, settings_json FROM screen_drafts');
   for (const row of result.rows) {
     const settingsJson = migrateSettings(row.settings_json);
     if (settingsJson === null) continue;
-    await pool.query(`UPDATE ${table} SET settings_json = $1 WHERE ${idColumn} = $2`, [settingsJson, row.id]);
+    await pool.query('UPDATE screen_drafts SET settings_json = $1 WHERE screen_id = $2', [settingsJson, row.screen_id]);
   }
-}
-
-export async function migrateLegacyMenuSettings(pool) {
-  await migrateTable(pool, 'templates', 'id');
-  await migrateTable(pool, 'screen_drafts', 'screen_id');
 }

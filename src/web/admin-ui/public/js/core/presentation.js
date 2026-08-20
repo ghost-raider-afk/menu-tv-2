@@ -25,11 +25,7 @@ function mix(source, target, amount) {
   const left = rgb(source);
   const right = rgb(target);
   if (!left || !right) return source;
-  return hex({
-    r: left.r + (right.r - left.r) * amount,
-    g: left.g + (right.g - left.g) * amount,
-    b: left.b + (right.b - left.b) * amount
-  });
+  return hex({ r: left.r + (right.r - left.r) * amount, g: left.g + (right.g - left.g) * amount, b: left.b + (right.b - left.b) * amount });
 }
 
 function luminance(value) {
@@ -78,11 +74,20 @@ function applyAccentColor(accent) {
   root.style.setProperty('--ui-accent-on-dark', accessibleAccentText(accent, '#151D29', '#FFFFFF'));
 }
 
+function formatByteLimit(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes <= 0) return 'Лимит загрузки задаётся сервером.';
+  const mebibytes = bytes / (1024 * 1024);
+  return `PNG, JPEG или WebP · максимум ${Number.isInteger(mebibytes) ? mebibytes : mebibytes.toFixed(1)} МБ`;
+}
+
 export function applyPresentation(site) {
   if (!site) return;
   const name = site.app_name || site.application_name || 'ТВ МЕНЮ';
   document.title = name;
+  document.documentElement.dataset.signinLogoSize = String(Math.max(1, Math.min(7, Number(site.signin_logo_size) || 1)));
   document.querySelectorAll('[data-app-name]').forEach((node) => { node.textContent = name; });
+  document.querySelectorAll('[data-screen-background-limit]').forEach((node) => { node.textContent = formatByteLimit(site.screen_background_max_bytes); });
   if (site.accent_color) applyAccentColor(site.accent_color);
   document.querySelectorAll('.brand-mark').forEach((mark) => {
     mark.replaceChildren();
@@ -91,23 +96,13 @@ export function applyPresentation(site) {
   });
   let favicon = document.querySelector("link[rel='icon']");
   if (site.favicon_url) {
-    if (!favicon) {
-      favicon = document.createElement('link');
-      favicon.rel = 'icon';
-      document.head.append(favicon);
-    }
+    if (!favicon) { favicon = document.createElement('link'); favicon.rel = 'icon'; document.head.append(favicon); }
     favicon.href = site.favicon_url;
   } else if (favicon) favicon.remove();
   const logoPreview = document.querySelector('[data-logo-preview]');
-  if (logoPreview) {
-    logoPreview.src = site.logo_url || '';
-    logoPreview.classList.toggle('is-hidden', !site.logo_url);
-  }
+  if (logoPreview) { logoPreview.src = site.logo_url || ''; logoPreview.classList.toggle('is-hidden', !site.logo_url); }
   const faviconPreview = document.querySelector('[data-favicon-preview]');
-  if (faviconPreview) {
-    faviconPreview.src = site.favicon_url || '';
-    faviconPreview.classList.toggle('is-hidden', !site.favicon_url);
-  }
+  if (faviconPreview) { faviconPreview.src = site.favicon_url || ''; faviconPreview.classList.toggle('is-hidden', !site.favicon_url); }
 }
 
 export function currentTheme() {
@@ -116,9 +111,7 @@ export function currentTheme() {
 
 export function applyTheme(theme) {
   const requested = theme || 'system';
-  const actual = requested === 'system'
-    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-    : requested;
+  const actual = requested === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : requested;
   document.documentElement.dataset.theme = actual;
   document.documentElement.dataset.themePreference = requested;
   if (state.site?.accent_color) applyAccentColor(state.site.accent_color);
@@ -134,13 +127,8 @@ export function formatDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   const timezone = state.site?.timezone || undefined;
-  const parts = new Intl.DateTimeFormat('ru-RU', {
-    timeZone: timezone,
-    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-  }).formatToParts(date);
+  const parts = new Intl.DateTimeFormat('ru-RU', { timeZone: timezone, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).formatToParts(date);
   const valueFor = (type) => parts.find((part) => part.type === type)?.value || '';
-  const calendar = state.site?.date_format === 'YYYY-MM-DD'
-    ? `${valueFor('year')}-${valueFor('month')}-${valueFor('day')}`
-    : `${valueFor('day')}.${valueFor('month')}.${valueFor('year')}`;
+  const calendar = state.site?.date_format === 'YYYY-MM-DD' ? `${valueFor('year')}-${valueFor('month')}-${valueFor('day')}` : `${valueFor('day')}.${valueFor('month')}.${valueFor('year')}`;
   return `${calendar}, ${valueFor('hour')}:${valueFor('minute')}`;
 }

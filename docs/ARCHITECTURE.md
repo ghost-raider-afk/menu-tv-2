@@ -1,311 +1,249 @@
-# ТВ МЕНЮ 2 — утверждённая архитектура
+# Архитектура TV Menu 2.0 — 1.2.0
 
-Этот документ описывает фактическую структуру проекта. ТВ МЕНЮ 1 используется как визуальный и пользовательский эталон frontend; его рабочий код не изменяется. ТВ МЕНЮ 2 использует модульный frontend/backend, PostgreSQL, Docker Compose и SFTPGo.
+## 1. Доменная модель
 
-## Базовые правила
-
-1. `.env` — единственный источник настраиваемых лимитов, размеров, таймаутов, security- и инфраструктурных параметров.
-2. Frontend: `API -> state -> render -> UI`. DOM не является источником бизнес-состояния.
-3. Backend: `HTTP -> service -> repository/integration`.
-4. HTTP-слой не содержит SQL; PostgreSQL-слой не знает об HTTP.
-5. Редактор меню — отдельное ядро frontend.
-6. Preview и конечный JPEG получают данные из одной render model.
-7. Применение шаблона меняет только локальный Editor State; запись в PostgreSQL выполняется обычным сохранением.
-8. Frontend имеет один shell и один CSS-entrypoint. Legacy/compatibility frontend отсутствует.
-9. Fresh install создаёт чистую PostgreSQL. Перенос старых данных выполняется только при обновлении существующей установки.
-
-## Стек
-
-- Node.js 24+
-- Express 5
-- PostgreSQL 17
-- `pg`
-- native ES Modules
-- HTML / CSS / JavaScript
-- Docker Compose
-- Traefik
-- SFTPGo
-
-# Frontend
+Runtime-модель приложения намеренно упрощена до одной цепочки:
 
 ```text
-src/web/admin-ui/public/
-├── index.html
-├── locations.html
-├── screens.html
-├── screen-editor.html
-├── catalog.html
-├── templates.html
-├── settings.html
-├── profile.html
-├── signin.html
-├── app.js
-├── theme-bootstrap.js
-│
-├── css/
-│   ├── index.css
-│   ├── tokens.css
-│   ├── base.css
-│   ├── shell.css
-│   ├── components.css
-│   ├── forms.css
-│   ├── tables.css
-│   ├── pages/
-│   │   ├── dashboard.css
-│   │   ├── locations.css
-│   │   ├── screens.css
-│   │   ├── catalog.css
-│   │   ├── templates.css
-│   │   └── settings.css
-│   ├── editor/
-│   │   └── editor.css
-│   └── auth/
-│       └── signin.css
-│
-└── js/
-    ├── application.js
-    ├── core/
-    │   ├── api.js
-    │   ├── config.js
-    │   ├── state.js
-    │   ├── session.js
-    │   ├── events.js
-    │   ├── navigation.js
-    │   ├── notifications.js
-    │   ├── presentation.js
-    │   └── dom.js
-    ├── components/
-    │   ├── shell.js
-    │   ├── sidebar.js
-    │   ├── context-panel.js
-    │   ├── header.js
-    │   ├── notifications.js
-    │   ├── dialogs.js
-    │   └── icons.js
-    ├── pages/
-    │   ├── dashboard.js
-    │   ├── locations.js
-    │   ├── screens.js
-    │   ├── catalog.js
-    │   ├── templates.js
-    │   ├── settings.js
-    │   ├── profile.js
-    │   └── signin.js
-    └── editor/
-        ├── editor.js
-        ├── state.js
-        ├── commands.js
-        ├── history.js
-        ├── rows.js
-        ├── properties.js
-        ├── templates.js
-        ├── settings.js
-        ├── renderer.js
-        ├── preview.js
-        ├── final-image.js
-        └── serializer.js
+Location
+└── Screen
+    ├── ScreenDraft
+    │   ├── rows
+    │   └── settings
+    └── Publication state
 ```
 
-HTML содержит только содержимое страниц и рабочие формы. Sidebar, context panel, header, профиль и уведомления создаются общими компонентами.
+### Location
 
-`css/index.css` — единственный CSS-entrypoint. Старых `style.css`, `css/tv1`, временных compatibility-стилей и старого shell ТВ МЕНЮ2 в проекте нет.
+Торговая точка хранит собственные реквизиты и при необходимости SFTP-привязку. Удаление точки каскадно удаляет её мониторы и черновики, но SFTP-доступ перед удалением должен быть явно отключён.
 
-## Frontend core
+### Screen
 
-- `core/api.js` — единый HTTP-клиент.
-- `core/config.js` — frontend-конфигурация API.
-- `core/state.js` — состояние приложения.
-- `core/session.js` — авторизованный контекст.
-- `core/navigation.js` — единая модель разделов и маршрутов.
-- `core/notifications.js` — данные уведомлений.
-- `core/presentation.js` — тема, логотип, favicon, имя и accent.
-- `core/events.js` — слабосвязанные события.
-- `core/dom.js` — общие DOM helpers.
+`Screen` — самостоятельный монитор. Он хранит идентичность и состояние доставки:
+- `location_id`;
+- `name`;
+- `resolution`;
+- `status`;
+- `active`;
+- `delivery_filename`;
+- prepared/publishing/published SHA-256 и revision;
+- timestamps.
 
-## Components
+### ScreenDraft
 
-- `shell.js` — только сборка shell.
-- `sidebar.js` — основной rail.
-- `context-panel.js` — контекстное меню раздела.
-- `header.js` — верхняя панель, профиль, logout, theme toggle.
-- `notifications.js` — UI уведомлений.
-- `dialogs.js` — общие диалоги/confirm.
-- `icons.js` — общие SVG.
+`screen_drafts` — единственный источник редактируемого содержимого монитора:
+- `rows_json`;
+- `settings_json`;
+- `revision`;
+- `updated_at`.
 
-В разделе «Каталог» контекстное меню содержит `Продукция` и `Тара`.
+`revision` используется для optimistic locking. Сохранение с устаревшей revision отклоняется с конфликтом.
 
-# Редактор меню
+## 2. Настройки монитора
+
+`settings_json` содержит canonical presentation state:
 
 ```text
-UI
- |
- v
-commands / properties / templates / rows
- |
- v
+background_color
+background_image_url
+accent_color
+text_color
+font_scale_percent
+font_family
+table_x
+table_y
+table_width_px
+table_height_px
+```
+
+Renderer, preview и финальный JPEG используют эти же значения. Отдельного layout слоя для JPEG нет.
+
+Фоновое изображение хранится в:
+
+```text
+/site-assets/screens/background-<uuid>.<ext>
+```
+
+Разрешены PNG, JPEG и WebP. Максимальный размер берётся только из:
+
+```env
+SCREEN_BACKGROUND_MAX_BYTES
+```
+
+Релизное значение 1.2.0 — `20971520` байт.
+
+## 3. Отказ от отдельного слоя оформления
+
+В runtime нет отдельной сущности для переиспользуемого оформления. Оформление принадлежит монитору напрямую.
+
+Для обновления старых установок существует только одноразовая migration boundary:
+
+```text
+legacy assigned presentation
+        ↓ materialize
+screen_drafts.rows_json/settings_json
+        ↓
+drop obsolete foreign key/column/table
+```
+
+Этот compatibility-код не участвует в обычных API/UI операциях после старта обновлённой базы.
+
+## 4. Клонирование
+
+### Monitor clone
+
+Копируются:
+- rows;
+- settings;
+- resolution;
+- active state.
+
+Не копируются:
+- screen ID;
+- prepared asset;
+- publication pending state;
+- published SHA/revision/timestamp;
+- delivery filename identity.
+
+Новая запись получает собственную revision и lifecycle публикации.
+
+### Location clone
+
+Копируются:
+- name/address задаются пользователем для новой точки;
+- все мониторы;
+- rows/settings каждого монитора.
+
+Не копируются:
+- location ID;
+- SFTP directory binding;
+- SFTP username/password;
+- publication state мониторов.
+
+## 5. Frontend
+
+### Shell
+
+Постоянные модули:
+- `components/sidebar.js`;
+- `components/context-panel.js`;
+- `components/header.js`;
+- `components/shell.js`;
+- `core/navigation.js`.
+
+Компактная геометрия задаётся базовыми tokens, а не page-specific override слоями:
+- rail: 64 px;
+- context: 250 px;
+- control height: 32 px;
+- уменьшенные page/card gaps и paddings.
+
+### Monitor editor
+
+`screen-editor.html` построен вокруг sticky command bar:
+- Monitor;
+- Table;
+- Appearance;
+- Delivery;
+- Add row actions;
+- Save.
+
+Основное рабочее пространство ниже toolbar содержит только:
+- compact semantic row editor;
+- preview.
+
+Настройки не занимают постоянную правую колонку.
+
+## 6. Renderer
+
+Canonical renderer:
+
+```text
 Editor State
- |
- v
-Renderer
- |       |
- v       v
-Preview  Final JPEG
-             |
-             v
-          staging
-             |
-             v
-           SFTP
+   ↓
+buildRenderModel
+   ↓
+buildDisplayLines
+   ↓
+buildRenderLayout
+   ↓
+buildTableSvg
+   ├── browser preview
+   └── final JPEG canvas pipeline
 ```
 
-- `editor.js` — orchestration загрузки, сохранения, staging и публикации.
-- `state.js` — единый Editor State.
-- `commands.js` — add/delete/move/update/apply-template.
-- `history.js` — история снимков и основа Undo/Redo.
-- `rows.js` — `section/product/packaging`.
-- `properties.js` — параметры монитора и оформления.
-- `templates.js` — загрузка и локальное применение шаблонов.
-- `settings.js` — нормализация оформления.
-- `renderer.js` — единая render model.
-- `preview.js` — preview из render model.
-- `final-image.js` — JPEG из той же render model.
-- `serializer.js` — Editor State <-> API draft.
+TV Menu 1 reference defaults для 1920×1080:
+- table X = 56;
+- table Y = 15;
+- width = 1374;
+- height = 925.
 
-Editor State:
+Каждый монитор может менять эти значения. Цена остаётся правовыровненной внутри текущей ширины таблицы.
 
-```text
-screen
-rows
-settings
-selectedRowId
-templateId
-dirty
-revision
-```
+## 7. PostgreSQL
 
-# Backend
+Критичные свойства:
+- FK `screens.location_id → locations.id ON DELETE CASCADE`;
+- PK `screen_drafts.screen_id → screens.id ON DELETE CASCADE`;
+- unique `(location_id, name)`;
+- transaction wrapper для multi-step mutations;
+- optimistic locking по `screen_drafts.revision`.
 
-```text
-src/
-├── config/
-│   ├── index.js
-│   └── env.js
-├── contracts/
-├── shared/
-├── logger/
-├── api/
-│   ├── auth/
-│   ├── session/
-│   ├── overview/
-│   ├── settings/
-│   ├── notifications/
-│   ├── locations/
-│   ├── screens/
-│   ├── catalog/
-│   ├── templates/
-│   └── sftp/
-├── middleware/
-├── services/
-├── db/
-│   ├── index.js
-│   ├── pool.js
-│   ├── helpers.js
-│   ├── migrations/
-│   │   ├── schema.js
-│   │   └── seed.js
-│   ├── overview.js
-│   ├── users.js
-│   ├── locations.js
-│   ├── screens.js
-│   ├── catalog.js
-│   ├── templates.js
-│   ├── settings.js
-│   ├── notifications.js
-│   └── sftp.js
-├── sftp/
-│   ├── index.js
-│   ├── client.js
-│   ├── storage.js
-│   └── publisher.js
-└── server.js
-```
+## 8. JPEG consistency
 
-## Ответственность backend
+Prepared JPEG связан с:
+- asset key;
+- SHA-256;
+- byte size;
+- draft revision.
 
-- `config/` — чтение и проверка `.env`.
-- `contracts/` — входные структуры и domain/API-контракты.
-- `shared/` — независимые errors/ids/validation helpers.
-- `logger/` — структурированные runtime-логи.
-- `middleware/` — session, login limiter, error handling и HTTP middleware.
-- `api/` — только HTTP routes и формирование HTTP-ответов.
-- `services/` — бизнес-правила, публикация, SFTP access, password/session/site-assets.
-- `db/` — только PostgreSQL, migrations и repository-функции.
-- `db/index.js` — единый `MenuTvStore`, собирающий PostgreSQL repositories.
-- `sftp/` — SFTPGo client, filesystem staging и publisher.
-- `sftp/index.js` — композиция SFTP-сервиса.
-- `server.js` — только сборка приложения, middleware, routers и lifecycle.
+Изменение черновика инвалидирует prepared asset. Публикация проверяет SHA и revision перед внешней SFTP-операцией.
 
-Корневых `src/config.js`, `src/db.js` и `src/sftp.js` нет. Эти границы защищаются архитектурными тестами.
+## 9. SFTP publication
 
-# Основной поток
+Публикация выполняется через staging:
+1. validate/decode JPEG;
+2. stage file;
+3. record prepared SHA/revision;
+4. mark publication started inside DB transaction;
+5. atomically publish through SFTP service;
+6. finalize DB state;
+7. cleanup staging.
 
-```text
-Browser
-  |
-  v
-Frontend core/pages/editor
-  |
-  v
-HTTP API
-  |
-  v
-Services
-  |------------------|
-  v                  v
-MenuTvStore       SFTP service
-  |                  |
-  v                  v
-PostgreSQL       staging/SFTPGo
-                     |
-                     v
-                  TV JPEG
-```
+Startup reconciliation восстанавливает незавершённые операции. HTTP calls к SFTPGo ограничены timeout из `.env`.
 
-# Проверка качества
+## 10. Site settings
 
-Перед установкой на VPS обязательны:
+`site_settings` хранит:
+- application name;
+- accent;
+- logo/favicon names;
+- timezone/date format;
+- dashboard refresh;
+- default monitor resolution;
+- `signin_logo_size` от 1 до 7.
 
-```text
-npm ci
-npm run check
-docker compose config
-production Docker build
-docker compose up --wait
-healthz
-login
-create location
-create screen
-editor load
-frontend assets
-SFTP service check
-```
+Уровень `1` — минимальный исходный размер логотипа страницы входа.
 
-CI содержит два обязательных job:
+## 11. Runtime configuration
 
-- `node-check` — syntax, unit/integration и архитектурные guards.
-- `clean-install-smoke` — production image + чистые PostgreSQL/SFTPGo/app + основной runtime-сценарий.
+`.env` — единственный источник изменяемых runtime limits/security settings. В частности:
+- HTTP/body limits;
+- session/login limits;
+- password limits;
+- PostgreSQL pool/timeouts;
+- SFTP timeout/staging age;
+- screen resolution limits;
+- image pixel limits;
+- site asset limits;
+- monitor background limit.
 
-Главный пользовательский сценарий:
+Код не должен иметь второй production-default для значения, которое объявлено в `.env`.
 
-```text
-вход
--> торговая точка
--> каталог
--> монитор
--> редактор
--> шаблон
--> сохранить
--> автоматически собрать JPEG
--> опубликовать
--> проверить SFTP-файл
-```
+## 12. Release gates
+
+Merge разрешён только после:
+- `node-check`;
+- `clean-install-smoke`;
+- `browser-visual`.
+
+Browser checks обязаны тестировать реальные DOM/SVG метрики, а не только наличие CSS-строк.

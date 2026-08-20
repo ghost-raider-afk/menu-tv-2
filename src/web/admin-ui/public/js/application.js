@@ -29,10 +29,6 @@ async function initialisePage(name) {
       const { initialiseScreenEditor } = await import('./editor/editor.js');
       return initialiseScreenEditor();
     }
-    case 'templates': {
-      const { initialiseTemplates } = await import('./pages/templates.js');
-      return initialiseTemplates();
-    }
     case 'catalog': {
       const { initialiseCatalog } = await import('./pages/catalog.js');
       return initialiseCatalog();

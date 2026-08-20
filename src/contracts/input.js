@@ -49,18 +49,7 @@ export function screenInput(body, { defaultScreenResolution, maxWidth, maxHeight
     name: requireText(body.name, 'name'),
     resolution: resolutionInput(body.resolution ?? defaultScreenResolution, 'resolution', { maxWidth, maxHeight }),
     status,
-    active: body.active !== false,
-    template_id: body.template_id === undefined || body.template_id === null || body.template_id === '' ? null : positiveId(body.template_id, 'template_id')
-  };
-}
-
-export function templateInput(body) {
-  return {
-    name: requireText(body.name, 'name'),
-    description: optionalText(body.description, 'description', { max: 500 }),
-    active: body.active !== false,
-    rows: Array.isArray(body.rows) ? body.rows : [],
-    settings: body.settings && typeof body.settings === 'object' && !Array.isArray(body.settings) ? body.settings : {}
+    active: body.active !== false
   };
 }
 
@@ -175,6 +164,12 @@ export function userPreferencesInput(body) {
   };
 }
 
+function logoSize(value) {
+  const source = typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : '';
+  if (!/^[1-7]$/.test(source)) throw new ValidationError('Размер логотипа страницы входа должен быть от 1 до 7.');
+  return Number(source);
+}
+
 export function siteSettingsInput(body, config) {
   const application_name = requireText(body.application_name, 'application_name', { max: 80 });
   const accent_color = requireText(body.accent_color, 'accent_color', { max: 7 });
@@ -198,5 +193,13 @@ export function siteSettingsInput(body, config) {
     maxWidth: config.screenMaxWidth,
     maxHeight: config.screenMaxHeight
   });
-  return { application_name, accent_color: accent_color.toUpperCase(), timezone, date_format, dashboard_refresh_seconds, default_screen_resolution };
+  return {
+    application_name,
+    accent_color: accent_color.toUpperCase(),
+    timezone,
+    date_format,
+    dashboard_refresh_seconds,
+    default_screen_resolution,
+    signin_logo_size: logoSize(body.signin_logo_size ?? 1)
+  };
 }
