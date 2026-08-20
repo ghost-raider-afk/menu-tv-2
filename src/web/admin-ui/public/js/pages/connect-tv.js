@@ -15,6 +15,8 @@ const screenOptions = document.querySelector('[data-screen-options]');
 const authorizeButton = document.querySelector('[data-authorize]');
 const success = document.querySelector('[data-connect-success]');
 const successText = document.querySelector('[data-connect-success-text]');
+const bindingsList = document.querySelector('[data-device-bindings]');
+const refreshBindingsButton = document.querySelector('[data-refresh-bindings]');
 
 let activationId = null;
 let locations = [];
@@ -118,6 +120,72 @@ async function loadStructure() {
   ]);
 }
 
+function formatLastSeen(value) {
+  if (!value) return 'последняя связь ещё не зафиксирована';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'последняя связь неизвестна';
+  return `последняя связь: ${date.toLocaleString('ru-RU')}`;
+}
+
+function bindingRow(binding) {
+  const row = document.createElement('div');
+  row.className = 'connect-tv-binding';
+
+  const info = document.createElement('div');
+  const title = document.createElement('strong');
+  title.textContent = `${binding.location_name} → ${binding.screen_name}`;
+  const details = document.createElement('span');
+  details.textContent = `ТВ ${binding.location_number || binding.screen_id} · ${formatLastSeen(binding.session_last_seen_at || binding.last_seen_at)}`;
+  info.append(title, details);
+
+  const revokeButton = document.createElement('button');
+  revokeButton.type = 'button';
+  revokeButton.className = 'button button-secondary';
+  revokeButton.textContent = 'Отключить';
+  revokeButton.addEventListener('click', async () => {
+    const confirmed = window.confirm(`Отменить авторизацию телевизора для «${binding.screen_name}»?`);
+    if (!confirmed) return;
+    revokeButton.disabled = true;
+    setMessage('Отключаем телевизор…');
+    try {
+      await api.delete(`${API.deviceBindings}/${encodeURIComponent(binding.screen_id)}`);
+      setMessage(`Авторизация телевизора для «${binding.screen_name}» отменена.`);
+      await loadBindings();
+    } catch (error) {
+      setMessage(error.message || 'Не удалось отключить телевизор.', true);
+      revokeButton.disabled = false;
+    }
+  });
+
+  row.append(info, revokeButton);
+  return row;
+}
+
+async function loadBindings() {
+  if (!bindingsList) return;
+  refreshBindingsButton && (refreshBindingsButton.disabled = true);
+  try {
+    const bindings = await api.get(API.deviceBindings);
+    bindingsList.innerHTML = '';
+    if (!Array.isArray(bindings) || !bindings.length) {
+      const empty = document.createElement('p');
+      empty.className = 'connect-tv-bindings-empty';
+      empty.textContent = 'Авторизованных телевизоров пока нет.';
+      bindingsList.append(empty);
+      return;
+    }
+    bindings.forEach((binding) => bindingsList.append(bindingRow(binding)));
+  } catch (error) {
+    bindingsList.innerHTML = '';
+    const empty = document.createElement('p');
+    empty.className = 'connect-tv-bindings-empty';
+    empty.textContent = error.message || 'Не удалось загрузить подключённые телевизоры.';
+    bindingsList.append(empty);
+  } finally {
+    refreshBindingsButton && (refreshBindingsButton.disabled = false);
+  }
+}
+
 async function resolveActivation(payload) {
   resetSelection();
   setMessage('Проверяем код подключения…');
@@ -206,6 +274,7 @@ async function authorize() {
     success.classList.remove('is-hidden');
     setMessage('Подключение подтверждено.');
     activationId = null;
+    window.setTimeout(() => void loadBindings(), 2500);
   } catch (error) {
     setMessage(error.message || 'Не удалось авторизовать телевизор.', true);
     authorizeButton.disabled = false;
@@ -214,6 +283,7 @@ async function authorize() {
 
 export function initialiseConnectTv() {
   resetSelection();
+  void loadBindings();
   scanButton?.addEventListener('click', () => void startScanner());
   codeInput?.addEventListener('input', normalizeReserveCode);
   codeButton?.addEventListener('click', () => {
@@ -225,5 +295,6 @@ export function initialiseConnectTv() {
     void resolveActivation({ reserve_code: code });
   });
   authorizeButton?.addEventListener('click', () => void authorize());
+  refreshBindingsButton?.addEventListener('click', () => void loadBindings());
   window.addEventListener('pagehide', stopCamera, { once: true });
 }
