@@ -86,8 +86,8 @@ function sectionRow(editorState, row, index, refresh, onChange) {
   line.append(
     td('editor-menu-order', orderCell(index, 'Раздел')),
     titleCell,
-    td('editor-menu-price editor-menu-price-label', text(firstSection ? '1 л' : '—')),
-    td('editor-menu-price editor-menu-price-label', text(firstSection ? '1,5 л' : '—')),
+    td('editor-menu-price editor-menu-price-primary editor-menu-price-label', text(firstSection ? '1 л' : '—')),
+    td('editor-menu-price editor-menu-price-secondary editor-menu-price-label', text(firstSection ? '1,5 л' : '—')),
     td('editor-menu-actions', actionButtons(editorState, row, index, refresh))
   );
   return line;
@@ -150,8 +150,8 @@ function itemRow(editorState, row, index, products, refresh, onChange) {
     td('editor-menu-position', productSelect(row, products, refresh, editorState)),
     td('editor-menu-producer', text(databaseMetadata(product), product ? 'editor-product-database-meta' : 'editor-muted')),
     td('editor-menu-details', promotionEditor(editorState, row, onChange)),
-    td('editor-menu-price', text(product?.price_primary ? price(product.price_primary) : '—')),
-    td('editor-menu-price', text(product?.price_secondary ? price(product.price_secondary) : '—')),
+    td('editor-menu-price editor-menu-price-primary', text(product?.price_primary ? price(product.price_primary) : '—')),
+    td('editor-menu-price editor-menu-price-secondary', text(product?.price_secondary ? price(product.price_secondary) : '—')),
     td('editor-menu-actions', actionButtons(editorState, row, index, refresh))
   );
   return line;
@@ -180,8 +180,8 @@ function packagingRow(editorState, row, index, packaging, refresh) {
     td('editor-menu-position', select),
     td('editor-menu-producer', text('Цена за единицу тары', 'editor-muted')),
     td('editor-menu-details', text('—', 'editor-muted')),
-    td('editor-menu-price', text(selected?.unit_price ? `${price(selected.unit_price)} / шт.` : '—')),
-    td('editor-menu-price', text('—', 'editor-muted')),
+    td('editor-menu-price editor-menu-price-primary', text(selected?.unit_price ? `${price(selected.unit_price)} / шт.` : '—')),
+    td('editor-menu-price editor-menu-price-secondary', text('—', 'editor-muted')),
     td('editor-menu-actions', actionButtons(editorState, row, index, refresh))
   );
   return line;
