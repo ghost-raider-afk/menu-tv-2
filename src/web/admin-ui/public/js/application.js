@@ -24,6 +24,10 @@ async function initialisePage(name) {
       const { initialiseSettings } = await import('./pages/settings.js');
       return initialiseSettings();
     }
+    case 'sftp-settings': {
+      const { initialiseSftpSettings } = await import('./pages/sftp-settings.js');
+      return initialiseSftpSettings();
+    }
     case 'animation': {
       const { initialiseAnimationStudio } = await import('./pages/animation.js');
       return initialiseAnimationStudio();
