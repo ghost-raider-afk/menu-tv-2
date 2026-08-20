@@ -15,14 +15,16 @@ function markMotionTargets(stage) {
   stage.querySelectorAll('text.price, text.packaging-price').forEach((node) => { node.dataset.motion = 'price'; });
 }
 
-function backgroundStyle(layer, model, palette) {
+function backgroundStyle(layer, model, palette, overrideUrl = null) {
+  if (!layer) return;
+  const backgroundUrl = overrideUrl === null ? model.settings.background_image_url : overrideUrl;
   layer.style.backgroundColor = palette.background;
-  layer.style.backgroundImage = model.settings.background_image_url ? `url("${model.settings.background_image_url}")` : '';
+  layer.style.backgroundImage = backgroundUrl ? `url(${JSON.stringify(backgroundUrl)})` : '';
   layer.style.backgroundSize = 'cover';
   layer.style.backgroundPosition = 'center';
 }
 
-export function renderAnimationScreenPreview(stage, bundle) {
+export function renderAnimationScreenPreview(stage, bundle, { fallbackTitle = 'Новый раздел', backgroundUrl = null } = {}) {
   if (!stage) return null;
   const screen = bundle?.screen;
   const draft = bundle?.draft || { rows: [], settings: {} };
@@ -44,7 +46,7 @@ export function renderAnimationScreenPreview(stage, bundle) {
   const lines = buildDisplayLines(model, {
     products: bundle?.products || [],
     packaging: bundle?.packaging || [],
-    fallbackTitle: 'Новый раздел'
+    fallbackTitle
   });
   const layout = buildRenderLayout(model, lines);
 
@@ -58,7 +60,7 @@ export function renderAnimationScreenPreview(stage, bundle) {
     <div class="animation-screen-vignette" aria-hidden="true"></div>
     <div class="animation-screen-shimmer" aria-hidden="true"></div>`;
 
-  backgroundStyle(stage.querySelector('.animation-screen-background'), model, layout.palette);
+  backgroundStyle(stage.querySelector('.animation-screen-background'), model, layout.palette, backgroundUrl);
   applyTypography(stage, layout);
   markMotionTargets(stage);
 
