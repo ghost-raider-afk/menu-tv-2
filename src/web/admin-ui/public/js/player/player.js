@@ -6,6 +6,7 @@ import {
 } from '../editor/renderer.js';
 
 const ACTIVATION_STORAGE_KEY = 'tv-menu.device-activation';
+const PLAYER_CONTEXT_STORAGE_KEY = 'tv-menu.player-context.v1';
 const activationView = document.querySelector('[data-activation-view]');
 const showActivationButton = document.querySelector('[data-show-activation]');
 const pairing = document.querySelector('[data-activation-pairing]');
@@ -41,6 +42,28 @@ function saveActivation(record) {
 
 function clearActivation() {
   try { sessionStorage.removeItem(ACTIVATION_STORAGE_KEY); } catch {}
+}
+
+function cachedPlayerContext() {
+  try {
+    const record = JSON.parse(localStorage.getItem(PLAYER_CONTEXT_STORAGE_KEY) || 'null');
+    return record?.context ? record : null;
+  } catch {
+    return null;
+  }
+}
+
+function savePlayerContext(context) {
+  try {
+    localStorage.setItem(PLAYER_CONTEXT_STORAGE_KEY, JSON.stringify({
+      saved_at: new Date().toISOString(),
+      context
+    }));
+  } catch {}
+}
+
+function clearPlayerContext() {
+  try { localStorage.removeItem(PLAYER_CONTEXT_STORAGE_KEY); } catch {}
 }
 
 function formatReserveCode(value) {
@@ -167,6 +190,12 @@ function sameOriginAsset(value) {
   }
 }
 
+async function warmPlayerAssetCache(context) {
+  const background = sameOriginAsset(context?.draft?.settings?.background_image_url);
+  if (!background) return;
+  await fetch(background, { cache: 'reload' }).catch(() => undefined);
+}
+
 function renderPlayerContext(context) {
   const viewport = resolutionOf(context.screen);
   const model = buildRenderModel(context.draft, viewport);
@@ -198,23 +227,57 @@ function schedulePlayerRefresh() {
   refreshTimer = setTimeout(() => void refreshPlayer(), playerRefreshMs);
 }
 
+async function fetchPlayerContext(timeoutMs = 5000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch('/api/device/player-context', { cache: 'no-store', signal: controller.signal });
+    if (response.status === 401) {
+      clearPlayerContext();
+      return { unauthorized: true };
+    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const context = await response.json();
+    savePlayerContext(context);
+    void warmPlayerAssetCache(context);
+    return {
+      context,
+      offline: response.headers.get('x-tv-menu-offline') === '1'
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function showCachedPlayer(record, message = 'Нет связи с сервером. ТВ работает по последней сохранённой версии меню.') {
+  if (!record?.context) return false;
+  renderPlayerContext(record.context);
+  setHidden(activationView, true);
+  setHidden(player, false);
+  showConnectionMessage(message);
+  void requestWakeLock();
+  schedulePlayerRefresh();
+  return true;
+}
+
 async function refreshPlayer() {
   try {
-    const response = await fetch('/api/device/player-context', { cache: 'no-store' });
-    if (response.status === 401) {
+    const result = await fetchPlayerContext();
+    if (result.unauthorized) {
       clearActivation();
       showActivationScreen();
       setHidden(pairing, true);
       showActivationButton.textContent = 'Показать QR-код';
       return;
     }
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const context = await response.json();
-    renderPlayerContext(context);
-    showConnectionMessage('');
+    renderPlayerContext(result.context);
+    showConnectionMessage(result.offline ? 'Нет связи с сервером. ТВ работает по последней сохранённой версии меню.' : '');
   } catch (error) {
     console.error('TV player refresh failed', error);
-    showConnectionMessage('Связь с сервером временно потеряна. Показывается последнее сохранённое меню.');
+    if (!showCachedPlayer(cachedPlayerContext())) {
+      showConnectionMessage('Связь с сервером временно потеряна.');
+    }
+    return;
   }
   schedulePlayerRefresh();
 }
@@ -223,24 +286,34 @@ async function loadPlayer() {
   if (pollTimer) clearTimeout(pollTimer);
   pollTimer = null;
   try {
-    const response = await fetch('/api/device/player-context', { cache: 'no-store' });
-    if (response.status === 401) {
+    const result = await fetchPlayerContext();
+    if (result.unauthorized) {
       showActivationScreen();
       return false;
     }
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const context = await response.json();
-    renderPlayerContext(context);
+    renderPlayerContext(result.context);
     setHidden(activationView, true);
     setHidden(player, false);
-    showConnectionMessage('');
+    showConnectionMessage(result.offline ? 'Нет связи с сервером. ТВ работает по последней сохранённой версии меню.' : '');
     await requestWakeLock();
     schedulePlayerRefresh();
     return true;
   } catch (error) {
-    console.error('TV player could not start', error);
+    console.error('TV player could not start online', error);
+    const cached = cachedPlayerContext();
+    if (showCachedPlayer(cached)) return true;
     showActivationScreen();
     return false;
+  }
+}
+
+async function registerOfflinePlayer() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    await navigator.serviceWorker.register('/player-sw.js', { scope: '/' });
+    await navigator.serviceWorker.ready;
+  } catch (error) {
+    console.warn('Offline TV player service worker could not start', error);
   }
 }
 
@@ -250,13 +323,18 @@ async function initialisePlayer() {
     if (document.visibilityState === 'visible') void requestWakeLock();
   });
 
+  await registerOfflinePlayer();
+
   try {
     const response = await fetch('/api/device/session', { cache: 'no-store' });
     if (response.ok) {
       await loadPlayer();
       return;
     }
-  } catch {}
+    if (response.status === 401) clearPlayerContext();
+  } catch {
+    if (showCachedPlayer(cachedPlayerContext())) return;
+  }
 
   const pending = activationFromStorage();
   if (pending) {
