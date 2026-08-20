@@ -14,17 +14,22 @@ function savedCollapsedState() {
   catch { return false; }
 }
 
+function initialCollapsedState() {
+  if (window.matchMedia?.('(max-width: 720px)').matches) return true;
+  return savedCollapsedState();
+}
+
 function wireContext(shell, rail, context, header) {
-  if (savedCollapsedState()) setCollapsed(shell, context, true);
+  if (initialCollapsedState()) setCollapsed(shell, context, true);
   context.querySelector('.ui-context-close')?.addEventListener('click', () => setCollapsed(shell, context, true));
   rail.querySelectorAll('.ui-rail-button').forEach((link) => {
     link.addEventListener('pointerenter', () => {
-      if (link.classList.contains('active')) setCollapsed(shell, context, false);
+      if (window.innerWidth > 720 && link.classList.contains('active')) setCollapsed(shell, context, false);
     }, { passive: true });
     link.addEventListener('click', () => setCollapsed(shell, context, false));
   });
   context.addEventListener('pointerleave', () => {
-    if (document.body.dataset.uiSection === 'monitors') setCollapsed(shell, context, true);
+    if (window.innerWidth > 720 && document.body.dataset.uiSection === 'monitors') setCollapsed(shell, context, true);
   }, { passive: true });
   shell.querySelector('.main-content')?.addEventListener('pointerdown', () => {
     if (window.innerWidth <= 1180) setCollapsed(shell, context, true);
@@ -32,6 +37,9 @@ function wireContext(shell, rail, context, header) {
   header.addEventListener('pointerdown', () => {
     if (window.innerWidth <= 1180 && !context.classList.contains('is-collapsed')) setCollapsed(shell, context, true);
   }, { capture: true, passive: true });
+  window.addEventListener('resize', () => {
+    if (window.innerWidth <= 720) setCollapsed(shell, context, true);
+  }, { passive: true });
   window.addEventListener('hashchange', () => refreshContextActive(context));
 }
 
