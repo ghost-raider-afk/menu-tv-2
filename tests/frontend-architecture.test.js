@@ -36,15 +36,23 @@ test('CSS architecture is compact and has one permanent entrypoint', async () =>
   assert.match(tokens, /--ui-control-height:32px/);
 });
 
-test('shell remains modular after compact redesign', async () => {
+test('shell remains modular and catalog submenu has one product entry', async () => {
   const [shell, navigation] = await Promise.all([read('js/components/shell.js'), read('js/core/navigation.js')]);
   assert.match(shell, /createSidebar/);
   assert.match(shell, /createContextPanel/);
   assert.match(shell, /createHeader/);
   assert.doesNotMatch(shell, /legacy|\.sidebar|\.topbar/i);
-  assert.match(navigation, /Продукция/);
-  assert.match(navigation, /Тара/);
+  assert.match(navigation, /catalog:\s*Object\.freeze\(\[\['Продукция', '\/catalog\.html'\]\]\)/);
+  assert.doesNotMatch(navigation, /#packaging|\['Тара'/);
   assert.doesNotMatch(navigation, /Шаблоны/);
+});
+
+test('authenticated page bootstrap uses one context API request', async () => {
+  const [session, config] = await Promise.all([read('js/core/session.js'), read('js/core/config.js')]);
+  assert.match(config, /sessionContext:\s*'\/api\/session\/context'/);
+  assert.match(session, /api\.get\(API\.sessionContext\)/);
+  assert.equal((session.match(/api\.get\(/g) || []).length, 1);
+  assert.doesNotMatch(session, /API\.userSettings|API\.siteSettings|Promise\.all/);
 });
 
 test('monitor editor owns one left-aligned exclusive command bar and one canonical renderer', async () => {
