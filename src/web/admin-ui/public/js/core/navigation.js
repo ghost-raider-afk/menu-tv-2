@@ -28,7 +28,7 @@ export const PREFETCH_ROUTE_PATHS = Object.freeze(ROUTE_DEFINITIONS.filter((rout
 const CONTEXT_LINKS = Object.freeze({
   overview: Object.freeze([['Обзор', '/']]),
   monitors: Object.freeze([['Торговые точки', '/locations.html'], ['Мониторы', '/screens.html']]),
-  catalog: Object.freeze([['Продукция', '/catalog.html']]),
+  catalog: Object.freeze([['Продукция', '/catalog.html#products-list'], ['Тара', '/catalog.html#packaging-list']]),
   settings: Object.freeze([['Настройки сайта', '/settings.html'], ['SFTP', '/sftp-settings.html'], ['Анимация', '/animation.html'], ['Профиль', '/profile.html']])
 });
 
@@ -54,5 +54,6 @@ export function routeIsActive(href, currentPage = pageName()) {
   if (currentPage === 'screen-editor' && target.pathname === '/screens.html') return true;
   if (canonicalRoutePath(window.location.pathname) !== canonicalRoutePath(target.pathname)) return false;
   if (!target.hash) return true;
+  if (currentPage === 'catalog' && target.hash === '#products-list' && !window.location.hash) return true;
   return window.location.hash === target.hash;
 }
