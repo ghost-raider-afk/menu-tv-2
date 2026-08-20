@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { constants as fsConstants } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -12,8 +13,24 @@ function storageError(message, status = 502) {
   return error;
 }
 
+async function readRegularFileNoFollow(filename) {
+  let handle;
+  try {
+    handle = await fs.open(filename, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+    const stat = await handle.stat();
+    if (!stat.isFile()) throw storageError('Опубликованный файл не найден.', 404);
+    const bytes = await handle.readFile();
+    return { bytes, stat };
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'ELOOP') throw storageError('Опубликованный файл не найден.', 404);
+    throw error;
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+}
+
 async function fileDigest(filename) {
-  const bytes = await fs.readFile(filename);
+  const { bytes } = await readRegularFileNoFollow(filename);
   return {
     sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
     size: bytes.length
@@ -50,9 +67,23 @@ export class SftpStorage {
     return path.join(this.directoryPath(directoryName), filename);
   }
 
+  async verifiedPublishedDirectory(name) {
+    const directory = this.directoryPath(name);
+    try {
+      const stat = await fs.lstat(directory);
+      if (!stat.isDirectory() || stat.isSymbolicLink()) throw storageError('Каталог SFTP недоступен для просмотра.', 409);
+      return directory;
+    } catch (error) {
+      if (error.code === 'ENOENT') return null;
+      if (error?.status) throw error;
+      throw storageError('Не удалось проверить каталог SFTP.');
+    }
+  }
+
   async directoryStatus(name) {
     try {
-      return (await fs.stat(this.directoryPath(name))).isDirectory() ? 'ready' : 'missing';
+      const stat = await fs.lstat(this.directoryPath(name));
+      return stat.isDirectory() && !stat.isSymbolicLink() ? 'ready' : 'missing';
     } catch (error) {
       if (error.code === 'ENOENT') return 'missing';
       throw storageError('Не удалось проверить каталог SFTP.');
@@ -66,25 +97,30 @@ export class SftpStorage {
       await fs.chmod(directory, 0o750);
       return 'created';
     } catch (error) {
-      if (error.code === 'EEXIST' && (await fs.stat(directory)).isDirectory()) return 'exists';
+      if (error.code === 'EEXIST') {
+        const stat = await fs.lstat(directory);
+        if (stat.isDirectory() && !stat.isSymbolicLink()) return 'exists';
+      }
       throw storageError('Не удалось создать каталог SFTP.');
     }
   }
 
   async directorySummary(name) {
+    const directory = await this.verifiedPublishedDirectory(name);
+    if (!directory) return { file_count: 0, total_bytes: 0, last_modified_at: null };
     let entries;
     try {
-      entries = await fs.readdir(this.directoryPath(name), { withFileTypes: true });
+      entries = await fs.readdir(directory, { withFileTypes: true });
     } catch (error) {
-      if (error.code === 'ENOENT') return { file_count: 0, total_bytes: 0, last_modified_at: null };
       throw storageError('Не удалось прочитать опубликованный каталог SFTP.');
     }
     let fileCount = 0;
     let totalBytes = 0;
     let lastModifiedAt = null;
     for (const entry of entries) {
-      if (!entry.isFile() || !PUBLISHED_FILE.test(entry.name)) continue;
-      const stat = await fs.stat(this.publishedFilePath(name, entry.name));
+      if (!entry.isFile() || entry.isSymbolicLink() || !PUBLISHED_FILE.test(entry.name)) continue;
+      const stat = await fs.lstat(this.publishedFilePath(name, entry.name));
+      if (!stat.isFile() || stat.isSymbolicLink()) continue;
       fileCount += 1;
       totalBytes += stat.size;
       if (!lastModifiedAt || stat.mtime > lastModifiedAt) lastModifiedAt = stat.mtime;
@@ -93,34 +129,40 @@ export class SftpStorage {
   }
 
   async listPublishedFiles(name) {
+    const directory = await this.verifiedPublishedDirectory(name);
+    if (!directory) return [];
     let entries;
     try {
-      entries = await fs.readdir(this.directoryPath(name), { withFileTypes: true });
+      entries = await fs.readdir(directory, { withFileTypes: true });
     } catch (error) {
-      if (error.code === 'ENOENT') return [];
       throw storageError('Не удалось прочитать опубликованный каталог SFTP.');
     }
     const files = [];
     for (const entry of entries) {
-      if (!entry.isFile() || !PUBLISHED_FILE.test(entry.name)) continue;
+      if (!entry.isFile() || entry.isSymbolicLink() || !PUBLISHED_FILE.test(entry.name)) continue;
       const filename = this.publishedFilePath(name, entry.name);
-      const stat = await fs.stat(filename);
-      const digest = await fileDigest(filename);
-      files.push({
-        name: entry.name,
-        size: digest.size,
-        sha256: digest.sha256,
-        modified_at: stat.mtime.toISOString()
-      });
+      try {
+        const { bytes, stat } = await readRegularFileNoFollow(filename);
+        files.push({
+          name: entry.name,
+          size: bytes.length,
+          sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
+          modified_at: stat.mtime.toISOString()
+        });
+      } catch (error) {
+        if (error?.status === 404) continue;
+        throw error;
+      }
     }
     return files.sort((left, right) => right.modified_at.localeCompare(left.modified_at) || left.name.localeCompare(right.name));
   }
 
   async readPublishedFile(directoryName, filename) {
+    const directory = await this.verifiedPublishedDirectory(directoryName);
+    if (!directory) throw storageError('Опубликованный файл не найден.', 404);
     const filePath = this.publishedFilePath(directoryName, filename);
     try {
-      const [bytes, stat] = await Promise.all([fs.readFile(filePath), fs.stat(filePath)]);
-      if (!stat.isFile()) throw storageError('Опубликованный файл не найден.', 404);
+      const { bytes, stat } = await readRegularFileNoFollow(filePath);
       return {
         name: filename,
         bytes,
@@ -129,7 +171,6 @@ export class SftpStorage {
         modified_at: stat.mtime.toISOString()
       };
     } catch (error) {
-      if (error.code === 'ENOENT') throw storageError('Опубликованный файл не найден.', 404);
       if (error?.status) throw error;
       throw storageError('Не удалось прочитать опубликованный файл SFTP.');
     }
@@ -161,7 +202,7 @@ export class SftpStorage {
     try {
       return await fileDigest(this.deliveryPath(directoryName, deliveryFilename));
     } catch (error) {
-      if (error.code === 'ENOENT') return null;
+      if (error.code === 'ENOENT' || error?.status === 404) return null;
       throw storageError('Не удалось проверить опубликованный JPEG.');
     }
   }
