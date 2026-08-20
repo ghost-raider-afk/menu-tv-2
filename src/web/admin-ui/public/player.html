@@ -10,7 +10,15 @@
   </head>
   <body>
     <main class="player-root">
-      <section class="activation-view" data-activation-view>
+      <section class="player-boot" data-player-boot aria-live="polite">
+        <div class="player-boot-card">
+          <p class="activation-eyebrow">ТВ МЕНЮ</p>
+          <div class="player-boot-spinner" aria-hidden="true"></div>
+          <p data-player-boot-message>Проверяем авторизацию телевизора…</p>
+        </div>
+      </section>
+
+      <section class="activation-view is-hidden" data-activation-view>
         <div class="activation-card">
           <p class="activation-eyebrow">ТВ МЕНЮ</p>
           <h1>Подключение телевизора</h1>
@@ -25,7 +33,7 @@
               <strong data-reserve-code>—— ——</strong>
             </div>
             <p class="activation-status" data-activation-status>Ожидание авторизации…</p>
-            <p class="activation-hint">На телефоне администратора откройте «ТВ МЕНЮ → Подключить ТВ».</p>
+            <p class="activation-hint">На телефоне администратора откройте «ТВ МЕНЮ → Подключение ТВ».</p>
           </div>
         </div>
       </section>
