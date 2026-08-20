@@ -4,7 +4,7 @@ function canonicalFilename(number) {
 
 export async function migrateScreenNumbering(pool) {
   const { rows } = await pool.query(
-    `SELECT id, location_id, location_number, status, publication_pending_sha256, delivery_filename
+    `SELECT id, location_id, location_number
      FROM screens ORDER BY location_id, id`
   );
 
@@ -26,15 +26,9 @@ export async function migrateScreenNumbering(pool) {
       nextByLocation.set(locationId, number);
     }
 
-    const canonical = canonicalFilename(number);
-    const keepLivePublishedPath = Boolean(
-      row.delivery_filename && (row.status === 'published' || row.publication_pending_sha256)
-    );
-    const filename = keepLivePublishedPath ? row.delivery_filename : canonical;
-
     await pool.query(
       'UPDATE screens SET location_number = $1, delivery_filename = $2 WHERE id = $3',
-      [number, filename, id]
+      [number, canonicalFilename(number), id]
     );
   }
 
