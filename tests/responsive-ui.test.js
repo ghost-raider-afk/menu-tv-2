@@ -21,7 +21,14 @@ test('mobile shell uses bottom navigation with an explicit Overview destination'
   assert.match(shell, /max-width: 720px/);
   assert.match(shell, /isMobileShell/);
   assert.match(shell, /usesContextMenu/);
-  assert.match(shell, /section === 'monitors' \|\| section === 'settings'/);
+  assert.match(shell, /section === 'monitors' \|\| section === 'settings' \|\| section === 'catalog'/);
+});
+
+test('context submenu collapses immediately when a destination is selected', async () => {
+  const shell = await read('src/web/admin-ui/public/js/components/shell.js');
+  assert.match(shell, /context\.addEventListener\('click'/);
+  assert.match(shell, /closest\('\.app-route-link'\)/);
+  assert.match(shell, /setCollapsed\(shell, context, true\)/);
 });
 
 test('mobile editor converts the desktop table into touch-friendly cards', async () => {
@@ -44,6 +51,24 @@ test('mobile controls avoid iOS zoom and keep practical touch targets', async ()
   assert.match(responsive, /\.button\{min-height:44px/);
   assert.match(responsive, /\.icon-button\{width:40px;height:40px/);
   assert.match(responsive, /safe-area-inset-bottom/);
+});
+
+test('mobile catalog shows existing databases before create forms', async () => {
+  const [page, css, navigation, router] = await Promise.all([
+    read('src/web/admin-ui/public/catalog.html'),
+    read('src/web/admin-ui/public/css/pages/catalog.css'),
+    read('src/web/admin-ui/public/js/core/navigation.js'),
+    read('src/web/admin-ui/public/js/core/router.js')
+  ]);
+  assert.match(page, /catalog-product-list[^>]*id="products"/);
+  assert.match(page, /catalog-packaging-list[^>]*id="packaging"/);
+  assert.match(page, /<h2>База продукции<\/h2>/);
+  assert.match(page, /<h2>База тары<\/h2>/);
+  assert.match(css, /grid-template-areas:"product-list" "product-form" "packaging-list" "packaging-form"/);
+  assert.match(navigation, /\['Продукция', '\/catalog\.html#products'\]/);
+  assert.match(navigation, /\['Тара', '\/catalog\.html#packaging'\]/);
+  assert.match(router, /scrollToRouteTarget/);
+  assert.match(router, /targetNode\.scrollIntoView/);
 });
 
 test('TV connection uses the common design system and a dedicated device workflow', async () => {
