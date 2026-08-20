@@ -43,24 +43,28 @@ function oneOf(value, allowed, fallback) {
   return typeof value === 'string' && allowed.includes(value) ? value : fallback;
 }
 
+function present(value, fallback) {
+  return value === undefined ? fallback : value;
+}
+
 function canonicalCurrent(source) {
   return {
     motion_version: ANIMATION_PROFILE_VERSION,
-    pattern: oneOf(source.pattern, ANIMATION_PATTERNS, DEFAULT_ANIMATION_PROFILE.pattern),
-    flow_direction: oneOf(source.flow_direction, ANIMATION_FLOW_DIRECTIONS, DEFAULT_ANIMATION_PROFILE.flow_direction),
-    easing: oneOf(source.easing, ANIMATION_EASINGS, DEFAULT_ANIMATION_PROFILE.easing),
-    cycle_seconds: number(source.cycle_seconds, DEFAULT_ANIMATION_PROFILE.cycle_seconds),
-    event_duration_ms: number(source.event_duration_ms, DEFAULT_ANIMATION_PROFILE.event_duration_ms),
-    wave_stagger_ms: number(source.wave_stagger_ms, DEFAULT_ANIMATION_PROFILE.wave_stagger_ms),
-    travel_px: number(source.travel_px, DEFAULT_ANIMATION_PROFILE.travel_px),
-    scale_amount: number(source.scale_amount, DEFAULT_ANIMATION_PROFILE.scale_amount),
-    brightness_amount: number(source.brightness_amount, DEFAULT_ANIMATION_PROFILE.brightness_amount),
-    section_effect: oneOf(source.section_effect, SECTION_EFFECTS, DEFAULT_ANIMATION_PROFILE.section_effect),
-    item_effect: oneOf(source.item_effect, ITEM_EFFECTS, DEFAULT_ANIMATION_PROFILE.item_effect),
-    price_effect: oneOf(source.price_effect, PRICE_EFFECTS, DEFAULT_ANIMATION_PROFILE.price_effect),
-    background_effect: oneOf(source.background_effect, BACKGROUND_EFFECTS, DEFAULT_ANIMATION_PROFILE.background_effect),
-    background_zoom_percent: number(source.background_zoom_percent, DEFAULT_ANIMATION_PROFILE.background_zoom_percent),
-    intensity: number(source.intensity, DEFAULT_ANIMATION_PROFILE.intensity)
+    pattern: present(source.pattern, DEFAULT_ANIMATION_PROFILE.pattern),
+    flow_direction: present(source.flow_direction, DEFAULT_ANIMATION_PROFILE.flow_direction),
+    easing: present(source.easing, DEFAULT_ANIMATION_PROFILE.easing),
+    cycle_seconds: present(source.cycle_seconds, DEFAULT_ANIMATION_PROFILE.cycle_seconds),
+    event_duration_ms: present(source.event_duration_ms, DEFAULT_ANIMATION_PROFILE.event_duration_ms),
+    wave_stagger_ms: present(source.wave_stagger_ms, DEFAULT_ANIMATION_PROFILE.wave_stagger_ms),
+    travel_px: present(source.travel_px, DEFAULT_ANIMATION_PROFILE.travel_px),
+    scale_amount: present(source.scale_amount, DEFAULT_ANIMATION_PROFILE.scale_amount),
+    brightness_amount: present(source.brightness_amount, DEFAULT_ANIMATION_PROFILE.brightness_amount),
+    section_effect: present(source.section_effect, DEFAULT_ANIMATION_PROFILE.section_effect),
+    item_effect: present(source.item_effect, DEFAULT_ANIMATION_PROFILE.item_effect),
+    price_effect: present(source.price_effect, DEFAULT_ANIMATION_PROFILE.price_effect),
+    background_effect: present(source.background_effect, DEFAULT_ANIMATION_PROFILE.background_effect),
+    background_zoom_percent: present(source.background_zoom_percent, DEFAULT_ANIMATION_PROFILE.background_zoom_percent),
+    intensity: present(source.intensity, DEFAULT_ANIMATION_PROFILE.intensity)
   };
 }
 
