@@ -5,6 +5,12 @@ function normaliseDraft(row, screenId) {
   return { ...record, revision: Number(record.revision || 0) };
 }
 
+function screenFilename(locationNumber) {
+  const number = Number(locationNumber);
+  if (!Number.isSafeInteger(number) || number < 1) throw new Error('Монитор не имеет корректного номера внутри торговой точки.');
+  return `monitor-${number}.jpg`;
+}
+
 export function createScreensRepository(pool) {
   async function getScreen(id) {
     const { rows } = await pool.query(
@@ -24,10 +30,22 @@ export function createScreensRepository(pool) {
        CASE WHEN d.name IS NULL THEN NULL ELSE '/' || d.name || '/' || s.delivery_filename END AS sftp_path
        FROM screens s JOIN locations l ON l.id = s.location_id
        LEFT JOIN sftp_directories d ON d.id = l.sftp_directory_id
-       WHERE s.location_id = $1 ORDER BY s.name`,
+       WHERE s.location_id = $1 ORDER BY s.location_number, s.id`,
       [locationId]
     );
     return rows.map(normaliseRow);
+  }
+
+  async function nextLocationNumber(locationId, { lockLocation = false } = {}) {
+    if (lockLocation) {
+      const locked = await pool.query('SELECT id FROM locations WHERE id = $1 FOR UPDATE', [locationId]);
+      if (!locked.rowCount) return null;
+    }
+    const { rows } = await pool.query(
+      'SELECT COALESCE(MAX(location_number), 0)::int AS current_number FROM screens WHERE location_id = $1',
+      [locationId]
+    );
+    return Number(rows[0].current_number || 0) + 1;
   }
 
   return Object.freeze({
@@ -37,7 +55,7 @@ export function createScreensRepository(pool) {
          CASE WHEN d.name IS NULL THEN NULL ELSE '/' || d.name || '/' || s.delivery_filename END AS sftp_path
          FROM screens s JOIN locations l ON l.id = s.location_id
          LEFT JOIN sftp_directories d ON d.id = l.sftp_directory_id
-         ORDER BY l.name, s.name`
+         ORDER BY l.name, s.location_number, s.id`
       );
       return rows.map(normaliseRow);
     },
@@ -50,15 +68,17 @@ export function createScreensRepository(pool) {
       return rowCount > 0;
     },
 
-    async createScreen({ location_id, name, resolution = '1920×1080', status = 'draft', active = true }) {
+    async createScreen({ location_id, name = '', resolution = '1920×1080', status = 'draft', active = true }) {
       const now = isoNow();
+      const locationNumber = await nextLocationNumber(location_id, { lockLocation: true });
+      if (!locationNumber) return null;
+      const resolvedName = name || `ТВ ${locationNumber}`;
       const { rows } = await pool.query(
-        `INSERT INTO screens (location_id, name, resolution, status, active, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $6) RETURNING id`,
-        [location_id, name, resolution, status, active, now]
+        `INSERT INTO screens (location_id, location_number, name, resolution, status, active, delivery_filename, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8) RETURNING id`,
+        [location_id, locationNumber, resolvedName, resolution, status, active, screenFilename(locationNumber), now]
       );
       const id = Number(rows[0].id);
-      await pool.query('UPDATE screens SET delivery_filename = $1 WHERE id = $2', [`monitor-${id}.jpg`, id]);
       await pool.query(
         'INSERT INTO screen_drafts (screen_id, rows_json, settings_json, revision, updated_at) VALUES ($1, $2, $3, 1, $4)',
         [id, '[]', '{}', now]
@@ -67,10 +87,20 @@ export function createScreensRepository(pool) {
     },
 
     async updateScreen(id, { location_id, name, resolution = '1920×1080', status = 'draft', active = true }) {
+      const currentResult = await pool.query('SELECT location_id, location_number FROM screens WHERE id = $1', [id]);
+      if (!currentResult.rowCount) return null;
+      const current = currentResult.rows[0];
+      let locationNumber = Number(current.location_number);
+      let filename = screenFilename(locationNumber);
+      if (Number(current.location_id) !== Number(location_id)) {
+        locationNumber = await nextLocationNumber(location_id, { lockLocation: true });
+        if (!locationNumber) return null;
+        filename = screenFilename(locationNumber);
+      }
       const { rowCount } = await pool.query(
-        `UPDATE screens SET location_id = $1, name = $2, resolution = $3, status = $4,
-         active = $5, updated_at = $6 WHERE id = $7`,
-        [location_id, name, resolution, status, active, isoNow(), id]
+        `UPDATE screens SET location_id = $1, location_number = $2, delivery_filename = $3, name = $4, resolution = $5, status = $6,
+         active = $7, updated_at = $8 WHERE id = $9`,
+        [location_id, locationNumber, filename, name, resolution, status, active, isoNow(), id]
       );
       return rowCount ? getScreen(id) : null;
     },
@@ -151,8 +181,8 @@ export function createScreensRepository(pool) {
     },
 
     async nextScreenName(locationId) {
-      const { rows } = await pool.query('SELECT COUNT(*)::int AS count FROM screens WHERE location_id = $1', [locationId]);
-      return `ТВ ${Number(rows[0].count) + 1}`;
+      const next = await nextLocationNumber(locationId);
+      return `ТВ ${next}`;
     },
 
     async getScreenDraft(screenId) {
@@ -182,11 +212,14 @@ export function createScreensRepository(pool) {
         );
         saved = result.rows[0];
       }
+      const screenResult = await pool.query('SELECT location_number FROM screens WHERE id = $1', [screenId]);
+      if (!screenResult.rowCount) return null;
+      const canonicalFilename = screenFilename(Number(screenResult.rows[0].location_number));
       await pool.query(
         `UPDATE screens SET prepared_asset_key = NULL, prepared_asset_sha256 = NULL, prepared_asset_size = NULL,
          prepared_draft_revision = NULL, publication_pending_sha256 = NULL, publication_started_at = NULL,
-         status = 'draft', updated_at = $1 WHERE id = $2`,
-        [now, screenId]
+         delivery_filename = $1, status = 'draft', updated_at = $2 WHERE id = $3`,
+        [canonicalFilename, now, screenId]
       );
       return normaliseDraft(saved, screenId);
     },
