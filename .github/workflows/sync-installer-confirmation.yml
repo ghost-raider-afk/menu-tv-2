@@ -1,0 +1,42 @@
+name: sync-installer-confirmation
+
+on:
+  push:
+    branches:
+      - agent/remove-templates-compact-ui-1.2.0
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/remove-templates-compact-ui-1.2.0
+      - name: Keep 1.2.0 and use y/N confirmations
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('menu-tv-2.sh')
+          text = path.read_text()
+          text = text.replace("[YES/NO]", "[y/N]")
+          text = text.replace('"${input^^}" != YES', '"${input,,}" != y')
+          text = text.replace('"${input^^}" == YES', '"${input,,}" == y')
+          if 'SCRIPT_VERSION="1.2.0"' not in text:
+              raise SystemExit('installer release version changed unexpectedly')
+          if '[YES/NO]' in text or '== YES' in text or '!= YES' in text:
+              raise SystemExit('legacy confirmation remains')
+          path.write_text(text)
+          PY
+          bash -n menu-tv-2.sh
+          grep -cF '[y/N]' menu-tv-2.sh | grep -Fx 3
+      - name: Commit installer patch
+        run: |
+          git config user.name 'menu-tv-maintainer'
+          git config user.email 'actions@users.noreply.github.com'
+          git add menu-tv-2.sh
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Use y/N confirmations in 1.2.0 installer'
+          git push origin HEAD:agent/remove-templates-compact-ui-1.2.0
