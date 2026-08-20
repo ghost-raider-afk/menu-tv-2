@@ -3,6 +3,8 @@ import { renderAnimationScreenPreview } from '../motion/screen-preview.js';
 
 const ACTIVATION_STORAGE_KEY = 'tv-menu.device-activation';
 const PLAYER_CONTEXT_STORAGE_KEY = 'tv-menu.player-context.v1';
+const bootView = document.querySelector('[data-player-boot]');
+const bootMessage = document.querySelector('[data-player-boot-message]');
 const activationView = document.querySelector('[data-activation-view]');
 const showActivationButton = document.querySelector('[data-show-activation]');
 const pairing = document.querySelector('[data-activation-pairing]');
@@ -15,6 +17,7 @@ const playerMessage = document.querySelector('[data-player-message]');
 
 let pollTimer = null;
 let refreshTimer = null;
+let initialRetryTimer = null;
 let wakeLock = null;
 let motionPlayer = null;
 let lastRenderedFingerprint = '';
@@ -22,6 +25,14 @@ let playerRefreshMs = 5000;
 
 function setHidden(element, hidden) {
   element?.classList.toggle('is-hidden', hidden);
+}
+
+function showBootScreen(message = 'Проверяем авторизацию телевизора…') {
+  if (bootMessage) bootMessage.textContent = message;
+  setHidden(bootView, false);
+  setHidden(activationView, true);
+  setHidden(player, true);
+  setHidden(playerMessage, true);
 }
 
 function activationFromStorage() {
@@ -92,8 +103,11 @@ function stopPlayerMotion() {
 function showActivationScreen() {
   if (refreshTimer) clearTimeout(refreshTimer);
   refreshTimer = null;
+  if (initialRetryTimer) clearTimeout(initialRetryTimer);
+  initialRetryTimer = null;
   lastRenderedFingerprint = '';
   stopPlayerMotion();
+  setHidden(bootView, true);
   setHidden(player, true);
   setHidden(activationView, false);
   setHidden(playerMessage, true);
@@ -161,6 +175,11 @@ async function createActivation() {
       body: '{}',
       cache: 'no-store'
     });
+    if (response.status === 409) {
+      clearActivation();
+      await loadPlayer();
+      return;
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const record = await response.json();
     saveActivation(record);
@@ -269,6 +288,7 @@ async function fetchPlayerContext(timeoutMs = 5000) {
 function showCachedPlayer(record, message = 'Нет связи с сервером. ТВ работает по последней сохранённой версии меню.') {
   if (!record?.context) return false;
   renderPlayerContext(record.context);
+  setHidden(bootView, true);
   setHidden(activationView, true);
   setHidden(player, false);
   showConnectionMessage(message);
@@ -306,9 +326,12 @@ async function loadPlayer() {
     const result = await fetchPlayerContext();
     if (result.unauthorized) {
       showActivationScreen();
+      setHidden(pairing, true);
+      showActivationButton.textContent = 'Показать QR-код';
       return false;
     }
     renderPlayerContext(result.context);
+    setHidden(bootView, true);
     setHidden(activationView, true);
     setHidden(player, false);
     showConnectionMessage(result.offline ? 'Нет связи с сервером. ТВ работает по последней сохранённой версии меню.' : '');
@@ -319,7 +342,7 @@ async function loadPlayer() {
     console.error('TV player could not start online', error);
     const cached = cachedPlayerContext();
     if (showCachedPlayer(cached)) return true;
-    showActivationScreen();
+    showBootScreen('Нет связи с сервером. Ожидаем восстановление соединения…');
     return false;
   }
 }
@@ -334,13 +357,15 @@ async function registerOfflinePlayer() {
   }
 }
 
-async function initialisePlayer() {
-  showActivationButton.addEventListener('click', () => void createActivation());
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') void requestWakeLock();
-  });
+function scheduleInitialRetry() {
+  if (initialRetryTimer) clearTimeout(initialRetryTimer);
+  initialRetryTimer = setTimeout(() => void resolveInitialPlayerState(), 3000);
+}
 
-  await registerOfflinePlayer();
+async function resolveInitialPlayerState() {
+  if (initialRetryTimer) clearTimeout(initialRetryTimer);
+  initialRetryTimer = null;
+  showBootScreen();
 
   try {
     const response = await fetch('/api/device/session', { cache: 'no-store' });
@@ -348,9 +373,14 @@ async function initialisePlayer() {
       await loadPlayer();
       return;
     }
-    if (response.status === 401) clearPlayerContext();
-  } catch {
+    if (response.status !== 401) throw new Error(`HTTP ${response.status}`);
+    clearPlayerContext();
+  } catch (error) {
+    console.warn('TV session state could not be resolved', error);
     if (showCachedPlayer(cachedPlayerContext())) return;
+    showBootScreen('Нет связи с сервером. Проверяем повторно…');
+    scheduleInitialRetry();
+    return;
   }
 
   const pending = activationFromStorage();
@@ -360,7 +390,19 @@ async function initialisePlayer() {
   } else {
     showActivationScreen();
     setHidden(pairing, true);
+    showActivationButton.textContent = 'Показать QR-код';
   }
+}
+
+async function initialisePlayer() {
+  showBootScreen();
+  showActivationButton.addEventListener('click', () => void createActivation());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void requestWakeLock();
+  });
+
+  await registerOfflinePlayer();
+  await resolveInitialPlayerState();
 }
 
 void initialisePlayer();
