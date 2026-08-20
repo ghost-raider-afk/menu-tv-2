@@ -1,7 +1,8 @@
 import { pageName } from './core/config.js';
 import { loadAuthenticatedContext } from './core/session.js';
 import { initialiseNotifications } from './core/notifications.js';
-import { initialiseShell } from './components/shell.js';
+import { createAppRouter } from './core/router.js';
+import { initialiseShell, refreshShellRoute } from './components/shell.js';
 
 async function initialisePage(name) {
   switch (name) {
@@ -50,7 +51,8 @@ async function initialiseApplication() {
     await loadAuthenticatedContext();
     initialiseShell();
     initialiseNotifications();
-    await initialisePage(current);
+    const router = createAppRouter({ mountPage: initialisePage, syncShell: refreshShellRoute });
+    await router.start();
   } catch (error) {
     console.error('Application initialization failed', error);
     window.location.replace('/signin.html');
