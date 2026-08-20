@@ -64,7 +64,7 @@ async function removePreviewFixture(page, fixture) {
   }, fixture);
 }
 
-test('animation studio renders the selected real screen with 20 presets, player controls and persistent settings', async ({ page }) => {
+test('animation studio keeps the selected real menu visible while 20 continuous presets loop', async ({ page }) => {
   await login(page);
   const fixture = await createPreviewFixture(page);
   const original = await animationSettings(page);
@@ -72,6 +72,7 @@ test('animation studio renders the selected real screen with 20 presets, player 
   try {
     await page.goto(`/animation.html?screen=${fixture.screenId}`);
     await expect(page.getByRole('heading', { name: 'Анимация экранов' })).toBeVisible();
+    await expect(page.getByText('Меню всегда остаётся открытым и читаемым.')).toBeVisible();
     await expect(page.locator('[data-animation-preset]')).toHaveCount(20);
     await expect(page.locator('#animation-stage')).toBeVisible();
     await expect(page.locator('#animation-screen-select')).toHaveValue(String(fixture.screenId));
@@ -80,12 +81,18 @@ test('animation studio renders the selected real screen with 20 presets, player 
     await expect(page.locator('#animation-stage .animation-screen-background')).toHaveCSS('background-color', 'rgb(18, 52, 86)');
     await expect(page.locator('#animation-screen-status')).toContainText(fixture.screenName);
 
-    await page.getByRole('button', { name: /Слайд слева/ }).click();
-    await expect(page.locator('#animation-current-preset')).toHaveText('Слайд слева');
+    await page.getByRole('button', { name: /Световая волна слева/ }).click();
+    await expect(page.locator('#animation-current-preset')).toHaveText('Световая волна слева');
+    await expect(page.locator('#animation-pattern')).toHaveValue('wave');
+    await expect(page.locator('#animation-flow-direction')).toHaveValue('left-to-right');
 
     await expect.poll(() => page.evaluate(() => document.querySelector('#animation-stage').getAnimations({ subtree: true }).filter((item) => item.playState === 'running').length)).toBeGreaterThan(0);
+    await expect.poll(() => page.evaluate(() => getComputedStyle(document.querySelector('#animation-stage g.table-section')).opacity)).toBe('1');
+
     await page.locator('#animation-pause').click();
     await expect.poll(() => page.evaluate(() => document.querySelector('#animation-stage').getAnimations({ subtree: true }).filter((item) => item.playState === 'running').length)).toBe(0);
+    await page.locator('#animation-timeline').fill('600');
+    await expect.poll(() => page.evaluate(() => getComputedStyle(document.querySelector('#animation-stage g.table-section')).opacity)).toBe('1');
     await page.locator('#animation-play').click();
     await expect.poll(() => page.evaluate(() => document.querySelector('#animation-stage').getAnimations({ subtree: true }).filter((item) => item.playState === 'running').length)).toBeGreaterThan(0);
     await page.locator('#animation-replay').click();
@@ -96,13 +103,15 @@ test('animation studio renders the selected real screen with 20 presets, player 
     await page.locator('#animation-save').click();
     const response = await responsePromise;
     expect(response.ok()).toBeTruthy();
-    await expect(page.locator('#animation-message')).toContainText('Профиль анимации сохранён');
+    await expect(page.locator('#animation-message')).toContainText('Профиль постоянной анимации сохранён');
 
     const saved = await animationSettings(page);
     expect(saved.enabled).toBe(true);
     expect(saved.preset_id).toBe('slide-left');
-    expect(saved.profile.entrance).toBe('slide');
-    expect(saved.profile.direction).toBe('left');
+    expect(saved.profile.motion_version).toBe(2);
+    expect(saved.profile.pattern).toBe('wave');
+    expect(saved.profile.flow_direction).toBe('left-to-right');
+    expect(saved.profile.entrance).toBeUndefined();
   } finally {
     await restoreAnimationSettings(page, original);
     await removePreviewFixture(page, fixture);
