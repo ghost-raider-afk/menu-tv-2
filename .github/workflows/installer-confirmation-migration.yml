@@ -4,12 +4,16 @@ on:
   push:
     branches:
       - agent/installer-y-n-1.1.15
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   patch:
+    if: github.head_ref == 'agent/installer-y-n-1.1.15' || github.ref_name == 'agent/installer-y-n-1.1.15'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
