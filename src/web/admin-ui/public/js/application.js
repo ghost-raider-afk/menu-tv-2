@@ -2,9 +2,19 @@ import { pageName } from './core/config.js';
 import { loadAuthenticatedContext } from './core/session.js';
 import { initialiseNotifications } from './core/notifications.js';
 import { createAppRouter } from './core/router.js';
+import { state } from './core/state.js';
 import { initialiseShell, refreshShellRoute } from './components/shell.js';
 
+function resetTransientPageState(name) {
+  if (name === 'locations') state.editingLocationId = null;
+  if (name === 'catalog') {
+    state.editingProductId = null;
+    state.editingPackagingId = null;
+  }
+}
+
 async function initialisePage(name) {
+  resetTransientPageState(name);
   switch (name) {
     case 'overview': {
       const { initialiseDashboard } = await import('./pages/dashboard.js');
