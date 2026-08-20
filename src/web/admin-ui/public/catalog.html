@@ -14,7 +14,7 @@
         <main class="main-content workspace-content">
           <div class="page-heading"><p class="eyebrow">КАТАЛОГ</p><h1>Продукция и тара</h1><p>Позиции каталога используются редакторами всех мониторов.</p></div>
           <div class="workspace-grid catalog-grid">
-            <section class="settings-card" id="products">
+            <section class="settings-card catalog-product-form-card" id="products">
               <div class="card-heading"><div><p class="eyebrow">ПРОДУКЦИЯ</p><h2 id="product-form-title">Новая продукция</h2></div><button class="text-button is-hidden" id="cancel-product-edit" type="button">Отменить</button></div>
               <form id="product-form" class="form-grid">
                 <label class="field field-full"><span>Название</span><input id="product-name" maxlength="120" required /></label>
@@ -31,11 +31,11 @@
                 <div class="form-actions field-full"><button class="button button-primary" id="product-submit" type="submit">Добавить продукцию</button></div>
               </form>
             </section>
-            <section class="settings-card">
+            <section class="settings-card catalog-product-list-card" id="products-list">
               <div class="card-heading"><div><p class="eyebrow">ПРОДУКЦИЯ</p><h2>Список</h2></div><div class="list-tools"><input class="list-filter" id="product-filter" type="search" placeholder="Поиск продукции" aria-label="Поиск продукции" /><input class="is-hidden" id="product-import-file" type="file" accept=".csv,text/csv" /><button class="button button-secondary" id="product-import" type="button">Загрузить в базу</button><button class="button button-secondary" id="product-export" type="button">Выгрузить из базы</button><button class="button button-secondary" id="refresh-catalog" type="button">Обновить</button></div></div>
               <div class="record-list" data-products-list></div><p class="empty-state is-hidden" data-products-empty>Продукции пока нет.</p>
             </section>
-            <section class="settings-card" id="packaging">
+            <section class="settings-card catalog-packaging-form-card" id="packaging">
               <div class="card-heading"><div><p class="eyebrow">ТАРА</p><h2 id="packaging-form-title">Новая тара</h2></div><button class="text-button is-hidden" id="cancel-packaging-edit" type="button">Отменить</button></div>
               <form id="packaging-form" class="form-grid">
                 <label class="field field-full"><span>Название тары</span><input id="packaging-name" maxlength="120" placeholder="Например, бутылка ПЭТ 1,5 л" required /></label>
@@ -45,7 +45,7 @@
                 <div class="form-actions field-full"><button class="button button-primary" id="packaging-submit" type="submit">Добавить тару</button></div>
               </form>
             </section>
-            <section class="settings-card">
+            <section class="settings-card catalog-packaging-list-card" id="packaging-list">
               <div class="card-heading"><div><p class="eyebrow">ТАРА</p><h2>Список</h2></div><input class="list-filter" id="packaging-filter" type="search" placeholder="Поиск тары" aria-label="Поиск тары" /></div>
               <div class="record-list" data-packaging-list></div><p class="empty-state is-hidden" data-packaging-empty>Тара пока не добавлена.</p>
             </section>
