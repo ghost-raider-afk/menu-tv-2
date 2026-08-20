@@ -47,10 +47,10 @@ test('shell remains modular after compact redesign', async () => {
   assert.doesNotMatch(navigation, /Шаблоны/);
 });
 
-test('monitor editor owns one sticky command bar and one canonical renderer', async () => {
-  const [rows, preview, finalImage, renderer, editorCss, editorHtml, tablesCss] = await Promise.all([
+test('monitor editor owns one left-aligned exclusive command bar and one canonical renderer', async () => {
+  const [rows, preview, finalImage, renderer, editorCss, editorHtml, editorJs, tablesCss] = await Promise.all([
     read('js/editor/rows.js'), read('js/editor/preview.js'), read('js/editor/final-image.js'), read('js/editor/renderer.js'),
-    read('css/editor/editor.css'), read('screen-editor.html'), read('css/tables.css')
+    read('css/editor/editor.css'), read('screen-editor.html'), read('js/editor/editor.js'), read('css/tables.css')
   ]);
   assert.match(rows, /editor-menu-editor-table/);
   assert.match(rows, /<th>Данные из базы<\/th>/);
@@ -69,25 +69,35 @@ test('monitor editor owns one sticky command bar and one canonical renderer', as
   assert.match(renderer, /viewBox="0 0 \$\{model\.viewport\.width\} \$\{model\.viewport\.height\}"/);
   assert.doesNotMatch(renderer, /verticalSeparatorsMarkup/);
   assert.match(editorCss, /\.editor-commandbar\{position:sticky/);
-  assert.match(editorCss, /\.editor-tool-popover/);
+  assert.match(editorCss, /\.editor-commandbar-tools\{[^}]*justify-content:flex-start/);
+  assert.match(editorCss, /\.editor-commandbar-menus\{display:flex/);
+  assert.match(editorCss, /\.editor-tool-popover\{[^}]*left:0/);
   assert.match(editorCss, /\.editor-menu-editor-table tbody tr\{height:27px/);
   assert.match(editorCss, /height:22px/);
   assert.doesNotMatch(editorCss, /!important|\.tv-board-table/);
   assert.match(editorHtml, /class="editor-commandbar"/);
+  assert.match(editorHtml, /class="editor-commandbar-menus"/);
+  assert.match(editorJs, /bindExclusiveToolMenus/);
+  assert.match(editorJs, /other\.open = false/);
   for (const id of ['editor-table-x','editor-table-y','editor-table-width','editor-table-height','editor-background-file','editor-font-family','editor-font-scale']) {
     assert.match(editorHtml, new RegExp(`id="${id}"`));
   }
   assert.match(editorHtml, />Tahoma Bold<\/option>/);
   assert.doesNotMatch(editorHtml, /editor-template|Использовать шаблон|ШАБЛОН/);
+  assert.doesNotMatch(editorJs, /20 МБ/);
   assert.doesNotMatch(tablesCss, /menu-preview|editor-menu-table/);
 });
 
-test('login logo has exactly seven size levels with level one as base size', async () => {
-  const [signinCss, settingsHtml, presentation] = await Promise.all([
-    read('css/auth/signin.css'), read('settings.html'), read('js/core/presentation.js')
+test('login logo has seven sizes and never paints the wrong default size while config is pending', async () => {
+  const [signinCss, signinHtml, signinJs, settingsHtml, presentation] = await Promise.all([
+    read('css/auth/signin.css'), read('signin.html'), read('js/pages/signin.js'), read('settings.html'), read('js/core/presentation.js')
   ]);
   assert.match(signinCss, /\.signin-brand \.brand-mark\{[^}]*width:44px[^}]*height:44px/);
   for (let level = 2; level <= 7; level += 1) assert.match(signinCss, new RegExp(`data-signin-logo-size="${level}"`));
+  assert.match(signinCss, /data-signin-presentation="pending"[^}]*brand-mark\{visibility:hidden/);
+  assert.doesNotMatch(signinCss, /transition:\s*(?:width|height)|transition-property:[^}]*\b(?:width|height)\b/);
+  assert.match(signinHtml, /data-signin-presentation="pending"/);
+  assert.match(signinJs, /signinPresentation = 'ready'/);
   assert.match(settingsHtml, /id="site-signin-logo-size"/);
   for (let level = 1; level <= 7; level += 1) assert.match(settingsHtml, new RegExp(`value="${level}"`));
   assert.match(presentation, /dataset\.signinLogoSize/);

@@ -27,6 +27,23 @@ function editorScreenId() {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+function bindExclusiveToolMenus(form) {
+  const menus = [...form.querySelectorAll('.editor-tool-menu')].filter((node) => node instanceof HTMLDetailsElement);
+  menus.forEach((menu) => {
+    menu.addEventListener('toggle', () => {
+      if (!menu.open) return;
+      menus.forEach((other) => {
+        if (other !== menu) other.open = false;
+      });
+    });
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    menus.forEach((menu) => { menu.open = false; });
+  });
+}
+
 function setEditorMessage(message, kind = 'error') {
   setMessage('screen-editor-message', message, kind);
 }
@@ -89,6 +106,8 @@ export function initialiseScreenEditor() {
     window.location.replace('/screens.html');
     return;
   }
+
+  bindExclusiveToolMenus(form);
 
   const editorState = createEditorState();
   const history = createEditorHistory(editorState);
@@ -207,7 +226,7 @@ export function initialiseScreenEditor() {
   element('editor-background-upload')?.addEventListener('click', async () => {
     if (editorState.dirty) return setEditorMessage('Сначала сохраните текущие изменения, затем загрузите фон.');
     const file = element('editor-background-file')?.files?.[0];
-    if (!file) return setEditorMessage('Выберите PNG, JPEG или WebP до 20 МБ.');
+    if (!file) return setEditorMessage('Выберите PNG, JPEG или WebP.');
     const button = element('editor-background-upload');
     setPending(button, true, 'Загружаем…');
     try {

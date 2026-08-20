@@ -66,9 +66,25 @@ for (const viewport of [{ width: 1920, height: 1080 }, { width: 1366, height: 76
     const commandbar = page.locator('.editor-commandbar');
     await expect(commandbar).toBeVisible();
     expect((await commandbar.boundingBox())?.height).toBeLessThanOrEqual(viewport.width < 1500 ? 82 : 56);
-    const position = await commandbar.evaluate((node) => getComputedStyle(node).position);
-    expect(position).toBe('sticky');
+    expect(await commandbar.evaluate((node) => getComputedStyle(node).position)).toBe('sticky');
     await expect(page.getByText('Шаблоны', { exact: true })).toHaveCount(0);
+
+    const menus = page.locator('.editor-commandbar-menus');
+    const addActions = page.locator('.editor-add-actions');
+    await expect(menus).toBeVisible();
+    if (viewport.width >= 1500) {
+      const menuBox = await menus.boundingBox();
+      const addBox = await addActions.boundingBox();
+      expect(menuBox.x).toBeLessThan(addBox.x);
+    }
+
+    const monitorMenu = page.locator('.editor-tool-menu').filter({ has: page.getByText('Монитор', { exact: true }) });
+    const tableMenu = page.locator('.editor-tool-menu').filter({ has: page.getByText('Таблица', { exact: true }) });
+    await monitorMenu.locator('summary').click();
+    await expect(monitorMenu).toHaveAttribute('open', '');
+    await tableMenu.locator('summary').click();
+    await expect(tableMenu).toHaveAttribute('open', '');
+    await expect(monitorMenu).not.toHaveAttribute('open', '');
 
     const table = page.locator('.editor-menu-editor-table');
     const scroll = page.locator('.editor-menu-table-scroll');
@@ -165,7 +181,7 @@ test('screen properties update preview and keep publication locked while dirty',
   expect(aspect.replace(/\s+/g, '')).toBe('1024/768');
 });
 
-test('login logo size setting has seven visible levels', async ({ page }) => {
+test('login logo size is applied without default-size flash', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await login(page);
   await page.goto('/settings.html');
@@ -177,9 +193,20 @@ test('login logo size setting has seven visible levels', async ({ page }) => {
   const logout = await page.request.post('/api/auth/logout');
   expect(logout.status()).toBe(204);
   await page.context().clearCookies();
-  await page.goto('/signin.html');
+
+  await page.route('**/api/public/config', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await route.continue();
+  });
+  await page.goto('/signin.html', { waitUntil: 'domcontentloaded' });
   await expect(page).toHaveURL(/\/signin\.html$/);
+  await expect(page.locator('html')).toHaveAttribute('data-signin-presentation', 'pending');
+  await expect(page.locator('.signin-brand .brand-mark')).toHaveCSS('visibility', 'hidden');
+  await expect(page.locator('html')).toHaveAttribute('data-signin-presentation', 'ready');
   await expect(page.locator('html')).toHaveAttribute('data-signin-logo-size', '7');
   const mark = page.locator('.signin-brand .brand-mark');
-  expect((await mark.boundingBox())?.width).toBeGreaterThanOrEqual(95);
+  await expect(mark).toHaveCSS('visibility', 'visible');
+  const box = await mark.boundingBox();
+  expect(Math.round(box.width)).toBe(100);
+  expect(await mark.evaluate((node) => getComputedStyle(node).transitionDuration)).toBe('0s');
 });
