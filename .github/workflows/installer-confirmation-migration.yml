@@ -1,9 +1,6 @@
 name: installer-confirmation-migration
 
 on:
-  push:
-    branches:
-      - agent/installer-y-n-1.1.15
   pull_request:
     branches:
       - main
@@ -13,7 +10,7 @@ permissions:
 
 jobs:
   patch:
-    if: github.head_ref == 'agent/installer-y-n-1.1.15' || github.ref_name == 'agent/installer-y-n-1.1.15'
+    if: github.head_ref == 'agent/installer-y-n-1.1.15'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,20 +32,16 @@ jobs:
           if text.count('[y/N]') != 3:
               raise SystemExit(f'expected 3 y/N prompts, got {text.count("[y/N]")}')
           script.write_text(text)
-
-          workflow = Path('.github/workflows/check.yml')
-          check = workflow.read_text().replace("Версия скрипта: 1.1.14", "Версия скрипта: 1.1.15")
-          workflow.write_text(check)
           PY
           bash -n menu-tv-2.sh
           grep -F 'SCRIPT_VERSION="1.1.15"' menu-tv-2.sh
           grep -cF '[y/N]' menu-tv-2.sh | grep -Fx 3
           ! grep -qF '[YES/NO]' menu-tv-2.sh
-      - name: Remove one-shot workflow and commit
+      - name: Commit installer only
         run: |
-          rm .github/workflows/installer-confirmation-migration.yml
           git config user.name 'menu-tv-maintainer'
           git config user.email 'actions@users.noreply.github.com'
-          git add menu-tv-2.sh .github/workflows/check.yml .github/workflows/installer-confirmation-migration.yml
+          git add menu-tv-2.sh
+          git diff --cached --quiet && exit 0
           git commit -m 'Use y/N confirmations in installer'
           git push origin HEAD:agent/installer-y-n-1.1.15
