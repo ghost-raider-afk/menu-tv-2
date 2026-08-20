@@ -9,21 +9,21 @@ export const BACKGROUND_EFFECTS = Object.freeze(['none', 'drift', 'breathe', 'zo
 
 export const DEFAULT_ANIMATION_PROFILE = Object.freeze({
   motion_version: ANIMATION_PROFILE_VERSION,
-  pattern: 'ambient',
-  flow_direction: 'left-to-right',
+  pattern: 'wave',
+  flow_direction: 'top-to-bottom',
   easing: 'smooth',
-  cycle_seconds: 12,
+  cycle_seconds: 13,
   event_duration_ms: 1800,
-  wave_stagger_ms: 180,
-  travel_px: 6,
-  scale_amount: 0.012,
-  brightness_amount: 0.16,
-  section_effect: 'shimmer',
-  item_effect: 'none',
-  price_effect: 'none',
+  wave_stagger_ms: 250,
+  travel_px: 4,
+  scale_amount: 0.01,
+  brightness_amount: 0.12,
+  section_effect: 'glow',
+  item_effect: 'focus',
+  price_effect: 'glow',
   background_effect: 'drift',
   background_zoom_percent: 2,
-  intensity: 45
+  intensity: 42
 });
 
 function sourceObject(profile) {
@@ -129,6 +129,7 @@ function migrateLegacyProfile(source) {
 
 export function completeAnimationProfile(profile = {}) {
   const source = sourceObject(profile);
+  if (Object.keys(source).length === 0) return canonicalCurrent(DEFAULT_ANIMATION_PROFILE);
   return Number(source.motion_version) === ANIMATION_PROFILE_VERSION
     ? canonicalCurrent(source)
     : migrateLegacyProfile(source);
