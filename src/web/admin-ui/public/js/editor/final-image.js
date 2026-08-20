@@ -42,7 +42,7 @@ export async function renderFinalJpeg(editorState, { screen, products, packaging
   if (!resolution) throw new Error('Укажите разрешение монитора в формате 1920×1080.');
 
   const model = buildRenderModel(editorState, resolution);
-  const lines = buildDisplayLines(model, { products, packaging, fallbackTitle: screen?.name || 'Меню' });
+  const lines = buildDisplayLines(model, { products, packaging, fallbackTitle: 'Новый раздел' });
   const layout = buildRenderLayout(model, lines);
   if (!layout.vertical.fits) {
     throw new Error(`Даже при минимальном масштабе меню не помещается в ${model.viewport.width}×${model.viewport.height}. Уменьшите количество строк.`);

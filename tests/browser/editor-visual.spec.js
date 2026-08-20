@@ -181,7 +181,7 @@ test('screen properties update preview and keep publication locked while dirty',
   expect(aspect.replace(/\s+/g, '')).toBe('1024/768');
 });
 
-test('login logo size is applied without default-size flash', async ({ page }) => {
+test('login composition follows TV Menu 1 and size 7 is the reference logo scale without flash', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await login(page);
   await page.goto('/settings.html');
@@ -201,12 +201,20 @@ test('login logo size is applied without default-size flash', async ({ page }) =
   await page.goto('/signin.html', { waitUntil: 'domcontentloaded' });
   await expect(page).toHaveURL(/\/signin\.html$/);
   await expect(page.locator('html')).toHaveAttribute('data-signin-presentation', 'pending');
-  await expect(page.locator('.signin-brand .brand-mark')).toHaveCSS('visibility', 'hidden');
+  await expect(page.locator('.signin-brand')).toHaveCSS('visibility', 'hidden');
   await expect(page.locator('html')).toHaveAttribute('data-signin-presentation', 'ready');
   await expect(page.locator('html')).toHaveAttribute('data-signin-logo-size', '7');
+  await expect(page.getByText('ПАНЕЛЬ УПРАВЛЕНИЯ', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Введите данные администратора.', { exact: true })).toHaveCount(0);
+  await expect(page.getByPlaceholder('Логин')).toBeVisible();
+  await expect(page.getByPlaceholder('Пароль')).toBeVisible();
+  await expect(page.getByText(/Забыли логин или пароль/)).toBeVisible();
   const mark = page.locator('.signin-brand .brand-mark');
   await expect(mark).toHaveCSS('visibility', 'visible');
   const box = await mark.boundingBox();
-  expect(Math.round(box.width)).toBe(100);
+  expect(Math.round(box.width)).toBe(170);
+  expect(Math.round(box.height)).toBe(170);
   expect(await mark.evaluate((node) => getComputedStyle(node).transitionDuration)).toBe('0s');
+  const card = await page.locator('.signin-card').boundingBox();
+  expect(card.width).toBeLessThanOrEqual(375);
 });

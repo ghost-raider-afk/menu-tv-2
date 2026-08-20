@@ -34,6 +34,8 @@ test('CSS architecture is compact and has one permanent entrypoint', async () =>
   assert.match(tokens, /--ui-rail-width:64px/);
   assert.match(tokens, /--ui-context-width:250px/);
   assert.match(tokens, /--ui-control-height:32px/);
+  assert.match(tokens, /--ui-chrome-surface:/);
+  assert.match(tokens, /--ui-accent-on-chrome:/);
 });
 
 test('shell remains modular and catalog submenu has one product entry', async () => {
@@ -132,15 +134,20 @@ test('monitor editor owns one left-aligned exclusive command bar and one canonic
   assert.doesNotMatch(tablesCss, /menu-preview|editor-menu-table/);
 });
 
-test('login logo has seven sizes and never paints the wrong default size while config is pending', async () => {
+test('login uses the TV Menu 1 composition and seven logo sizes without a wrong first frame', async () => {
   const [signinCss, signinHtml, signinJs, settingsHtml, presentation] = await Promise.all([
     read('css/auth/signin.css'), read('signin.html'), read('js/pages/signin.js'), read('settings.html'), read('js/core/presentation.js')
   ]);
-  assert.match(signinCss, /\.signin-brand \.brand-mark\{[^}]*width:44px[^}]*height:44px/);
+  assert.match(signinCss, /\.signin-brand \.brand-mark\{[^}]*width:72px[^}]*height:72px/);
   for (let level = 2; level <= 7; level += 1) assert.match(signinCss, new RegExp(`data-signin-logo-size="${level}"`));
-  assert.match(signinCss, /data-signin-presentation="pending"[^}]*brand-mark\{visibility:hidden/);
+  assert.match(signinCss, /data-signin-logo-size="7"[^}]*width:170px[^}]*height:170px/);
+  assert.match(signinCss, /data-signin-presentation="pending"[^}]*\.signin-brand\{visibility:hidden/);
   assert.doesNotMatch(signinCss, /transition:\s*(?:width|height)|transition-property:[^}]*\b(?:width|height)\b/);
   assert.match(signinHtml, /data-signin-presentation="pending"/);
+  assert.doesNotMatch(signinHtml, /ПАНЕЛЬ УПРАВЛЕНИЯ|Введите данные администратора\./);
+  assert.match(signinHtml, /placeholder="Логин"/);
+  assert.match(signinHtml, /placeholder="Пароль"/);
+  assert.match(signinHtml, /Забыли логин или пароль/);
   assert.match(signinJs, /signinPresentation = 'ready'/);
   assert.match(settingsHtml, /id="site-signin-logo-size"/);
   for (let level = 1; level <= 7; level += 1) assert.match(settingsHtml, new RegExp(`value="${level}"`));

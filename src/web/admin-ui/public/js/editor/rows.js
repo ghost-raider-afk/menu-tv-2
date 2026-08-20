@@ -40,19 +40,24 @@ function controlButton(label, title, tone, action) {
 function actionButtons(editorState, row, index, refresh) {
   const controls = document.createElement('div');
   controls.className = 'editor-row-actions';
+  const pinnedFirstSection = index === 0 && row.kind === 'section';
+  const protectedTopIndex = editorState.rows[0]?.kind === 'section' ? 1 : 0;
   const up = controlButton('↑', 'Переместить выше', '', () => { moveRow(editorState, row.id, index - 1); refresh(); });
   const down = controlButton('↓', 'Переместить ниже', '', () => { moveRow(editorState, row.id, index + 1); refresh(); });
-  up.disabled = index === 0;
-  down.disabled = index >= editorState.rows.length - 1;
-  controls.append(
-    up,
-    down,
-    controlButton(row.enabled === false ? '○' : '●', row.enabled === false ? 'Показать строку' : 'Скрыть строку', '', () => {
-      updateRow(editorState, row.id, { enabled: row.enabled === false });
-      refresh();
-    }),
-    controlButton('×', 'Удалить строку', 'danger', () => { removeRow(editorState, row.id); refresh(); })
-  );
+  const visibility = controlButton(row.enabled === false ? '○' : '●', row.enabled === false ? 'Показать строку' : 'Скрыть строку', '', () => {
+    updateRow(editorState, row.id, { enabled: row.enabled === false });
+    refresh();
+  });
+  const remove = controlButton('×', 'Удалить строку', 'danger', () => { removeRow(editorState, row.id); refresh(); });
+
+  up.disabled = pinnedFirstSection || index <= protectedTopIndex;
+  down.disabled = pinnedFirstSection || index >= editorState.rows.length - 1;
+  visibility.disabled = pinnedFirstSection;
+  remove.disabled = pinnedFirstSection;
+  if (pinnedFirstSection) {
+    up.title = down.title = visibility.title = remove.title = 'Первый раздел закреплён для заголовков ценовых колонок';
+  }
+  controls.append(up, down, visibility, remove);
   return controls;
 }
 
@@ -64,8 +69,9 @@ function orderCell(index, kind) {
 }
 
 function sectionRow(editorState, row, index, refresh, onChange) {
+  const firstSection = index === 0;
   const line = document.createElement('tr');
-  line.className = `editor-menu-table-section${row.enabled === false ? ' is-disabled' : ''}`;
+  line.className = `editor-menu-table-section${firstSection ? ' is-pinned-section' : ''}${row.enabled === false ? ' is-disabled' : ''}`;
   line.dataset.rowId = row.id;
 
   const input = document.createElement('input');
@@ -80,8 +86,8 @@ function sectionRow(editorState, row, index, refresh, onChange) {
   line.append(
     td('editor-menu-order', orderCell(index, 'Раздел')),
     titleCell,
-    td('editor-menu-price editor-menu-price-label', text(index === 0 ? '1 л' : '—')),
-    td('editor-menu-price editor-menu-price-label', text(index === 0 ? '1,5 л' : '—')),
+    td('editor-menu-price editor-menu-price-label', text(firstSection ? '1 л' : '—')),
+    td('editor-menu-price editor-menu-price-label', text(firstSection ? '1,5 л' : '—')),
     td('editor-menu-actions', actionButtons(editorState, row, index, refresh))
   );
   return line;
