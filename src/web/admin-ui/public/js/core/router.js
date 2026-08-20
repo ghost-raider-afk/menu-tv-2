@@ -1,28 +1,10 @@
-const APP_ROUTE_PATHS = new Set([
-  '/',
-  '/index.html',
-  '/locations.html',
-  '/screens.html',
-  '/screen-editor.html',
-  '/catalog.html',
-  '/settings.html',
-  '/profile.html'
-]);
-
-const PREFETCH_PATHS = Object.freeze([
-  '/screens.html',
-  '/locations.html',
-  '/catalog.html',
-  '/settings.html',
-  '/profile.html',
-  '/screen-editor.html'
-]);
+import { canonicalRoutePath, isAppRoutePath, PREFETCH_ROUTE_PATHS } from './navigation.js';
 
 let activeRouter = null;
 
 function canonicalUrl(value) {
   const url = value instanceof URL ? new URL(value.href) : new URL(String(value), window.location.href);
-  if (url.pathname === '/index.html') url.pathname = '/';
+  url.pathname = canonicalRoutePath(url.pathname);
   return url;
 }
 
@@ -31,7 +13,7 @@ function routeIdentity(url) {
 }
 
 function isAppRoute(url) {
-  return url.origin === window.location.origin && APP_ROUTE_PATHS.has(url.pathname);
+  return url.origin === window.location.origin && isAppRoutePath(url.pathname);
 }
 
 function shouldHandleAnchor(event, anchor) {
@@ -197,8 +179,8 @@ export function createAppRouter({ mountPage, syncShell }) {
 
   function prefetch() {
     const run = () => {
-      PREFETCH_PATHS.forEach((path) => {
-        if (path === window.location.pathname) return;
+      PREFETCH_ROUTE_PATHS.forEach((path) => {
+        if (path === canonicalRoutePath(window.location.pathname)) return;
         void loadView(canonicalUrl(path)).catch(() => undefined);
       });
     };
