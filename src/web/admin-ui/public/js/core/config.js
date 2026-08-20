@@ -3,6 +3,7 @@ export const API = Object.freeze({
   login: '/api/auth/login',
   logout: '/api/auth/logout',
   session: '/api/session',
+  sessionContext: '/api/session/context',
   overview: '/api/overview',
   userSettings: '/api/settings/user',
   userPassword: '/api/settings/user/password',
