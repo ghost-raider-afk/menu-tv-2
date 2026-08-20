@@ -37,6 +37,7 @@ test('premium ambient layer animates the workspace and respects reduced motion',
 
 test('uploaded rail logo has no accent tile behind it', async ({ page }) => {
   await login(page);
+  await expect(page.locator('.ui-rail-brand .brand-mark')).toBeVisible();
 
   const result = await page.evaluate(() => {
     const mark = document.querySelector('.ui-rail-brand .brand-mark');
