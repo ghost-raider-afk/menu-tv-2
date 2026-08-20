@@ -82,7 +82,7 @@ test('public player does not require admin login while Connect TV page does', as
   assert.equal(connect.headers.get('location'), '/signin.html');
 });
 
-test('TV activation binds one device to one screen and revocation invalidates its Device Session', async () => {
+test('TV activation binds one device to one screen, rejects duplicate activation and revocation invalidates its Device Session', async () => {
   const { screenId } = await seedScreen();
 
   const activationResponse = await fetch(`${baseUrl}/api/device/activations`, {
@@ -123,6 +123,15 @@ test('TV activation binds one device to one screen and revocation invalidates it
   assert.match(deviceSetCookie, /HttpOnly/);
   const deviceCookie = deviceSetCookie.split(';', 1)[0];
   assert.equal((await consumed.json()).status, 'authorized');
+
+  const duplicateActivation = await fetch(`${baseUrl}/api/device/activations`, {
+    method: 'POST', headers: jsonHeaders(deviceCookie), body: '{}'
+  });
+  assert.equal(duplicateActivation.status, 409);
+  const duplicateBody = await duplicateActivation.json();
+  assert.equal(duplicateBody.authorized, true);
+  assert.equal(duplicateBody.screen.id, screenId);
+  assert.match(duplicateBody.error, /уже авторизован/);
 
   const currentAnimation = await store.getAnimationSettings();
   const savedAnimation = await store.updateAnimationSettings({
