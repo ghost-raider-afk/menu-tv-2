@@ -12,6 +12,10 @@ function routeIdentity(url) {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
+function documentIdentity(url) {
+  return `${url.pathname}${url.search}`;
+}
+
 function isAppRoute(url) {
   return url.origin === window.location.origin && isAppRoutePath(url.pathname);
 }
@@ -75,6 +79,19 @@ function parseViewDocument(html, responseUrl) {
     mainHtml: main.innerHTML,
     documentTitle: parsed.title || document.title
   };
+}
+
+function scrollToRouteTarget(target) {
+  if (!target.hash) {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    return;
+  }
+
+  let id = target.hash.slice(1);
+  try { id = decodeURIComponent(id); } catch {}
+  const targetNode = document.getElementById(id);
+  if (targetNode) targetNode.scrollIntoView({ block: 'start', behavior: 'auto' });
+  else window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
 }
 
 export function navigate(url, options = {}) {
@@ -161,7 +178,7 @@ export function createAppRouter({ mountPage, syncShell }) {
     if (typeof syncShell === 'function') syncShell();
     await mountCurrentPage(view.page, main);
     activeIdentity = routeIdentity(target);
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    scrollToRouteTarget(target);
     return true;
   }
 
@@ -173,8 +190,23 @@ export function createAppRouter({ mountPage, syncShell }) {
     }
 
     const targetIdentity = routeIdentity(target);
+    const activeUrl = canonicalUrl(activeIdentity);
+
+    if (!options.force && documentIdentity(target) === documentIdentity(activeUrl) && target.hash !== activeUrl.hash) {
+      if (!options.fromHistory) {
+        const href = targetIdentity;
+        if (options.replace) window.history.replaceState({ tvMenu: true }, '', href);
+        else window.history.pushState({ tvMenu: true }, '', href);
+      }
+      activeIdentity = targetIdentity;
+      if (typeof syncShell === 'function') syncShell();
+      scrollToRouteTarget(target);
+      return true;
+    }
+
     if (!options.force && !options.fromHistory && targetIdentity === activeIdentity) {
       if (typeof syncShell === 'function') syncShell();
+      scrollToRouteTarget(target);
       return true;
     }
 
