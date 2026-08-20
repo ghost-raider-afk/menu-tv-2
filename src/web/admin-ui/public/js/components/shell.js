@@ -24,6 +24,12 @@ function wireContext(shell, rail, context, header) {
   else if (savedCollapsedState()) setCollapsed(shell, context, true, { persist: false });
 
   context.querySelector('.ui-context-close')?.addEventListener('click', () => setCollapsed(shell, context, true));
+  context.addEventListener('click', (event) => {
+    const link = event.target instanceof Element ? event.target.closest('.app-route-link') : null;
+    if (!link || !context.contains(link)) return;
+    setCollapsed(shell, context, true);
+  });
+
   rail.querySelectorAll('.ui-rail-button').forEach((link) => {
     link.addEventListener('pointerenter', () => {
       if (window.innerWidth > 720 && link.classList.contains('active')) setCollapsed(shell, context, false);
@@ -31,7 +37,7 @@ function wireContext(shell, rail, context, header) {
     link.addEventListener('click', (event) => {
       if (window.innerWidth <= 720) {
         const section = link.dataset.routeSection;
-        const usesContextMenu = section === 'monitors' || section === 'settings';
+        const usesContextMenu = section === 'monitors' || section === 'settings' || section === 'catalog';
         if (usesContextMenu && link.classList.contains('active')) event.preventDefault();
         setCollapsed(shell, context, !usesContextMenu);
         return;
