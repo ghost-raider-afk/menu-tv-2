@@ -3,6 +3,7 @@ import { api } from '../core/api.js';
 import { element, setMessage, setPending } from '../core/dom.js';
 import { ANIMATION_PRESETS, DEFAULT_PRESET_ID, PRESET_BY_ID, profileForPreset } from '../motion/presets.js';
 import { AnimationPreviewPlayer } from '../motion/preview-player.js';
+import { renderAnimationScreenEmpty, renderAnimationScreenPreview } from '../motion/screen-preview.js';
 
 const CONTROL_IDS = Object.freeze([
   'animation-entrance', 'animation-direction', 'animation-easing', 'animation-distance', 'animation-scale',
@@ -15,6 +16,7 @@ const CONTROL_IDS = Object.freeze([
 let currentPresetId = DEFAULT_PRESET_ID;
 let player = null;
 let previewFrame = null;
+let screenLoadSequence = 0;
 
 function number(id) {
   return Number(element(id)?.value ?? 0);
@@ -150,6 +152,75 @@ function bindProfileControls() {
   });
 }
 
+function screenLabel(screen) {
+  const location = screen.location_name || 'Без точки';
+  return `${location} — ${screen.name}`;
+}
+
+function setScreenStatus(text) {
+  const node = element('animation-screen-status');
+  if (node) node.textContent = text;
+}
+
+function screenFromUrl(screens) {
+  const candidate = Number(new URL(window.location.href).searchParams.get('screen'));
+  return screens.find((screen) => Number(screen.id) === candidate) || screens[0] || null;
+}
+
+function rememberSelectedScreen(screenId) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('screen', String(screenId));
+  history.replaceState(history.state, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
+async function loadScreenPreview(screenId) {
+  const stage = element('animation-stage');
+  const select = element('animation-screen-select');
+  if (!stage || !screenId) return;
+  const sequence = ++screenLoadSequence;
+  if (select) select.disabled = true;
+  setScreenStatus('Загружаем сохранённый экран…');
+  try {
+    const bundle = await api.get(`${API.screens}/${screenId}/editor`);
+    if (sequence !== screenLoadSequence) return;
+    renderAnimationScreenPreview(stage, bundle);
+    setScreenStatus(`${bundle.screen.location_name || 'Без точки'} · ${bundle.screen.name} · ${bundle.screen.resolution}`);
+    restartPreview();
+  } catch (error) {
+    if (sequence !== screenLoadSequence) return;
+    renderAnimationScreenEmpty(stage, 'Не удалось загрузить выбранный монитор.');
+    setScreenStatus(error.message);
+  } finally {
+    if (sequence === screenLoadSequence && select) select.disabled = false;
+  }
+}
+
+async function loadScreenOptions() {
+  const stage = element('animation-stage');
+  const select = element('animation-screen-select');
+  if (!stage || !(select instanceof HTMLSelectElement)) return;
+  const screens = await api.get(API.screens);
+  if (!Array.isArray(screens) || screens.length === 0) {
+    select.innerHTML = '<option value="">Нет мониторов</option>';
+    select.disabled = true;
+    renderAnimationScreenEmpty(stage);
+    setScreenStatus('В проекте пока нет мониторов.');
+    player?.destroy();
+    return;
+  }
+
+  select.innerHTML = screens.map((screen) => `<option value="${screen.id}">${screenLabel(screen)}</option>`).join('');
+  const selected = screenFromUrl(screens);
+  select.value = String(selected.id);
+  select.addEventListener('change', () => {
+    const id = Number(select.value);
+    if (!id) return;
+    rememberSelectedScreen(id);
+    void loadScreenPreview(id);
+  });
+  await loadScreenPreview(selected.id);
+}
+
 async function loadSettings() {
   const settings = await api.get(API.animationSettings);
   currentPresetId = settings?.preset_id || DEFAULT_PRESET_ID;
@@ -197,5 +268,5 @@ export function initialiseAnimationStudio() {
   renderPresets();
   bindProfileControls();
   element('animation-save')?.addEventListener('click', () => { void saveSettings(); });
-  void loadSettings().catch((error) => setMessage('animation-message', error.message));
+  void Promise.all([loadSettings(), loadScreenOptions()]).catch((error) => setMessage('animation-message', error.message));
 }
