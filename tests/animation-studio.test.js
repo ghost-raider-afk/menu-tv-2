@@ -26,23 +26,36 @@ test('animation settings contract rejects invalid professional controls', () => 
   assert.throws(() => animationSettingsInput({ enabled: true, preset_id: 'custom', profile: { ...profile, easing: 'random' } }), /Easing/);
 });
 
-test('animation studio has a dedicated settings route, mini player and timeline controls', async () => {
-  const [html, app, navigation, config, css, page, player] = await Promise.all([
+test('animation studio has a dedicated settings route, real-screen mini player and timeline controls', async () => {
+  const [html, app, navigation, config, css, previewCss, page, player, screenPreview] = await Promise.all([
     read('animation.html'), read('js/application.js'), read('js/core/navigation.js'), read('js/core/config.js'),
-    read('css/pages/animation.css'), read('js/pages/animation.js'), read('js/motion/preview-player.js')
+    read('css/pages/animation.css'), read('css/pages/animation-screen-preview.css'), read('js/pages/animation.js'),
+    read('js/motion/preview-player.js'), read('js/motion/screen-preview.js')
   ]);
   assert.match(html, /data-page="animation"/);
-  for (const id of ['animation-stage','animation-play','animation-pause','animation-replay','animation-timeline','animation-save']) {
+  for (const id of ['animation-stage','animation-screen-select','animation-screen-status','animation-play','animation-pause','animation-replay','animation-timeline','animation-save']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
+  assert.doesNotMatch(html, /animation-demo-|БИР КОМ СВЕТЛОЕ|ЖИГУЛЕВСКОЕ/);
   assert.match(navigation, /\/animation\.html/);
   assert.match(navigation, /\['Анимация', '\/animation\.html'\]/);
   assert.match(app, /initialiseAnimationStudio/);
   assert.match(config, /animationSettings:\s*'\/api\/settings\/animation'/);
   assert.match(page, /ANIMATION_PRESETS/);
   assert.match(page, /AnimationPreviewPlayer/);
+  assert.match(page, /api\.get\(API\.screens\)/);
+  assert.match(page, /\$\{API\.screens\}\/\$\{screenId\}\/editor/);
+  assert.match(page, /renderAnimationScreenPreview/);
+  assert.match(screenPreview, /buildRenderModel/);
+  assert.match(screenPreview, /buildDisplayLines/);
+  assert.match(screenPreview, /buildRenderLayout/);
+  assert.match(screenPreview, /buildTableSvg/);
+  assert.match(screenPreview, /g\.table-section/);
+  assert.match(screenPreview, /text\.price/);
   assert.match(player, /element\.animate/);
   assert.match(player, /currentTime/);
   assert.match(css, /\.animation-stage/);
   assert.match(css, /aspect-ratio:16\/9/);
+  assert.match(previewCss, /\.animation-screen-canvas \.menu-table-svg/);
+  assert.match(previewCss, /\.animation-stage \[data-motion\]/);
 });
