@@ -5,12 +5,8 @@ function rowIndex(state, rowId) {
 }
 
 export function addRow(state, row, { index = state.rows.length } = {}) {
-  if (!row || typeof row !== 'object' || typeof row.id !== 'string' || !row.id) {
-    throw new TypeError('Строка редактора должна иметь непустой id.');
-  }
-  if (state.rows.some((item) => item.id === row.id)) {
-    throw new Error(`Строка с id ${row.id} уже существует.`);
-  }
+  if (!row || typeof row !== 'object' || typeof row.id !== 'string' || !row.id) throw new TypeError('Строка редактора должна иметь непустой id.');
+  if (state.rows.some((item) => item.id === row.id)) throw new Error(`Строка с id ${row.id} уже существует.`);
   const target = Math.max(0, Math.min(Number.isInteger(index) ? index : state.rows.length, state.rows.length));
   state.rows.splice(target, 0, structuredClone(row));
   state.selectedRowId = row.id;
@@ -57,14 +53,5 @@ export function updateSettings(state, patch) {
 
 export function updateScreen(state, patch) {
   state.screen = { ...(state.screen || {}), ...structuredClone(patch || {}) };
-  return markEditorChanged(state);
-}
-
-export function applyTemplate(state, template) {
-  if (!template || typeof template !== 'object') throw new TypeError('Шаблон не задан.');
-  state.rows = structuredClone(Array.isArray(template.rows) ? template.rows : []);
-  state.settings = structuredClone(template.settings && typeof template.settings === 'object' ? template.settings : {});
-  state.templateId = template.id ?? null;
-  state.selectedRowId = null;
   return markEditorChanged(state);
 }
