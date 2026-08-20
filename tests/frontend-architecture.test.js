@@ -55,6 +55,27 @@ test('authenticated page bootstrap uses one context API request', async () => {
   assert.doesNotMatch(session, /API\.userSettings|API\.siteSettings|Promise\.all/);
 });
 
+test('authenticated navigation uses one persistent client-side shell', async () => {
+  const [application, router, shell, sidebar, context, header, screens] = await Promise.all([
+    read('js/application.js'), read('js/core/router.js'), read('js/components/shell.js'), read('js/components/sidebar.js'),
+    read('js/components/context-panel.js'), read('js/components/header.js'), read('js/pages/screens.js')
+  ]);
+  assert.match(application, /createAppRouter/);
+  assert.match(application, /router\.start\(\)/);
+  assert.doesNotMatch(application, /await initialisePage\(current\)/);
+  assert.match(router, /history\.pushState/);
+  assert.match(router, /addEventListener\('popstate'/);
+  assert.match(router, /main\.innerHTML = view\.mainHtml/);
+  assert.match(router, /PREFETCH_PATHS/);
+  assert.match(router, /canLeaveCurrentPage/);
+  assert.match(shell, /refreshShellRoute/);
+  assert.match(sidebar, /refreshSidebarActive/);
+  assert.match(context, /refreshContextPanel/);
+  assert.match(header, /refreshHeaderRoute/);
+  assert.match(screens, /await navigate\(`\/screen-editor\.html\?id=\$\{screen\.id\}`\)/);
+  assert.doesNotMatch(screens, /window\.location\.assign/);
+});
+
 test('monitor editor owns one left-aligned exclusive command bar and one canonical renderer', async () => {
   const [rows, preview, finalImage, renderer, editorCss, editorHtml, editorJs, tablesCss] = await Promise.all([
     read('js/editor/rows.js'), read('js/editor/preview.js'), read('js/editor/final-image.js'), read('js/editor/renderer.js'),
@@ -91,6 +112,9 @@ test('monitor editor owns one left-aligned exclusive command bar and one canonic
   assert.match(editorHtml, /id="editor-save"[^>]*>Сохранить<\/button>\s*<button[^>]*id="editor-publish"[^>]*>Опубликовать<\/button>/);
   assert.match(editorJs, /bindExclusiveToolMenus/);
   assert.match(editorJs, /other\.open = false/);
+  assert.match(editorJs, /canLeave\(\)/);
+  assert.match(editorJs, /dispose\(\)/);
+  assert.match(editorJs, /removeEventListener\('beforeunload'/);
   assert.doesNotMatch(editorJs, /editor-source-file|editor-upload/);
   const commandbar = editorHtml.match(/<section class="editor-commandbar"[\s\S]*?<\/section>/)?.[0] || '';
   const menuCard = editorHtml.match(/<section class="settings-card editor-menu-card"[\s\S]*?<\/section>/)?.[0] || '';
