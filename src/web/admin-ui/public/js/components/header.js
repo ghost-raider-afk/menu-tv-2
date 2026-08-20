@@ -27,6 +27,16 @@ function accountControl() {
   return wrap;
 }
 
+export function refreshHeaderRoute(root = document) {
+  const { title } = navigationState();
+  const header = root.querySelector('.app-header');
+  if (!header) return;
+  const titleNode = header.querySelector('.app-header-title span');
+  if (titleNode) titleNode.textContent = title;
+  const nameNode = header.querySelector('[data-app-name]');
+  if (nameNode) nameNode.textContent = appName();
+}
+
 export function createHeader() {
   const { title } = navigationState();
   const header = document.createElement('header');
@@ -81,7 +91,8 @@ export function initialiseHeader() {
   const account = document.querySelector('.header-account');
   const trigger = account?.querySelector('.header-account-trigger');
   const menu = account?.querySelector('.header-account-menu');
-  if (trigger && menu) {
+  if (trigger && menu && trigger.dataset.bound !== '1') {
+    trigger.dataset.bound = '1';
     trigger.addEventListener('click', () => {
       const open = menu.classList.contains('is-hidden');
       menu.classList.toggle('is-hidden', !open);
@@ -99,6 +110,10 @@ export function initialiseHeader() {
     button.dataset.logoutBound = '1';
     button.addEventListener('click', () => { void logout(); });
   });
-  document.getElementById('theme-toggle')?.addEventListener('click', () => { void toggleTheme(); });
+  const theme = document.getElementById('theme-toggle');
+  if (theme && theme.dataset.bound !== '1') {
+    theme.dataset.bound = '1';
+    theme.addEventListener('click', () => { void toggleTheme(); });
+  }
   syncThemeButton();
 }
