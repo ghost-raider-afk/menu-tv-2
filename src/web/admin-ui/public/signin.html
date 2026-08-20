@@ -11,14 +11,24 @@
   <body data-page="signin" class="signin-page">
     <main class="signin-layout">
       <section class="signin-card" aria-labelledby="signin-title">
-        <a class="signin-brand" href="/signin.html"><span class="brand-mark">ТВ</span><span data-app-name>ТВ МЕНЮ</span></a>
-        <div class="signin-heading"><p class="eyebrow">ПАНЕЛЬ УПРАВЛЕНИЯ</p><h1 id="signin-title">Вход в систему</h1><p>Введите данные администратора.</p></div>
-        <form id="signin-form" class="form-stack" novalidate>
-          <label class="field"><span>Логин</span><input id="username" name="username" type="text" autocomplete="username" required autofocus /></label>
-          <label class="field"><span>Пароль</span><input id="password" name="password" type="password" autocomplete="current-password" required /></label>
+        <h1 id="signin-title" class="signin-visually-hidden">Вход в систему</h1>
+        <div class="signin-brand">
+          <span class="brand-mark" aria-hidden="true">ТВ</span>
+          <strong data-app-name>ТВ МЕНЮ</strong>
+        </div>
+        <form id="signin-form" class="signin-form" novalidate>
+          <label class="signin-field">
+            <span class="signin-visually-hidden">Логин</span>
+            <input id="username" name="username" type="text" autocomplete="username" placeholder="Логин" required autofocus />
+          </label>
+          <label class="signin-field">
+            <span class="signin-visually-hidden">Пароль</span>
+            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Пароль" required />
+          </label>
           <p class="form-message is-hidden" id="signin-message" role="alert" aria-live="polite"></p>
           <button class="button button-primary button-wide" id="signin-submit" type="submit">Войти</button>
         </form>
+        <p class="signin-help">Забыли логин или пароль?<br />Обратитесь к администратору.</p>
       </section>
     </main>
   </body>
