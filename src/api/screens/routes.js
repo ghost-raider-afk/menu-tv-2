@@ -24,7 +24,6 @@ async function cloneScreen(tx, sourceId, targetLocationId, config) {
   const draft = await tx.getScreenDraft(source.id);
   const created = await tx.createScreen({
     location_id: targetLocationId,
-    name: await tx.nextScreenName(targetLocationId),
     resolution: source.resolution,
     status: 'draft',
     active: source.active !== false
@@ -174,12 +173,12 @@ export function createScreensRouter({ store, sftp, config }) {
       const siteSettings = await tx.getSiteSettings();
       return tx.createScreen({
         location_id: locationId,
-        name: await tx.nextScreenName(locationId),
         resolution: siteSettings.default_screen_resolution,
         status: 'draft',
         active: true
       });
     });
+    if (!screen) throw notFound();
     await activity(store, request, {
       action: sourceId ? 'screen.cloned' : 'screen.created',
       entity_type: 'screen',
@@ -200,6 +199,7 @@ export function createScreensRouter({ store, sftp, config }) {
       if (!await tx.getLocation(input.location_id)) throw notFound();
       return tx.createScreen(input);
     });
+    if (!screen) throw notFound();
     await activity(store, request, { action: 'screen.created', entity_type: 'screen', entity_id: screen.id, message: `Добавлен монитор «${screen.name}».` });
     response.status(201).json(screen);
   });
