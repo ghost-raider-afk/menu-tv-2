@@ -68,3 +68,40 @@ test('products can be exported and imported as one round-trip CSV', async ({ pag
   await page.request.delete(`/api/catalog/products/${product.id}`);
   if (created) await page.request.delete(`/api/catalog/products/${created.id}`);
 });
+
+test('mobile catalog shows existing products before the creation form', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page);
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const productName = `MOBILE ${suffix}`;
+  const createResponse = await page.request.post('/api/catalog/products', {
+    data: {
+      name: productName,
+      producer: 'Browser CI',
+      characteristics: 'mobile list regression',
+      strength: '',
+      price_primary: '120',
+      alcoholic: false,
+      beverage_color: 'none',
+      filtration: 'none',
+      active: true
+    }
+  });
+  expect(createResponse.status()).toBe(201);
+  const product = await createResponse.json();
+
+  try {
+    await page.goto('/catalog.html');
+    await waitForRouteReady(page);
+    await expect(page.locator('#products-list')).toBeVisible();
+    await expect(page.locator('#products-list .record-title', { hasText: productName })).toBeVisible();
+
+    const listBox = await page.locator('#products-list').boundingBox();
+    const formBox = await page.locator('#products').boundingBox();
+    expect(listBox).not.toBeNull();
+    expect(formBox).not.toBeNull();
+    expect(listBox.y).toBeLessThan(formBox.y);
+  } finally {
+    await page.request.delete(`/api/catalog/products/${product.id}`);
+  }
+});
