@@ -5,11 +5,13 @@ import { retireLegacyTemplates } from './migrations/template-retirement.js';
 import { migrateScreenNumbering } from './migrations/screen-numbering.js';
 import { migrateAnimationSettings } from './migrations/animation-settings.js';
 import { migrateAnimationProfileLibrary } from './migrations/animation-profile-library.js';
+import { migratePlayerWorkspaces } from './migrations/player-workspaces.js';
 import { seedDemoData } from './migrations/seed.js';
 import { createOverviewRepository } from './overview.js';
 import { createUsersRepository } from './users.js';
 import { createSettingsRepository } from './settings.js';
 import { createAnimationRepository } from './animation.js';
+import { createPlayerRepository } from './player.js';
 import { createNotificationsRepository } from './notifications.js';
 import { createLocationsRepository } from './locations.js';
 import { createScreensRepository } from './screens.js';
@@ -24,6 +26,7 @@ function createRepositories(queryable) {
     createUsersRepository(queryable),
     createSettingsRepository(queryable),
     createAnimationRepository(queryable),
+    createPlayerRepository(queryable),
     createNotificationsRepository(queryable),
     locations,
     createScreensRepository(queryable),
@@ -47,6 +50,7 @@ export class MenuTvStore {
     await migrateAnimationSettings(this.pool);
     await migrateAnimationProfileLibrary(this.pool);
     if (this.seedDemoData) await seedDemoData(this.pool);
+    await migratePlayerWorkspaces(this.pool);
   }
 
   async transaction(run) {
