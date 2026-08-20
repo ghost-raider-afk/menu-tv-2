@@ -51,6 +51,14 @@ export function createDevicesRepository(pool) {
       return activationRecord(rows[0]);
     },
 
+    async getDeviceActivation(id, { lock = false } = {}) {
+      const { rows } = await pool.query(
+        `SELECT * FROM tv_device_activations WHERE id = $1 LIMIT 1${lock ? ' FOR UPDATE' : ''}`,
+        [id]
+      );
+      return activationRecord(rows[0]);
+    },
+
     async getDeviceActivationByScanTokenHash(hash) {
       const { rows } = await pool.query(
         `SELECT * FROM tv_device_activations
