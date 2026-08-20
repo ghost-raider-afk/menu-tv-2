@@ -3,7 +3,7 @@ import test from 'node:test';
 import { newDb } from 'pg-mem';
 import { migrateScreenNumbering } from '../src/db/migrations/screen-numbering.js';
 
-test('legacy screens are numbered inside each location and unpublished filenames become canonical', async () => {
+test('legacy screens are numbered inside each location and all filenames become canonical', async () => {
   const memory = newDb();
   const { Pool } = memory.adapters.createPg();
   const pool = new Pool();
@@ -32,7 +32,7 @@ test('legacy screens are numbered inside each location and unpublished filenames
   })), [
     { location: 10, number: 1, filename: 'monitor-1.jpg' },
     { location: 20, number: 1, filename: 'monitor-1.jpg' },
-    { location: 10, number: 2, filename: 'monitor-9.jpg' }
+    { location: 10, number: 2, filename: 'monitor-2.jpg' }
   ]);
   await pool.end();
 });
