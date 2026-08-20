@@ -17,6 +17,21 @@ test('server is a thin application assembly layer without templates runtime', as
   assert.doesNotMatch(server, /function\s+(?:productInput|screenInput|menuDraftInput|verifyPassword|issueSession)\b/);
 });
 
+test('normal page loads never purge the browser cache', async () => {
+  const server = await read('server.js');
+  assert.doesNotMatch(server, /Clear-Site-Data/i);
+  assert.match(server, /extension === '\.html'[\s\S]*Cache-Control', 'no-store'/);
+  assert.match(server, /extension === '\.js' \|\| extension === '\.css'[\s\S]*no-cache, must-revalidate/);
+});
+
+test('session router exposes one bootstrap context with user and site data', async () => {
+  const routes = await read('api/session/routes.js');
+  assert.match(routes, /router\.get\('\/session\/context'/);
+  assert.match(routes, /user:\s*preferences/);
+  assert.match(routes, /site:\s*siteSettingsResponse\(settings, config\)/);
+  assert.match(routes, /Promise\.all/);
+});
+
 test('database facade exposes only current domain repositories', async () => {
   const facade = await read('db/index.js');
   assert.ok(facade.length < 6000, `db/index.js too large: ${facade.length}`);

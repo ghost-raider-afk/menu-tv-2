@@ -4,11 +4,8 @@ import { state } from './state.js';
 import { applyPresentation, applyTheme } from './presentation.js';
 
 export async function loadAuthenticatedContext() {
-  const [session, user, site] = await Promise.all([
-    api.get(API.session),
-    api.get(API.userSettings),
-    api.get(API.siteSettings)
-  ]);
+  const context = await api.get(API.sessionContext);
+  const { session, user, site } = context;
   state.session = session;
   state.user = user;
   state.site = site;
