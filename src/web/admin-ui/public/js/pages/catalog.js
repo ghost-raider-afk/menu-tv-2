@@ -87,6 +87,52 @@ async function deleteProduct(product) {
   catch (error) { setMessage('product-message', error.message); }
 }
 
+function downloadCsv(csv) {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'products.csv';
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function exportProducts() {
+  const button = element('product-export');
+  setPending(button, true, 'Выгружаем…');
+  clearMessage('product-message');
+  try {
+    const csv = await api.get(API.productsExport);
+    downloadCsv(csv);
+    setMessage('product-message', `CSV выгружен. Записей: ${state.products.length}.`, 'success');
+  } catch (error) {
+    setMessage('product-message', error.message);
+  } finally {
+    setPending(button, false, 'Выгружаем…');
+  }
+}
+
+async function importProducts(file) {
+  const button = element('product-import');
+  const input = element('product-import-file');
+  setPending(button, true, 'Загружаем…');
+  clearMessage('product-message');
+  try {
+    const csv = await file.text();
+    const result = await api.post(API.productsImport, { csv });
+    resetProductForm();
+    await Promise.all([loadCatalog(), loadNotifications()]);
+    setMessage('product-message', `CSV загружен: создано ${result.created}, обновлено ${result.updated}.`, 'success');
+  } catch (error) {
+    setMessage('product-message', error.message);
+  } finally {
+    if (input instanceof HTMLInputElement) input.value = '';
+    setPending(button, false, 'Загружаем…');
+  }
+}
+
 function resetPackagingForm() {
   const form = element('packaging-form');
   if (!(form instanceof HTMLFormElement)) return;
@@ -126,6 +172,12 @@ export function initialiseCatalog() {
   element('packaging-filter')?.addEventListener('input', renderCatalogPackaging);
   element('cancel-product-edit')?.addEventListener('click', resetProductForm);
   element('cancel-packaging-edit')?.addEventListener('click', resetPackagingForm);
+  element('product-export')?.addEventListener('click', () => { void exportProducts(); });
+  element('product-import')?.addEventListener('click', () => { element('product-import-file')?.click(); });
+  element('product-import-file')?.addEventListener('change', (event) => {
+    const file = event.target?.files?.[0];
+    if (file) void importProducts(file);
+  });
   productForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const submit = element('product-submit');
