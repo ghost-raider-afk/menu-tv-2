@@ -5,12 +5,10 @@ export const state = {
   notificationTimer: null,
   locations: [],
   screens: [],
-  templates: [],
   products: [],
   packaging: [],
   sftpDirectories: [],
   editingLocationId: null,
-  editingTemplateId: null,
   editingProductId: null,
   editingPackagingId: null
 };
