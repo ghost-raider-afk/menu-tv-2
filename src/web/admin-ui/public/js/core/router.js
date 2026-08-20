@@ -90,9 +90,9 @@ export function createAppRouter({ mountPage, syncShell }) {
 
   const viewCache = new Map();
   let lifecycle = null;
-  let navigationSequence = 0;
   let activeIdentity = routeIdentity(canonicalUrl(window.location.href));
   let started = false;
+  let navigationQueue = Promise.resolve();
 
   viewCache.set(canonicalUrl(window.location.href).pathname, currentViewSnapshot());
 
@@ -165,7 +165,7 @@ export function createAppRouter({ mountPage, syncShell }) {
     return true;
   }
 
-  async function navigateInternal(value, options = {}) {
+  async function performNavigation(value, options = {}) {
     const target = canonicalUrl(value);
     if (!isAppRoute(target)) {
       window.location.assign(target.href);
@@ -178,16 +178,23 @@ export function createAppRouter({ mountPage, syncShell }) {
       return true;
     }
 
-    const sequence = ++navigationSequence;
     try {
       const view = await loadView(target);
-      if (sequence !== navigationSequence) return false;
       return await commit(target, view, options);
     } catch (error) {
       console.error('Client-side navigation failed', error);
       window.location.assign(target.href);
       return false;
     }
+  }
+
+  function navigateInternal(value, options = {}) {
+    const targetHref = canonicalUrl(value).href;
+    const requestOptions = { ...options };
+    const run = () => performNavigation(targetHref, requestOptions);
+    const result = navigationQueue.then(run, run);
+    navigationQueue = result.catch(() => false);
+    return result;
   }
 
   function onDocumentClick(event) {
@@ -227,6 +234,7 @@ export function createAppRouter({ mountPage, syncShell }) {
     async stop() {
       document.removeEventListener('click', onDocumentClick);
       window.removeEventListener('popstate', onPopState);
+      await navigationQueue.catch(() => undefined);
       await disposeCurrentPage();
       if (activeRouter === router) activeRouter = null;
       started = false;
