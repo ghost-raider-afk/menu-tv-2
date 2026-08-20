@@ -88,7 +88,8 @@ async function deleteProduct(product) {
 }
 
 function downloadCsv(csv) {
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const content = csv.startsWith('\uFEFF') ? csv : `\uFEFF${csv}`;
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -96,7 +97,7 @@ function downloadCsv(csv) {
   document.body.append(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 async function exportProducts() {
