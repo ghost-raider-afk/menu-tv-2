@@ -4,7 +4,7 @@ export const ROUTE_DEFINITIONS = Object.freeze([
   Object.freeze({ path: '/', page: 'overview', section: 'overview', title: 'Обзор', prefetch: false }),
   Object.freeze({ path: '/locations.html', page: 'locations', section: 'monitors', title: 'Торговые точки', prefetch: true }),
   Object.freeze({ path: '/screens.html', page: 'screens', section: 'monitors', title: 'Мониторы', prefetch: true }),
-  Object.freeze({ path: '/connect-tv.html', page: 'connect-tv', section: 'monitors', title: 'Подключить ТВ', prefetch: true }),
+  Object.freeze({ path: '/connect-tv.html', page: 'connect-tv', section: 'monitors', title: 'Подключение ТВ', prefetch: true }),
   Object.freeze({ path: '/screen-editor.html', page: 'screen-editor', section: 'monitors', title: 'Редактор меню', prefetch: true }),
   Object.freeze({ path: '/catalog.html', page: 'catalog', section: 'catalog', title: 'Каталог', prefetch: true }),
   Object.freeze({ path: '/settings.html', page: 'settings', section: 'settings', title: 'Настройки сайта', prefetch: true }),
@@ -26,12 +26,44 @@ export function isAppRoutePath(pathname) {
 
 export const PREFETCH_ROUTE_PATHS = Object.freeze(ROUTE_DEFINITIONS.filter((route) => route.prefetch).map((route) => route.path));
 
-const CONTEXT_LINKS = Object.freeze({
-  overview: Object.freeze([['Обзор', '/']]),
-  monitors: Object.freeze([['Торговые точки', '/locations.html'], ['Мониторы', '/screens.html'], ['Подключить ТВ', '/connect-tv.html']]),
-  catalog: Object.freeze([['Продукция', '/catalog.html']]),
-  settings: Object.freeze([['Настройки сайта', '/settings.html'], ['SFTP', '/sftp-settings.html'], ['Анимация', '/animation.html'], ['Профиль', '/profile.html']])
+const CONTEXT_GROUPS = Object.freeze({
+  overview: Object.freeze([
+    Object.freeze({ label: '', links: Object.freeze([['Обзор', '/']]) })
+  ]),
+  monitors: Object.freeze([
+    Object.freeze({
+      label: 'УПРАВЛЕНИЕ МОНИТОРАМИ',
+      links: Object.freeze([
+        ['Торговые точки', '/locations.html'],
+        ['Мониторы', '/screens.html']
+      ])
+    }),
+    Object.freeze({
+      label: 'ТЕЛЕВИЗОРЫ',
+      links: Object.freeze([
+        ['Подключение ТВ', '/connect-tv.html']
+      ])
+    })
+  ]),
+  catalog: Object.freeze([
+    Object.freeze({ label: '', links: Object.freeze([['Продукция', '/catalog.html']]) })
+  ]),
+  settings: Object.freeze([
+    Object.freeze({
+      label: '',
+      links: Object.freeze([
+        ['Настройки сайта', '/settings.html'],
+        ['SFTP', '/sftp-settings.html'],
+        ['Анимация', '/animation.html'],
+        ['Профиль', '/profile.html']
+      ])
+    })
+  ])
 });
+
+function flattenContextGroups(groups) {
+  return groups.flatMap((group) => group.links);
+}
 
 export const PRIMARY_ROUTES = Object.freeze([
   Object.freeze({ key: 'monitors', label: 'Мониторы', href: '/screens.html', icon: 'monitor' }),
@@ -41,11 +73,13 @@ export const PRIMARY_ROUTES = Object.freeze([
 
 export function navigationState(currentPage = pageName()) {
   const route = ROUTE_BY_PAGE.get(currentPage) || ROUTE_BY_PAGE.get('overview');
+  const contextGroups = CONTEXT_GROUPS[route.section] || CONTEXT_GROUPS.overview;
   return {
     currentPage,
     section: route.section,
     title: route.title,
-    contextLinks: CONTEXT_LINKS[route.section] || CONTEXT_LINKS.overview
+    contextGroups,
+    contextLinks: flattenContextGroups(contextGroups)
   };
 }
 
