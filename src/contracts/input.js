@@ -73,7 +73,7 @@ function priceForOneAndHalf(value) {
 export function productInput(body) {
   const beverageColor = body.beverage_color ?? 'none';
   const filtration = body.filtration ?? 'none';
-  if (!['none', 'light', 'dark'].includes(beverageColor) || !['none', 'filtered', 'unfiltered'].includes(filtration)) {
+  if (!['none', 'light', 'dark', 'white', 'semi_dark', 'amber', 'red'].includes(beverageColor) || !['none', 'filtered', 'unfiltered'].includes(filtration)) {
     throw new ValidationError('Выберите корректные параметры напитка.');
   }
   const pricePrimary = normalisePrice(body.price_primary, 'Цена за 1 л');

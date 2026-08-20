@@ -41,6 +41,10 @@ function readableBoolean(value) {
 function readableColor(value) {
   if (value === 'light') return 'светлый';
   if (value === 'dark') return 'тёмный';
+  if (value === 'white') return 'белое';
+  if (value === 'semi_dark') return 'полутёмное';
+  if (value === 'amber') return 'янтарное';
+  if (value === 'red') return 'красное';
   return '';
 }
 
@@ -165,8 +169,12 @@ function booleanValue(value, field, fallback) {
 function beverageColorValue(value) {
   const text = String(value || '').trim().toLocaleLowerCase('ru-RU');
   if (!text || text === 'none' || text === 'не указан') return 'none';
-  if (text === 'light' || text === 'светлый') return 'light';
-  if (text === 'dark' || text === 'тёмный' || text === 'темный') return 'dark';
+  if (text === 'light' || text === 'светлый' || text === 'светлое') return 'light';
+  if (text === 'dark' || text === 'тёмный' || text === 'темный' || text === 'тёмное' || text === 'темное') return 'dark';
+  if (text === 'white' || text === 'белое' || text === 'белый') return 'white';
+  if (text === 'semi_dark' || text === 'semi-dark' || text === 'полутёмное' || text === 'полутемное') return 'semi_dark';
+  if (text === 'amber' || text === 'янтарное' || text === 'янтарный') return 'amber';
+  if (text === 'red' || text === 'красное' || text === 'красный') return 'red';
   throw new ValidationError('Поле «Цвет напитка» содержит неизвестное значение.');
 }
 
