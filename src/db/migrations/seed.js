@@ -9,10 +9,10 @@ export async function seedDemoData(pool) {
     ['Демонстрационная точка', 'Пример адреса', now]
   );
   const screen = await pool.query(
-    'INSERT INTO screens (location_id, name, resolution, status, active, created_at, updated_at) VALUES ($1, $2, $3, $4, TRUE, $5, $5) RETURNING id',
-    [location.rows[0].id, 'Экран у кассы', '1920×1080', 'draft', now]
+    `INSERT INTO screens (location_id, location_number, name, resolution, status, active, delivery_filename, created_at, updated_at)
+     VALUES ($1, 1, $2, $3, $4, TRUE, $5, $6, $6) RETURNING id`,
+    [location.rows[0].id, 'Экран у кассы', '1920×1080', 'draft', 'monitor-1.jpg', now]
   );
-  await pool.query('UPDATE screens SET delivery_filename = $1 WHERE id = $2', [`monitor-${screen.rows[0].id}.jpg`, screen.rows[0].id]);
   await pool.query(
     'INSERT INTO screen_drafts (screen_id, rows_json, settings_json, revision, updated_at) VALUES ($1, $2, $3, 1, $4)',
     [screen.rows[0].id, '[]', '{}', now]
