@@ -17,6 +17,7 @@ let pollTimer = null;
 let refreshTimer = null;
 let wakeLock = null;
 let motionPlayer = null;
+let lastRenderedFingerprint = '';
 let playerRefreshMs = 5000;
 
 function setHidden(element, hidden) {
@@ -91,6 +92,7 @@ function stopPlayerMotion() {
 function showActivationScreen() {
   if (refreshTimer) clearTimeout(refreshTimer);
   refreshTimer = null;
+  lastRenderedFingerprint = '';
   stopPlayerMotion();
   setHidden(player, true);
   setHidden(activationView, false);
@@ -197,7 +199,21 @@ function playerMotion() {
   return motionPlayer;
 }
 
+function renderFingerprint(context) {
+  return JSON.stringify({
+    screen: context?.screen || null,
+    draft: context?.draft || null,
+    products: context?.products || [],
+    packaging: context?.packaging || [],
+    animation: context?.animation || null
+  });
+}
+
 function renderPlayerContext(context) {
+  playerRefreshMs = Math.max(2000, Number(context.refresh_interval_ms) || 5000);
+  const fingerprint = renderFingerprint(context);
+  if (fingerprint === lastRenderedFingerprint) return false;
+
   stopPlayerMotion();
   const backgroundUrl = sameOriginAsset(context?.draft?.settings?.background_image_url);
   const rendered = renderAnimationScreenPreview(playerStage, context, {
@@ -209,7 +225,8 @@ function renderPlayerContext(context) {
   if (!rendered?.invalidResolution && animation?.enabled === true && animation.profile) {
     playerMotion().restart(animation.profile);
   }
-  playerRefreshMs = Math.max(2000, Number(context.refresh_interval_ms) || 5000);
+  lastRenderedFingerprint = fingerprint;
+  return true;
 }
 
 function showConnectionMessage(message) {
