@@ -26,7 +26,8 @@ async function cloneScreen(tx, sourceId, targetLocationId, config) {
     location_id: targetLocationId,
     resolution: source.resolution,
     status: 'draft',
-    active: source.active !== false
+    active: source.active !== false,
+    animation_profile_id: source.animation_profile_id || null
   });
   const saved = await tx.saveScreenDraft(created.id, {
     rows: structuredClone(draft.rows || []),
@@ -53,10 +54,37 @@ export function createScreensRouter({ store, sftp, config }) {
     const id = positiveId(request.params.id, 'id');
     const screen = await store.getScreen(id);
     if (!screen) throw notFound();
-    const [draft, products, packaging] = await Promise.all([
-      store.getScreenDraft(id), store.listProducts(), store.listPackaging()
+    const [draft, products, packaging, animationProfile] = await Promise.all([
+      store.getScreenDraft(id),
+      store.listProducts(),
+      store.listPackaging(),
+      screen.animation_profile_id ? store.getAnimationProfile(screen.animation_profile_id) : Promise.resolve(null)
     ]);
-    response.json({ screen, draft, products, packaging });
+    response.json({ screen, draft, products, packaging, animation_profile: animationProfile });
+  });
+
+  router.put('/screens/:id/animation-profile', async (request, response) => {
+    const id = positiveId(request.params.id, 'id');
+    const profileId = request.body?.profile_id == null || request.body?.profile_id === ''
+      ? null
+      : positiveId(request.body.profile_id, 'profile_id');
+    const screen = await store.transaction(async (tx) => {
+      if (!await tx.lockScreen(id)) throw notFound();
+      const current = await tx.getScreen(id);
+      if (!current) throw notFound();
+      if (profileId && !await tx.getAnimationProfile(profileId)) throw notFound();
+      if (!await tx.assignScreenAnimationProfile(id, profileId)) throw notFound();
+      return tx.getScreen(id);
+    });
+    await activity(store, request, {
+      action: 'screen.animation_profile.updated',
+      entity_type: 'screen',
+      entity_id: id,
+      message: profileId
+        ? `Монитору «${screen.name}» назначен профиль анимации.`
+        : `Для монитора «${screen.name}» отключено назначение профиля анимации.`
+    });
+    response.json(screen);
   });
 
   router.put('/screens/:id/draft', async (request, response) => {
