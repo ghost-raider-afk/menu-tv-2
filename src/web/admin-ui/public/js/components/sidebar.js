@@ -13,7 +13,17 @@ function appName() {
 
 function railLink(route, activeSection) {
   const active = route.key === activeSection;
-  return `<a class="ui-rail-button${active ? ' active' : ''}" href="${route.href}" aria-label="${route.label}" title="${route.label}"${active ? ' aria-current="page"' : ''}><span class="ui-rail-icon">${ICONS[route.icon] || ''}</span><span class="ui-rail-label">${route.label}</span></a>`;
+  return `<a class="ui-rail-button${active ? ' active' : ''}" data-route-section="${route.key}" href="${route.href}" aria-label="${route.label}" title="${route.label}"${active ? ' aria-current="page"' : ''}><span class="ui-rail-icon">${ICONS[route.icon] || ''}</span><span class="ui-rail-label">${route.label}</span></a>`;
+}
+
+export function refreshSidebarActive(root = document) {
+  const { section } = navigationState();
+  root.querySelectorAll('.ui-rail-button[data-route-section]').forEach((link) => {
+    const active = link.dataset.routeSection === section;
+    link.classList.toggle('active', active);
+    if (active) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  });
 }
 
 export function createSidebar() {
