@@ -33,9 +33,25 @@ function normaliseLifecycle(value) {
   return null;
 }
 
-function currentViewSnapshot() {
+function currentMain() {
   const main = document.querySelector('.main-content');
   if (!main) throw new Error('Рабочая область приложения не найдена.');
+  return main;
+}
+
+function setRouteMountState(main, mounting) {
+  main.inert = mounting;
+  if (mounting) {
+    main.setAttribute('aria-busy', 'true');
+    main.dataset.routeState = 'mounting';
+  } else {
+    main.removeAttribute('aria-busy');
+    main.dataset.routeState = 'ready';
+  }
+}
+
+function currentViewSnapshot() {
+  const main = currentMain();
   return {
     page: document.body.dataset.page || '',
     mainClassName: main.className,
@@ -112,6 +128,15 @@ export function createAppRouter({ mountPage, syncShell }) {
     lifecycle = null;
   }
 
+  async function mountCurrentPage(page, main = currentMain()) {
+    setRouteMountState(main, true);
+    try {
+      lifecycle = normaliseLifecycle(await mountPage(page));
+    } finally {
+      setRouteMountState(main, false);
+    }
+  }
+
   async function commit(target, view, { replace = false, fromHistory = false } = {}) {
     if (!view) return false;
     if (!await canLeaveCurrentPage()) {
@@ -128,14 +153,13 @@ export function createAppRouter({ mountPage, syncShell }) {
     }
 
     document.body.dataset.page = view.page;
-    const main = document.querySelector('.main-content');
-    if (!main) throw new Error('Рабочая область приложения не найдена.');
+    const main = currentMain();
     main.className = view.mainClassName;
     main.innerHTML = view.mainHtml;
     document.title = view.documentTitle;
 
     if (typeof syncShell === 'function') syncShell();
-    lifecycle = normaliseLifecycle(await mountPage(view.page));
+    await mountCurrentPage(view.page, main);
     activeIdentity = routeIdentity(target);
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     return true;
@@ -194,7 +218,7 @@ export function createAppRouter({ mountPage, syncShell }) {
       started = true;
       activeRouter = router;
       window.history.replaceState({ tvMenu: true }, '', routeIdentity(canonicalUrl(window.location.href)));
-      lifecycle = normaliseLifecycle(await mountPage(document.body.dataset.page || ''));
+      await mountCurrentPage(document.body.dataset.page || '');
       document.addEventListener('click', onDocumentClick);
       window.addEventListener('popstate', onPopState);
       prefetch();
