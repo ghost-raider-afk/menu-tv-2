@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.1.14"
+SCRIPT_VERSION="1.1.15"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
@@ -141,8 +141,8 @@ update_script() {
     return
   fi
 
-  read -r -p 'Установить обновление скрипта? [YES/NO]: ' input
-  if [[ "${input^^}" != YES ]]; then
+  read -r -p 'Установить обновление скрипта? [y/N]: ' input
+  if [[ "${input,,}" != y ]]; then
     rm -f -- "$latest_file"
     info "Обновление скрипта отменено."
     return
@@ -849,8 +849,8 @@ confirm_removal() {
   local input
   printf '\nБудут затронуты только Menu TV 2.0: %s, %s, %s, %s и %s.\n' "$INSTALL_DIR" "$APP_CONTAINER" "$DB_CONTAINER" "$SFTP_CONTAINER" "$DB_VOLUME"
   printf 'Также будут удалены тома SFTP и оформления сайта: %s, %s.\n' "$SFTP_VOLUME" "$SITE_ASSETS_VOLUME"
-  read -r -p 'Подтвердить удаление? [YES/NO]: ' input
-  [[ "${input^^}" == YES ]]
+  read -r -p 'Подтвердить удаление? [y/N]: ' input
+  [[ "${input,,}" == y ]]
 }
 
 remove_project() {
@@ -891,8 +891,8 @@ remove_script() {
   local input
   require_root
   [[ -e "$LAUNCHER_PATH" ]] || die "Системный скрипт Menu TV 2.0 не найден."
-  read -r -p 'Удалить только системный скрипт, не затрагивая проект и данные? [YES/NO]: ' input
-  [[ "${input^^}" == YES ]] || { info "Удаление отменено."; return; }
+  read -r -p 'Удалить только системный скрипт, не затрагивая проект и данные? [y/N]: ' input
+  [[ "${input,,}" == y ]] || { info "Удаление отменено."; return; }
   rm -f -- "$LAUNCHER_PATH"
   info "Системный скрипт удалён. Проект, данные и другие Docker-контейнеры не затронуты."
 }
