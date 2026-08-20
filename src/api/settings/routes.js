@@ -1,5 +1,6 @@
 import express from 'express';
 import { siteSettingsInput, userPreferencesInput } from '../../contracts/input.js';
+import { animationSettingsInput } from '../../contracts/animation.js';
 import { activity, notFound } from '../helpers.js';
 import { hashPassword, passwordChangeInput, verifyPassword } from '../../services/password-service.js';
 import { issueSession, sessionCookie, themeCookie } from '../../services/session-service.js';
@@ -33,6 +34,14 @@ export function createSettingsRouter({ store, config }) {
     const settings = await store.updateSiteSettings({ ...siteSettingsInput(request.body, config), updated_by: request.session.sub });
     await activity(store, request, { action: 'settings.site.updated', entity_type: 'site_settings', entity_id: settings.id, message: 'Обновлены настройки сайта.' });
     response.json(siteSettingsResponse(settings, config));
+  });
+  router.get('/animation', async (_request, response) => {
+    response.json(await store.getAnimationSettings());
+  });
+  router.put('/animation', async (request, response) => {
+    const settings = await store.updateAnimationSettings({ ...animationSettingsInput(request.body), updated_by: request.session.sub });
+    await activity(store, request, { action: 'settings.animation.updated', entity_type: 'animation_settings', entity_id: settings.id, message: 'Обновлены настройки анимации экранов.' });
+    response.json(settings);
   });
   router.put('/site/logo', express.raw({ type: '*/*', limit: config.siteLogoMaxBytes }), async (request, response) => {
     const settings = await replaceSiteImage({ kind: 'logo', bytes: request.body, config, store, username: request.session.sub });
