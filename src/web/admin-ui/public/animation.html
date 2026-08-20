@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ТВ МЕНЮ</title>
+    <script src="/theme-bootstrap.js"></script>
+    <link rel="stylesheet" href="/css/index.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body data-page="animation">
+    <div class="app-shell">
+      <div class="app-content">
+        <main class="main-content animation-content">
+          <div class="page-heading animation-heading">
+            <div><p class="eyebrow">MOTION STUDIO</p><h1>Анимация экранов</h1><p>Профессиональная настройка движения для конечного файла монитора.</p></div>
+            <div class="animation-heading-actions">
+              <label class="animation-master-toggle"><input id="animation-enabled" type="checkbox" /><span><strong>Анимация включена</strong><small>Статический JPEG остаётся резервным вариантом.</small></span></label>
+              <button class="button button-primary" id="animation-save" type="button">Сохранить профиль</button>
+            </div>
+          </div>
+
+          <p class="form-message is-hidden" id="animation-message" role="status" aria-live="polite"></p>
+
+          <section class="animation-studio-grid" aria-label="Студия анимации">
+            <div class="settings-card animation-preset-card">
+              <div class="card-heading"><div><p class="eyebrow">20 ПРЕСЕТОВ</p><h2>Библиотека движения</h2><p>Выберите готовый профиль или используйте его как основу.</p></div></div>
+              <div class="animation-preset-list" id="animation-presets"></div>
+            </div>
+
+            <div class="settings-card animation-player-card">
+              <div class="card-heading"><div><p class="eyebrow">LIVE PREVIEW</p><h2>Мини‑плеер</h2><p id="animation-current-preset">Каскадная сборка</p></div><span class="animation-live-badge">LIVE</span></div>
+              <div class="animation-player-shell">
+                <div class="animation-stage" id="animation-stage" aria-label="Предпросмотр анимации">
+                  <div class="animation-demo-bg" data-motion-background></div>
+                  <div class="animation-demo-vignette"></div>
+                  <div class="animation-demo-menu">
+                    <div class="animation-demo-brand">БИР.ФИШ</div>
+                    <div class="animation-demo-section" data-motion="section"><span>ПИВО СВЕТЛОЕ ФИЛЬТРОВАННОЕ</span><span>1 л&nbsp;&nbsp;&nbsp;&nbsp;1,5 л</span></div>
+                    <div class="animation-demo-row" data-motion="item"><span><strong>БИР КОМ СВЕТЛОЕ</strong><small>светлое · фильтрованное · 4,5%</small></span><span class="animation-demo-prices"><b data-motion="price">205</b><b data-motion="price">307</b></span></div>
+                    <div class="animation-demo-row" data-motion="item"><span><strong>ЖИГУЛЕВСКОЕ</strong><small>классическое · 4,7%</small></span><span class="animation-demo-prices"><b data-motion="price">237</b><b data-motion="price">355</b></span></div>
+                    <div class="animation-demo-row" data-motion="item"><span><strong>НА ЮГА</strong><small>мягкое · ароматное · 4,8%</small></span><span class="animation-demo-prices"><b data-motion="price">256</b><b data-motion="price">384</b></span></div>
+                    <div class="animation-demo-section" data-motion="section"><span>ПИВО СВЕТЛОЕ НЕФИЛЬТРОВАННОЕ</span><span></span></div>
+                    <div class="animation-demo-row" data-motion="item"><span><strong>27 РЕГИОН</strong><small>нефильтрованное · 4,5%</small></span><span class="animation-demo-prices"><b data-motion="price">230</b><b data-motion="price">345</b></span></div>
+                    <div class="animation-demo-row" data-motion="item"><span><strong>ХМЕЛЬНОЙ ЭЛЬ</strong><small>яркий · хмелевой · 5,2%</small></span><span class="animation-demo-prices"><b data-motion="price">268</b><b data-motion="price">402</b></span></div>
+                  </div>
+                </div>
+                <div class="animation-player-controls">
+                  <div class="animation-player-buttons">
+                    <button class="button button-secondary" id="animation-play" type="button">▶ Пуск</button>
+                    <button class="button button-secondary" id="animation-pause" type="button">⏸ Пауза</button>
+                    <button class="button button-secondary" id="animation-replay" type="button">↻ Повтор</button>
+                  </div>
+                  <div class="animation-timeline-wrap"><input id="animation-timeline" type="range" min="0" max="1000" value="0" aria-label="Шкала времени" /><span id="animation-time">0.0 с / 0.0 с</span></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="animation-controls-grid" aria-label="Детальные параметры анимации">
+            <div class="settings-card">
+              <div class="card-heading"><div><p class="eyebrow">ДВИЖЕНИЕ</p><h2>Появление</h2></div></div>
+              <div class="form-grid">
+                <label class="field"><span>Тип появления</span><select id="animation-entrance"><option value="fade">Fade</option><option value="slide">Slide</option><option value="cascade">Cascade</option><option value="zoom">Zoom</option><option value="wipe">Wipe</option><option value="split">Split</option><option value="focus">Focus</option><option value="diagonal">Diagonal</option><option value="reveal">Reveal</option></select></label>
+                <label class="field"><span>Направление</span><select id="animation-direction"><option value="none">Без направления</option><option value="left">Слева</option><option value="right">Справа</option><option value="up">Снизу вверх</option><option value="down">Сверху вниз</option><option value="diagonal">Диагональ</option></select></label>
+                <label class="field"><span>Easing</span><select id="animation-easing"><option value="standard">Standard</option><option value="smooth">Smooth</option><option value="snappy">Snappy</option><option value="cinematic">Cinematic</option><option value="elastic">Elastic</option></select></label>
+                <label class="field"><span>Дистанция, px</span><input id="animation-distance" type="number" min="0" max="240" step="1" /></label>
+                <label class="field"><span>Начальный масштаб</span><input id="animation-scale" type="number" min="0.7" max="1.2" step="0.01" /></label>
+                <label class="field"><span>Размытие, px</span><input id="animation-blur" type="number" min="0" max="30" step="1" /></label>
+                <label class="field"><span>Начальная прозрачность</span><input id="animation-opacity" type="number" min="0" max="1" step="0.05" /></label>
+              </div>
+            </div>
+
+            <div class="settings-card">
+              <div class="card-heading"><div><p class="eyebrow">ТАЙМИНГ</p><h2>Ритм сцены</h2></div></div>
+              <div class="form-grid">
+                <label class="field"><span>Длительность элемента, мс</span><input id="animation-duration" type="number" min="300" max="5000" step="10" /></label>
+                <label class="field"><span>Каскад, мс</span><input id="animation-stagger" type="number" min="0" max="500" step="5" /></label>
+                <label class="field"><span>Задержка разделов, мс</span><input id="animation-section-delay" type="number" min="0" max="2000" step="10" /></label>
+                <label class="field"><span>Задержка строк, мс</span><input id="animation-item-delay" type="number" min="0" max="2000" step="10" /></label>
+                <label class="field"><span>Задержка цен, мс</span><input id="animation-price-delay" type="number" min="0" max="2000" step="10" /></label>
+                <label class="field"><span>Показ готового экрана, сек</span><input id="animation-hold" type="number" min="3" max="60" step="0.5" /></label>
+              </div>
+            </div>
+
+            <div class="settings-card">
+              <div class="card-heading"><div><p class="eyebrow">АКЦЕНТЫ</p><h2>Разделы и цены</h2></div></div>
+              <div class="form-grid">
+                <label class="field"><span>Акцент разделов</span><select id="animation-section-emphasis"><option value="none">Нет</option><option value="slide">Slide</option><option value="wipe">Wipe</option><option value="glow">Glow</option><option value="pulse">Pulse</option></select></label>
+                <label class="field"><span>Акцент цен</span><select id="animation-price-emphasis"><option value="none">Нет</option><option value="fade">Fade</option><option value="slide">Slide</option><option value="pop">Pop</option></select></label>
+                <label class="toggle-row field-full"><span><strong>Световой блик</strong><small>Проход света по акцентным плашкам.</small></span><input id="animation-shimmer" type="checkbox" /><i aria-hidden="true"></i></label>
+                <label class="toggle-row field-full"><span><strong>Свечение</strong><small>Мягкий glow вокруг активных разделов.</small></span><input id="animation-glow" type="checkbox" /><i aria-hidden="true"></i></label>
+              </div>
+            </div>
+
+            <div class="settings-card">
+              <div class="card-heading"><div><p class="eyebrow">ATMOSPHERE</p><h2>Фон и интенсивность</h2></div></div>
+              <div class="form-grid">
+                <label class="toggle-row field-full"><span><strong>Движение фона</strong><small>Медленный параллакс без движения текста.</small></span><input id="animation-background-motion" type="checkbox" /><i aria-hidden="true"></i></label>
+                <label class="field"><span>Скорость фона, сек</span><input id="animation-ambient-speed" type="number" min="5" max="90" step="1" /></label>
+                <label class="field"><span>Интенсивность, %</span><input id="animation-intensity" type="range" min="0" max="100" step="1" /><output id="animation-intensity-output">55%</output></label>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
