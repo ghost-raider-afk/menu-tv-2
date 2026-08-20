@@ -68,15 +68,15 @@ export function createScreensRepository(pool) {
       return rowCount > 0;
     },
 
-    async createScreen({ location_id, name = '', resolution = '1920×1080', status = 'draft', active = true }) {
+    async createScreen({ location_id, name = '', resolution = '1920×1080', status = 'draft', active = true, animation_profile_id = null }) {
       const now = isoNow();
       const locationNumber = await nextLocationNumber(location_id, { lockLocation: true });
       if (!locationNumber) return null;
       const resolvedName = name || `ТВ ${locationNumber}`;
       const { rows } = await pool.query(
-        `INSERT INTO screens (location_id, location_number, name, resolution, status, active, delivery_filename, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8) RETURNING id`,
-        [location_id, locationNumber, resolvedName, resolution, status, active, screenFilename(locationNumber), now]
+        `INSERT INTO screens (location_id, location_number, name, resolution, status, active, animation_profile_id, delivery_filename, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9) RETURNING id`,
+        [location_id, locationNumber, resolvedName, resolution, status, active, animation_profile_id, screenFilename(locationNumber), now]
       );
       const id = Number(rows[0].id);
       await pool.query(
