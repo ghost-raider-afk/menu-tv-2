@@ -60,3 +60,10 @@ export function animationSettingsInput(body) {
     profile: animationProfileInput(body.profile ?? DEFAULT_ANIMATION_PROFILE)
   };
 }
+
+export function animationProfileRecordInput(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new ValidationError('Профиль анимации должен быть объектом.');
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
+  if (!name || name.length > 80) throw new ValidationError('Название профиля должно содержать от 1 до 80 символов.');
+  return { name, ...animationSettingsInput(body) };
+}
