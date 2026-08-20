@@ -161,8 +161,9 @@ button {
 
 .tv-player-stage .animation-screen-background {
   z-index: 0;
-  inset: -4%;
-  transform: scale(1.035);
+  inset: 0;
+  transform: none;
+  transform-origin: center;
   background-repeat: no-repeat;
   background-size: cover;
   background-position: center;
