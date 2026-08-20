@@ -46,7 +46,13 @@ const CONTEXT_GROUPS = Object.freeze({
     })
   ]),
   catalog: Object.freeze([
-    Object.freeze({ label: '', links: Object.freeze([['Продукция', '/catalog.html']]) })
+    Object.freeze({
+      label: 'БАЗА ПРОДУКЦИИ',
+      links: Object.freeze([
+        ['Продукция', '/catalog.html#products'],
+        ['Тара', '/catalog.html#packaging']
+      ])
+    })
   ]),
   settings: Object.freeze([
     Object.freeze({
