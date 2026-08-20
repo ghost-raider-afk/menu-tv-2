@@ -16,9 +16,8 @@ test('player is public while TV connection page remains admin protected', async 
   assert.match(server, /app\.use\('\/api\/device', createDevicePublicRouter/);
   assert.match(server, /app\.use\('\/api\/device-admin', createDeviceAdminRouter/);
   assert.match(playerHtml, /data-player-boot/);
-  assert.match(playerHtml, /activation-view is-hidden/);
-  assert.match(playerHtml, /data-activation-view/);
-  assert.match(playerHtml, /data-tv-player/);
+  assert.match(playerHtml, /activation-view is-hidden[^>]*data-activation-view[^>]*hidden/);
+  assert.match(playerHtml, /tv-player is-hidden[^>]*data-tv-player[^>]*hidden/);
   assert.match(connectHtml, /Сканировать QR/);
   assert.match(connectHtml, /6-значный резервный код/);
 });
@@ -28,7 +27,7 @@ test('offline player keeps its shell, motion engine, context and same-origin ass
     read('src/web/admin-ui/public/player-sw.js'),
     read('src/web/admin-ui/public/js/player/player.js')
   ]);
-  assert.match(worker, /tv-menu-player-shell-v4/);
+  assert.match(worker, /tv-menu-player-shell-v5/);
   assert.match(worker, /PLAYER_CONTEXT = '\/api\/device\/player-context'/);
   assert.match(worker, /\/js\/motion\/preview-player\.js/);
   assert.match(worker, /\/js\/motion\/screen-preview\.js/);
@@ -47,6 +46,22 @@ test('offline player keeps its shell, motion engine, context and same-origin ass
   assert.match(player, /resolveInitialPlayerState/);
   assert.match(player, /serviceWorker\.register\('\/player-sw\.js'/);
   assert.match(player, /Нет связи с сервером\. ТВ работает по последней сохранённой версии меню/);
+});
+
+test('rapid reload cannot expose raw Player screens or drop a cached shell asset', async () => {
+  const [html, worker, player] = await Promise.all([
+    read('src/web/admin-ui/public/player.html'),
+    read('src/web/admin-ui/public/player-sw.js'),
+    read('src/web/admin-ui/public/js/player/player.js')
+  ]);
+  assert.match(html, /data-activation-view hidden/);
+  assert.match(html, /data-activation-pairing hidden/);
+  assert.match(html, /data-tv-player[^>]*hidden/);
+  assert.match(html, /data-player-message[^>]*hidden/);
+  assert.match(player, /element\.hidden = Boolean\(hidden\)/);
+  const shellAsset = worker.match(/async function shellAsset\([\s\S]*?\n\}/)?.[0] || '';
+  assert.match(shellAsset, /const cached = await cache\.match\(request\)/);
+  assert.match(shellAsset, /if \(cached\)[\s\S]*event\.waitUntil\(refresh\)[\s\S]*return cached/);
 });
 
 test('static TV background stays inside the exact player screen bounds', async () => {
