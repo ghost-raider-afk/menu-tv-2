@@ -1,11 +1,29 @@
 import express from 'express';
 import { packagingInput, positiveId, productInput } from '../../contracts/input.js';
+import { importProductsCsv, productsToCsv } from '../../services/catalog-csv-service.js';
 import { activity, conflict, notFound } from '../helpers.js';
 
 export function createCatalogRouter({ store }) {
   const router = express.Router();
 
   router.get('/products', async (_request, response) => response.json(await store.listProducts()));
+  router.get('/products/export.csv', async (_request, response) => {
+    const csv = productsToCsv(await store.listProducts());
+    response.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    response.setHeader('Content-Disposition', 'attachment; filename="products.csv"');
+    response.setHeader('Cache-Control', 'no-store');
+    response.send(csv);
+  });
+  router.post('/products/import', async (request, response) => {
+    const result = await importProductsCsv(store, request.body?.csv);
+    await activity(store, request, {
+      action: 'catalog.products.imported',
+      entity_type: 'catalog_product',
+      entity_id: null,
+      message: `Импортирована продукция из CSV: создано ${result.created}, обновлено ${result.updated}.`
+    });
+    response.json(result);
+  });
   router.post('/products', async (request, response) => {
     const product = await store.createProduct(productInput(request.body));
     await activity(store, request, { action: 'catalog.product.created', entity_type: 'catalog_product', entity_id: product.id, message: `Добавлена продукция «${product.name}».` });
