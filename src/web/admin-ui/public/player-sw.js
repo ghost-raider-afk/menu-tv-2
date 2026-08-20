@@ -1,11 +1,14 @@
-const SHELL_CACHE = 'tv-menu-player-shell-v1';
+const SHELL_CACHE = 'tv-menu-player-shell-v2';
 const DATA_CACHE = 'tv-menu-player-data-v1';
 const PLAYER_CONTEXT = '/api/device/player-context';
 const SHELL_ASSETS = [
   '/player.html',
   '/css/player.css',
   '/js/player/player.js',
-  '/js/editor/renderer.js'
+  '/js/editor/renderer.js',
+  '/js/editor/settings.js',
+  '/js/motion/preview-player.js',
+  '/js/motion/screen-preview.js'
 ];
 
 self.addEventListener('install', (event) => {
