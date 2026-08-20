@@ -1,4 +1,22 @@
 import { isoNow, normaliseRow } from './helpers.js';
+import { completeAnimationProfile } from '../shared/animation-profile.js';
+
+function normaliseAnimationSettings(row) {
+  const value = normaliseRow(row);
+  if (!value) return null;
+  let profile = {};
+  try { profile = JSON.parse(value.profile_json || '{}'); }
+  catch { profile = {}; }
+  return {
+    id: value.id,
+    enabled: value.enabled === true,
+    preset_id: value.preset_id || 'cascade-soft',
+    profile: completeAnimationProfile(profile),
+    updated_by: value.updated_by || '',
+    created_at: value.created_at,
+    updated_at: value.updated_at
+  };
+}
 
 export function createSettingsRepository(pool) {
   return Object.freeze({
@@ -22,6 +40,20 @@ export function createSettingsRepository(pool) {
         [application_name, accent_color, timezone, date_format, dashboard_refresh_seconds, default_screen_resolution, signin_logo_size, updated_by, isoNow()]
       );
       return normaliseRow(rows[0]);
+    },
+
+    async getAnimationSettings() {
+      const { rows } = await pool.query('SELECT * FROM animation_settings WHERE id = 1');
+      return normaliseAnimationSettings(rows[0]);
+    },
+
+    async updateAnimationSettings({ enabled, preset_id, profile, updated_by }) {
+      const { rows } = await pool.query(
+        `UPDATE animation_settings SET enabled = $1, preset_id = $2, profile_json = $3,
+         updated_by = $4, updated_at = $5 WHERE id = 1 RETURNING *`,
+        [enabled, preset_id, JSON.stringify(profile), updated_by, isoNow()]
+      );
+      return normaliseAnimationSettings(rows[0]);
     },
 
     async setSiteAsset(kind, filename, updatedBy) {

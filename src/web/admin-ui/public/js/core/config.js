@@ -8,6 +8,7 @@ export const API = Object.freeze({
   userSettings: '/api/settings/user',
   userPassword: '/api/settings/user/password',
   siteSettings: '/api/settings/site',
+  animationSettings: '/api/settings/animation',
   notifications: '/api/notifications',
   locations: '/api/locations',
   screens: '/api/screens',
