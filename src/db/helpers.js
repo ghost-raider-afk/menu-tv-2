@@ -2,17 +2,25 @@ export function isoNow() {
   return new Date().toISOString();
 }
 
+function numericField(row, field) {
+  return row[field] === undefined || row[field] === null ? {} : { [field]: Number(row[field]) };
+}
+
 export function normaliseRow(row) {
   if (!row) return null;
   return {
     ...row,
-    ...(row.id === undefined ? {} : { id: Number(row.id) }),
-    ...(row.location_id === undefined ? {} : { location_id: Number(row.location_id) }),
-    ...(row.template_id === undefined || row.template_id === null ? {} : { template_id: Number(row.template_id) }),
-    ...(row.session_version === undefined || row.session_version === null ? {} : { session_version: Number(row.session_version) }),
-    ...(row.screen_count === undefined ? {} : { screen_count: Number(row.screen_count) }),
-    ...(row.sftp_directory_id === undefined || row.sftp_directory_id === null ? {} : { sftp_directory_id: Number(row.sftp_directory_id) }),
-    ...(row.bound_location_id === undefined || row.bound_location_id === null ? {} : { bound_location_id: Number(row.bound_location_id) })
+    ...numericField(row, 'id'),
+    ...numericField(row, 'location_id'),
+    ...numericField(row, 'screen_id'),
+    ...numericField(row, 'template_id'),
+    ...numericField(row, 'session_version'),
+    ...numericField(row, 'screen_count'),
+    ...numericField(row, 'sftp_directory_id'),
+    ...numericField(row, 'bound_location_id'),
+    ...numericField(row, 'prepared_asset_size'),
+    ...numericField(row, 'prepared_draft_revision'),
+    ...numericField(row, 'published_draft_revision')
   };
 }
 

@@ -72,6 +72,7 @@ test('monitor editor owns one left-aligned exclusive command bar and one canonic
   assert.match(editorCss, /\.editor-commandbar-tools\{[^}]*justify-content:flex-start/);
   assert.match(editorCss, /\.editor-commandbar-menus\{display:flex/);
   assert.match(editorCss, /\.editor-tool-popover\{[^}]*left:0/);
+  assert.match(editorCss, /\.editor-save\{[^}]*margin-left:auto/);
   assert.match(editorCss, /\.editor-menu-editor-table tbody tr\{height:27px/);
   assert.match(editorCss, /height:22px/);
   assert.doesNotMatch(editorCss, /!important|\.tv-board-table/);
@@ -79,6 +80,10 @@ test('monitor editor owns one left-aligned exclusive command bar and one canonic
   assert.match(editorHtml, /class="editor-commandbar-menus"/);
   assert.match(editorJs, /bindExclusiveToolMenus/);
   assert.match(editorJs, /other\.open = false/);
+  const commandbar = editorHtml.match(/<section class="editor-commandbar"[\s\S]*?<\/section>/)?.[0] || '';
+  const menuCard = editorHtml.match(/<section class="settings-card editor-menu-card"[\s\S]*?<\/section>/)?.[0] || '';
+  assert.doesNotMatch(commandbar, /editor-add-section|editor-add-item|editor-add-packaging/);
+  for (const id of ['editor-add-section','editor-add-item','editor-add-packaging']) assert.match(menuCard, new RegExp(`id="${id}"`));
   for (const id of ['editor-table-x','editor-table-y','editor-table-width','editor-table-height','editor-background-file','editor-font-family','editor-font-scale']) {
     assert.match(editorHtml, new RegExp(`id="${id}"`));
   }

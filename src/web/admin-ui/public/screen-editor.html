@@ -66,13 +66,18 @@
                     <div class="editor-tool-popover editor-tool-popover-wide"><p class="delivery-path" id="editor-sftp-path">—</p><input id="editor-source-file" type="file" accept="image/jpeg" disabled /><div class="inline-actions"><button class="button button-secondary" id="editor-upload" type="button" disabled>JPEG вручную</button><button class="button button-primary" id="editor-publish" type="button" disabled>Опубликовать</button></div></div>
                   </details>
                 </div>
-                <div class="editor-add-actions" aria-label="Добавить строку"><button class="button button-secondary" id="editor-add-section" type="button" disabled>+ Раздел</button><button class="button button-secondary" id="editor-add-item" type="button" disabled>+ Продукция</button><button class="button button-secondary" id="editor-add-packaging" type="button" disabled>+ Тара</button></div>
                 <button class="button button-primary editor-save" id="editor-save" type="submit" disabled>Сохранить</button>
               </div>
             </section>
             <p class="form-message is-hidden editor-message" id="screen-editor-message" role="status" aria-live="polite"></p>
             <div class="editor-main-column">
-              <section class="settings-card editor-menu-card"><div class="editor-section-line"><div><p class="eyebrow">СОДЕРЖИМОЕ</p><h2>Строки меню</h2></div><span class="muted-copy">Цены и характеристики — из каталога</span></div><div class="editor-menu-rows" id="editor-menu-rows"></div><p class="empty-state" id="editor-menu-empty">В меню ещё нет строк.</p></section>
+              <section class="settings-card editor-menu-card">
+                <div class="editor-section-line">
+                  <div class="editor-section-copy"><p class="eyebrow">СОДЕРЖИМОЕ</p><h2>Строки меню</h2><span class="muted-copy">Цены и характеристики — из каталога</span></div>
+                  <div class="editor-add-actions" aria-label="Добавить строку"><button class="button button-secondary" id="editor-add-section" type="button" disabled>+ Раздел</button><button class="button button-secondary" id="editor-add-item" type="button" disabled>+ Продукция</button><button class="button button-secondary" id="editor-add-packaging" type="button" disabled>+ Тара</button></div>
+                </div>
+                <div class="editor-menu-rows" id="editor-menu-rows"></div><p class="empty-state" id="editor-menu-empty">В меню ещё нет строк.</p>
+              </section>
               <section class="settings-card editor-preview-card"><div class="editor-preview-head"><strong>Предпросмотр</strong><span>Один renderer для preview и JPEG</span></div><div class="editor-menu-preview" id="editor-menu-preview"></div><p class="editor-layout-warning is-hidden" id="editor-layout-warning" role="status"></p></section>
             </div>
           </form>
