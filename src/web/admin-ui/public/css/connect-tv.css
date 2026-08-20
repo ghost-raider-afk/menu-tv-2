@@ -6,7 +6,8 @@
 }
 
 .connect-tv-card,
-.connect-tv-success {
+.connect-tv-success,
+.connect-tv-bindings {
   border: 1px solid var(--border-color, #d9dee8);
   border-radius: 18px;
   background: var(--surface, #fff);
@@ -34,7 +35,8 @@
 }
 
 .connect-tv-card h2,
-.connect-tv-success h2 {
+.connect-tv-success h2,
+.connect-tv-bindings h2 {
   margin: 16px 0 8px;
 }
 
@@ -167,6 +169,58 @@
   margin-top: 0;
 }
 
+.connect-tv-bindings {
+  margin-top: 20px;
+}
+
+.connect-tv-bindings-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.connect-tv-bindings-heading h2 {
+  margin-top: 4px;
+}
+
+.connect-tv-bindings-heading p:last-child {
+  margin: 0;
+  color: var(--muted-text, #667085);
+}
+
+.connect-tv-bindings-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.connect-tv-binding {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color, #d9dee8);
+  border-radius: 12px;
+}
+
+.connect-tv-binding strong,
+.connect-tv-binding span {
+  display: block;
+}
+
+.connect-tv-binding span {
+  margin-top: 4px;
+  color: var(--muted-text, #667085);
+  font-size: 13px;
+}
+
+.connect-tv-bindings-empty {
+  margin: 0;
+  color: var(--muted-text, #667085);
+}
+
 @media (max-width: 1050px) {
   .connect-tv-grid {
     grid-template-columns: 1fr;
@@ -178,11 +232,17 @@
 }
 
 @media (max-width: 560px) {
-  .connect-tv-card {
+  .connect-tv-card,
+  .connect-tv-bindings {
     padding: 18px;
   }
 
-  .connect-tv-code-row {
+  .connect-tv-code-row,
+  .connect-tv-binding {
+    display: grid;
+  }
+
+  .connect-tv-bindings-heading {
     display: grid;
   }
 }
