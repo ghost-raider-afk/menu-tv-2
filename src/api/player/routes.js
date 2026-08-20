@@ -8,6 +8,16 @@ function playerToken(value) {
   return token;
 }
 
+function referencedCatalog(draft, products, packaging) {
+  const rows = Array.isArray(draft?.rows) ? draft.rows : [];
+  const productIds = new Set(rows.map((row) => Number(row?.product_id)).filter(Number.isSafeInteger));
+  const packagingIds = new Set(rows.map((row) => Number(row?.packaging_id)).filter(Number.isSafeInteger));
+  return {
+    products: products.filter((item) => productIds.has(Number(item.id))),
+    packaging: packaging.filter((item) => packagingIds.has(Number(item.id)))
+  };
+}
+
 export function createPublicPlayerRouter({ store }) {
   const router = express.Router();
 
@@ -16,20 +26,33 @@ export function createPublicPlayerRouter({ store }) {
     if (!workspace) throw notFound();
     const screen = await store.getScreen(workspace.screen_id);
     if (!screen || screen.active === false) throw notFound();
-    const [draft, products, packaging, animationProfile] = await Promise.all([
+    const [draft, allProducts, allPackaging, animationProfile] = await Promise.all([
       store.getScreenDraft(screen.id),
       store.listProducts(),
       store.listPackaging(),
       screen.animation_profile_id ? store.getAnimationProfile(screen.animation_profile_id) : Promise.resolve(null)
     ]);
+    const catalog = referencedCatalog(draft, allProducts, allPackaging);
     response.setHeader('Cache-Control', 'no-store');
     response.json({
       workspace: { id: workspace.id, screen_id: screen.id },
-      screen,
+      screen: {
+        id: screen.id,
+        name: screen.name,
+        resolution: screen.resolution,
+        location_name: screen.location_name,
+        active: screen.active
+      },
       draft,
-      products,
-      packaging,
-      animation_profile: animationProfile
+      products: catalog.products,
+      packaging: catalog.packaging,
+      animation_profile: animationProfile ? {
+        id: animationProfile.id,
+        name: animationProfile.name,
+        enabled: animationProfile.enabled,
+        preset_id: animationProfile.preset_id,
+        profile: animationProfile.profile
+      } : null
     });
   });
 
