@@ -1,11 +1,14 @@
 import { ValidationError } from '../shared/errors.js';
 import {
-  ANIMATION_DIRECTIONS,
   ANIMATION_EASINGS,
-  ANIMATION_ENTRANCES,
+  ANIMATION_FLOW_DIRECTIONS,
+  ANIMATION_PATTERNS,
+  ANIMATION_PROFILE_VERSION,
+  BACKGROUND_EFFECTS,
   DEFAULT_ANIMATION_PROFILE,
-  PRICE_EMPHASIS,
-  SECTION_EMPHASIS,
+  ITEM_EFFECTS,
+  PRICE_EFFECTS,
+  SECTION_EFFECTS,
   completeAnimationProfile
 } from '../shared/animation-profile.js';
 
@@ -22,35 +25,26 @@ function numberValue(value, field, { min, max, integer = false }) {
   return number;
 }
 
-function booleanValue(value, field) {
-  if (typeof value !== 'boolean') throw new ValidationError(`Поле «${field}» должно быть логическим значением.`);
-  return value;
-}
-
 export function animationProfileInput(source) {
   if (!source || typeof source !== 'object' || Array.isArray(source)) throw new ValidationError('Профиль анимации должен быть объектом.');
   const profile = completeAnimationProfile(source);
   return {
-    entrance: enumValue(profile.entrance, 'Тип появления', ANIMATION_ENTRANCES),
-    direction: enumValue(profile.direction, 'Направление', ANIMATION_DIRECTIONS),
+    motion_version: ANIMATION_PROFILE_VERSION,
+    pattern: enumValue(profile.pattern, 'Характер движения', ANIMATION_PATTERNS),
+    flow_direction: enumValue(profile.flow_direction, 'Направление волны', ANIMATION_FLOW_DIRECTIONS),
     easing: enumValue(profile.easing, 'Easing', ANIMATION_EASINGS),
-    duration_ms: numberValue(profile.duration_ms, 'Длительность', { min: 300, max: 5000, integer: true }),
-    stagger_ms: numberValue(profile.stagger_ms, 'Каскад', { min: 0, max: 500, integer: true }),
-    distance_px: numberValue(profile.distance_px, 'Дистанция', { min: 0, max: 240, integer: true }),
-    scale_from: numberValue(profile.scale_from, 'Начальный масштаб', { min: 0.7, max: 1.2 }),
-    opacity_from: numberValue(profile.opacity_from, 'Начальная прозрачность', { min: 0, max: 1 }),
-    blur_px: numberValue(profile.blur_px, 'Размытие', { min: 0, max: 30 }),
-    section_delay_ms: numberValue(profile.section_delay_ms, 'Задержка разделов', { min: 0, max: 2000, integer: true }),
-    item_delay_ms: numberValue(profile.item_delay_ms, 'Задержка строк', { min: 0, max: 2000, integer: true }),
-    price_delay_ms: numberValue(profile.price_delay_ms, 'Задержка цен', { min: 0, max: 2000, integer: true }),
-    section_emphasis: enumValue(profile.section_emphasis, 'Акцент разделов', SECTION_EMPHASIS),
-    price_emphasis: enumValue(profile.price_emphasis, 'Акцент цен', PRICE_EMPHASIS),
-    shimmer: booleanValue(profile.shimmer, 'Световой блик'),
-    glow: booleanValue(profile.glow, 'Свечение'),
-    background_motion: booleanValue(profile.background_motion, 'Движение фона'),
-    ambient_speed_seconds: numberValue(profile.ambient_speed_seconds, 'Скорость фона', { min: 5, max: 90 }),
-    intensity: numberValue(profile.intensity, 'Интенсивность', { min: 0, max: 100, integer: true }),
-    hold_seconds: numberValue(profile.hold_seconds, 'Время показа', { min: 3, max: 60 })
+    cycle_seconds: numberValue(profile.cycle_seconds, 'Период цикла', { min: 4, max: 60 }),
+    event_duration_ms: numberValue(profile.event_duration_ms, 'Длительность события', { min: 400, max: 6000, integer: true }),
+    wave_stagger_ms: numberValue(profile.wave_stagger_ms, 'Шаг волны', { min: 0, max: 1000, integer: true }),
+    travel_px: numberValue(profile.travel_px, 'Амплитуда перемещения', { min: 0, max: 24 }),
+    scale_amount: numberValue(profile.scale_amount, 'Амплитуда масштаба', { min: 0, max: 0.08 }),
+    brightness_amount: numberValue(profile.brightness_amount, 'Амплитуда яркости', { min: 0, max: 0.5 }),
+    section_effect: enumValue(profile.section_effect, 'Эффект разделов', SECTION_EFFECTS),
+    item_effect: enumValue(profile.item_effect, 'Эффект строк', ITEM_EFFECTS),
+    price_effect: enumValue(profile.price_effect, 'Эффект цен', PRICE_EFFECTS),
+    background_effect: enumValue(profile.background_effect, 'Эффект фона', BACKGROUND_EFFECTS),
+    background_zoom_percent: numberValue(profile.background_zoom_percent, 'Глубина фона', { min: 0, max: 8 }),
+    intensity: numberValue(profile.intensity, 'Интенсивность', { min: 0, max: 100, integer: true })
   };
 }
 
