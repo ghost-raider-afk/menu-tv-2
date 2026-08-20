@@ -23,6 +23,7 @@ export async function initialiseSchema(pool) {
     CREATE TABLE IF NOT EXISTS screens (
       id BIGSERIAL PRIMARY KEY,
       location_id BIGINT NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+      location_number INTEGER,
       name TEXT NOT NULL,
       resolution TEXT NOT NULL DEFAULT '1920×1080',
       status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'ready', 'published')),
@@ -121,6 +122,7 @@ export async function initialiseSchema(pool) {
     ALTER TABLE locations ADD COLUMN IF NOT EXISTS sftp_directory_id BIGINT REFERENCES sftp_directories(id) ON DELETE RESTRICT;
     ALTER TABLE locations ADD COLUMN IF NOT EXISTS sftp_username TEXT;
     ALTER TABLE locations ADD COLUMN IF NOT EXISTS sftp_password_issued_at TIMESTAMPTZ;
+    ALTER TABLE screens ADD COLUMN IF NOT EXISTS location_number INTEGER;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS delivery_filename TEXT;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_key TEXT;
     ALTER TABLE screens ADD COLUMN IF NOT EXISTS prepared_asset_sha256 TEXT;
@@ -153,7 +155,6 @@ export async function initialiseSchema(pool) {
     CREATE UNIQUE INDEX IF NOT EXISTS locations_sftp_username_unique ON locations(sftp_username) WHERE sftp_username IS NOT NULL;
     CREATE INDEX IF NOT EXISTS activity_events_created_at_index ON activity_events(created_at DESC);
     CREATE INDEX IF NOT EXISTS activity_events_unread_index ON activity_events(read_at) WHERE read_at IS NULL;
-    UPDATE screens SET delivery_filename = 'monitor-' || id::text || '.jpg' WHERE delivery_filename IS NULL;
     UPDATE web_users SET password_changed_at = created_at WHERE password_changed_at IS NULL;
     UPDATE site_settings SET accent_color = '#F4C915' WHERE accent_color = '#2563EB' AND COALESCE(updated_by, '') = '';
     UPDATE site_settings SET signin_logo_size = 1 WHERE signin_logo_size IS NULL OR signin_logo_size < 1 OR signin_logo_size > 7;
