@@ -17,14 +17,61 @@ async function createManagedSftpUser({ store, sftp, username, password, director
 }
 
 export function createSftpAccessService({ store, sftp, config }) {
+  async function directoryWithStatus(directory) {
+    const storageStatus = await sftp.directoryStatus(directory.name);
+    const summary = storageStatus === 'ready'
+      ? await sftp.directorySummary(directory.name)
+      : { file_count: 0, total_bytes: 0, last_modified_at: null };
+    return { ...directory, storage_status: storageStatus, ...summary };
+  }
+
   return Object.freeze({
     connection() {
-      return { host: config.sftp.publicHost, port: config.sftp.port };
+      return {
+        host: config.sftp.publicHost,
+        port: config.sftp.port,
+        access_mode: 'read-only',
+        permissions: ['list', 'download'],
+        source: '.env',
+        api_timeout_ms: config.sftp.apiTimeoutMs,
+        staging_max_age_hours: config.sftp.stagingMaxAgeHours,
+        generated_password_length: config.generatedPasswordLength,
+        screen_source_max_bytes: config.screenSourceMaxBytes
+      };
     },
 
     async directoriesWithStatus() {
       const directories = await store.listSftpDirectories();
-      return Promise.all(directories.map(async (directory) => ({ ...directory, storage_status: await sftp.directoryStatus(directory.name) })));
+      return Promise.all(directories.map(directoryWithStatus));
+    },
+
+    async overview() {
+      const directories = await this.directoriesWithStatus();
+      return {
+        connection: this.connection(),
+        totals: {
+          directories: directories.length,
+          ready_directories: directories.filter((item) => item.storage_status === 'ready').length,
+          bound_directories: directories.filter((item) => Boolean(item.bound_location_id)).length,
+          published_files: directories.reduce((total, item) => total + Number(item.file_count || 0), 0),
+          published_bytes: directories.reduce((total, item) => total + Number(item.total_bytes || 0), 0)
+        },
+        directories
+      };
+    },
+
+    async directoryFiles(id) {
+      const directory = await store.getSftpDirectory(id);
+      if (!directory) throw new NotFoundError();
+      const storageStatus = await sftp.directoryStatus(directory.name);
+      const files = storageStatus === 'ready' ? await sftp.listPublishedFiles(directory.name) : [];
+      return { directory: await directoryWithStatus(directory), files };
+    },
+
+    async publishedFile(id, filename) {
+      const directory = await store.getSftpDirectory(id);
+      if (!directory) throw new NotFoundError();
+      return { directory, file: await sftp.readPublishedFile(directory.name, filename) };
     },
 
     async provisionDirectory(id) {
@@ -32,7 +79,7 @@ export function createSftpAccessService({ store, sftp, config }) {
       if (!directory) throw new NotFoundError();
       await sftp.provisionDirectory(directory.name);
       const updated = await store.markSftpDirectoryProvisioned(id);
-      return { ...updated, storage_status: await sftp.directoryStatus(updated.name) };
+      return directoryWithStatus(updated);
     },
 
     async bindLocation(locationId, input) {
