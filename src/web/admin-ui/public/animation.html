@@ -30,20 +30,13 @@
 
             <div class="settings-card animation-player-card">
               <div class="card-heading"><div><p class="eyebrow">LIVE PREVIEW</p><h2>Мини‑плеер</h2><p id="animation-current-preset">Каскадная сборка</p></div><span class="animation-live-badge">LIVE</span></div>
+              <div class="animation-screen-picker">
+                <label class="field"><span>Экран предпросмотра</span><select id="animation-screen-select" aria-label="Экран предпросмотра"><option value="">Загрузка мониторов…</option></select></label>
+                <p id="animation-screen-status">Загружаем сохранённый экран…</p>
+              </div>
               <div class="animation-player-shell">
                 <div class="animation-stage" id="animation-stage" aria-label="Предпросмотр анимации">
-                  <div class="animation-demo-bg" data-motion-background></div>
-                  <div class="animation-demo-vignette"></div>
-                  <div class="animation-demo-menu">
-                    <div class="animation-demo-brand">БИР.ФИШ</div>
-                    <div class="animation-demo-section" data-motion="section"><span>ПИВО СВЕТЛОЕ ФИЛЬТРОВАННОЕ</span><span>1 л&nbsp;&nbsp;&nbsp;&nbsp;1,5 л</span></div>
-                    <div class="animation-demo-row" data-motion="item"><span><strong>БИР КОМ СВЕТЛОЕ</strong><small>светлое · фильтрованное · 4,5%</small></span><span class="animation-demo-prices"><b data-motion="price">205</b><b data-motion="price">307</b></span></div>
-                    <div class="animation-demo-row" data-motion="item"><span><strong>ЖИГУЛЕВСКОЕ</strong><small>классическое · 4,7%</small></span><span class="animation-demo-prices"><b data-motion="price">237</b><b data-motion="price">355</b></span></div>
-                    <div class="animation-demo-row" data-motion="item"><span><strong>НА ЮГА</strong><small>мягкое · ароматное · 4,8%</small></span><span class="animation-demo-prices"><b data-motion="price">256</b><b data-motion="price">384</b></span></div>
-                    <div class="animation-demo-section" data-motion="section"><span>ПИВО СВЕТЛОЕ НЕФИЛЬТРОВАННОЕ</span><span></span></div>
-                    <div class="animation-demo-row" data-motion="item"><span><strong>27 РЕГИОН</strong><small>нефильтрованное · 4,5%</small></span><span class="animation-demo-prices"><b data-motion="price">230</b><b data-motion="price">345</b></span></div>
-                    <div class="animation-demo-row" data-motion="item"><span><strong>ХМЕЛЬНОЙ ЭЛЬ</strong><small>яркий · хмелевой · 5,2%</small></span><span class="animation-demo-prices"><b data-motion="price">268</b><b data-motion="price">402</b></span></div>
-                  </div>
+                  <p class="animation-screen-empty">Загружаем настоящий экран…</p>
                 </div>
                 <div class="animation-player-controls">
                   <div class="animation-player-buttons">

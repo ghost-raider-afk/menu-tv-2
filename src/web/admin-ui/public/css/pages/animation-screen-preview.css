@@ -1,0 +1,15 @@
+.animation-screen-picker{display:grid;grid-template-columns:minmax(240px,1fr) auto;align-items:end;gap:12px;margin:-2px 0 12px;padding:10px 12px;border:1px solid var(--ui-border);border-radius:10px;background:var(--ui-panel-raised)}
+.animation-screen-picker .field{margin:0}.animation-screen-picker p{margin:0 0 3px;color:var(--ui-text-muted);font-size:11px;text-align:right;white-space:nowrap}
+.animation-screen-background,.animation-screen-canvas,.animation-screen-vignette,.animation-screen-shimmer{position:absolute;inset:0}
+.animation-screen-background{z-index:0;inset:-4%;transform:scale(1.035);background-repeat:no-repeat;will-change:transform}
+.animation-screen-canvas{z-index:1;overflow:hidden}.animation-screen-canvas .menu-table-svg{display:block;width:100%;height:100%;overflow:visible}
+.animation-screen-vignette{z-index:2;pointer-events:none;background:radial-gradient(circle at center,transparent 62%,rgba(0,0,0,.16))}
+.animation-screen-shimmer{z-index:3;pointer-events:none;left:-42%;right:auto;width:22%;opacity:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.19),transparent);transform:skewX(-18deg)}
+.animation-screen-empty{position:absolute;inset:0;display:grid;place-items:center;margin:0;padding:22px;z-index:4;color:rgba(255,255,255,.66);font-size:13px;text-align:center;background:#080b0e}
+.animation-stage [data-motion]{transform-box:fill-box;transform-origin:center;will-change:transform,opacity,filter}
+.animation-stage.motion-glow g.table-section{filter:drop-shadow(0 0 calc(14px * var(--motion-intensity)) rgba(244,201,21,.48))}
+.animation-stage.motion-shimmer .animation-screen-shimmer{opacity:calc(.28 * var(--motion-intensity));animation:animation-screen-shimmer 2.8s ease-in-out infinite}
+.animation-stage.motion-background .animation-screen-background{will-change:transform}
+@keyframes animation-screen-shimmer{0%,48%{transform:translateX(0) skewX(-18deg);opacity:0}58%{opacity:calc(.28 * var(--motion-intensity))}100%{transform:translateX(720%) skewX(-18deg);opacity:0}}
+@media(max-width:760px){.animation-screen-picker{grid-template-columns:1fr}.animation-screen-picker p{text-align:left;white-space:normal}}
+@media(prefers-reduced-motion:reduce){.animation-stage.motion-shimmer .animation-screen-shimmer{animation:none;opacity:0}}

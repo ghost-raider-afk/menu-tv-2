@@ -11,5 +11,6 @@
 @import url('./pages/catalog.css');
 @import url('./pages/settings.css');
 @import url('./pages/animation.css');
+@import url('./pages/animation-screen-preview.css');
 @import url('./editor/editor.css');
 @import url('./auth/signin.css');

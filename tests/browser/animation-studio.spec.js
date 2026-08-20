@@ -27,15 +27,59 @@ async function restoreAnimationSettings(page, settings) {
   }, { enabled: settings.enabled, preset_id: settings.preset_id, profile: settings.profile });
 }
 
-test('animation studio exposes 20 presets, live mini player controls and persistent settings', async ({ page }) => {
+async function createPreviewFixture(page) {
+  return page.evaluate(async () => {
+    async function request(url, init = {}) {
+      const response = await fetch(url, {
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', ...(init.headers || {}) },
+        ...init
+      });
+      if (!response.ok) throw new Error(`${init.method || 'GET'} ${url} failed: ${response.status}`);
+      return response.status === 204 ? null : response.json();
+    }
+
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const location = await request('/api/locations', {
+      method: 'POST', body: JSON.stringify({ name: `Animation ${suffix}`, address: '', active: true })
+    });
+    const screen = await request(`/api/locations/${location.id}/screens`, { method: 'POST', body: '{}' });
+    const editor = await request(`/api/screens/${screen.id}/editor`);
+    await request(`/api/screens/${screen.id}/draft`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        revision: editor.draft.revision,
+        rows: [{ id: 'real-preview-section', kind: 'section', name: 'НАСТОЯЩИЙ ЭКРАН MOTION STUDIO', enabled: true }],
+        settings: { background_color: '#123456', accent_color: '#F4C915', text_color: '#F8FAFC' }
+      })
+    });
+    return { locationId: location.id, screenId: screen.id, locationName: location.name, screenName: screen.name };
+  });
+}
+
+async function removePreviewFixture(page, fixture) {
+  await page.evaluate(async ({ screenId, locationId }) => {
+    await fetch(`/api/screens/${screenId}`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => undefined);
+    await fetch(`/api/locations/${locationId}`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => undefined);
+  }, fixture);
+}
+
+test('animation studio renders the selected real screen with 20 presets, player controls and persistent settings', async ({ page }) => {
   await login(page);
-  await page.goto('/animation.html');
-  await expect(page.getByRole('heading', { name: 'Анимация экранов' })).toBeVisible();
-  await expect(page.locator('[data-animation-preset]')).toHaveCount(20);
-  await expect(page.locator('#animation-stage')).toBeVisible();
+  const fixture = await createPreviewFixture(page);
   const original = await animationSettings(page);
 
   try {
+    await page.goto(`/animation.html?screen=${fixture.screenId}`);
+    await expect(page.getByRole('heading', { name: 'Анимация экранов' })).toBeVisible();
+    await expect(page.locator('[data-animation-preset]')).toHaveCount(20);
+    await expect(page.locator('#animation-stage')).toBeVisible();
+    await expect(page.locator('#animation-screen-select')).toHaveValue(String(fixture.screenId));
+    await expect(page.locator('#animation-stage')).toHaveAttribute('data-screen-id', String(fixture.screenId));
+    await expect(page.locator('#animation-stage .section-title')).toHaveText('НАСТОЯЩИЙ ЭКРАН MOTION STUDIO');
+    await expect(page.locator('#animation-stage .animation-screen-background')).toHaveCSS('background-color', 'rgb(18, 52, 86)');
+    await expect(page.locator('#animation-screen-status')).toContainText(fixture.screenName);
+
     await page.getByRole('button', { name: /Слайд слева/ }).click();
     await expect(page.locator('#animation-current-preset')).toHaveText('Слайд слева');
 
@@ -61,5 +105,6 @@ test('animation studio exposes 20 presets, live mini player controls and persist
     expect(saved.profile.direction).toBe('left');
   } finally {
     await restoreAnimationSettings(page, original);
+    await removePreviewFixture(page, fixture);
   }
 });
