@@ -4,6 +4,7 @@ export const ROUTE_DEFINITIONS = Object.freeze([
   Object.freeze({ path: '/', page: 'overview', section: 'overview', title: 'Обзор', prefetch: false }),
   Object.freeze({ path: '/locations.html', page: 'locations', section: 'monitors', title: 'Торговые точки', prefetch: true }),
   Object.freeze({ path: '/screens.html', page: 'screens', section: 'monitors', title: 'Мониторы', prefetch: true }),
+  Object.freeze({ path: '/connect-tv.html', page: 'connect-tv', section: 'monitors', title: 'Подключить ТВ', prefetch: true }),
   Object.freeze({ path: '/screen-editor.html', page: 'screen-editor', section: 'monitors', title: 'Редактор меню', prefetch: true }),
   Object.freeze({ path: '/catalog.html', page: 'catalog', section: 'catalog', title: 'Каталог', prefetch: true }),
   Object.freeze({ path: '/settings.html', page: 'settings', section: 'settings', title: 'Настройки сайта', prefetch: true }),
@@ -27,7 +28,7 @@ export const PREFETCH_ROUTE_PATHS = Object.freeze(ROUTE_DEFINITIONS.filter((rout
 
 const CONTEXT_LINKS = Object.freeze({
   overview: Object.freeze([['Обзор', '/']]),
-  monitors: Object.freeze([['Торговые точки', '/locations.html'], ['Мониторы', '/screens.html']]),
+  monitors: Object.freeze([['Торговые точки', '/locations.html'], ['Мониторы', '/screens.html'], ['Подключить ТВ', '/connect-tv.html']]),
   catalog: Object.freeze([['Продукция', '/catalog.html']]),
   settings: Object.freeze([['Настройки сайта', '/settings.html'], ['SFTP', '/sftp-settings.html'], ['Анимация', '/animation.html'], ['Профиль', '/profile.html']])
 });
