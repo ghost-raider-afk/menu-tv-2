@@ -28,7 +28,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, 'web', 'admin-ui', 'public');
 const protectedPages = [
   '/', '/index.html', '/locations.html', '/screens.html', '/catalog.html',
-  '/screen-editor.html', '/profile.html', '/settings.html', '/animation.html', '/sftp-settings.html'
+  '/screen-editor.html', '/profile.html', '/settings.html', '/animation.html', '/sftp-settings.html', '/pair.html'
 ];
 
 async function initialiseStore(store, config) {
@@ -71,7 +71,8 @@ function configureSecurity(app, config) {
         styleSrc: ["'self'"],
         fontSrc: ["'self'", 'data:'],
         scriptSrc: ["'self'"],
-        imgSrc: ["'self'", 'data:', 'blob:']
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        mediaSrc: ["'self'", 'blob:']
       }
     }
   }));
@@ -106,8 +107,8 @@ function mountPublicRoutes(app, { store, config }) {
       signin_logo_size: site.signin_logo_size
     });
   });
-  app.use('/api/player', createPublicPlayerRouter({ store }));
-  app.get('/player/:token', (_request, response) => {
+  app.use('/api/player', createPublicPlayerRouter({ store, config }));
+  app.get(['/player', '/player/'], (_request, response) => {
     response.setHeader('Cache-Control', 'no-store');
     response.sendFile(path.join(publicDir, 'player.html'));
   });
@@ -122,7 +123,7 @@ function mountProtectedApi(app, dependencies, requireApiSession) {
   app.use('/api/catalog', createCatalogRouter(dependencies));
   app.use('/api/locations', createLocationsRouter(dependencies));
   app.use('/api', createScreensRouter(dependencies));
-  app.use('/api', createPlayerAdminRouter(dependencies));
+  app.use('/api/player-admin', createPlayerAdminRouter(dependencies));
   app.use('/api', createSftpRouter(dependencies));
 }
 
