@@ -19,7 +19,9 @@ test('mobile shell uses bottom navigation with an explicit Overview destination'
   assert.match(sidebar, /ui-rail-mobile-home/);
   assert.match(sidebar, /label: 'Обзор'/);
   assert.match(shell, /max-width: 720px/);
-  assert.match(shell, /initialCollapsedState/);
+  assert.match(shell, /isMobileShell/);
+  assert.match(shell, /usesContextMenu/);
+  assert.match(shell, /section === 'monitors' \|\| section === 'settings'/);
 });
 
 test('mobile editor converts the desktop table into touch-friendly cards', async () => {
