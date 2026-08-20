@@ -1,4 +1,4 @@
-name: sync-installer-confirmation
+name: sync-release-fixes
 
 on:
   push:
@@ -15,28 +15,37 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: agent/remove-templates-compact-ui-1.2.0
-      - name: Keep 1.2.0 and use y/N confirmations
+      - name: Keep 1.2.0 installer confirmations and fix signin visual test lifecycle
         run: |
           python - <<'PY'
           from pathlib import Path
-          path = Path('menu-tv-2.sh')
-          text = path.read_text()
-          text = text.replace("[YES/NO]", "[y/N]")
+
+          script = Path('menu-tv-2.sh')
+          text = script.read_text()
+          text = text.replace('[YES/NO]', '[y/N]')
           text = text.replace('"${input^^}" != YES', '"${input,,}" != y')
           text = text.replace('"${input^^}" == YES', '"${input,,}" == y')
           if 'SCRIPT_VERSION="1.2.0"' not in text:
               raise SystemExit('installer release version changed unexpectedly')
           if '[YES/NO]' in text or '== YES' in text or '!= YES' in text:
               raise SystemExit('legacy confirmation remains')
-          path.write_text(text)
+          script.write_text(text)
+
+          test = Path('tests/browser/editor-visual.spec.js')
+          source = test.read_text()
+          old = "  await expect(page.locator('#site-settings-message')).toContainText('сохранены');\n  await page.goto('/signin.html');\n  await expect(page.locator('html')).toHaveAttribute('data-signin-logo-size', '7');"
+          new = "  await expect(page.locator('#site-settings-message')).toContainText('сохранены');\n  const logout = await page.request.post('/api/auth/logout');\n  expect(logout.status()).toBe(204);\n  await page.context().clearCookies();\n  await page.goto('/signin.html');\n  await expect(page).toHaveURL(/\\/signin\\.html$/);\n  await expect(page.locator('html')).toHaveAttribute('data-signin-logo-size', '7');"
+          if old not in source and new not in source:
+              raise SystemExit('signin visual test structure changed unexpectedly')
+          test.write_text(source.replace(old, new))
           PY
           bash -n menu-tv-2.sh
           grep -cF '[y/N]' menu-tv-2.sh | grep -Fx 3
-      - name: Commit installer patch
+      - name: Commit release fixes
         run: |
           git config user.name 'menu-tv-maintainer'
           git config user.email 'actions@users.noreply.github.com'
-          git add menu-tv-2.sh
+          git add menu-tv-2.sh tests/browser/editor-visual.spec.js
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m 'Use y/N confirmations in 1.2.0 installer'
+          git commit -m 'Fix 1.2.0 release browser lifecycle'
           git push origin HEAD:agent/remove-templates-compact-ui-1.2.0
