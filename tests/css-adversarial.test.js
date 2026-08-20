@@ -6,17 +6,21 @@ async function source(path) {
   return readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 }
 
-test('shell uses dynamic viewport height and explicit layer tokens', async () => {
+test('shell uses dynamic viewport height and explicit layer and chrome tokens', async () => {
   const [tokens, shell] = await Promise.all([
     source('src/web/admin-ui/public/css/tokens.css'),
     source('src/web/admin-ui/public/css/shell.css')
   ]);
   assert.match(tokens, /--ui-z-context:/);
   assert.match(tokens, /--ui-accent-text:/);
-  assert.match(tokens, /--ui-accent-on-dark:/);
+  assert.match(tokens, /--ui-accent-on-chrome:/);
+  assert.match(tokens, /--ui-chrome-surface:/);
+  assert.match(tokens, /--ui-chrome-text:/);
   assert.match(shell, /100dvh/);
   assert.match(shell, /var\(--ui-z-context\)/);
-  assert.match(shell, /var\(--ui-accent-on-dark\)/);
+  assert.match(shell, /var\(--ui-accent-on-chrome\)/);
+  assert.match(shell, /var\(--ui-chrome-surface\)/);
+  assert.match(shell, /var\(--ui-chrome-text\)/);
 });
 
 test('hidden switches expose a keyboard focus indicator', async () => {
@@ -63,4 +67,5 @@ test('site accent derives contrast colors instead of reusing arbitrary accent as
   assert.match(presentation, /--ui-accent-contrast/);
   assert.match(presentation, /--ui-accent-text/);
   assert.match(presentation, /--ui-accent-on-dark/);
+  assert.match(presentation, /--ui-accent-on-chrome/);
 });
