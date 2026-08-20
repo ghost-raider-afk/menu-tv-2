@@ -29,7 +29,7 @@ export function renderPreview(editorState, { screen, products, packaging, target
 
   target.classList.remove('is-invalid-resolution');
   const model = buildRenderModel(editorState, resolution);
-  const lines = buildDisplayLines(model, { products, packaging, fallbackTitle: screen?.name || 'Меню' });
+  const lines = buildDisplayLines(model, { products, packaging, fallbackTitle: 'Новый раздел' });
   const layout = buildRenderLayout(model, lines);
   const { palette } = layout;
 
