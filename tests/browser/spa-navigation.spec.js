@@ -41,6 +41,12 @@ test('main menu and context submenu navigate inside one persistent document', as
   await expect(page.locator('#site-settings-form')).toBeVisible();
   expect(await page.evaluate(() => window.__tvMenuSpaSentinel)).toBe(sentinel);
 
+  await page.getByRole('link', { name: /^SFTP$/ }).click();
+  await expect(page).toHaveURL(/\/sftp-settings\.html$/);
+  await expect(page.locator('#sftp-directory-form')).toBeVisible();
+  await expect(page.locator('#sftp-file-list')).toBeAttached();
+  expect(await page.evaluate(() => window.__tvMenuSpaSentinel)).toBe(sentinel);
+
   expect(documentRequests).toEqual([]);
 });
 
