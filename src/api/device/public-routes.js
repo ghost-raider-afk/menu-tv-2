@@ -103,6 +103,15 @@ export function createDevicePublicRouter({ store, config }) {
   });
 
   router.post('/activations', async (request, response) => {
+    const existingSession = await resolveDeviceSession(store, config, request, response);
+    if (existingSession) {
+      return response.status(409).json({
+        error: 'Телевизор уже авторизован.',
+        authorized: true,
+        screen: publicScreen(existingSession)
+      });
+    }
+
     const { credentials, expiresAt } = await createPendingActivation(store, config, request);
     response.status(201).json({
       activation_id: credentials.id,
