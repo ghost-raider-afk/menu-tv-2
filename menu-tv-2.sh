@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.2.0"
+SCRIPT_VERSION="1.3.0"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
@@ -157,6 +157,33 @@ update_script() {
   rm -f -- "$latest_file"
   info "Скрипт обновлён до версии $latest_version. Запускается новая версия."
   exec "$LAUNCHER_PATH"
+}
+
+handoff_update_to_latest_script() {
+  local latest_file latest_version owner
+  latest_file="$(mktemp -t "${PROGRAM_NAME}.script.XXXXXX")"
+  if ! fetch_latest_script "$latest_file"; then
+    rm -f -- "$latest_file"
+    die "Не удалось проверить актуальность системного скрипта перед обновлением приложения."
+  fi
+  latest_version="$(script_version_from_file "$latest_file")"
+
+  if ! script_version_is_newer "$SCRIPT_VERSION" "$latest_version"; then
+    rm -f -- "$latest_file"
+    return
+  fi
+
+  log "Обновление системного скрипта перед обновлением приложения"
+  install -o root -g root -m 0755 "$latest_file" "$LAUNCHER_PATH"
+  if [[ -d "$INSTALL_DIR" ]]; then
+    owner="$(project_owner)"
+    id "$owner" >/dev/null 2>&1 || die "Не найден пользователь владельца проекта: $owner"
+    install -o "$owner" -g "$owner" -m 0750 "$latest_file" "$INSTALL_DIR/menu-tv-2.sh"
+  fi
+  rm -f -- "$latest_file"
+  info "Системный скрипт обновлён с $SCRIPT_VERSION до $latest_version."
+  info "Обновление приложения продолжается уже новой версией установщика."
+  exec "$LAUNCHER_PATH" update
 }
 
 require_ubuntu() {
@@ -389,6 +416,11 @@ ensure_sftp_env() {
   [[ -n "$(env_value POSTGRES_IDLE_TIMEOUT_MS "$env_file")" ]] || set_env_value "$env_file" POSTGRES_IDLE_TIMEOUT_MS "30000"
   [[ -n "$(env_value SESSION_TTL_HOURS "$env_file")" ]] || set_env_value "$env_file" SESSION_TTL_HOURS "12"
   [[ -n "$(env_value SECURE_COOKIES "$env_file")" ]] || set_env_value "$env_file" SECURE_COOKIES "true"
+  [[ -n "$(env_value DEVICE_ACTIVATION_TTL_MINUTES "$env_file")" ]] || set_env_value "$env_file" DEVICE_ACTIVATION_TTL_MINUTES "10"
+  [[ -n "$(env_value DEVICE_ACTIVATION_POLL_SECONDS "$env_file")" ]] || set_env_value "$env_file" DEVICE_ACTIVATION_POLL_SECONDS "2"
+  [[ -n "$(env_value DEVICE_SESSION_TTL_DAYS "$env_file")" ]] || set_env_value "$env_file" DEVICE_SESSION_TTL_DAYS "365"
+  [[ -n "$(env_value DEVICE_HEARTBEAT_WRITE_SECONDS "$env_file")" ]] || set_env_value "$env_file" DEVICE_HEARTBEAT_WRITE_SECONDS "30"
+  [[ -n "$(env_value PLAYER_REFRESH_SECONDS "$env_file")" ]] || set_env_value "$env_file" PLAYER_REFRESH_SECONDS "5"
   [[ -n "$(env_value PASSWORD_MIN_LENGTH "$env_file")" ]] || set_env_value "$env_file" PASSWORD_MIN_LENGTH "10"
   [[ -n "$(env_value PASSWORD_MAX_LENGTH "$env_file")" ]] || set_env_value "$env_file" PASSWORD_MAX_LENGTH "32"
   [[ -n "$(env_value GENERATED_PASSWORD_LENGTH "$env_file")" ]] || set_env_value "$env_file" GENERATED_PASSWORD_LENGTH "10"
@@ -429,7 +461,7 @@ ensure_sftp_env() {
 validate_env() {
   local key value
   [[ -f "$INSTALL_DIR/.env" ]] || die "Отсутствует $INSTALL_DIR/.env"
-  for key in MENU_TV_2_DOMAIN POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD SESSION_SECRET SFTP_PUBLIC_HOST SFTP_PORT SFTP_ADMIN_USERNAME SFTP_ADMIN_PASSWORD SCREEN_BACKGROUND_MAX_BYTES; do
+  for key in MENU_TV_2_DOMAIN POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD SESSION_SECRET SFTP_PUBLIC_HOST SFTP_PORT SFTP_ADMIN_USERNAME SFTP_ADMIN_PASSWORD SCREEN_BACKGROUND_MAX_BYTES DEVICE_ACTIVATION_TTL_MINUTES DEVICE_ACTIVATION_POLL_SECONDS DEVICE_SESSION_TTL_DAYS DEVICE_HEARTBEAT_WRITE_SECONDS PLAYER_REFRESH_SECONDS; do
     value="$(env_value "$key")"
     [[ -n "$value" && "$value" != replace-with-* ]] || die "$key в .env не настроен."
   done
@@ -538,6 +570,7 @@ verify_https_certificate() {
       sleep 5
     fi
   done
+
 
   warn "HTTPS-сертификат для $domain не получен за 2 минуты."
   warn "Последние сообщения Traefik:"
@@ -778,6 +811,7 @@ update_app() {
   prepare_host
   check_dependencies
   [[ -d "$INSTALL_DIR/.git" ]] || die "Menu TV 2.0 не установлен: $INSTALL_DIR"
+  handoff_update_to_latest_script
   env_before="$(mktemp -t "${PROGRAM_NAME}.env.XXXXXX")"
   cp "$INSTALL_DIR/.env" "$env_before"
   ensure_sftp_env
