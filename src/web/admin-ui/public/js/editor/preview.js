@@ -16,6 +16,22 @@ function applyPreviewTypography(target, layout) {
   svg.dataset.fontKey = layout.typography.key;
 }
 
+function appendTableGuide(target, model, layout) {
+  const guide = document.createElement('div');
+  const { frame } = layout;
+  guide.className = 'editor-preview-table-guide';
+  guide.setAttribute('aria-hidden', 'true');
+  guide.dataset.x = String(frame.x);
+  guide.dataset.y = String(frame.y);
+  guide.dataset.width = String(frame.width);
+  guide.dataset.height = String(frame.height);
+  guide.style.left = `${(frame.x / model.viewport.width) * 100}%`;
+  guide.style.top = `${(frame.y / model.viewport.height) * 100}%`;
+  guide.style.width = `${(frame.width / model.viewport.width) * 100}%`;
+  guide.style.height = `${(frame.height / model.viewport.height) * 100}%`;
+  target.append(guide);
+}
+
 export function renderPreview(editorState, { screen, products, packaging, target }) {
   if (!target) return null;
   const resolution = parseResolution(screen?.resolution);
@@ -44,6 +60,7 @@ export function renderPreview(editorState, { screen, products, packaging, target
   target.classList.toggle('is-overflowing', !layout.vertical.fits);
   target.innerHTML = buildTableSvg(model, lines, layout);
   applyPreviewTypography(target, layout);
+  appendTableGuide(target, model, layout);
 
   return { model, lines, layout };
 }
