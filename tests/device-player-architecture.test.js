@@ -15,6 +15,8 @@ test('player is public while TV connection page remains admin protected', async 
   assert.doesNotMatch(server.match(/const protectedPages = \[[\s\S]*?\];/)?.[0] || '', /player/);
   assert.match(server, /app\.use\('\/api\/device', createDevicePublicRouter/);
   assert.match(server, /app\.use\('\/api\/device-admin', createDeviceAdminRouter/);
+  assert.match(playerHtml, /data-player-boot/);
+  assert.match(playerHtml, /activation-view is-hidden/);
   assert.match(playerHtml, /data-activation-view/);
   assert.match(playerHtml, /data-tv-player/);
   assert.match(connectHtml, /Сканировать QR/);
@@ -26,7 +28,7 @@ test('offline player keeps its shell, motion engine, context and same-origin ass
     read('src/web/admin-ui/public/player-sw.js'),
     read('src/web/admin-ui/public/js/player/player.js')
   ]);
-  assert.match(worker, /tv-menu-player-shell-v2/);
+  assert.match(worker, /tv-menu-player-shell-v4/);
   assert.match(worker, /PLAYER_CONTEXT = '\/api\/device\/player-context'/);
   assert.match(worker, /\/js\/motion\/preview-player\.js/);
   assert.match(worker, /\/js\/motion\/screen-preview\.js/);
@@ -40,6 +42,9 @@ test('offline player keeps its shell, motion engine, context and same-origin ass
   assert.match(player, /animation\?\.enabled === true/);
   assert.match(player, /restart\(animation\.profile\)/);
   assert.match(player, /showCachedPlayer/);
+  assert.match(player, /showBootScreen/);
+  assert.match(player, /response\.status === 409/);
+  assert.match(player, /resolveInitialPlayerState/);
   assert.match(player, /serviceWorker\.register\('\/player-sw\.js'/);
   assert.match(player, /Нет связи с сервером\. ТВ работает по последней сохранённой версии меню/);
 });
@@ -53,19 +58,33 @@ test('static TV background stays inside the exact player screen bounds', async (
   assert.doesNotMatch(rule, /scale\(/);
 });
 
+test('authorized TV cannot create another activation request', async () => {
+  const routes = await read('src/api/device/public-routes.js');
+  const activationRoute = routes.match(/router\.post\('\/activations'[\s\S]*?\n  \}\);/)?.[0] || '';
+  assert.match(activationRoute, /resolveDeviceSession/);
+  assert.match(activationRoute, /existingSession/);
+  assert.match(activationRoute, /status\(409\)/);
+  assert.match(activationRoute, /Телевизор уже авторизован/);
+});
+
 test('player context includes the saved global animation profile', async () => {
   const routes = await read('src/api/device/public-routes.js');
   assert.match(routes, /store\.getAnimationSettings\(\)/);
   assert.match(routes, /animation:\s*animation \|\|/);
 });
 
-test('admin connection flow requires explicit location and screen selection before authorization', async () => {
-  const [navigation, application, page] = await Promise.all([
+test('TV connection is a separate device branch inside monitor submenu', async () => {
+  const [navigation, contextPanel, screens, application, page] = await Promise.all([
     read('src/web/admin-ui/public/js/core/navigation.js'),
+    read('src/web/admin-ui/public/js/components/context-panel.js'),
+    read('src/web/admin-ui/public/screens.html'),
     read('src/web/admin-ui/public/js/application.js'),
     read('src/web/admin-ui/public/js/pages/connect-tv.js')
   ]);
-  assert.match(navigation, /\['Подключить ТВ', '\/connect-tv\.html'\]/);
+  assert.match(navigation, /label: 'ТЕЛЕВИЗОРЫ'/);
+  assert.match(navigation, /\['Подключение ТВ', '\/connect-tv\.html'\]/);
+  assert.match(contextPanel, /is-device-route/);
+  assert.doesNotMatch(screens, />Подключить ТВ<\/a>/);
   assert.match(application, /case 'connect-tv'/);
   assert.match(page, /selectedLocationId/);
   assert.match(page, /selectedScreenId/);
