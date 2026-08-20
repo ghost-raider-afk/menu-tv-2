@@ -10,6 +10,12 @@ function publicationMatches(screen, info) {
   );
 }
 
+function sameRevision(left, right) {
+  const leftRevision = Number(left);
+  const rightRevision = Number(right);
+  return Number.isSafeInteger(leftRevision) && leftRevision > 0 && leftRevision === rightRevision;
+}
+
 export function createPublishService({ store, sftp, config }) {
   if (!config?.imageMaxPixels) throw new Error('Publish service requires IMAGE_MAX_PIXELS from runtime config.');
   if (typeof store?.transaction !== 'function') throw new Error('Publish service requires transactional store access.');
@@ -57,11 +63,11 @@ export function createPublishService({ store, sftp, config }) {
           if (current.publication_pending_sha256) {
             throw new ConflictError('Сейчас выполняется публикация этого монитора. Дождитесь её завершения перед подготовкой нового JPEG.');
           }
-          if (current.resolution !== initialScreen.resolution || draft.revision !== initialDraft.revision) {
+          if (current.resolution !== initialScreen.resolution || !sameRevision(draft.revision, initialDraft.revision)) {
             throw new ConflictError('Меню изменилось во время подготовки JPEG. Сохраните актуальную версию и повторите операцию.');
           }
           const previousKey = current.prepared_asset_key || null;
-          const updated = await tx.savePreparedAsset(screenId, asset, draft.revision);
+          const updated = await tx.savePreparedAsset(screenId, asset, Number(draft.revision));
           if (!updated) throw new ConflictError('Меню изменилось во время подготовки JPEG. Сохраните актуальную версию и повторите операцию.');
           return { updated, previousKey };
         });
@@ -101,10 +107,10 @@ export function createPublishService({ store, sftp, config }) {
         if (!current.prepared_asset_key || !current.prepared_asset_sha256 || !current.prepared_draft_revision) {
           throw new ConflictError('Сначала сохраните текущее меню и подготовьте JPEG.');
         }
-        if (!draft?.revision || current.prepared_draft_revision !== draft.revision) {
+        if (!draft?.revision || !sameRevision(current.prepared_draft_revision, draft.revision)) {
           throw new ConflictError('Подготовленный JPEG относится к предыдущей версии меню. Сохраните меню заново.');
         }
-        const started = await tx.markPublicationStarted(current.id, current.prepared_asset_sha256, draft.revision);
+        const started = await tx.markPublicationStarted(current.id, current.prepared_asset_sha256, Number(draft.revision));
         if (!started) throw new ConflictError('Меню или подготовленный JPEG изменились. Обновите страницу и повторите публикацию.');
         return started;
       });
