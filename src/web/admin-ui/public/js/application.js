@@ -1,9 +1,20 @@
 import { pageName } from './core/config.js';
 import { loadAuthenticatedContext } from './core/session.js';
 import { initialiseNotifications } from './core/notifications.js';
-import { initialiseShell } from './components/shell.js';
+import { createAppRouter } from './core/router.js';
+import { state } from './core/state.js';
+import { initialiseShell, refreshShellRoute } from './components/shell.js';
+
+function resetTransientPageState(name) {
+  if (name === 'locations') state.editingLocationId = null;
+  if (name === 'catalog') {
+    state.editingProductId = null;
+    state.editingPackagingId = null;
+  }
+}
 
 async function initialisePage(name) {
+  resetTransientPageState(name);
   switch (name) {
     case 'overview': {
       const { initialiseDashboard } = await import('./pages/dashboard.js');
@@ -50,7 +61,8 @@ async function initialiseApplication() {
     await loadAuthenticatedContext();
     initialiseShell();
     initialiseNotifications();
-    await initialisePage(current);
+    const router = createAppRouter({ mountPage: initialisePage, syncShell: refreshShellRoute });
+    await router.start();
   } catch (error) {
     console.error('Application initialization failed', error);
     window.location.replace('/signin.html');

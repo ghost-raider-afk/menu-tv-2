@@ -2,6 +2,7 @@ import { API } from '../core/config.js';
 import { api } from '../core/api.js';
 import { element, setMessage, setPending } from '../core/dom.js';
 import { loadNotifications } from '../core/notifications.js';
+import { navigate } from '../core/router.js';
 import { createEditorState, markEditorSaved, replaceEditorState } from './state.js';
 import { updateSettings } from './commands.js';
 import { createEditorHistory } from './history.js';
@@ -38,10 +39,12 @@ function bindExclusiveToolMenus(form) {
     });
   });
 
-  document.addEventListener('keydown', (event) => {
+  const onKeydown = (event) => {
     if (event.key !== 'Escape') return;
     menus.forEach((menu) => { menu.open = false; });
-  });
+  };
+  document.addEventListener('keydown', onKeydown);
+  return () => document.removeEventListener('keydown', onKeydown);
 }
 
 function setEditorMessage(message, kind = 'error') {
@@ -103,11 +106,13 @@ export function initialiseScreenEditor() {
   const form = element('screen-editor-form');
   const screenId = editorScreenId();
   if (!(form instanceof HTMLFormElement) || !screenId) {
-    window.location.replace('/screens.html');
-    return;
+    void navigate('/screens.html', { replace: true });
+    return undefined;
   }
 
-  bindExclusiveToolMenus(form);
+  let disposed = false;
+  const unbindToolMenus = bindExclusiveToolMenus(form);
+  const isMounted = () => !disposed && document.getElementById('screen-editor-form') === form;
 
   const editorState = createEditorState();
   const history = createEditorHistory(editorState);
@@ -129,6 +134,7 @@ export function initialiseScreenEditor() {
   });
 
   const refreshEditorView = () => {
+    if (!isMounted()) return null;
     const activeScreen = editorState.screen || screen;
     const preview = refreshPreview(activeScreen);
     setLayoutWarning(preview, activeScreen);
@@ -138,16 +144,20 @@ export function initialiseScreenEditor() {
     return preview;
   };
 
-  const refreshRows = () => renderRows(editorState, {
-    target: rowsTarget,
-    empty: rowsEmpty,
-    products,
-    packaging,
-    onChange: refreshEditorView
-  });
+  const refreshRows = () => {
+    if (!isMounted()) return;
+    renderRows(editorState, {
+      target: rowsTarget,
+      empty: rowsEmpty,
+      products,
+      packaging,
+      onChange: refreshEditorView
+    });
+  };
 
   const load = async () => {
     const editor = await api.get(`${API.screens}/${screenId}/editor`);
+    if (!isMounted()) return;
     screen = editor.screen;
     products = editor.products;
     packaging = editor.packaging;
@@ -165,7 +175,7 @@ export function initialiseScreenEditor() {
     setEditorLoading(form, false);
     refreshEditorView();
   };
-  void load().catch((error) => setEditorMessage(error.message));
+  void load().catch((error) => { if (isMounted()) setEditorMessage(error.message); });
 
   bindSettingsProperties(editorState, refreshEditorView);
   bindScreenProperties(editorState, refreshEditorView);
@@ -187,6 +197,7 @@ export function initialiseScreenEditor() {
       if (!preview?.layout?.vertical?.fits) throw new Error('Таблица не помещается в заданную область. Измените высоту, масштаб или количество строк.');
 
       const saved = await api.put(`${API.screens}/${screenId}/draft`, serializeDraft(editorState, screenPayload));
+      if (!isMounted()) return;
       replaceEditorState(editorState, {
         screen: saved.screen,
         rows: saved.draft.rows || [],
@@ -204,12 +215,14 @@ export function initialiseScreenEditor() {
       try {
         const jpeg = await renderFinalJpeg(editorState, { screen, products, packaging });
         screen = await api.put(`${API.screens}/${screenId}/source`, jpeg, { headers: { 'Content-Type': 'image/jpeg' } });
+        if (!isMounted()) return;
         editorState.screen = structuredClone(screen);
         jpegPrepared = true;
       } catch (error) {
         jpegError = error;
       }
 
+      if (!isMounted()) return;
       populateEditor(screen, editorState);
       refreshRows();
       refreshEditorView();
@@ -217,9 +230,9 @@ export function initialiseScreenEditor() {
       if (jpegPrepared) setEditorMessage('Сохранено. JPEG собран и готов к публикации.', 'success');
       else setEditorMessage(`Меню сохранено, но JPEG не собран: ${jpegError?.message || 'неизвестная ошибка'}.`, 'error');
     } catch (error) {
-      setEditorMessage(error.message);
+      if (isMounted()) setEditorMessage(error.message);
     } finally {
-      setPending(submit, false, 'Сохраняем…');
+      if (isMounted()) setPending(submit, false, 'Сохраняем…');
     }
   });
 
@@ -233,6 +246,7 @@ export function initialiseScreenEditor() {
       const result = await api.put(`${API.screens}/${screenId}/background`, file, {
         headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-Draft-Revision': String(editorState.draftRevision) }
       });
+      if (!isMounted()) return;
       screen = result.screen;
       replaceEditorState(editorState, {
         screen,
@@ -247,9 +261,9 @@ export function initialiseScreenEditor() {
       refreshEditorView();
       setEditorMessage('Фон монитора загружен.', 'success');
     } catch (error) {
-      setEditorMessage(error.message);
+      if (isMounted()) setEditorMessage(error.message);
     } finally {
-      setPending(button, false, 'Загружаем…');
+      if (isMounted()) setPending(button, false, 'Загружаем…');
     }
   });
 
@@ -260,6 +274,7 @@ export function initialiseScreenEditor() {
       const result = await api.delete(`${API.screens}/${screenId}/background`, {
         headers: { 'X-Draft-Revision': String(editorState.draftRevision) }
       });
+      if (!isMounted()) return;
       screen = result.screen;
       replaceEditorState(editorState, {
         screen,
@@ -274,7 +289,7 @@ export function initialiseScreenEditor() {
       refreshEditorView();
       setEditorMessage('Фон удалён.', 'success');
     } catch (error) {
-      setEditorMessage(error.message);
+      if (isMounted()) setEditorMessage(error.message);
     }
   });
 
@@ -284,21 +299,34 @@ export function initialiseScreenEditor() {
     setPending(button, true, 'Публикуем…');
     try {
       screen = await api.post(`${API.screens}/${screenId}/publish`);
+      if (!isMounted()) return;
       editorState.screen = structuredClone(screen);
       populateEditor(screen, editorState);
       refreshEditorView();
       setEditorMessage('JPEG опубликован в SFTP-папке торговой точки.', 'success');
       await loadNotifications();
     } catch (error) {
-      setEditorMessage(error.message);
+      if (isMounted()) setEditorMessage(error.message);
     } finally {
-      setPending(button, false, 'Публикуем…');
+      if (isMounted()) setPending(button, false, 'Публикуем…');
     }
   });
 
-  window.addEventListener('beforeunload', (event) => {
+  const onBeforeUnload = (event) => {
     if (!editorState.dirty) return;
     event.preventDefault();
     event.returnValue = '';
-  });
+  };
+  window.addEventListener('beforeunload', onBeforeUnload);
+
+  return {
+    canLeave() {
+      return !editorState.dirty || window.confirm('Есть несохранённые изменения. Перейти в другой раздел без сохранения?');
+    },
+    dispose() {
+      disposed = true;
+      unbindToolMenus();
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    }
+  };
 }

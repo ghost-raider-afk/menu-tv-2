@@ -1,5 +1,6 @@
 import { API } from '../core/config.js';
 import { api } from '../core/api.js';
+import { navigate } from '../core/router.js';
 import { state } from '../core/state.js';
 import { element, makeButton, setMessage } from '../core/dom.js';
 
@@ -92,7 +93,7 @@ async function createScreenAtLocation(location, sourceId) {
   try {
     const payload = sourceId ? { source_screen_id: Number(sourceId) } : {};
     const screen = await api.post(`${API.locations}/${location.id}/screens`, payload);
-    window.location.assign(`/screen-editor.html?id=${screen.id}`);
+    await navigate(`/screen-editor.html?id=${screen.id}`);
   } catch (error) {
     setMessage('screens-message', error.message);
   }

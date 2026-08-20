@@ -21,6 +21,7 @@ Location
 
 `Screen` — самостоятельный монитор. Он хранит идентичность и состояние доставки:
 - `location_id`;
+- локальный номер внутри точки;
 - `name`;
 - `resolution`;
 - `status`;
@@ -28,6 +29,8 @@ Location
 - `delivery_filename`;
 - prepared/publishing/published SHA-256 и revision;
 - timestamps.
+
+Имя файла публикации определяется номером монитора внутри торговой точки (`monitor-1.jpg`, `monitor-2.jpg`), а не глобальным PostgreSQL ID.
 
 ### ScreenDraft
 
@@ -122,14 +125,52 @@ drop obsolete foreign key/column/table
 
 ## 5. Frontend
 
-### Shell
+### Persistent application shell
 
-Постоянные модули:
-- `components/sidebar.js`;
-- `components/context-panel.js`;
-- `components/header.js`;
-- `components/shell.js`;
-- `core/navigation.js`.
+После авторизации frontend работает как одно постоянное приложение. Полный HTML document не перезагружается при переходах между основным меню, подменю и рабочими разделами.
+
+Постоянное ядро:
+- `core/router.js` — History API, route cache, prefetch, mount/unmount lifecycle;
+- `components/sidebar.js` — основное меню;
+- `components/context-panel.js` — подменю текущего раздела;
+- `components/header.js` — заголовок, профиль, уведомления, тема;
+- `components/shell.js` — связывает постоянные части shell;
+- `core/navigation.js` — логическая карта разделов.
+
+Переход выполняется так:
+
+```text
+click internal route
+      ↓
+core/router.js
+      ↓
+History API (pushState/popstate)
+      ↓
+replace only .main-content contents
+      ↓
+refresh active shell state
+      ↓
+mount page module
+```
+
+Sidebar, context panel, header, notification polling и загруженный authenticated context остаются в памяти. На каждой странице больше не выполняется повторная загрузка shell и повторный bootstrap пользователя.
+
+HTML-файлы разделов сохраняются как direct-entry/fallback route documents и как лёгкие view templates. Это позволяет открыть `/screens.html`, `/catalog.html`, `/settings.html` или editor URL напрямую после F5, но обычная навигация внутри приложения использует client-side router.
+
+Основные route documents предварительно загружаются в фоне и после первого получения хранятся в памяти текущей вкладки. JS-модули также повторно не загружаются благодаря native ES module cache.
+
+Каждый page module может вернуть lifecycle:
+
+```text
+canLeave()  — разрешить/запретить переход
+dispose()   — удалить глобальные listeners/resources
+```
+
+Редактор монитора использует lifecycle для защиты несохранённых изменений и снимает свои `keydown`/`beforeunload` listeners при уходе со страницы.
+
+Страница входа остаётся отдельной security boundary и не входит в authenticated SPA shell.
+
+### Compact geometry
 
 Компактная геометрия задаётся базовыми tokens, а не page-specific override слоями:
 - rail: 64 px;
@@ -137,21 +178,21 @@ drop obsolete foreign key/column/table
 - control height: 32 px;
 - уменьшенные page/card gaps и paddings.
 
+### Catalog
+
+В подменю `Каталог` один пункт — `Продукция`. На самой странице остаются оба рабочих блока: продукция и тара. Отдельный пункт подменю `Тара` отсутствует.
+
 ### Monitor editor
 
 `screen-editor.html` построен вокруг sticky command bar:
 - Monitor;
 - Table;
 - Appearance;
-- Delivery;
-- Add row actions;
-- Save.
+- справа `Сохранить → Опубликовать`.
 
-Основное рабочее пространство ниже toolbar содержит только:
-- compact semantic row editor;
-- preview.
+SFTP-путь отображается рядом с идентичностью точки/монитора. Отдельной вкладки `Доставка` нет.
 
-Настройки не занимают постоянную правую колонку.
+Действия добавления строк (`+ Раздел`, `+ Продукция`, `+ Тара`) находятся в верхней части блока содержимого меню. Основное рабочее пространство содержит compact semantic row editor и preview.
 
 ## 6. Renderer
 
@@ -186,7 +227,8 @@ TV Menu 1 reference defaults для 1920×1080:
 - PK `screen_drafts.screen_id → screens.id ON DELETE CASCADE`;
 - unique `(location_id, name)`;
 - transaction wrapper для multi-step mutations;
-- optimistic locking по `screen_drafts.revision`.
+- optimistic locking по `screen_drafts.revision`;
+- PostgreSQL `BIGINT` revision нормализуется на DB boundary перед сравнением в JavaScript.
 
 ## 8. JPEG consistency
 
@@ -239,11 +281,21 @@ Startup reconciliation восстанавливает незавершённые
 
 Код не должен иметь второй production-default для значения, которое объявлено в `.env`.
 
-## 12. Release gates
+## 12. Frontend caching
+
+HTML direct-entry documents возвращаются с `Cache-Control: no-store`, но сервер не должен отправлять `Clear-Site-Data: "cache"` при обычной навигации. JS/CSS используют revalidation (`no-cache, must-revalidate`).
+
+Client-side router дополнительно держит view templates в памяти текущей вкладки. Поэтому после запуска приложения переходы по уже загруженным разделам не требуют повторного HTTP-запроса за HTML.
+
+## 13. Release gates
 
 Merge разрешён только после:
 - `node-check`;
 - `clean-install-smoke`;
 - `browser-visual`.
 
-Browser checks обязаны тестировать реальные DOM/SVG метрики, а не только наличие CSS-строк.
+Browser checks обязаны тестировать:
+- реальные DOM/SVG метрики редактора;
+- отсутствие полного document reload при переходах меню/подменю;
+- History API back/forward;
+- login presentation без неправильного первого кадра.
