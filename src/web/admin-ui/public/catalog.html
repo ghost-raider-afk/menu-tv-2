@@ -32,7 +32,7 @@
               </form>
             </section>
             <section class="settings-card">
-              <div class="card-heading"><div><p class="eyebrow">ПРОДУКЦИЯ</p><h2>Список</h2></div><div class="list-tools"><input class="list-filter" id="product-filter" type="search" placeholder="Поиск продукции" aria-label="Поиск продукции" /><button class="button button-secondary" id="refresh-catalog" type="button">Обновить</button></div></div>
+              <div class="card-heading"><div><p class="eyebrow">ПРОДУКЦИЯ</p><h2>Список</h2></div><div class="list-tools"><input class="list-filter" id="product-filter" type="search" placeholder="Поиск продукции" aria-label="Поиск продукции" /><input class="is-hidden" id="product-import-file" type="file" accept=".csv,text/csv" /><button class="button button-secondary" id="product-import" type="button">Загрузить в базу</button><button class="button button-secondary" id="product-export" type="button">Выгрузить из базы</button><button class="button button-secondary" id="refresh-catalog" type="button">Обновить</button></div></div>
               <div class="record-list" data-products-list></div><p class="empty-state is-hidden" data-products-empty>Продукции пока нет.</p>
             </section>
             <section class="settings-card" id="packaging">

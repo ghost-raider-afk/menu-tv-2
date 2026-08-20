@@ -12,6 +12,8 @@ export const API = Object.freeze({
   locations: '/api/locations',
   screens: '/api/screens',
   products: '/api/catalog/products',
+  productsImport: '/api/catalog/products/import',
+  productsExport: '/api/catalog/products/export.csv',
   packaging: '/api/catalog/packaging',
   sftpDirectories: '/api/sftp/directories',
   sftpConnection: '/api/sftp/connection'
