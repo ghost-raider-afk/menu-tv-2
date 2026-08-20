@@ -12,6 +12,7 @@ export function normaliseRow(row) {
     ...row,
     ...numericField(row, 'id'),
     ...numericField(row, 'location_id'),
+    ...numericField(row, 'location_number'),
     ...numericField(row, 'screen_id'),
     ...numericField(row, 'template_id'),
     ...numericField(row, 'session_version'),
