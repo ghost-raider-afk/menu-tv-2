@@ -38,14 +38,14 @@ test('CSS architecture is compact and has one permanent entrypoint', async () =>
   assert.match(tokens, /--ui-accent-on-chrome:/);
 });
 
-test('shell remains modular and catalog submenu has one product entry', async () => {
+test('shell remains modular and catalog submenu exposes product and packaging lists', async () => {
   const [shell, navigation] = await Promise.all([read('js/components/shell.js'), read('js/core/navigation.js')]);
   assert.match(shell, /createSidebar/);
   assert.match(shell, /createContextPanel/);
   assert.match(shell, /createHeader/);
+  assert.match(shell, /closest\('\.app-route-link'\)/);
   assert.doesNotMatch(shell, /legacy|\.sidebar|\.topbar/i);
-  assert.match(navigation, /catalog:\s*Object\.freeze\(\[\['Продукция', '\/catalog\.html'\]\]\)/);
-  assert.doesNotMatch(navigation, /#packaging|\['Тара'/);
+  assert.match(navigation, /catalog:\s*Object\.freeze\(\[\['Продукция', '\/catalog\.html#products-list'\], \['Тара', '\/catalog\.html#packaging-list'\]\]\)/);
   assert.doesNotMatch(navigation, /Шаблоны/);
 });
 
