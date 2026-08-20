@@ -1,0 +1,50 @@
+name: installer-confirmation-migration
+
+on:
+  push:
+    branches:
+      - agent/installer-y-n-1.1.15
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/installer-y-n-1.1.15
+      - name: Replace YES/NO confirmations with y/N
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          script = Path('menu-tv-2.sh')
+          text = script.read_text()
+          text = text.replace('SCRIPT_VERSION="1.1.14"', 'SCRIPT_VERSION="1.1.15"')
+          text = text.replace("  read -r -p 'Установить обновление скрипта? [YES/NO]: ' input\n  if [[ \"${input^^}\" != YES ]]; then", "  read -r -p 'Установить обновление скрипта? [y/N]: ' input\n  if [[ \"${input,,}\" != y ]]; then")
+          text = text.replace("  read -r -p 'Подтвердить удаление? [YES/NO]: ' input\n  [[ \"${input^^}\" == YES ]]", "  read -r -p 'Подтвердить удаление? [y/N]: ' input\n  [[ \"${input,,}\" == y ]]")
+          text = text.replace("  read -r -p 'Удалить только системный скрипт, не затрагивая проект и данные? [YES/NO]: ' input\n  [[ \"${input^^}\" == YES ]] ||", "  read -r -p 'Удалить только системный скрипт, не затрагивая проект и данные? [y/N]: ' input\n  [[ \"${input,,}\" == y ]] ||")
+          if '[YES/NO]' in text or '== YES' in text or '!= YES' in text:
+              raise SystemExit('legacy YES/NO confirmation remains')
+          if text.count('[y/N]') != 3:
+              raise SystemExit(f'expected 3 y/N prompts, got {text.count("[y/N]")}')
+          script.write_text(text)
+
+          workflow = Path('.github/workflows/check.yml')
+          check = workflow.read_text().replace("Версия скрипта: 1.1.14", "Версия скрипта: 1.1.15")
+          workflow.write_text(check)
+          PY
+          bash -n menu-tv-2.sh
+          grep -F 'SCRIPT_VERSION="1.1.15"' menu-tv-2.sh
+          grep -cF '[y/N]' menu-tv-2.sh | grep -Fx 3
+          ! grep -qF '[YES/NO]' menu-tv-2.sh
+      - name: Remove one-shot workflow and commit
+        run: |
+          rm .github/workflows/installer-confirmation-migration.yml
+          git config user.name 'menu-tv-maintainer'
+          git config user.email 'actions@users.noreply.github.com'
+          git add menu-tv-2.sh .github/workflows/check.yml .github/workflows/installer-confirmation-migration.yml
+          git commit -m 'Use y/N confirmations in installer'
+          git push origin HEAD:agent/installer-y-n-1.1.15
