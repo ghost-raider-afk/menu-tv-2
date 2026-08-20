@@ -1,24 +1,20 @@
 const BASE = Object.freeze({
-  entrance: 'cascade',
-  direction: 'left',
+  motion_version: 2,
+  pattern: 'ambient',
+  flow_direction: 'left-to-right',
   easing: 'smooth',
-  duration_ms: 900,
-  stagger_ms: 70,
-  distance_px: 54,
-  scale_from: 0.98,
-  opacity_from: 0,
-  blur_px: 0,
-  section_delay_ms: 0,
-  item_delay_ms: 150,
-  price_delay_ms: 220,
-  section_emphasis: 'slide',
-  price_emphasis: 'fade',
-  shimmer: false,
-  glow: false,
-  background_motion: true,
-  ambient_speed_seconds: 28,
-  intensity: 55,
-  hold_seconds: 8
+  cycle_seconds: 12,
+  event_duration_ms: 1800,
+  wave_stagger_ms: 180,
+  travel_px: 6,
+  scale_amount: 0.012,
+  brightness_amount: 0.16,
+  section_effect: 'shimmer',
+  item_effect: 'none',
+  price_effect: 'none',
+  background_effect: 'drift',
+  background_zoom_percent: 2,
+  intensity: 45
 });
 
 function preset(id, name, category, description, overrides = {}) {
@@ -26,26 +22,106 @@ function preset(id, name, category, description, overrides = {}) {
 }
 
 export const ANIMATION_PRESETS = Object.freeze([
-  preset('fade-soft', 'Мягкое появление', 'Спокойный', 'Чистый fade без лишнего движения.', { entrance: 'fade', direction: 'none', duration_ms: 1200, stagger_ms: 35, distance_px: 0, section_emphasis: 'none', background_motion: false, intensity: 35 }),
-  preset('slide-left', 'Слайд слева', 'Динамичный', 'Разделы и строки уверенно входят слева.', { entrance: 'slide', direction: 'left', duration_ms: 760, stagger_ms: 55, distance_px: 86, easing: 'snappy', section_emphasis: 'slide', intensity: 62 }),
-  preset('slide-up', 'Слайд снизу', 'Динамичный', 'Меню поднимается снизу с мягким каскадом.', { entrance: 'slide', direction: 'up', duration_ms: 820, stagger_ms: 60, distance_px: 74, easing: 'smooth', intensity: 58 }),
-  preset('cascade-soft', 'Каскадная сборка', 'Универсальный', 'Разделы, строки и цены собираются по слоям.', { entrance: 'cascade', direction: 'left', duration_ms: 880, stagger_ms: 78, section_delay_ms: 0, item_delay_ms: 170, price_delay_ms: 320, section_emphasis: 'slide', price_emphasis: 'fade', intensity: 58 }),
-  preset('zoom-focus', 'Масштаб + фокус', 'Премиум', 'Лёгкий zoom и фокусировка без резкого движения.', { entrance: 'focus', direction: 'none', duration_ms: 1050, stagger_ms: 42, distance_px: 0, scale_from: 0.92, blur_px: 9, easing: 'cinematic', section_emphasis: 'glow', glow: true, intensity: 48 }),
-  preset('light-wave', 'Световая волна', 'Премиум', 'Каскад с золотым световым проходом.', { entrance: 'reveal', direction: 'left', duration_ms: 980, stagger_ms: 66, section_emphasis: 'glow', shimmer: true, glow: true, background_motion: true, ambient_speed_seconds: 22, intensity: 72 }),
-  preset('sections-first', 'Сначала разделы', 'Навигационный', 'Плашки разделов появляются первыми, затем позиции.', { entrance: 'cascade', direction: 'left', duration_ms: 780, stagger_ms: 54, section_delay_ms: 0, item_delay_ms: 520, price_delay_ms: 700, section_emphasis: 'wipe', price_emphasis: 'fade', intensity: 60 }),
-  preset('ambient-reveal', 'Живой фон + проявление', 'Премиум', 'Параллакс фона и спокойное раскрытие меню.', { entrance: 'reveal', direction: 'up', duration_ms: 1250, stagger_ms: 52, distance_px: 42, scale_from: 0.96, blur_px: 3, background_motion: true, ambient_speed_seconds: 18, easing: 'cinematic', intensity: 50 }),
-  preset('accent-pulse', 'Акцент разделов', 'Промо', 'Разделы мягко подсвечиваются после появления.', { entrance: 'cascade', direction: 'left', duration_ms: 760, stagger_ms: 52, section_emphasis: 'pulse', price_emphasis: 'pop', glow: true, intensity: 78 }),
-  preset('diagonal-cut', 'Диагональный переход', 'Динамичный', 'Контент открывается диагональным движением.', { entrance: 'diagonal', direction: 'diagonal', duration_ms: 900, stagger_ms: 60, distance_px: 96, easing: 'snappy', section_emphasis: 'wipe', intensity: 75 }),
-  preset('fast-retail', 'Fast Retail', 'Динамичный', 'Быстрая ритмичная сборка в стиле digital menu board.', { entrance: 'cascade', direction: 'left', duration_ms: 520, stagger_ms: 32, distance_px: 68, easing: 'snappy', section_emphasis: 'slide', price_emphasis: 'pop', intensity: 82 }),
-  preset('soft-premium', 'Soft Premium', 'Премиум', 'Медленное дорогое движение с деликатным glow.', { entrance: 'focus', direction: 'up', duration_ms: 1450, stagger_ms: 70, distance_px: 34, scale_from: 0.95, blur_px: 7, easing: 'cinematic', section_emphasis: 'glow', glow: true, background_motion: true, ambient_speed_seconds: 34, intensity: 44 }),
-  preset('stagger-lines', 'Строка за строкой', 'Навигационный', 'Чёткий последовательный проход по всем строкам.', { entrance: 'cascade', direction: 'right', duration_ms: 640, stagger_ms: 115, distance_px: 46, easing: 'standard', section_emphasis: 'none', price_emphasis: 'fade', intensity: 55 }),
-  preset('price-reveal', 'Акцент на ценах', 'Промо', 'Названия появляются первыми, цены догоняют отдельным движением.', { entrance: 'cascade', direction: 'left', duration_ms: 720, stagger_ms: 48, item_delay_ms: 120, price_delay_ms: 780, price_emphasis: 'slide', section_emphasis: 'slide', intensity: 68 }),
-  preset('split-columns', 'Разделение колонок', 'Динамичный', 'Текст и цены сходятся с разных направлений.', { entrance: 'split', direction: 'left', duration_ms: 820, stagger_ms: 46, distance_px: 92, price_delay_ms: 120, price_emphasis: 'slide', easing: 'smooth', intensity: 70 }),
-  preset('depth-parallax', 'Глубина / Parallax', 'Премиум', 'Фон и меню движутся с разной глубиной.', { entrance: 'focus', direction: 'up', duration_ms: 1180, stagger_ms: 44, distance_px: 52, scale_from: 0.94, blur_px: 4, background_motion: true, ambient_speed_seconds: 14, easing: 'cinematic', intensity: 56 }),
-  preset('glow-sweep', 'Золотой блик', 'Промо', 'После сборки по акцентам проходит световой блик.', { entrance: 'reveal', direction: 'left', duration_ms: 850, stagger_ms: 48, section_emphasis: 'glow', shimmer: true, glow: true, ambient_speed_seconds: 24, intensity: 88 }),
-  preset('quick-snap', 'Quick Snap', 'Динамичный', 'Очень быстрый и собранный старт без долгих задержек.', { entrance: 'slide', direction: 'up', duration_ms: 420, stagger_ms: 24, distance_px: 52, easing: 'snappy', section_emphasis: 'slide', price_emphasis: 'pop', background_motion: false, intensity: 86 }),
-  preset('cinema-build', 'Cinema Build', 'Премиум', 'Медленная кинематографичная сборка с blur и глубиной.', { entrance: 'focus', direction: 'none', duration_ms: 1750, stagger_ms: 95, distance_px: 0, scale_from: 1.07, blur_px: 14, easing: 'cinematic', section_delay_ms: 120, item_delay_ms: 360, price_delay_ms: 540, glow: true, background_motion: true, ambient_speed_seconds: 40, intensity: 46 }),
-  preset('signature-gold', 'Signature Gold', 'Фирменный', 'Сбалансированный золотой пресет для ТВ МЕНЮ.', { entrance: 'cascade', direction: 'left', duration_ms: 840, stagger_ms: 58, distance_px: 64, easing: 'smooth', section_emphasis: 'wipe', price_emphasis: 'pop', shimmer: true, glow: true, background_motion: true, ambient_speed_seconds: 26, intensity: 74 })
+  preset('fade-soft', 'Тихое дыхание', 'Ambient', 'Меню постоянно видно; фон и строки едва заметно «дышат».', {
+    pattern: 'ambient', flow_direction: 'none', cycle_seconds: 18, event_duration_ms: 3200, wave_stagger_ms: 0,
+    travel_px: 0, scale_amount: 0.006, brightness_amount: 0.08, section_effect: 'glow', item_effect: 'breathe',
+    price_effect: 'none', background_effect: 'breathe', background_zoom_percent: 1.2, intensity: 28
+  }),
+  preset('slide-left', 'Световая волна слева', 'Wave', 'Мягкий акцент проходит по уже открытому меню слева направо.', {
+    pattern: 'wave', flow_direction: 'left-to-right', cycle_seconds: 10, event_duration_ms: 1600, wave_stagger_ms: 220,
+    travel_px: 8, scale_amount: 0.006, brightness_amount: 0.14, section_effect: 'wave', item_effect: 'wave',
+    price_effect: 'glow', background_effect: 'drift', intensity: 52
+  }),
+  preset('slide-up', 'Вертикальная волна', 'Wave', 'Акцент поднимается снизу вверх, не скрывая строки и цены.', {
+    pattern: 'wave', flow_direction: 'bottom-to-top', cycle_seconds: 11, event_duration_ms: 1700, wave_stagger_ms: 160,
+    travel_px: 7, scale_amount: 0.008, brightness_amount: 0.13, section_effect: 'lift', item_effect: 'lift',
+    price_effect: 'wave', background_effect: 'none', intensity: 48
+  }),
+  preset('cascade-soft', 'Мягкий каскад', 'Universal', 'Спокойный каскад подсветки разделов, строк и цен поверх постоянного меню.', {
+    pattern: 'wave', flow_direction: 'top-to-bottom', cycle_seconds: 13, event_duration_ms: 1800, wave_stagger_ms: 250,
+    travel_px: 4, scale_amount: 0.01, brightness_amount: 0.12, section_effect: 'glow', item_effect: 'focus',
+    price_effect: 'glow', background_effect: 'drift', intensity: 42
+  }),
+  preset('zoom-focus', 'Фокус по строкам', 'Focus', 'Каждая строка на мгновение получает фокус, остальные остаются полностью видимыми.', {
+    pattern: 'focus', flow_direction: 'top-to-bottom', cycle_seconds: 14, event_duration_ms: 2200, wave_stagger_ms: 400,
+    travel_px: 0, scale_amount: 0.018, brightness_amount: 0.2, section_effect: 'none', item_effect: 'focus',
+    price_effect: 'pulse', background_effect: 'breathe', background_zoom_percent: 1.5, intensity: 46
+  }),
+  preset('light-wave', 'Золотая волна', 'Premium', 'Золотой свет последовательно проходит по разделам и ценам.', {
+    pattern: 'spark', flow_direction: 'left-to-right', cycle_seconds: 12, event_duration_ms: 1800, wave_stagger_ms: 260,
+    travel_px: 3, scale_amount: 0.008, brightness_amount: 0.24, section_effect: 'shimmer', item_effect: 'breathe',
+    price_effect: 'glow', background_effect: 'drift', intensity: 62
+  }),
+  preset('sections-first', 'Ритм разделов', 'Navigation', 'Только заголовки разделов периодически дают навигационный акцент.', {
+    pattern: 'pulse', flow_direction: 'none', cycle_seconds: 9, event_duration_ms: 1500, wave_stagger_ms: 0,
+    travel_px: 0, scale_amount: 0.014, brightness_amount: 0.14, section_effect: 'pulse', item_effect: 'none',
+    price_effect: 'none', background_effect: 'none', intensity: 44
+  }),
+  preset('ambient-reveal', 'Живой фон', 'Ambient', 'Контент неподвижен, а глубину создаёт только очень медленное движение фона.', {
+    pattern: 'parallax', flow_direction: 'none', cycle_seconds: 20, event_duration_ms: 5000, wave_stagger_ms: 0,
+    travel_px: 3, scale_amount: 0, brightness_amount: 0.05, section_effect: 'none', item_effect: 'none',
+    price_effect: 'none', background_effect: 'drift', background_zoom_percent: 3, intensity: 34
+  }),
+  preset('accent-pulse', 'Пульс акцентов', 'Promo', 'Разделы и цены синхронно пульсируют коротким спокойным импульсом.', {
+    pattern: 'pulse', flow_direction: 'none', cycle_seconds: 8, event_duration_ms: 1200, wave_stagger_ms: 0,
+    travel_px: 0, scale_amount: 0.02, brightness_amount: 0.18, section_effect: 'pulse', item_effect: 'none',
+    price_effect: 'pulse', background_effect: 'none', intensity: 58
+  }),
+  preset('diagonal-cut', 'Диагональный ритм', 'Wave', 'Небольшая диагональная волна проходит по элементам без смены сцены.', {
+    pattern: 'wave', flow_direction: 'alternate', cycle_seconds: 10, event_duration_ms: 1500, wave_stagger_ms: 180,
+    travel_px: 8, scale_amount: 0.006, brightness_amount: 0.14, section_effect: 'wave', item_effect: 'wave',
+    price_effect: 'wave', background_effect: 'drift', intensity: 54
+  }),
+  preset('fast-retail', 'Retail Energy', 'Dynamic', 'Быстрые короткие импульсы разделов и цен для активного digital-menu.', {
+    pattern: 'spark', flow_direction: 'left-to-right', easing: 'snappy', cycle_seconds: 7, event_duration_ms: 1100,
+    wave_stagger_ms: 120, travel_px: 5, scale_amount: 0.02, brightness_amount: 0.22, section_effect: 'shimmer',
+    item_effect: 'focus', price_effect: 'pop', background_effect: 'none', intensity: 70
+  }),
+  preset('soft-premium', 'Soft Premium', 'Premium', 'Медленная дорогая пластика: лёгкий glow, дыхание строк и фона.', {
+    pattern: 'ambient', flow_direction: 'none', easing: 'cinematic', cycle_seconds: 18, event_duration_ms: 3200,
+    wave_stagger_ms: 0, travel_px: 0, scale_amount: 0.008, brightness_amount: 0.1, section_effect: 'glow',
+    item_effect: 'breathe', price_effect: 'glow', background_effect: 'breathe', background_zoom_percent: 2, intensity: 32
+  }),
+  preset('stagger-lines', 'Волна по строкам', 'Navigation', 'Небольшой акцент последовательно проходит по каждой строке меню.', {
+    pattern: 'wave', flow_direction: 'top-to-bottom', cycle_seconds: 12, event_duration_ms: 1500, wave_stagger_ms: 300,
+    travel_px: 6, scale_amount: 0.006, brightness_amount: 0.12, section_effect: 'none', item_effect: 'wave',
+    price_effect: 'glow', background_effect: 'none', intensity: 44
+  }),
+  preset('price-reveal', 'Ценовой ритм', 'Promo', 'Цены получают редкий акцент, не отвлекая от названий продукции.', {
+    pattern: 'spark', flow_direction: 'right-to-left', cycle_seconds: 8, event_duration_ms: 900, wave_stagger_ms: 160,
+    travel_px: 0, scale_amount: 0.025, brightness_amount: 0.25, section_effect: 'none', item_effect: 'none',
+    price_effect: 'pulse', background_effect: 'none', intensity: 62
+  }),
+  preset('split-columns', 'Двойной поток', 'Dynamic', 'Строки и цены движутся микроволной в противоположном ритме.', {
+    pattern: 'wave', flow_direction: 'alternate', cycle_seconds: 11, event_duration_ms: 1600, wave_stagger_ms: 200,
+    travel_px: 7, scale_amount: 0.008, brightness_amount: 0.14, section_effect: 'wave', item_effect: 'wave',
+    price_effect: 'wave', background_effect: 'none', intensity: 52
+  }),
+  preset('depth-parallax', 'Depth Parallax', 'Premium', 'Фон медленно смещается, а контент получает едва заметную глубину.', {
+    pattern: 'parallax', flow_direction: 'none', easing: 'cinematic', cycle_seconds: 16, event_duration_ms: 3000,
+    wave_stagger_ms: 0, travel_px: 4, scale_amount: 0.01, brightness_amount: 0.08, section_effect: 'lift',
+    item_effect: 'breathe', price_effect: 'none', background_effect: 'drift', background_zoom_percent: 4, intensity: 36
+  }),
+  preset('glow-sweep', 'Золотой блик', 'Promo', 'Редкий световой проход по акцентным плашкам и ценам.', {
+    pattern: 'spark', flow_direction: 'left-to-right', cycle_seconds: 10, event_duration_ms: 1700, wave_stagger_ms: 260,
+    travel_px: 2, scale_amount: 0.006, brightness_amount: 0.3, section_effect: 'shimmer', item_effect: 'none',
+    price_effect: 'glow', background_effect: 'none', intensity: 72
+  }),
+  preset('quick-snap', 'Quick Pulse', 'Dynamic', 'Очень короткий импульс разделов и цен с длинной спокойной паузой.', {
+    pattern: 'pulse', flow_direction: 'none', easing: 'snappy', cycle_seconds: 6, event_duration_ms: 700, wave_stagger_ms: 80,
+    travel_px: 0, scale_amount: 0.025, brightness_amount: 0.22, section_effect: 'pulse', item_effect: 'none',
+    price_effect: 'pop', background_effect: 'none', intensity: 68
+  }),
+  preset('cinema-build', 'Cinema Ambient', 'Premium', 'Очень медленное кинематографичное дыхание всей композиции без появления/исчезновения.', {
+    pattern: 'ambient', flow_direction: 'none', easing: 'cinematic', cycle_seconds: 24, event_duration_ms: 4200,
+    wave_stagger_ms: 500, travel_px: 2, scale_amount: 0.012, brightness_amount: 0.09, section_effect: 'glow',
+    item_effect: 'focus', price_effect: 'glow', background_effect: 'zoom', background_zoom_percent: 4, intensity: 30
+  }),
+  preset('signature-gold', 'Signature Gold', 'Signature', 'Фирменный постоянный motion: мягкий фон, золотой блик и спокойный ценовой импульс.', {
+    pattern: 'spark', flow_direction: 'left-to-right', cycle_seconds: 12, event_duration_ms: 1800, wave_stagger_ms: 220,
+    travel_px: 5, scale_amount: 0.014, brightness_amount: 0.2, section_effect: 'shimmer', item_effect: 'focus',
+    price_effect: 'pulse', background_effect: 'drift', background_zoom_percent: 2.5, intensity: 58
+  })
 ]);
 
 export const PRESET_BY_ID = new Map(ANIMATION_PRESETS.map((item) => [item.id, item]));
