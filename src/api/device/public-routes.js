@@ -33,6 +33,21 @@ function publicScreen(session) {
   };
 }
 
+function filterPlayerCatalog(draft, products, packaging) {
+  const productIds = new Set();
+  const packagingIds = new Set();
+  for (const row of draft?.rows || []) {
+    const productId = Number(row?.product_id ?? row?.productId);
+    const packagingId = Number(row?.packaging_id ?? row?.packagingId);
+    if (Number.isSafeInteger(productId) && productId > 0) productIds.add(productId);
+    if (Number.isSafeInteger(packagingId) && packagingId > 0) packagingIds.add(packagingId);
+  }
+  return {
+    products: products.filter((item) => productIds.has(Number(item.id))),
+    packaging: packaging.filter((item) => packagingIds.has(Number(item.id)))
+  };
+}
+
 async function createPendingActivation(store, config, request) {
   const expiresAt = new Date(Date.now() + config.deviceActivationTtlMinutes * 60_000).toISOString();
   let lastError;
@@ -174,6 +189,7 @@ export function createDevicePublicRouter({ store, config }) {
       response.setHeader('Set-Cookie', deviceSessionCookie('', config, 0));
       return response.status(401).json({ error: 'Привязка телевизора больше не активна.' });
     }
+    const catalog = filterPlayerCatalog(draft, products, packaging);
 
     return response.json({
       screen: {
@@ -186,8 +202,8 @@ export function createDevicePublicRouter({ store, config }) {
         location_number: screen.location_number
       },
       draft: { rows: draft.rows || [], settings: draft.settings || {}, revision: draft.revision },
-      products,
-      packaging,
+      products: catalog.products,
+      packaging: catalog.packaging,
       refresh_interval_ms: config.playerRefreshSeconds * 1000
     });
   });
