@@ -13,18 +13,31 @@
       <div class="app-content">
         <main class="main-content animation-content">
           <div class="page-heading animation-heading">
-            <div><p class="eyebrow">MOTION STUDIO</p><h1>Анимация экранов</h1><p>Меню всегда остаётся открытым и читаемым. Анимация работает как постоянное живое оформление: фон, световые волны, микро‑движение разделов, строк и цен.</p></div>
+            <div><p class="eyebrow">MOTION STUDIO</p><h1>Анимация экранов</h1><p>Меню всегда остаётся открытым и читаемым. Профили хранятся в библиотеке и назначаются конкретным мониторам.</p></div>
             <div class="animation-heading-actions">
-              <label class="animation-master-toggle"><input id="animation-enabled" type="checkbox" /><span><strong>Анимация включена</strong><small>Ни один пресет не скрывает меню целиком.</small></span></label>
+              <label class="animation-master-toggle"><input id="animation-enabled" type="checkbox" /><span><strong>Профиль включён</strong><small>Выключенный профиль оставляет экран статичным.</small></span></label>
               <button class="button button-primary" id="animation-save" type="button">Сохранить профиль</button>
             </div>
           </div>
 
           <p class="form-message is-hidden" id="animation-message" role="status" aria-live="polite"></p>
 
+          <section class="settings-card animation-library-card" aria-labelledby="animation-library-title">
+            <div class="card-heading"><div><p class="eyebrow">БИБЛИОТЕКА</p><h2 id="animation-library-title">Профили анимации</h2><p>Один профиль можно назначить нескольким мониторам. Изменение профиля применяется ко всем назначенным экранам.</p></div></div>
+            <div class="animation-library-grid">
+              <label class="field"><span>Редактируемый профиль</span><select id="animation-profile-select"></select></label>
+              <label class="field"><span>Название профиля</span><input id="animation-profile-name" maxlength="80" /></label>
+              <div class="animation-profile-usage"><span>Назначено мониторам</span><strong id="animation-profile-screen-count">0</strong></div>
+              <div class="form-actions animation-library-actions">
+                <button class="button button-secondary" id="animation-new-profile" type="button">Новый профиль</button>
+                <button class="button button-secondary" id="animation-delete-profile" type="button">Удалить профиль</button>
+              </div>
+            </div>
+          </section>
+
           <section class="animation-studio-grid" aria-label="Студия анимации">
             <div class="settings-card animation-preset-card">
-              <div class="card-heading"><div><p class="eyebrow">20 ПРЕСЕТОВ</p><h2>Постоянное движение</h2><p>Не переходы между слайдами, а циклические акценты поверх постоянно открытого меню.</p></div></div>
+              <div class="card-heading"><div><p class="eyebrow">20 ПРЕСЕТОВ</p><h2>Постоянное движение</h2><p>Пресет — стартовая конфигурация текущего профиля. После выбора параметры можно детально изменить.</p></div></div>
               <div class="animation-preset-list" id="animation-presets"></div>
             </div>
 
@@ -32,8 +45,22 @@
               <div class="card-heading"><div><p class="eyebrow">LIVE PREVIEW</p><h2>Мини‑плеер</h2><p id="animation-current-preset">Мягкий каскад</p></div><span class="animation-live-badge">LOOP</span></div>
               <div class="animation-screen-picker">
                 <label class="field"><span>Экран предпросмотра</span><select id="animation-screen-select" aria-label="Экран предпросмотра"><option value="">Загрузка мониторов…</option></select></label>
+                <label class="field"><span>Назначенный профиль</span><select id="animation-screen-profile"><option value="">Без анимации</option></select></label>
                 <p id="animation-screen-status">Загружаем сохранённый экран…</p>
+                <button class="button button-secondary" id="animation-assign-profile" type="button">Применить к экрану</button>
               </div>
+
+              <div class="animation-player-workspace" aria-label="Рабочее место телевизора">
+                <div class="animation-player-workspace-heading"><div><span>FULLSCREEN TV PLAYER</span><strong>Рабочее место выбранного телевизора</strong></div><label><input id="animation-player-enabled" type="checkbox" /> доступ включён</label></div>
+                <code id="animation-player-url">—</code>
+                <div class="animation-player-workspace-actions">
+                  <button class="button button-secondary" id="animation-player-copy" type="button">Копировать ссылку</button>
+                  <button class="button button-secondary" id="animation-player-open" type="button">Открыть плеер</button>
+                  <button class="button button-secondary" id="animation-player-rotate" type="button">Новая ссылка</button>
+                </div>
+                <p>Страница рассчитана на Chromium/браузер телевизора в kiosk/fullscreen: без интерфейса, скролла и курсора, только назначенный экран.</p>
+              </div>
+
               <div class="animation-player-shell">
                 <div class="animation-stage" id="animation-stage" aria-label="Предпросмотр постоянной анимации">
                   <p class="animation-screen-empty">Загружаем настоящий экран…</p>
