@@ -5,7 +5,7 @@ import { addRow, moveRow, removeRow, updateRow, updateSettings } from '../../../
 import { buildDisplayLines, buildRenderLayout, buildRenderModel, buildTableSvg, MENU_REFERENCE } from '../../../src/web/admin-ui/public/js/editor/renderer.js';
 import { normaliseEditorSettings } from '../../../src/web/admin-ui/public/js/editor/settings.js';
 
-test('editor commands mutate only Editor State and track dirty revision', () => {
+test('editor commands keep the first section pinned while its title stays editable', () => {
   const state = createEditorState();
   addRow(state, { id: 'section-1', kind: 'section', name: 'Пиво', enabled: true });
   addRow(state, { id: 'item-1', kind: 'item', product_id: 1, name: 'Тест', enabled: true });
@@ -16,14 +16,40 @@ test('editor commands mutate only Editor State and track dirty revision', () => 
   updateRow(state, 'item-1', { promotion: true });
   assert.equal(state.rows[1].promotion, true);
   moveRow(state, 'item-1', 0);
-  assert.equal(state.rows[0].id, 'item-1');
-  assert.equal(removeRow(state, 'section-1'), true);
-  assert.equal(state.rows.length, 1);
+  assert.equal(state.rows[0].id, 'section-1');
+  assert.equal(state.rows[1].id, 'item-1');
+  assert.equal(removeRow(state, 'section-1'), false);
+  updateRow(state, 'section-1', { name: 'Пиво светлое', enabled: false });
+  assert.equal(state.rows[0].name, 'Пиво светлое');
+  assert.equal(state.rows[0].enabled, true);
   updateSettings(state, { table_x: 100 });
   assert.equal(state.settings.table_x, 100);
   markEditorSaved(state);
   assert.equal(state.dirty, false);
   assert.equal(Object.hasOwn(state, 'templateId'), false);
+});
+
+test('legacy drafts get a real editable first section independent from monitor name', () => {
+  const state = createEditorState({
+    screen: { id: 17, name: 'СВЕТЛОЕ ФИЛЬТРОВАННОЕ' },
+    rows: [{ id: 'item-1', kind: 'item', product_id: 1, enabled: true }],
+    dirty: false
+  });
+  assert.equal(state.rows[0].kind, 'section');
+  assert.equal(state.rows[0].name, 'Новый раздел');
+  assert.equal(state.rows[0].id, 'section-primary-17');
+  assert.equal(state.dirty, true);
+
+  updateRow(state, state.rows[0].id, { name: 'ПИВО СВЕТЛОЕ' });
+  const model = buildRenderModel(state, { width: 1920, height: 1080 });
+  const lines = buildDisplayLines(model, {
+    products: [{ id: 1, name: 'СНЕЖНЫЙ ЭЛЬ', price_primary: '500', price_secondary: '750' }],
+    fallbackTitle: 'СВЕТЛОЕ ФИЛЬТРОВАННОЕ'
+  });
+  assert.equal(lines[0].kind, 'section');
+  assert.equal(lines[0].name, 'ПИВО СВЕТЛОЕ');
+  assert.equal(lines[0].showPriceLabels, true);
+  assert.notEqual(lines[0].name, state.screen.name);
 });
 
 test('renderer model filters disabled rows and respects arbitrary monitor aspect ratio', () => {
@@ -60,6 +86,7 @@ test('canonical table keeps prices separate and builds second line only from cat
     packaging: [{ id: 10, name: 'ПЭТ 1 л', unit_price: '10' }, { id: 11, name: 'ПЭТ 1,5 л', unit_price: '12' }]
   });
   assert.equal(lines[0].kind, 'section');
+  assert.equal(lines[0].name, 'Новый раздел');
   assert.equal(lines[1].name, 'Бавария');
   assert.equal(lines[1].metadata, 'ООО «Портал» · 4,6% · светлое · нефильтрованное');
   assert.equal(lines[1].pricePrimary, '179.00');
