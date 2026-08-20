@@ -3,10 +3,11 @@ import { api } from '../core/api.js';
 import { state } from '../core/state.js';
 import { element, setMessage, setPending } from '../core/dom.js';
 import { applyPresentation } from '../core/presentation.js';
+import { refreshHeaderRoute } from '../components/header.js';
 import { loadNotifications, loadActivity, startNotificationPolling } from '../core/notifications.js';
 
 function populateSiteForm(site) {
-  element('site-app-name').value = site.app_name;
+  element('site-app-name').value = site.app_name || site.application_name || '';
   element('site-domain').value = site.domain;
   element('site-accent-color').value = site.accent_color;
   element('site-signin-logo-size').value = String(site.signin_logo_size || 1);
@@ -18,6 +19,13 @@ function populateSiteForm(site) {
   element('site-sftp-port').textContent = String(site.sftp_port);
 }
 
+function applySiteSettings(site) {
+  state.site = site;
+  applyPresentation(site);
+  refreshHeaderRoute();
+  populateSiteForm(site);
+}
+
 function uploadSiteAsset(kind) {
   const fileInput = element(kind === 'logo' ? 'site-logo-file' : 'site-favicon-file');
   const button = element(kind === 'logo' ? 'upload-logo' : 'upload-favicon');
@@ -26,9 +34,7 @@ function uploadSiteAsset(kind) {
   setPending(button, true, 'Загружаем…');
   void api.put(`${API.siteSettings}/${kind}`, file, { headers: { 'Content-Type': file.type || 'application/octet-stream' } })
     .then((site) => {
-      state.site = site;
-      applyPresentation(site);
-      populateSiteForm(site);
+      applySiteSettings(site);
       setMessage('site-settings-message', `${kind === 'logo' ? 'Логотип' : 'Favicon'} сохранён.`, 'success');
       return loadNotifications();
     })
@@ -58,9 +64,7 @@ export function initialiseSettings() {
         dashboard_refresh_seconds: Number(element('site-refresh-seconds').value),
         default_screen_resolution: element('site-default-resolution').value
       });
-      state.site = site;
-      applyPresentation(site);
-      populateSiteForm(site);
+      applySiteSettings(site);
       startNotificationPolling();
       setMessage('site-settings-message', 'Настройки сайта сохранены.', 'success');
       await Promise.all([loadNotifications(), loadActivity()]);
