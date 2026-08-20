@@ -124,11 +124,23 @@ test('TV activation binds one device to one screen and revocation invalidates it
   const deviceCookie = deviceSetCookie.split(';', 1)[0];
   assert.equal((await consumed.json()).status, 'authorized');
 
+  const currentAnimation = await store.getAnimationSettings();
+  const savedAnimation = await store.updateAnimationSettings({
+    enabled: true,
+    preset_id: currentAnimation.preset_id,
+    profile: currentAnimation.profile,
+    updated_by: 'admin'
+  });
+  assert.equal(savedAnimation.enabled, true);
+
   const context = await fetch(`${baseUrl}/api/device/player-context`, { headers: { Cookie: deviceCookie } });
   assert.equal(context.status, 200);
   const contextBody = await context.json();
   assert.equal(contextBody.screen.id, screenId);
   assert.equal(contextBody.draft.rows[0].name, 'Меню API');
+  assert.equal(contextBody.animation.enabled, true);
+  assert.equal(contextBody.animation.preset_id, savedAnimation.preset_id);
+  assert.equal(contextBody.animation.profile.motion_version, 2);
   assert.equal(contextBody.refresh_interval_ms, 5000);
 
   const bindings = await fetch(`${baseUrl}/api/device-admin/bindings`, { headers: { Cookie: admin } });
