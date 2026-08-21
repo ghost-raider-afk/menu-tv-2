@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'tv-menu-player-shell-v9';
+const SHELL_CACHE = 'tv-menu-player-shell-v10';
 const DATA_CACHE = 'tv-menu-player-data-v1';
 const PLAYER_CONTEXT = '/api/device/player-context';
 const SHELL_ASSETS = [
