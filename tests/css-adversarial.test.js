@@ -23,6 +23,17 @@ test('shell uses dynamic viewport height and explicit layer and chrome tokens', 
   assert.match(shell, /var\(--ui-chrome-text\)/);
 });
 
+test('header popovers own a stacking context above mobile rail and page controls', async () => {
+  const [components, responsive] = await Promise.all([
+    source('src/web/admin-ui/public/css/components.css'),
+    source('src/web/admin-ui/public/css/responsive.css')
+  ]);
+  assert.match(components, /\.app-header\{z-index:calc\(var\(--ui-z-popover\) \+ 5\);isolation:isolate\}/);
+  assert.match(components, /\.notification-panel\{position:absolute;z-index:var\(--ui-z-popover\)/);
+  assert.match(responsive, /\.ui-rail\{position:fixed;z-index:calc\(var\(--ui-z-rail\) \+ 20\)/);
+  assert.match(responsive, /\.ui-context\{position:fixed;z-index:calc\(var\(--ui-z-context\) \+ 30\)/);
+});
+
 test('hidden switches expose a keyboard focus indicator', async () => {
   const forms = await source('src/web/admin-ui/public/css/forms.css');
   assert.match(forms, /\.toggle-row input:focus-visible\+i/);
