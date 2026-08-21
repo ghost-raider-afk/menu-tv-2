@@ -98,6 +98,15 @@ test('static TV background stays inside the exact player screen bounds', async (
   assert.doesNotMatch(rule, /scale\(/);
 });
 
+test('Motion Studio background uses the same exact screen bounds as the TV Player', async () => {
+  const css = await read('src/web/admin-ui/public/css/pages/animation-screen-preview.css');
+  const rule = css.match(/\.animation-screen-background\{([\s\S]*?)\}/)?.[1] || '';
+  assert.match(rule, /inset:\s*0/);
+  assert.match(rule, /transform:\s*none/);
+  assert.doesNotMatch(rule, /inset:\s*-\d/);
+  assert.doesNotMatch(rule, /scale\(/);
+});
+
 test('authorized TV cannot create another activation request', async () => {
   const routes = await read('src/api/device/public-routes.js');
   const activationRoute = routes.match(/router\.post\('\/activations'[\s\S]*?\n  \}\);/)?.[0] || '';
