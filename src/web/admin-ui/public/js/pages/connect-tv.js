@@ -1,5 +1,6 @@
 import { api } from '../core/api.js';
 import { API } from '../core/config.js';
+import { decodeTvActivationQr, recommendedQrFrameSize } from '../device/qr-decoder.js';
 
 const message = document.querySelector('#connect-tv-message');
 const scanButton = document.querySelector('[data-start-scan]');
@@ -8,6 +9,7 @@ const video = document.querySelector('[data-camera]');
 const codeInput = document.querySelector('#connect-tv-code');
 const codeButton = document.querySelector('[data-use-code]');
 const deviceFound = document.querySelector('[data-device-found]');
+const activationValidity = document.querySelector('[data-activation-validity]');
 const locationStep = document.querySelector('[data-connect-step="location"]');
 const screenStep = document.querySelector('[data-connect-step="screen"]');
 const locationOptions = document.querySelector('[data-location-options]');
@@ -17,8 +19,12 @@ const success = document.querySelector('[data-connect-success]');
 const successText = document.querySelector('[data-connect-success-text]');
 const bindingsList = document.querySelector('[data-device-bindings]');
 const refreshBindingsButton = document.querySelector('[data-refresh-bindings]');
+const scanCanvas = document.createElement('canvas');
+const scanContext = scanCanvas.getContext('2d', { willReadFrequently: true });
 
 let activationId = null;
+let activationExpiresAt = null;
+let activationTimer = null;
 let locations = [];
 let screens = [];
 let selectedLocationId = null;
@@ -33,6 +39,39 @@ function setMessage(text = '', error = false) {
   message.classList.toggle('is-error', Boolean(text && error));
 }
 
+function stopActivationTimer() {
+  if (activationTimer) window.clearInterval(activationTimer);
+  activationTimer = null;
+}
+
+function remainingText(expiresAt) {
+  const remaining = Math.max(0, Date.parse(expiresAt || '') - Date.now());
+  const seconds = Math.ceil(remaining / 1000);
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function startActivationTimer(expiresAt) {
+  stopActivationTimer();
+  activationExpiresAt = expiresAt || null;
+  if (!activationValidity || !activationExpiresAt) return;
+  const update = () => {
+    const remaining = Date.parse(activationExpiresAt) - Date.now();
+    if (remaining <= 0) {
+      stopActivationTimer();
+      activationId = null;
+      activationExpiresAt = null;
+      activationValidity.textContent = 'Код подключения истёк.';
+      resetSelection({ keepValidity: true });
+      setMessage('Срок действия кода истёк. На телевизоре уже должен появиться новый QR-код и резервный код.', true);
+      return;
+    }
+    activationValidity.textContent = `Код действителен ещё ${remainingText(activationExpiresAt)}`;
+  };
+  update();
+  activationTimer = window.setInterval(update, 500);
+}
+
 function stopCamera() {
   scannerRunning = false;
   for (const track of mediaStream?.getTracks?.() || []) track.stop();
@@ -42,16 +81,20 @@ function stopCamera() {
   if (scanButton) scanButton.textContent = 'Сканировать QR';
 }
 
-function resetSelection() {
+function resetSelection({ keepValidity = false } = {}) {
   selectedLocationId = null;
   selectedScreenId = null;
   locationStep?.classList.add('is-disabled');
   screenStep?.classList.add('is-disabled');
-  locationOptions.innerHTML = '';
-  screenOptions.innerHTML = '';
-  authorizeButton.disabled = true;
+  if (locationOptions) locationOptions.innerHTML = '';
+  if (screenOptions) screenOptions.innerHTML = '';
+  if (authorizeButton) authorizeButton.disabled = true;
   deviceFound?.classList.add('is-hidden');
   success?.classList.add('is-hidden');
+  if (!keepValidity && activationValidity) {
+    activationValidity.textContent = '';
+    activationValidity.classList.add('is-hidden');
+  }
 }
 
 function optionButton({ title, subtitle = '', selected = false, onClick }) {
@@ -71,13 +114,14 @@ function optionButton({ title, subtitle = '', selected = false, onClick }) {
 }
 
 function renderScreens() {
+  if (!screenOptions) return;
   screenOptions.innerHTML = '';
   const available = screens.filter((screen) => Number(screen.location_id) === Number(selectedLocationId) && screen.active !== false);
   if (!available.length) {
     const empty = document.createElement('p');
     empty.textContent = 'В этой торговой точке нет активных мониторов.';
     screenOptions.append(empty);
-    authorizeButton.disabled = true;
+    if (authorizeButton) authorizeButton.disabled = true;
     return;
   }
 
@@ -89,13 +133,14 @@ function renderScreens() {
       onClick: () => {
         selectedScreenId = Number(screen.id);
         renderScreens();
-        authorizeButton.disabled = false;
+        if (authorizeButton) authorizeButton.disabled = false;
       }
     }));
   }
 }
 
 function renderLocations() {
+  if (!locationOptions) return;
   locationOptions.innerHTML = '';
   for (const location of locations.filter((item) => item.active !== false)) {
     locationOptions.append(optionButton({
@@ -163,7 +208,7 @@ function bindingRow(binding) {
 
 async function loadBindings() {
   if (!bindingsList) return;
-  refreshBindingsButton && (refreshBindingsButton.disabled = true);
+  if (refreshBindingsButton) refreshBindingsButton.disabled = true;
   try {
     const bindings = await api.get(API.deviceBindings);
     bindingsList.innerHTML = '';
@@ -182,12 +227,13 @@ async function loadBindings() {
     empty.textContent = error.message || 'Не удалось загрузить подключённые телевизоры.';
     bindingsList.append(empty);
   } finally {
-    refreshBindingsButton && (refreshBindingsButton.disabled = false);
+    if (refreshBindingsButton) refreshBindingsButton.disabled = false;
   }
 }
 
 async function resolveActivation(payload) {
   resetSelection();
+  stopActivationTimer();
   setMessage('Проверяем код подключения…');
   try {
     const body = payload.scan_payload
@@ -195,31 +241,64 @@ async function resolveActivation(payload) {
       : { reserve_code: payload.reserve_code };
     const activation = await api.post(API.deviceResolve, body);
     activationId = activation.activation_id;
+    activationExpiresAt = activation.expires_at;
     await loadStructure();
-    deviceFound.textContent = 'Телевизор найден. Теперь выберите торговую точку и монитор.';
-    deviceFound.classList.remove('is-hidden');
+    if (deviceFound) {
+      deviceFound.textContent = 'Телевизор найден. Теперь выберите торговую точку и монитор.';
+      deviceFound.classList.remove('is-hidden');
+    }
+    if (activationValidity) activationValidity.classList.remove('is-hidden');
+    startActivationTimer(activation.expires_at);
     locationStep?.classList.remove('is-disabled');
     renderLocations();
     setMessage('Телевизор найден. Выберите место установки.');
     stopCamera();
   } catch (error) {
     activationId = null;
+    activationExpiresAt = null;
     setMessage(error.message || 'Не удалось проверить код подключения.', true);
   }
 }
 
+async function nativeDetector() {
+  if (!('BarcodeDetector' in window)) return null;
+  try {
+    const formats = await window.BarcodeDetector.getSupportedFormats?.();
+    if (Array.isArray(formats) && !formats.includes('qr_code')) return null;
+    return new window.BarcodeDetector({ formats: ['qr_code'] });
+  } catch {
+    return null;
+  }
+}
+
+function localScanPayload() {
+  if (!scanContext || !video?.videoWidth || !video?.videoHeight) return null;
+  const size = recommendedQrFrameSize(video.videoWidth, video.videoHeight);
+  if (scanCanvas.width !== size.width) scanCanvas.width = size.width;
+  if (scanCanvas.height !== size.height) scanCanvas.height = size.height;
+  scanContext.drawImage(video, 0, 0, size.width, size.height);
+  const frame = scanContext.getImageData(0, 0, size.width, size.height);
+  return decodeTvActivationQr(frame);
+}
+
 async function scanLoop(detector) {
   while (scannerRunning) {
-    try {
-      const codes = await detector.detect(video);
-      const rawValue = codes.find((entry) => String(entry.rawValue || '').startsWith('TV2:'))?.rawValue;
-      if (rawValue) {
-        scannerRunning = false;
-        await resolveActivation({ scan_payload: rawValue });
-        return;
-      }
-    } catch {}
-    await new Promise((resolve) => setTimeout(resolve, 180));
+    let rawValue = null;
+    if (detector) {
+      try {
+        const codes = await detector.detect(video);
+        rawValue = codes.find((entry) => String(entry.rawValue || '').startsWith('TV2:'))?.rawValue || null;
+      } catch {}
+    }
+    if (!rawValue) {
+      try { rawValue = localScanPayload(); } catch {}
+    }
+    if (rawValue) {
+      scannerRunning = false;
+      await resolveActivation({ scan_payload: rawValue });
+      return;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, detector ? 180 : 240));
   }
 }
 
@@ -229,55 +308,66 @@ async function startScanner() {
     stopCamera();
     return;
   }
-  if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
-    setMessage('На этом телефоне автоматическое сканирование QR недоступно. Введите 6-значный код с телевизора.', true);
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setMessage('Этот браузер не предоставляет доступ к камере. Используйте 6-значный код с телевизора.', true);
     return;
   }
 
   try {
-    const formats = await window.BarcodeDetector.getSupportedFormats?.();
-    if (Array.isArray(formats) && !formats.includes('qr_code')) throw new Error('qr-not-supported');
-    const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+    const detector = await nativeDetector();
     mediaStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' } },
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
       audio: false
     });
     video.srcObject = mediaStream;
     await video.play();
     scannerRunning = true;
-    cameraWrap.classList.remove('is-hidden');
-    scanButton.textContent = 'Остановить камеру';
+    cameraWrap?.classList.remove('is-hidden');
+    if (scanButton) scanButton.textContent = 'Остановить камеру';
     setMessage('Наведите камеру на QR-код телевизора.');
     void scanLoop(detector);
   } catch (error) {
+    console.warn('TV QR scanner could not start', error);
     stopCamera();
-    setMessage('Не удалось открыть QR-сканер. Разрешите доступ к камере или используйте 6-значный код.', true);
+    setMessage('Не удалось открыть камеру. Разрешите доступ к камере или используйте 6-значный код.', true);
   }
 }
 
 function normalizeReserveCode() {
-  const digits = String(codeInput.value || '').replace(/\D/g, '').slice(0, 6);
-  codeInput.value = digits.length > 3 ? `${digits.slice(0, 3)} ${digits.slice(3)}` : digits;
+  const digits = String(codeInput?.value || '').replace(/\D/g, '').slice(0, 6);
+  if (codeInput) codeInput.value = digits.length > 3 ? `${digits.slice(0, 3)} ${digits.slice(3)}` : digits;
   return digits;
 }
 
 async function authorize() {
   if (!activationId || !selectedScreenId) return;
-  authorizeButton.disabled = true;
+  if (Date.parse(activationExpiresAt || '') <= Date.now()) {
+    activationId = null;
+    if (authorizeButton) authorizeButton.disabled = true;
+    setMessage('Срок действия кода подключения истёк. Отсканируйте новый QR-код.', true);
+    return;
+  }
+  if (authorizeButton) authorizeButton.disabled = true;
   setMessage('Авторизуем телевизор…');
   try {
     const result = await api.post(API.deviceAuthorize, {
       activation_id: activationId,
       screen_id: selectedScreenId
     });
-    successText.textContent = `${result.screen.location_name} → ${result.screen.name}. Телевизор автоматически перейдёт в полноэкранный Player.`;
-    success.classList.remove('is-hidden');
+    stopActivationTimer();
+    activationExpiresAt = null;
+    if (successText) successText.textContent = `${result.screen.location_name} → ${result.screen.name}. Телевизор автоматически перейдёт в полноэкранный Player.`;
+    success?.classList.remove('is-hidden');
     setMessage('Подключение подтверждено.');
     activationId = null;
     window.setTimeout(() => void loadBindings(), 2500);
   } catch (error) {
     setMessage(error.message || 'Не удалось авторизовать телевизор.', true);
-    authorizeButton.disabled = false;
+    if (authorizeButton) authorizeButton.disabled = false;
   }
 }
 
@@ -296,5 +386,8 @@ export function initialiseConnectTv() {
   });
   authorizeButton?.addEventListener('click', () => void authorize());
   refreshBindingsButton?.addEventListener('click', () => void loadBindings());
-  window.addEventListener('pagehide', stopCamera, { once: true });
+  window.addEventListener('pagehide', () => {
+    stopCamera();
+    stopActivationTimer();
+  }, { once: true });
 }
