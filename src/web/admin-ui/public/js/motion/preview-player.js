@@ -56,18 +56,22 @@ function targetDelay(profile, index, count, cycleMs) {
   return cycleMs ? phase % cycleMs : 0;
 }
 function backgroundFrames(profile) {
-  const intensity = motionGain(profile);
-  const travel = (Number(profile.travel_px) || 0) * intensity;
-  const depth = (Number(profile.background_zoom_percent) || 0) / 100;
-  const baseScale = 1.035 + depth * 0.35;
-  const peakScale = baseScale + depth * Math.max(0.2, intensity);
-  const base = `scale(${baseScale.toFixed(4)}) translate3d(0,0,0)`;
-  if (profile.background_effect === 'breathe' || profile.background_effect === 'zoom') return [{ transform: base }, { transform: `scale(${peakScale.toFixed(4)}) translate3d(0,0,0)` }, { transform: base }];
-  return [
-    { transform: `scale(${baseScale.toFixed(4)}) translate3d(${-travel * 0.45}px, ${travel * 0.2}px, 0)` },
-    { transform: `scale(${peakScale.toFixed(4)}) translate3d(${travel}px, ${-travel * 0.45}px, 0)` },
-    { transform: `scale(${baseScale.toFixed(4)}) translate3d(${-travel * 0.45}px, ${travel * 0.2}px, 0)` }
-  ];
+  const gain = motionGain(profile);
+  const depth = Math.max(0, Number(profile.background_zoom_percent) || 0) / 100;
+  const brightnessLift = Math.min(0.12, depth * 0.45 + gain * 0.035);
+  const saturationLift = Math.min(0.1, depth * 0.32 + gain * 0.02);
+  const contrastLift = Math.min(0.08, depth * 0.24 + gain * 0.015);
+  const base = { transform: 'none', filter: 'brightness(1) saturate(1) contrast(1)' };
+  const peak = {
+    transform: 'none',
+    filter: `brightness(${(1 + brightnessLift).toFixed(3)}) saturate(${(1 + saturationLift).toFixed(3)}) contrast(${(1 + contrastLift).toFixed(3)})`
+  };
+  if (profile.background_effect === 'breathe' || profile.background_effect === 'zoom') return [base, peak, base];
+  const soft = {
+    transform: 'none',
+    filter: `brightness(${(1 + brightnessLift * 0.45).toFixed(3)}) saturate(${(1 + saturationLift * 0.5).toFixed(3)}) contrast(${(1 + contrastLift * 0.4).toFixed(3)})`
+  };
+  return [soft, peak, soft];
 }
 function shimmerFrames(profile) {
   const cycleMs = Math.max(4000, Number(profile.cycle_seconds) * 1000 || 12000);
