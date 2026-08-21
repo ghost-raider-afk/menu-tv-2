@@ -9,6 +9,7 @@ import {
   ITEM_EFFECTS,
   PRICE_EFFECTS,
   SECTION_EFFECTS,
+  VISUAL_EFFECTS,
   completeAnimationProfile
 } from '../shared/animation-profile.js';
 
@@ -16,15 +17,11 @@ function enumValue(value, field, allowed) {
   if (typeof value !== 'string' || !allowed.includes(value)) throw new ValidationError(`Поле «${field}» содержит неподдерживаемое значение.`);
   return value;
 }
-
 function numberValue(value, field, { min, max, integer = false }) {
   const number = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(number) || number < min || number > max || (integer && !Number.isInteger(number))) {
-    throw new ValidationError(`Поле «${field}» должно быть числом от ${min} до ${max}.`);
-  }
+  if (!Number.isFinite(number) || number < min || number > max || (integer && !Number.isInteger(number))) throw new ValidationError(`Поле «${field}» должно быть числом от ${min} до ${max}.`);
   return number;
 }
-
 export function animationProfileInput(source) {
   if (!source || typeof source !== 'object' || Array.isArray(source)) throw new ValidationError('Профиль анимации должен быть объектом.');
   const profile = completeAnimationProfile(source);
@@ -44,19 +41,15 @@ export function animationProfileInput(source) {
     price_effect: enumValue(profile.price_effect, 'Эффект цен', PRICE_EFFECTS),
     background_effect: enumValue(profile.background_effect, 'Эффект фона', BACKGROUND_EFFECTS),
     background_zoom_percent: numberValue(profile.background_zoom_percent, 'Глубина фона', { min: 0, max: 8 }),
+    visual_effect: enumValue(profile.visual_effect, 'Визуальный эффект', VISUAL_EFFECTS),
     intensity: numberValue(profile.intensity, 'Интенсивность', { min: 0, max: 100, integer: true })
   };
 }
-
 export function animationSettingsInput(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new ValidationError('Настройки анимации должны быть объектом.');
   const enabled = body.enabled ?? false;
   if (typeof enabled !== 'boolean') throw new ValidationError('Поле «enabled» должно быть логическим значением.');
   const presetId = typeof body.preset_id === 'string' ? body.preset_id.trim() : '';
   if (!/^[a-z0-9-]{1,64}$/.test(presetId)) throw new ValidationError('Идентификатор пресета указан неверно.');
-  return {
-    enabled,
-    preset_id: presetId,
-    profile: animationProfileInput(body.profile ?? DEFAULT_ANIMATION_PROFILE)
-  };
+  return { enabled, preset_id: presetId, profile: animationProfileInput(body.profile ?? DEFAULT_ANIMATION_PROFILE) };
 }
