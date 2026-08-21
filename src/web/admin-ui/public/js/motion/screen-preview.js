@@ -53,7 +53,7 @@ export function renderAnimationScreenPreview(stage, bundle, { fallbackTitle = 'Ð
   stage.dataset.menuFits = layout.vertical.fits ? 'true' : 'false';
   stage.dataset.fontKey = layout.typography.key;
   stage.innerHTML = `
-    <div class="animation-screen-background" data-motion-background></div>
+    <div class="animation-screen-background"></div>
     <div class="animation-screen-canvas">${buildTableSvg(model, lines, layout)}</div>
     ${visualFxMarkup()}
     <div class="animation-screen-vignette" aria-hidden="true"></div>
