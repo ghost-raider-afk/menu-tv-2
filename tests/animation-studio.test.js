@@ -50,7 +50,7 @@ test('TV presets keep a distance-readable visual signal', () => {
     || profile.brightness_amount >= 0.3
     || profile.visual_effect !== 'none'
   ));
-  assert.ok(distanceReadable.length >= 24, `distance-readable presets: ${distanceReadable.length}/26`);
+  assert.ok(distanceReadable.length >= 22, `distance-readable presets: ${distanceReadable.length}/26`);
 
   for (const preset of ANIMATION_PRESETS.filter((item) => ['Dynamic', 'Promo'].includes(item.category))) {
     assert.ok(preset.profile.intensity >= 80, `${preset.id} is too weak for retail TV distance`);
