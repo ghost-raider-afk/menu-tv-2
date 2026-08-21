@@ -72,7 +72,7 @@ function configureSecurity(app, config) {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'"],
         fontSrc: ["'self'", 'data:'],
-        scriptSrc: ["'self'", 'https://cdn.jsdelivr.net'],
+        scriptSrc: ["'self'"],
         imgSrc: ["'self'", 'data:', 'blob:']
       }
     }
