@@ -12,18 +12,18 @@ export const DEFAULT_ANIMATION_PROFILE = Object.freeze({
   pattern: 'wave',
   flow_direction: 'top-to-bottom',
   easing: 'smooth',
-  cycle_seconds: 13,
-  event_duration_ms: 1800,
-  wave_stagger_ms: 250,
-  travel_px: 4,
-  scale_amount: 0.01,
-  brightness_amount: 0.12,
+  cycle_seconds: 9.5,
+  event_duration_ms: 1850,
+  wave_stagger_ms: 190,
+  travel_px: 11,
+  scale_amount: 0.03,
+  brightness_amount: 0.28,
   section_effect: 'glow',
   item_effect: 'focus',
   price_effect: 'glow',
   background_effect: 'drift',
-  background_zoom_percent: 2,
-  intensity: 42
+  background_zoom_percent: 3.5,
+  intensity: 72
 });
 
 function sourceObject(profile) {
