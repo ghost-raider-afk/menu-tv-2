@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'tv-menu-player-shell-v11';
+const SHELL_CACHE = 'tv-menu-player-shell-v12';
 const DATA_CACHE = 'tv-menu-player-data-v1';
 const PLAYER_CONTEXT = '/api/device/player-context';
 const SHELL_ASSETS = [
@@ -6,6 +6,7 @@ const SHELL_ASSETS = [
   '/css/player.css',
   '/css/motion-effects.css',
   '/js/player/player.js',
+  '/js/player/player-legacy.js',
   '/js/editor/renderer.js',
   '/js/editor/settings.js',
   '/js/motion/preview-player.js',
