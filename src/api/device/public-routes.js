@@ -10,6 +10,13 @@ import {
   tokenHash,
   userAgent
 } from '../../services/device-session-service.js';
+import {
+  buildDisplayLines,
+  buildRenderLayout,
+  buildRenderModel,
+  buildTableSvg
+} from '../../web/admin-ui/public/js/editor/renderer.js';
+import { parseResolution } from '../../web/admin-ui/public/js/editor/settings.js';
 
 function activationId(value) {
   const id = String(value || '').trim();
@@ -45,6 +52,30 @@ function filterPlayerCatalog(draft, products, packaging) {
   return {
     products: products.filter((item) => productIds.has(Number(item.id))),
     packaging: packaging.filter((item) => packagingIds.has(Number(item.id)))
+  };
+}
+
+function buildRenderedPlayerFrame(screen, draft, products, packaging) {
+  const resolution = parseResolution(screen?.resolution);
+  if (!resolution) return { invalid_resolution: true };
+  const editorState = { rows: draft?.rows || [], settings: draft?.settings || {} };
+  const model = buildRenderModel(editorState, resolution);
+  const lines = buildDisplayLines(model, {
+    products,
+    packaging,
+    fallbackTitle: screen?.name || 'Меню'
+  });
+  const layout = buildRenderLayout(model, lines);
+  return {
+    invalid_resolution: false,
+    width: model.viewport.width,
+    height: model.viewport.height,
+    svg: buildTableSvg(model, lines, layout),
+    background_url: model.settings.background_image_url || '',
+    background_color: layout.palette.background,
+    font_family: layout.typography.family,
+    font_weight: layout.typography.weightFloor || 400,
+    menu_fits: layout.vertical.fits
   };
 }
 
@@ -200,6 +231,7 @@ export function createDevicePublicRouter({ store, config }) {
       return response.status(401).json({ error: 'Привязка телевизора больше не активна.' });
     }
     const catalog = filterPlayerCatalog(draft, products, packaging);
+    const renderedFrame = buildRenderedPlayerFrame(screen, draft, catalog.products, catalog.packaging);
 
     return response.json({
       screen: {
@@ -215,6 +247,7 @@ export function createDevicePublicRouter({ store, config }) {
       products: catalog.products,
       packaging: catalog.packaging,
       animation: animation || { enabled: false, preset_id: '', profile: {} },
+      rendered_frame: renderedFrame,
       refresh_interval_ms: config.playerRefreshSeconds * 1000
     });
   });
