@@ -21,6 +21,10 @@ test('animation studio ships twenty-six continuous unique TV presets', () => {
     assert.ok(VISUAL_EFFECTS.includes(parsed.profile.visual_effect));
     assert.ok(parsed.profile.event_duration_ms >= 400);
     assert.ok(parsed.profile.cycle_seconds >= 4);
+    assert.equal(parsed.profile.background_effect, 'none');
+    assert.equal(parsed.profile.background_zoom_percent, 0);
+    assert.equal('background_effect' in preset.profile, false);
+    assert.equal('background_zoom_percent' in preset.profile, false);
     assert.equal('entrance' in parsed.profile, false);
     assert.equal('opacity_from' in parsed.profile, false);
   }
@@ -44,10 +48,9 @@ test('TV presets keep a distance-readable visual signal', () => {
     profile.travel_px >= 10
     || profile.scale_amount >= 0.03
     || profile.brightness_amount >= 0.3
-    || profile.background_zoom_percent >= 4
     || profile.visual_effect !== 'none'
   ));
-  assert.ok(distanceReadable.length >= 25, `distance-readable presets: ${distanceReadable.length}/26`);
+  assert.ok(distanceReadable.length >= 24, `distance-readable presets: ${distanceReadable.length}/26`);
 
   for (const preset of ANIMATION_PRESETS.filter((item) => ['Dynamic', 'Promo'].includes(item.category))) {
     assert.ok(preset.profile.intensity >= 80, `${preset.id} is too weak for retail TV distance`);
@@ -64,7 +67,7 @@ test('animation settings contract rejects invalid continuous motion controls', (
   assert.throws(() => animationSettingsInput({ enabled: true, preset_id: 'custom', profile: { ...profile, visual_effect: 'unknown-fx' } }), /Визуальный эффект/);
 });
 
-test('legacy entrance profile is migrated into always-visible continuous motion', () => {
+test('legacy entrance profile is migrated into always-visible continuous motion with a static background', () => {
   const migrated = completeAnimationProfile({
     entrance: 'cascade', direction: 'left', easing: 'smooth', duration_ms: 900, stagger_ms: 70,
     distance_px: 54, scale_from: 0.98, opacity_from: 0, section_emphasis: 'pulse', price_emphasis: 'pop',
@@ -75,7 +78,8 @@ test('legacy entrance profile is migrated into always-visible continuous motion'
   assert.equal(migrated.flow_direction, 'left-to-right');
   assert.equal(migrated.section_effect, 'glow');
   assert.equal(migrated.price_effect, 'pulse');
-  assert.equal(migrated.background_effect, 'drift');
+  assert.equal(migrated.background_effect, 'none');
+  assert.equal(migrated.background_zoom_percent, 0);
   assert.equal(migrated.visual_effect, 'none');
   assert.equal('entrance' in migrated, false);
   assert.equal('opacity_from' in migrated, false);
@@ -88,9 +92,10 @@ test('animation studio uses real screen, Visual FX and continuous loop', async (
     read('js/pages/animation.js'), read('js/motion/preview-player.js'), read('js/motion/screen-preview.js')
   ]);
   assert.match(html, /data-page="animation"/);
-  for (const id of ['animation-stage','animation-screen-select','animation-screen-status','animation-play','animation-pause','animation-replay','animation-timeline','animation-save','animation-pattern','animation-cycle','animation-section-effect','animation-background-effect','animation-visual-effect']) {
+  for (const id of ['animation-stage','animation-screen-select','animation-screen-status','animation-play','animation-pause','animation-replay','animation-timeline','animation-save','animation-pattern','animation-cycle','animation-section-effect','animation-visual-effect']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
+  assert.doesNotMatch(html, /id="animation-background-effect"|id="animation-background-zoom"/);
   assert.match(html, /26 ТВ-ПРЕСЕТОВ/);
   assert.match(html, /Морской прибой/);
   assert.match(html, /Liquid Glass/);
@@ -98,11 +103,14 @@ test('animation studio uses real screen, Visual FX and continuous loop', async (
   assert.doesNotMatch(html, /animation-demo-|БИР КОМ СВЕТЛОЕ|ЖИГУЛЕВСКОЕ/);
   assert.match(html, /меню всегда остаётся открытым и читаемым/i);
   assert.match(html, /3–6 метров/);
+  assert.match(html, /Фоновое изображение всегда остаётся статичным/);
   assert.match(navigation, /\/animation\.html/);
   assert.match(navigation, /\['Анимация', '\/animation\.html'\]/);
   assert.match(app, /initialiseAnimationStudio/);
   assert.match(config, /animationSettings:\s*'\/api\/settings\/animation'/);
   assert.match(page, /visual_effect/);
+  assert.match(page, /background_effect:'none'/);
+  assert.match(page, /background_zoom_percent:0/);
   assert.match(page, /ANIMATION_PRESETS/);
   assert.match(page, /api\.get\(API\.screens\)/);
   assert.match(page, /renderAnimationScreenPreview/);
