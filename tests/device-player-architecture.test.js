@@ -27,9 +27,10 @@ test('offline player keeps its shell, motion engine, Visual FX, context and same
     read('src/web/admin-ui/public/player-sw.js'),
     read('src/web/admin-ui/public/js/player/player.js')
   ]);
-  assert.match(worker, /tv-menu-player-shell-v11/);
+  assert.match(worker, /tv-menu-player-shell-v12/);
   assert.match(worker, /PLAYER_CONTEXT = '\/api\/device\/player-context'/);
   assert.match(worker, /\/css\/motion-effects\.css/);
+  assert.match(worker, /\/js\/player\/player-legacy\.js/);
   assert.match(worker, /\/js\/motion\/preview-player\.js/);
   assert.match(worker, /\/js\/motion\/screen-preview\.js/);
   assert.match(worker, /\/js\/editor\/settings\.js/);
@@ -47,6 +48,26 @@ test('offline player keeps its shell, motion engine, Visual FX, context and same
   assert.match(player, /resolveInitialPlayerState/);
   assert.match(player, /serviceWorker\.register\('\/player-sw\.js'/);
   assert.match(player, /Нет связи с сервером\. ТВ работает по последней сохранённой версии меню/);
+});
+
+test('legacy TV browser gets a classic Player when ES modules cannot run', async () => {
+  const [html, legacy, routes, motionCss] = await Promise.all([
+    read('src/web/admin-ui/public/player.html'),
+    read('src/web/admin-ui/public/js/player/player-legacy.js'),
+    read('src/api/device/public-routes.js'),
+    read('src/web/admin-ui/public/css/motion-effects.css')
+  ]);
+  assert.match(html, /<script defer src="\/js\/player\/player-legacy\.js"><\/script>/);
+  assert.match(html, /type="module" data-modern-player/);
+  assert.match(legacy, /XMLHttpRequest/);
+  assert.match(legacy, /'noModule' in document\.createElement\('script'\)/);
+  assert.match(legacy, /modernScript\.addEventListener\('error', function \(\) \{ startLegacy\(\); \}\)/);
+  assert.doesNotMatch(legacy, /\?\.|\?\?|=>|\bconst\b|\blet\b|\.padStart\(/);
+  assert.match(routes, /buildRenderedPlayerFrame/);
+  assert.match(routes, /rendered_frame: renderedFrame/);
+  assert.match(routes, /buildTableSvg\(model, lines, layout\)/);
+  assert.match(motionCss, /data-legacy-player="true"/);
+  assert.match(motionCss, /legacy-ocean-a/);
 });
 
 test('rapid reload cannot expose raw Player screens or drop a cached shell asset', async () => {
