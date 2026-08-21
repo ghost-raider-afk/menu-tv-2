@@ -27,7 +27,7 @@ test('offline player keeps its shell, motion engine, Visual FX, context and same
     read('src/web/admin-ui/public/player-sw.js'),
     read('src/web/admin-ui/public/js/player/player.js')
   ]);
-  assert.match(worker, /tv-menu-player-shell-v9/);
+  assert.match(worker, /tv-menu-player-shell-v10/);
   assert.match(worker, /PLAYER_CONTEXT = '\/api\/device\/player-context'/);
   assert.match(worker, /\/css\/motion-effects\.css/);
   assert.match(worker, /\/js\/motion\/preview-player\.js/);
@@ -107,19 +107,40 @@ test('authorized TV cannot create another activation request', async () => {
   assert.match(activationRoute, /Телевизор уже авторизован/);
 });
 
+test('QR and reserve code share the server TTL, show a countdown and renew automatically', async () => {
+  const [routes, html, player, connect] = await Promise.all([
+    read('src/api/device/public-routes.js'),
+    read('src/web/admin-ui/public/player.html'),
+    read('src/web/admin-ui/public/js/player/player.js'),
+    read('src/web/admin-ui/public/js/pages/connect-tv.js')
+  ]);
+  assert.match(routes, /config\.deviceActivationTtlMinutes \* 60_000/);
+  assert.match(routes, /expires_at: expiresAt/);
+  assert.match(html, /data-activation-countdown/);
+  assert.match(player, /formatRemaining\(expiresAt\)/);
+  assert.match(player, /expireActivation\(record\)/);
+  assert.match(player, /createActivation\(\{ automatic: true \}\)/);
+  assert.match(player, /ACTIVATION_RENEW_RETRY_MS/);
+  assert.match(connect, /activation\.expires_at/);
+  assert.match(connect, /startActivationTimer\(activation\.expires_at\)/);
+});
+
 test('player context includes the saved global animation profile', async () => {
   const routes = await read('src/api/device/public-routes.js');
   assert.match(routes, /store\.getAnimationSettings\(\)/);
   assert.match(routes, /animation:\s*animation \|\|/);
 });
 
-test('TV connection is a separate device branch inside monitor submenu', async () => {
-  const [navigation, contextPanel, screens, application, page] = await Promise.all([
+test('TV connection uses native QR detection when available and a local iPhone fallback otherwise', async () => {
+  const [navigation, contextPanel, screens, application, page, html, server, decoder] = await Promise.all([
     read('src/web/admin-ui/public/js/core/navigation.js'),
     read('src/web/admin-ui/public/js/components/context-panel.js'),
     read('src/web/admin-ui/public/screens.html'),
     read('src/web/admin-ui/public/js/application.js'),
-    read('src/web/admin-ui/public/js/pages/connect-tv.js')
+    read('src/web/admin-ui/public/js/pages/connect-tv.js'),
+    read('src/web/admin-ui/public/connect-tv.html'),
+    read('src/server.js'),
+    read('src/web/admin-ui/public/js/device/qr-decoder.js')
   ]);
   assert.match(navigation, /label: 'ТЕЛЕВИЗОРЫ'/);
   assert.match(navigation, /\['Подключение ТВ', '\/connect-tv\.html'\]/);
@@ -130,6 +151,12 @@ test('TV connection is a separate device branch inside monitor submenu', async (
   assert.match(page, /selectedScreenId/);
   assert.match(page, /API\.deviceAuthorize/);
   assert.match(page, /BarcodeDetector/);
+  assert.match(page, /decodeTvActivationQr/);
+  assert.match(page, /localScanPayload/);
+  assert.match(page, /navigator\.mediaDevices\?\.getUserMedia/);
+  assert.match(decoder, /export function decodeTvActivationQr/);
+  assert.doesNotMatch(html, /cdn\.jsdelivr\.net|jsQR/i);
+  assert.match(server, /scriptSrc: \["'self'"\]/);
 });
 
 test('runtime TV device settings are declared in env example', async () => {
