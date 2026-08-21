@@ -22,13 +22,14 @@ test('player is public while TV connection page remains admin protected', async 
   assert.match(connectHtml, /6-значный резервный код/);
 });
 
-test('offline player keeps its shell, motion engine, context and same-origin assets', async () => {
+test('offline player keeps its shell, motion engine, Visual FX, context and same-origin assets', async () => {
   const [worker, player] = await Promise.all([
     read('src/web/admin-ui/public/player-sw.js'),
     read('src/web/admin-ui/public/js/player/player.js')
   ]);
-  assert.match(worker, /tv-menu-player-shell-v6/);
+  assert.match(worker, /tv-menu-player-shell-v7/);
   assert.match(worker, /PLAYER_CONTEXT = '\/api\/device\/player-context'/);
+  assert.match(worker, /\/css\/motion-effects\.css/);
   assert.match(worker, /\/js\/motion\/preview-player\.js/);
   assert.match(worker, /\/js\/motion\/screen-preview\.js/);
   assert.match(worker, /\/js\/editor\/settings\.js/);
@@ -66,9 +67,11 @@ test('rapid reload cannot expose raw Player screens or drop a cached shell asset
 
 test('static TV background stays inside the exact player screen bounds', async () => {
   const css = await read('src/web/admin-ui/public/css/player.css');
-  const rule = css.match(/\.tv-player-stage \.animation-screen-background \{([\s\S]*?)\}/)?.[1] || '';
-  assert.match(rule, /inset:\s*0;/);
-  assert.match(rule, /transform:\s*none;/);
+  const rule = css.match(/\.tv-player-stage \.animation-screen-background\{([\s\S]*?)\}/)?.[1]
+    || css.match(/\.tv-player-stage \.animation-screen-background \{([\s\S]*?)\}/)?.[1]
+    || '';
+  assert.match(rule, /inset:\s*0/);
+  assert.match(rule, /transform:\s*none/);
   assert.doesNotMatch(rule, /inset:\s*-\d/);
   assert.doesNotMatch(rule, /scale\(/);
 });
