@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.3.1"
+SCRIPT_VERSION="1.3.2"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
@@ -34,11 +34,37 @@ TEMP_BACKUP_DIR=""
 KEEP_TEMP_BACKUP=false
 INITIAL_ADMIN_USERNAME=""
 INITIAL_ADMIN_PASSWORD=""
+UPDATE_PROGRESS_ACTIVE=false
+UPDATE_LOG_FILE=""
 
 log() { printf '\n==> %s\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
 warn() { printf 'WARNING: %s\n' "$*" >&2; }
-die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+die() {
+  local message="$*"
+  printf 'ERROR: %s\n' "$message" >&2
+  if [[ "$UPDATE_PROGRESS_ACTIVE" == true ]]; then
+    printf '\nОшибка обновления: %s\n' "$message" >&3
+    if [[ -n "$UPDATE_LOG_FILE" && -s "$UPDATE_LOG_FILE" ]]; then
+      printf 'Последние сообщения журнала:\n' >&3
+      tail -n 40 "$UPDATE_LOG_FILE" | sed 's/^/  /' >&3 || true
+      printf 'Полный журнал: %s\n' "$UPDATE_LOG_FILE" >&3
+    fi
+  fi
+  exit 1
+}
+
+update_progress() {
+  local percent="$1" label="${2:-}" width=32 filled index bar=""
+  (( percent < 0 )) && percent=0
+  (( percent > 100 )) && percent=100
+  filled=$((percent * width / 100))
+  for ((index = 0; index < width; index += 1)); do
+    if (( index < filled )); then bar+="#"; else bar+="-"; fi
+  done
+  printf '\rОбновление [%s] %3d%%  %-34s' "$bar" "$percent" "$label" >&3
+  (( percent == 100 )) && printf '\n' >&3
+}
 
 cleanup_temporary_backup() {
   if [[ -n "$TEMP_BACKUP_DIR" && -d "$TEMP_BACKUP_DIR" && "$KEEP_TEMP_BACKUP" != true ]]; then
@@ -196,6 +222,14 @@ handoff_update_to_latest_script() {
   rm -f -- "$latest_file"
   info "Системный скрипт обновлён с $SCRIPT_VERSION до $latest_version."
   info "Обновление приложения продолжается уже новой версией установщика."
+  if [[ "$UPDATE_PROGRESS_ACTIVE" == true ]]; then
+    printf '\n' >&3
+    exec 1>&3 2>&3
+    exec 3>&-
+    UPDATE_PROGRESS_ACTIVE=false
+    [[ -z "$UPDATE_LOG_FILE" ]] || rm -f -- "$UPDATE_LOG_FILE"
+    UPDATE_LOG_FILE=""
+  fi
   exec "$LAUNCHER_PATH" update
 }
 
@@ -819,14 +853,26 @@ install_app() {
 }
 
 update_app() {
-  local env_before remote_revision changed_files source_changed=false env_changed=false needs_runtime=false needs_build=false needs_database_backup=false
+  local env_before remote_revision changed_files source_changed=false env_changed=false needs_runtime=false needs_build=false needs_database_backup=false final_message
   require_root
-  prepare_host
-  check_dependencies
   [[ -d "$INSTALL_DIR/.git" ]] || die "Menu TV 2.0 не установлен: $INSTALL_DIR"
+
+  UPDATE_LOG_FILE="$(mktemp -t "${PROGRAM_NAME}.update-log.XXXXXX")"
+  chmod 600 "$UPDATE_LOG_FILE"
+  exec 3>&1
+  UPDATE_PROGRESS_ACTIVE=true
+  exec >>"$UPDATE_LOG_FILE" 2>&1
+
+  update_progress 0 "Подготовка"
+  if ! prepare_host; then die "Не удалось подготовить систему к обновлению."; fi
+  update_progress 10 "Проверка системы"
+  if ! check_dependencies; then die "Проверка зависимостей не пройдена."; fi
+  update_progress 18 "Проверка установщика"
   handoff_update_to_latest_script
+
   env_before="$(mktemp -t "${PROGRAM_NAME}.env.XXXXXX")"
   cp "$INSTALL_DIR/.env" "$env_before"
+  update_progress 25 "Проверка конфигурации"
   ensure_sftp_env
   validate_env
   if ! cmp -s "$env_before" "$INSTALL_DIR/.env"; then
@@ -834,8 +880,10 @@ update_app() {
   fi
   rm -f -- "$env_before"
 
-  log "Проверка изменений в репозитории ($BRANCH)"
-  remote_revision="$(fetch_remote_revision)"
+  update_progress 35 "Проверка репозитория"
+  if ! remote_revision="$(fetch_remote_revision)"; then
+    die "Не удалось получить актуальную ревизию проекта."
+  fi
   if ! git_as_project_owner -C "$INSTALL_DIR" diff --quiet HEAD "$remote_revision"; then
     source_changed=true
     changed_files="$(git_as_project_owner -C "$INSTALL_DIR" diff --name-only HEAD "$remote_revision")"
@@ -843,37 +891,67 @@ update_app() {
     source_requires_image_rebuild "$changed_files" && needs_build=true
     source_requires_database_backup "$changed_files" && needs_database_backup=true
   fi
+  update_progress 45 "Анализ изменений"
 
   if [[ "$source_changed" == false && "$env_changed" == false ]]; then
-    info "Исходники и конфигурация уже актуальны. Текущая версия проекта: $(project_version)."
+    final_message="Уже актуально. Версия проекта: $(project_version)"
+    update_progress 100 "Готово"
+    exec 1>&3 2>&3
+    exec 3>&-
+    UPDATE_PROGRESS_ACTIVE=false
+    rm -f -- "$UPDATE_LOG_FILE"
+    UPDATE_LOG_FILE=""
+    printf '%s\n' "$final_message"
     return
   fi
 
   if [[ "$source_changed" == true ]]; then
     if [[ "$needs_runtime" == true ]]; then
-      create_temporary_backup "$needs_database_backup"
+      update_progress 55 "Резервная копия"
+      if ! create_temporary_backup "$needs_database_backup"; then
+        die "Не удалось создать резервную копию перед обновлением."
+      fi
     fi
+    update_progress 65 "Применение исходников"
     if ! sync_existing_source "$remote_revision"; then
       die "Не удалось применить обновление исходников."
     fi
   fi
 
+  update_progress 72 "Применение конфигурации"
   if bootstrap_administrator_is_configured && administrator_is_persisted; then
     finalize_bootstrap_administrator
     env_changed=true
   fi
 
   if [[ "$needs_runtime" == false && "$env_changed" == false ]]; then
-    info "Обновлены служебные файлы. Текущая версия проекта: $(project_version). Контейнеры, база данных и HTTPS не затрагивались."
+    final_message="Обновлены служебные файлы. Версия проекта: $(project_version)"
+    update_progress 100 "Готово"
+    exec 1>&3 2>&3
+    exec 3>&-
+    UPDATE_PROGRESS_ACTIVE=false
+    rm -f -- "$UPDATE_LOG_FILE"
+    UPDATE_LOG_FILE=""
+    printf '%s\n' "$final_message"
     return
   fi
 
+  update_progress 82 "$([[ "$needs_build" == true ]] && printf 'Сборка контейнеров' || printf 'Запуск контейнеров')"
   if [[ "$needs_build" == true ]]; then
-    build_and_start build false || recover_failed_update
+    if ! build_and_start build false; then recover_failed_update; fi
   elif ! build_and_start apply false; then
     recover_failed_update
   fi
-  info "Обновление прошло проверку. Текущая версия проекта: $(project_version). HTTPS-сертификат не перевыпускался."
+
+  update_progress 96 "Финальная проверка"
+  final_message="Обновление завершено. Версия проекта: $(project_version)"
+  update_progress 100 "Готово"
+  exec 1>&3 2>&3
+  exec 3>&-
+  UPDATE_PROGRESS_ACTIVE=false
+  rm -f -- "$UPDATE_LOG_FILE"
+  UPDATE_LOG_FILE=""
+  printf '%s\n' "$final_message"
 }
 
 reset_admin_password() {
