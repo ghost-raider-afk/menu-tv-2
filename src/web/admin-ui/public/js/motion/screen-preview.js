@@ -18,7 +18,7 @@ function backgroundStyle(layer, model, palette, overrideUrl = null) {
   const backgroundUrl = overrideUrl === null ? model.settings.background_image_url : overrideUrl;
   layer.style.backgroundColor = palette.background;
   layer.style.backgroundImage = backgroundUrl ? `url(${JSON.stringify(backgroundUrl)})` : '';
-  layer.style.backgroundSize = 'cover';
+  layer.style.backgroundSize = '100% 100%';
   layer.style.backgroundPosition = 'center';
 }
 function visualFxMarkup() {
