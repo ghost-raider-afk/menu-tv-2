@@ -2,6 +2,23 @@ import { navigationState } from '../core/navigation.js';
 import { createSidebar, refreshSidebarActive } from './sidebar.js';
 import { createContextPanel, refreshContextActive, refreshContextPanel } from './context-panel.js';
 import { createHeader, initialiseHeader, refreshHeaderRoute } from './header.js';
+import { createNotificationsPanel } from './notifications.js';
+
+function ensureOverlayRoot() {
+  let root = document.querySelector('[data-overlay-root]');
+  if (root) return root;
+  root = document.createElement('div');
+  root.className = 'ui-overlay-root';
+  root.dataset.overlayRoot = 'true';
+  document.body.append(root);
+  return root;
+}
+
+function ensureShellOverlays() {
+  const root = ensureOverlayRoot();
+  if (!document.getElementById('notifications-panel')) root.append(createNotificationsPanel());
+  return root;
+}
 
 function setCollapsed(shell, context, collapsed, { persist = true } = {}) {
   context.classList.toggle('is-collapsed', collapsed);
@@ -64,6 +81,7 @@ export function refreshShellRoute() {
   const { section, currentPage } = navigationState();
   document.body.dataset.appPage = currentPage;
   document.body.dataset.uiSection = section;
+  ensureShellOverlays();
   refreshSidebarActive();
   refreshContextPanel();
   refreshHeaderRoute();
@@ -74,6 +92,7 @@ export function initialiseShell() {
   const shell = document.querySelector('.app-shell');
   const content = shell?.querySelector('.app-content');
   if (!shell || !content) return;
+  ensureShellOverlays();
   if (shell.querySelector('.ui-rail')) {
     refreshShellRoute();
     return;
