@@ -1,0 +1,2 @@
+.ui-overlay-root{position:fixed;z-index:var(--ui-z-popover);inset:0;pointer-events:none;isolation:isolate}.ui-overlay-root>*{pointer-events:auto}.ui-overlay-root .notification-panel{position:absolute;z-index:0;top:52px;right:14px;left:auto;width:min(340px,calc(100vw - 28px));max-height:min(70dvh,600px)}
+@media(max-width:720px){.ui-overlay-root .notification-panel{position:absolute;top:56px;right:8px;left:8px;width:auto;max-height:calc(100dvh - 132px)}}
