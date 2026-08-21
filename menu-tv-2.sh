@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.3.0"
+SCRIPT_VERSION="1.3.1"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
@@ -47,6 +47,18 @@ cleanup_temporary_backup() {
 }
 trap cleanup_temporary_backup EXIT
 
+project_version_from_file() {
+  local file="$1" version
+  [[ -r "$file" ]] || return 1
+  version="$(sed -nE 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*$/\1/p' "$file" | head -n 1)"
+  [[ -n "$version" ]] || return 1
+  printf '%s\n' "$version"
+}
+
+project_version() {
+  project_version_from_file "$INSTALL_DIR/package.json" 2>/dev/null || printf '%s\n' 'не установлена'
+}
+
 usage() {
   cat <<USAGE
 Menu TV 2.0 — управление независимым приложением
@@ -65,6 +77,7 @@ Menu TV 2.0 — управление независимым приложение
   sudo $PROGRAM_NAME purge
   sudo $PROGRAM_NAME status
 
+Версия проекта: $(project_version)
 Версия скрипта: $SCRIPT_VERSION
 Ветка/реф: $BRANCH
 Проект устанавливается только в: $INSTALL_DIR
@@ -571,7 +584,6 @@ verify_https_certificate() {
     fi
   done
 
-
   warn "HTTPS-сертификат для $domain не получен за 2 минуты."
   warn "Последние сообщения Traefik:"
   docker logs --tail 20 "$PROXY_CONTAINER" 2>&1 | sed 's/^/    /' >&2 || true
@@ -746,6 +758,7 @@ show_credentials() {
   printf '\n+------------------------------------------------------------------------------+\n'
   credentials_box_text '  MENU TV 2.0 — СОХРАНИТЕ ПАРАМЕТРЫ'
   printf '|------------------------------------------------------------------------------|\n'
+  credentials_box_value 'Версия проекта' "$(project_version)" ''
   credentials_box_value 'Веб-адрес' "https://$domain" "$credentials_color_url"
   credentials_box_value 'Логин администратора' "$INITIAL_ADMIN_USERNAME" "$credentials_color_login"
   credentials_box_value 'Пароль администратора' "$INITIAL_ADMIN_PASSWORD" "$credentials_color_password"
@@ -832,7 +845,7 @@ update_app() {
   fi
 
   if [[ "$source_changed" == false && "$env_changed" == false ]]; then
-    info "Исходники и конфигурация уже актуальны. Контейнеры, база данных и HTTPS не затрагивались."
+    info "Исходники и конфигурация уже актуальны. Текущая версия проекта: $(project_version)."
     return
   fi
 
@@ -851,7 +864,7 @@ update_app() {
   fi
 
   if [[ "$needs_runtime" == false && "$env_changed" == false ]]; then
-    info "Обновлены служебные файлы. Контейнеры, база данных и HTTPS не затрагивались."
+    info "Обновлены служебные файлы. Текущая версия проекта: $(project_version). Контейнеры, база данных и HTTPS не затрагивались."
     return
   fi
 
@@ -860,7 +873,7 @@ update_app() {
   elif ! build_and_start apply false; then
     recover_failed_update
   fi
-  info "Обновление прошло проверку. HTTPS-сертификат не перевыпускался."
+  info "Обновление прошло проверку. Текущая версия проекта: $(project_version). HTTPS-сертификат не перевыпускался."
 }
 
 reset_admin_password() {
@@ -935,6 +948,8 @@ remove_script() {
 status_app() {
   require_root
   [[ -d "$INSTALL_DIR" ]] || die "Menu TV 2.0 не установлен."
+  printf 'Версия проекта: %s\n' "$(project_version)"
+  printf 'Версия скрипта: %s\n' "$SCRIPT_VERSION"
   printf 'Installation: %s\n' "$INSTALL_DIR"
   printf 'Ref: %s\n' "$BRANCH"
   printf 'Revision: '
@@ -951,6 +966,7 @@ menu() {
   while true; do
     printf '\n============================================\n'
     printf ' Menu TV 2.0\n'
+    printf ' Версия проекта: %s\n' "$(project_version)"
     printf ' Версия скрипта: %s\n' "$SCRIPT_VERSION"
     printf ' Ветка/реф: %s\n' "$BRANCH"
     printf '============================================\n'
