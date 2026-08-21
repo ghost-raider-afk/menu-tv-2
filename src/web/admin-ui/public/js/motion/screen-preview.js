@@ -8,13 +8,11 @@ function applyTypography(stage, layout) {
   svg.style.fontWeight = String(layout.typography.weightFloor || 400);
   svg.dataset.fontKey = layout.typography.key;
 }
-
 function markMotionTargets(stage) {
   stage.querySelectorAll('g.table-section').forEach((node) => { node.dataset.motion = 'section'; });
   stage.querySelectorAll('g.table-item, g.table-packaging').forEach((node) => { node.dataset.motion = 'item'; });
   stage.querySelectorAll('text.price, text.packaging-price').forEach((node) => { node.dataset.motion = 'price'; });
 }
-
 function backgroundStyle(layer, model, palette, overrideUrl = null) {
   if (!layer) return;
   const backgroundUrl = overrideUrl === null ? model.settings.background_image_url : overrideUrl;
@@ -23,33 +21,33 @@ function backgroundStyle(layer, model, palette, overrideUrl = null) {
   layer.style.backgroundSize = 'cover';
   layer.style.backgroundPosition = 'center';
 }
+function visualFxMarkup() {
+  return `<div class="animation-screen-fx" data-motion-fx aria-hidden="true">
+    <div class="motion-fx motion-fx-ocean"><i></i><i></i></div>
+    <div class="motion-fx motion-fx-aurora"><i></i><i></i><i></i></div>
+    <div class="motion-fx motion-fx-ripple"><i></i><i></i><i></i></div>
+    <div class="motion-fx motion-fx-sun"><i></i></div>
+    <div class="motion-fx motion-fx-spotlight"><i></i></div>
+    <div class="motion-fx motion-fx-glass"><i></i></div>
+  </div>`;
+}
 
 export function renderAnimationScreenPreview(stage, bundle, { fallbackTitle = 'Новый раздел', backgroundUrl = null } = {}) {
   if (!stage) return null;
   const screen = bundle?.screen;
   const draft = bundle?.draft || { rows: [], settings: {} };
   const resolution = parseResolution(screen?.resolution);
-
   if (!resolution) {
     stage.classList.add('is-invalid-resolution');
     stage.style.aspectRatio = '16 / 9';
-    stage.replaceChildren(Object.assign(document.createElement('p'), {
-      className: 'animation-screen-empty',
-      textContent: 'У экрана некорректное разрешение.'
-    }));
+    stage.replaceChildren(Object.assign(document.createElement('p'), { className: 'animation-screen-empty', textContent: 'У экрана некорректное разрешение.' }));
     return { invalidResolution: true };
   }
-
   stage.classList.remove('is-invalid-resolution');
   const editorState = { rows: draft.rows || [], settings: draft.settings || {} };
   const model = buildRenderModel(editorState, resolution);
-  const lines = buildDisplayLines(model, {
-    products: bundle?.products || [],
-    packaging: bundle?.packaging || [],
-    fallbackTitle
-  });
+  const lines = buildDisplayLines(model, { products: bundle?.products || [], packaging: bundle?.packaging || [], fallbackTitle });
   const layout = buildRenderLayout(model, lines);
-
   stage.style.aspectRatio = `${model.viewport.width} / ${model.viewport.height}`;
   stage.dataset.screenId = String(screen.id);
   stage.dataset.menuFits = layout.vertical.fits ? 'true' : 'false';
@@ -57,22 +55,19 @@ export function renderAnimationScreenPreview(stage, bundle, { fallbackTitle = '�
   stage.innerHTML = `
     <div class="animation-screen-background" data-motion-background></div>
     <div class="animation-screen-canvas">${buildTableSvg(model, lines, layout)}</div>
+    ${visualFxMarkup()}
     <div class="animation-screen-vignette" aria-hidden="true"></div>
     <div class="animation-screen-shimmer" aria-hidden="true"></div>`;
-
   backgroundStyle(stage.querySelector('.animation-screen-background'), model, layout.palette, backgroundUrl);
   applyTypography(stage, layout);
   markMotionTargets(stage);
-
   return { model, lines, layout };
 }
 
 export function renderAnimationScreenEmpty(stage, message = 'Создайте монитор, чтобы просматривать его анимацию.') {
   if (!stage) return;
   delete stage.dataset.screenId;
+  delete stage.dataset.visualEffect;
   stage.style.aspectRatio = '16 / 9';
-  stage.replaceChildren(Object.assign(document.createElement('p'), {
-    className: 'animation-screen-empty',
-    textContent: message
-  }));
+  stage.replaceChildren(Object.assign(document.createElement('p'), { className: 'animation-screen-empty', textContent: message }));
 }
