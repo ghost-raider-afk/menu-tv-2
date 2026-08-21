@@ -27,7 +27,7 @@ test('offline player keeps its shell, motion engine, context and same-origin ass
     read('src/web/admin-ui/public/player-sw.js'),
     read('src/web/admin-ui/public/js/player/player.js')
   ]);
-  assert.match(worker, /tv-menu-player-shell-v5/);
+  assert.match(worker, /tv-menu-player-shell-v6/);
   assert.match(worker, /PLAYER_CONTEXT = '\/api\/device\/player-context'/);
   assert.match(worker, /\/js\/motion\/preview-player\.js/);
   assert.match(worker, /\/js\/motion\/screen-preview\.js/);
