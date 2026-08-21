@@ -4,6 +4,7 @@ import { renderAnimationScreenPreview } from '../motion/screen-preview.js';
 const ACTIVATION_STORAGE_KEY = 'tv-menu.device-activation';
 const PLAYER_CONTEXT_STORAGE_KEY = 'tv-menu.player-context.v1';
 const NETWORK_TIMEOUT_MS = 5000;
+const ACTIVATION_RENEW_RETRY_MS = 5000;
 const bootView = document.querySelector('[data-player-boot]');
 const bootMessage = document.querySelector('[data-player-boot-message]');
 const activationView = document.querySelector('[data-activation-view]');
@@ -11,12 +12,16 @@ const showActivationButton = document.querySelector('[data-show-activation]');
 const pairing = document.querySelector('[data-activation-pairing]');
 const qrContainer = document.querySelector('[data-activation-qr]');
 const reserveCode = document.querySelector('[data-reserve-code]');
+const activationCountdown = document.querySelector('[data-activation-countdown]');
 const activationStatus = document.querySelector('[data-activation-status]');
 const player = document.querySelector('[data-tv-player]');
 const playerStage = document.querySelector('[data-player-stage]');
 const playerMessage = document.querySelector('[data-player-message]');
 
 let pollTimer = null;
+let activationCountdownTimer = null;
+let activationRenewTimer = null;
+let activationCreationInFlight = false;
 let refreshTimer = null;
 let initialRetryTimer = null;
 let wakeLock = null;
@@ -100,6 +105,65 @@ function formatReserveCode(value) {
   return code.length === 6 ? `${code.slice(0, 3)} ${code.slice(3)}` : '—— ——';
 }
 
+function formatRemaining(expiresAt) {
+  const remainingMs = Math.max(0, Date.parse(expiresAt || '') - Date.now());
+  const seconds = Math.ceil(remainingMs / 1000);
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function stopActivationTimers() {
+  if (pollTimer) clearTimeout(pollTimer);
+  if (activationCountdownTimer) clearInterval(activationCountdownTimer);
+  if (activationRenewTimer) clearTimeout(activationRenewTimer);
+  pollTimer = null;
+  activationCountdownTimer = null;
+  activationRenewTimer = null;
+}
+
+function scheduleActivationRenew(delay = ACTIVATION_RENEW_RETRY_MS) {
+  if (activationRenewTimer) clearTimeout(activationRenewTimer);
+  activationRenewTimer = setTimeout(() => {
+    activationRenewTimer = null;
+    void createActivation({ automatic: true });
+  }, Math.max(250, Number(delay) || ACTIVATION_RENEW_RETRY_MS));
+}
+
+function expireActivation(record) {
+  const stored = (() => {
+    try { return JSON.parse(sessionStorage.getItem(ACTIVATION_STORAGE_KEY) || 'null'); } catch { return null; }
+  })();
+  if (stored?.activation_id && record?.activation_id && stored.activation_id !== record.activation_id) return;
+  if (pollTimer) clearTimeout(pollTimer);
+  pollTimer = null;
+  if (activationCountdownTimer) clearInterval(activationCountdownTimer);
+  activationCountdownTimer = null;
+  clearActivation();
+  if (qrContainer) qrContainer.innerHTML = '';
+  if (reserveCode) reserveCode.textContent = '—— ——';
+  if (activationCountdown) activationCountdown.textContent = '00:00';
+  if (activationStatus) activationStatus.textContent = 'Срок действия истёк. Обновляем код…';
+  if (showActivationButton) showActivationButton.textContent = 'Обновить код сейчас';
+  scheduleActivationRenew(250);
+}
+
+function startActivationCountdown(record) {
+  if (activationCountdownTimer) clearInterval(activationCountdownTimer);
+  activationCountdownTimer = null;
+  const update = () => {
+    const expiresAt = Date.parse(record?.expires_at || '');
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      expireActivation(record);
+      return;
+    }
+    if (activationCountdown) activationCountdown.textContent = formatRemaining(record.expires_at);
+  };
+  update();
+  if (Date.parse(record?.expires_at || '') > Date.now()) {
+    activationCountdownTimer = setInterval(update, 500);
+  }
+}
+
 async function requestWakeLock() {
   if (!('wakeLock' in navigator) || wakeLock) return;
   try {
@@ -135,11 +199,12 @@ function showActivationScreen() {
 
 function showPairing(record) {
   showActivationScreen();
-  qrContainer.innerHTML = record.qr_svg;
-  reserveCode.textContent = formatReserveCode(record.reserve_code);
-  activationStatus.textContent = 'Ожидание авторизации…';
-  showActivationButton.textContent = 'Получить новый код';
+  if (qrContainer) qrContainer.innerHTML = record.qr_svg;
+  if (reserveCode) reserveCode.textContent = formatReserveCode(record.reserve_code);
+  if (activationStatus) activationStatus.textContent = 'Ожидание авторизации…';
+  if (showActivationButton) showActivationButton.textContent = 'Получить новый код';
   setHidden(pairing, false);
+  startActivationCountdown(record);
 }
 
 function schedulePoll(record) {
@@ -150,9 +215,7 @@ function schedulePoll(record) {
 
 async function pollActivation(record) {
   if (Date.parse(record.expires_at) <= Date.now()) {
-    clearActivation();
-    activationStatus.textContent = 'Код подключения истёк. Получите новый.';
-    showActivationButton.textContent = 'Получить новый код';
+    expireActivation(record);
     return;
   }
 
@@ -162,33 +225,36 @@ async function pollActivation(record) {
       cache: 'no-store'
     });
     if (response.status === 410 || response.status === 404) {
-      clearActivation();
-      activationStatus.textContent = 'Код подключения больше не действителен.';
-      showActivationButton.textContent = 'Получить новый код';
+      expireActivation(record);
       return;
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const body = await response.json();
     if (body.status === 'authorized') {
+      stopActivationTimers();
       clearActivation();
-      activationStatus.textContent = 'Авторизовано. Запускаем ТВ МЕНЮ…';
+      if (activationStatus) activationStatus.textContent = 'Авторизовано. Запускаем ТВ МЕНЮ…';
       await loadPlayer();
       return;
     }
-    activationStatus.textContent = 'Ожидание авторизации…';
+    if (activationStatus) activationStatus.textContent = 'Ожидание авторизации…';
   } catch {
-    activationStatus.textContent = 'Нет связи с сервером. Повторяем…';
+    if (activationStatus) activationStatus.textContent = 'Нет связи с сервером. Повторяем…';
   }
   schedulePoll(record);
 }
 
-async function createActivation() {
+async function createActivation({ automatic = false } = {}) {
+  if (activationCreationInFlight) return;
+  activationCreationInFlight = true;
   if (pollTimer) clearTimeout(pollTimer);
   pollTimer = null;
-  showActivationButton.disabled = true;
-  activationStatus.textContent = 'Создаём код подключения…';
+  if (activationRenewTimer) clearTimeout(activationRenewTimer);
+  activationRenewTimer = null;
+  if (showActivationButton) showActivationButton.disabled = true;
+  if (activationStatus) activationStatus.textContent = automatic ? 'Обновляем код подключения…' : 'Создаём код подключения…';
   try {
-    await enterImmersiveMode();
+    if (!automatic) await enterImmersiveMode();
     const response = await fetchWithTimeout('/api/device/activations', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -196,6 +262,7 @@ async function createActivation() {
       cache: 'no-store'
     });
     if (response.status === 409) {
+      stopActivationTimers();
       clearActivation();
       await loadPlayer();
       return;
@@ -208,11 +275,18 @@ async function createActivation() {
   } catch (error) {
     console.error('TV activation could not start', error);
     setHidden(pairing, false);
-    qrContainer.innerHTML = '';
-    reserveCode.textContent = '—— ——';
-    activationStatus.textContent = 'Не удалось получить код. Проверьте соединение с сервером.';
+    if (qrContainer) qrContainer.innerHTML = '';
+    if (reserveCode) reserveCode.textContent = '—— ——';
+    if (activationCountdown) activationCountdown.textContent = '00:00';
+    if (activationStatus) {
+      activationStatus.textContent = automatic
+        ? 'Не удалось обновить код. Повторяем через несколько секунд…'
+        : 'Не удалось получить код. Проверьте соединение с сервером.';
+    }
+    if (automatic) scheduleActivationRenew();
   } finally {
-    showActivationButton.disabled = false;
+    activationCreationInFlight = false;
+    if (showActivationButton) showActivationButton.disabled = false;
   }
 }
 
@@ -284,29 +358,24 @@ function schedulePlayerRefresh() {
 }
 
 async function fetchPlayerContext(timeoutMs = NETWORK_TIMEOUT_MS) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch('/api/device/player-context', { cache: 'no-store', signal: controller.signal });
-    if (response.status === 401) {
-      clearPlayerContext();
-      return { unauthorized: true };
-    }
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const context = await response.json();
-    savePlayerContext(context);
-    void warmPlayerAssetCache(context);
-    return {
-      context,
-      offline: response.headers.get('x-tv-menu-offline') === '1'
-    };
-  } finally {
-    clearTimeout(timer);
+  const response = await fetchWithTimeout('/api/device/player-context', { cache: 'no-store' }, timeoutMs);
+  if (response.status === 401) {
+    clearPlayerContext();
+    return { unauthorized: true };
   }
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const context = await response.json();
+  savePlayerContext(context);
+  void warmPlayerAssetCache(context);
+  return {
+    context,
+    offline: response.headers.get('x-tv-menu-offline') === '1'
+  };
 }
 
 function showCachedPlayer(record, message = 'Нет связи с сервером. ТВ работает по последней сохранённой версии меню.') {
   if (!record?.context) return false;
+  stopActivationTimers();
   renderPlayerContext(record.context);
   setHidden(bootView, true);
   setHidden(activationView, true);
@@ -321,10 +390,11 @@ async function refreshPlayer() {
   try {
     const result = await fetchPlayerContext();
     if (result.unauthorized) {
+      stopActivationTimers();
       clearActivation();
       showActivationScreen();
       setHidden(pairing, true);
-      showActivationButton.textContent = 'Показать QR-код';
+      if (showActivationButton) showActivationButton.textContent = 'Показать QR-код';
       return;
     }
     renderPlayerContext(result.context);
@@ -340,14 +410,13 @@ async function refreshPlayer() {
 }
 
 async function loadPlayer() {
-  if (pollTimer) clearTimeout(pollTimer);
-  pollTimer = null;
+  stopActivationTimers();
   try {
     const result = await fetchPlayerContext();
     if (result.unauthorized) {
       showActivationScreen();
       setHidden(pairing, true);
-      showActivationButton.textContent = 'Показать QR-код';
+      if (showActivationButton) showActivationButton.textContent = 'Показать QR-код';
       return false;
     }
     renderPlayerContext(result.context);
@@ -355,7 +424,7 @@ async function loadPlayer() {
     setHidden(activationView, true);
     setHidden(player, false);
     showConnectionMessage(result.offline ? 'Нет связи с сервером. ТВ работает по последней сохранённой версии меню.' : '');
-    await requestWakeLock();
+    void requestWakeLock();
     schedulePlayerRefresh();
     return true;
   } catch (error) {
@@ -406,15 +475,16 @@ async function resolveInitialPlayerState() {
     showPairing(pending);
     schedulePoll(pending);
   } else {
+    stopActivationTimers();
     showActivationScreen();
     setHidden(pairing, true);
-    showActivationButton.textContent = 'Показать QR-код';
+    if (showActivationButton) showActivationButton.textContent = 'Показать QR-код';
   }
 }
 
 async function initialisePlayer() {
   showBootScreen();
-  showActivationButton.addEventListener('click', () => void createActivation());
+  showActivationButton?.addEventListener('click', () => void createActivation());
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') void requestWakeLock();
   });
