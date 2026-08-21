@@ -27,7 +27,7 @@ test('offline player keeps its shell, motion engine, Visual FX, context and same
     read('src/web/admin-ui/public/player-sw.js'),
     read('src/web/admin-ui/public/js/player/player.js')
   ]);
-  assert.match(worker, /tv-menu-player-shell-v12/);
+  assert.match(worker, /tv-menu-player-shell-v13/);
   assert.match(worker, /PLAYER_CONTEXT = '\/api\/device\/player-context'/);
   assert.match(worker, /\/css\/motion-effects\.css/);
   assert.match(worker, /\/js\/player\/player-legacy\.js/);
@@ -119,7 +119,7 @@ test('static TV background stays inside the exact player screen bounds', async (
   assert.doesNotMatch(rule, /scale\(/);
 });
 
-test('Motion Studio and TV Player preserve the full background frame during animation', async () => {
+test('background is not a Motion Engine target anywhere in preview or TV Player', async () => {
   const [css, renderer, motion] = await Promise.all([
     read('src/web/admin-ui/public/css/pages/animation-screen-preview.css'),
     read('src/web/admin-ui/public/js/motion/screen-preview.js'),
@@ -131,9 +131,8 @@ test('Motion Studio and TV Player preserve the full background frame during anim
   assert.doesNotMatch(rule, /inset:\s*-\d/);
   assert.doesNotMatch(rule, /scale\(/);
   assert.match(renderer, /backgroundSize = '100% 100%'/);
-  const backgroundFrames = motion.match(/function backgroundFrames\(profile\) \{[\s\S]*?\n\}/)?.[0] || '';
-  assert.match(backgroundFrames, /transform: 'none'/);
-  assert.doesNotMatch(backgroundFrames, /baseScale|peakScale|translate3d\(|scale\(/);
+  assert.doesNotMatch(renderer, /data-motion-background/);
+  assert.doesNotMatch(motion, /backgroundFrames|background_effect|background_zoom_percent|data-motion-background/);
 });
 
 test('authorized TV cannot create another activation request', async () => {
