@@ -27,7 +27,7 @@ test('offline player keeps its shell, motion engine, Visual FX, context and same
     read('src/web/admin-ui/public/player-sw.js'),
     read('src/web/admin-ui/public/js/player/player.js')
   ]);
-  assert.match(worker, /tv-menu-player-shell-v7/);
+  assert.match(worker, /tv-menu-player-shell-v8/);
   assert.match(worker, /PLAYER_CONTEXT = '\/api\/device\/player-context'/);
   assert.match(worker, /\/css\/motion-effects\.css/);
   assert.match(worker, /\/js\/motion\/preview-player\.js/);
@@ -63,6 +63,17 @@ test('rapid reload cannot expose raw Player screens or drop a cached shell asset
   const shellAsset = worker.match(/async function shellAsset\([\s\S]*?\n\}/)?.[0] || '';
   assert.match(shellAsset, /const cached = await cache\.match\(request\)/);
   assert.match(shellAsset, /if \(cached\)[\s\S]*event\.waitUntil\(refresh\)[\s\S]*return cached/);
+});
+
+test('legacy TV browser boot layout does not depend on CSS grid', async () => {
+  const css = await read('src/web/admin-ui/public/css/player.css');
+  const bootRule = css.match(/\.player-boot,\.activation-view\s*\{([\s\S]*?)\}/)?.[1] || '';
+  const cardRule = css.match(/\.player-boot-card\s*\{([\s\S]*?)\}/)?.[1] || '';
+  assert.match(bootRule, /display:flex/);
+  assert.match(bootRule, /align-items:center/);
+  assert.match(bootRule, /justify-content:center/);
+  assert.doesNotMatch(bootRule, /display:grid/);
+  assert.match(cardRule, /display:block/);
 });
 
 test('static TV background stays inside the exact player screen bounds', async () => {
