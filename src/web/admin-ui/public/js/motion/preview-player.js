@@ -128,7 +128,7 @@ function animateVisualFx(stage, profile, total, animations) {
       { transform: 'translate3d(95%,15%,0) scale(1.12)', opacity: 0.62 * gain },
       { transform: 'translate3d(48%,58%,0) scale(1)', opacity: 0.48 * gain },
       { transform: 'translate3d(0,0,0) scale(.92)', opacity: 0.35 * gain }
-    ], { duration: total, easing }));
+    ], { duration: total, easing });
   } else if (effect === 'liquid-glass') {
     addAnimation(animations, stage.querySelector('.motion-fx-glass i'), [
       { offset: 0, transform: 'translateX(-120%) skewX(-10deg) scaleX(.82)', opacity: 0 },
@@ -136,7 +136,7 @@ function animateVisualFx(stage, profile, total, animations) {
       { offset: 0.34, transform: 'translateX(250%) skewX(-7deg) scaleX(1.08)', opacity: 0.66 * gain },
       { offset: 0.6, transform: 'translateX(530%) skewX(-12deg) scaleX(.9)', opacity: 0 },
       { offset: 1, transform: 'translateX(530%) skewX(-12deg) scaleX(.9)', opacity: 0 }
-    ], { duration: total, easing }));
+    ], { duration: total, easing });
   }
 }
 
