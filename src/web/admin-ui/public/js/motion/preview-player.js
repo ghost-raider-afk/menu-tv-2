@@ -55,24 +55,6 @@ function targetDelay(profile, index, count, cycleMs) {
   const phase = orderedIndex(profile, index, count) * (Number(profile.wave_stagger_ms) || 0);
   return cycleMs ? phase % cycleMs : 0;
 }
-function backgroundFrames(profile) {
-  const gain = motionGain(profile);
-  const depth = Math.max(0, Number(profile.background_zoom_percent) || 0) / 100;
-  const brightnessLift = Math.min(0.12, depth * 0.45 + gain * 0.035);
-  const saturationLift = Math.min(0.1, depth * 0.32 + gain * 0.02);
-  const contrastLift = Math.min(0.08, depth * 0.24 + gain * 0.015);
-  const base = { transform: 'none', filter: 'brightness(1) saturate(1) contrast(1)' };
-  const peak = {
-    transform: 'none',
-    filter: `brightness(${(1 + brightnessLift).toFixed(3)}) saturate(${(1 + saturationLift).toFixed(3)}) contrast(${(1 + contrastLift).toFixed(3)})`
-  };
-  if (profile.background_effect === 'breathe' || profile.background_effect === 'zoom') return [base, peak, base];
-  const soft = {
-    transform: 'none',
-    filter: `brightness(${(1 + brightnessLift * 0.45).toFixed(3)}) saturate(${(1 + saturationLift * 0.5).toFixed(3)}) contrast(${(1 + contrastLift * 0.4).toFixed(3)})`
-  };
-  return [soft, peak, soft];
-}
 function shimmerFrames(profile) {
   const cycleMs = Math.max(4000, Number(profile.cycle_seconds) * 1000 || 12000);
   const eventFraction = clamp((Number(profile.event_duration_ms) || 1800) / cycleMs, 0.08, 0.72);
@@ -176,8 +158,6 @@ export class AnimationPreviewPlayer {
         duration: this.total, delay: targetDelay(profile, index, targets.length, this.total), easing: EASING[profile.easing] || EASING.smooth
       }));
     }
-    const background = this.stage.querySelector('[data-motion-background]');
-    if (background && profile.background_effect !== 'none') addAnimation(this.animations, background, backgroundFrames(profile), { duration: this.total, easing: EASING[profile.easing] || EASING.smooth });
     const shimmer = this.stage.querySelector('.animation-screen-shimmer');
     if (shimmer && profile.section_effect === 'shimmer') addAnimation(this.animations, shimmer, shimmerFrames(profile), { duration: this.total, easing: 'ease-in-out' });
     animateVisualFx(this.stage, profile, this.total, this.animations);
