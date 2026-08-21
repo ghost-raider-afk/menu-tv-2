@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.3.2"
+SCRIPT_VERSION="1.3.3"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
@@ -63,7 +63,10 @@ update_progress() {
     if (( index < filled )); then bar+="#"; else bar+="-"; fi
   done
   printf '\rОбновление [%s] %3d%%  %-34s' "$bar" "$percent" "$label" >&3
-  (( percent == 100 )) && printf '\n' >&3
+  if (( percent == 100 )); then
+    printf '\n' >&3
+  fi
+  return 0
 }
 
 cleanup_temporary_backup() {
@@ -587,7 +590,7 @@ install_launcher() {
 wait_for_database() {
   local attempt
   for attempt in $(seq 1 30); do
-    if compose exec -T "$DB_SERVICE" sh -ec 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1; then
+    if compose exec -T "$DB_SERVICE" sh -ec 'PGPASSWORD="$POSTGRES_PASSWORD" pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1; then
       return 0
     fi
     sleep 2
