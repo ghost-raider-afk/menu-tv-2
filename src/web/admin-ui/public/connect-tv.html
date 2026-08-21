@@ -6,7 +6,6 @@
     <title>ТВ МЕНЮ — Подключение ТВ</title>
     <script src="/theme-bootstrap.js"></script>
     <link rel="stylesheet" href="/css/index.css" />
-    <link rel="stylesheet" href="/css/connect-tv.css" />
     <script src="/app.js" defer></script>
   </head>
   <body data-page="connect-tv">
@@ -19,7 +18,7 @@
               <h1>Подключение ТВ</h1>
             </div>
             <div class="compact-heading-actions">
-              <span>Подключение, привязка и отзыв авторизации физических телевизоров.</span>
+              <span>Быстрое подключение нового телевизора и управление уже авторизованными устройствами.</span>
             </div>
           </div>
 
@@ -30,15 +29,15 @@
               <div>
                 <p class="eyebrow">НОВОЕ УСТРОЙСТВО</p>
                 <h2 id="connect-new-tv-title">Подключить телевизор</h2>
-                <p>Откройте <strong>/player</strong> на телевизоре, затем выполните три шага.</p>
+                <p>Откройте <strong>/player</strong> на телевизоре. Дальше мастер проведёт по трём коротким шагам.</p>
               </div>
             </div>
 
             <div class="connect-tv-grid">
               <article class="connect-tv-card" data-connect-step="scan">
                 <div class="connect-tv-step">1</div>
-                <h3>Получить телевизор</h3>
-                <p>Отсканируйте QR-код с экрана ТВ или введите резервный код.</p>
+                <h3>Считать код с ТВ</h3>
+                <p>Наведите камеру на QR-код экрана телевизора или используйте шестизначный резервный код.</p>
                 <div class="connect-tv-camera-wrap is-hidden" data-camera-wrap>
                   <video class="connect-tv-camera" data-camera autoplay playsinline muted></video>
                   <div class="connect-tv-camera-frame" aria-hidden="true"></div>
@@ -64,7 +63,7 @@
               <article class="connect-tv-card is-disabled" data-connect-step="screen">
                 <div class="connect-tv-step">3</div>
                 <h3>Выбрать монитор</h3>
-                <p>Выберите конкретный экран, который должен показывать телевизор.</p>
+                <p>Выберите конкретный экран, который должен отображаться на этом телевизоре.</p>
                 <div class="connect-tv-options" data-screen-options></div>
                 <button class="button button-primary connect-tv-authorize" type="button" data-authorize disabled>Авторизовать телевизор</button>
               </article>
@@ -83,9 +82,9 @@
           <section class="connect-tv-bindings" aria-labelledby="connected-tv-title">
             <div class="connect-tv-bindings-heading">
               <div>
-                <p class="eyebrow">УПРАВЛЕНИЕ УСТРОЙСТВАМИ</p>
+                <p class="eyebrow">ПОДКЛЮЧЁННЫЕ УСТРОЙСТВА</p>
                 <h2 id="connected-tv-title">Подключённые телевизоры</h2>
-                <p>Контроль активных привязок. Отключение сразу отзывает Device Session на сервере.</p>
+                <p>Здесь видны активные привязки. «Отключить» сразу отзывает Device Session на сервере.</p>
               </div>
               <button class="button button-secondary" type="button" data-refresh-bindings>Обновить список</button>
             </div>
