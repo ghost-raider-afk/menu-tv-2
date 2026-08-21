@@ -4,7 +4,6 @@ import {
   ANIMATION_FLOW_DIRECTIONS,
   ANIMATION_PATTERNS,
   ANIMATION_PROFILE_VERSION,
-  BACKGROUND_EFFECTS,
   DEFAULT_ANIMATION_PROFILE,
   ITEM_EFFECTS,
   PRICE_EFFECTS,
@@ -39,8 +38,6 @@ export function animationProfileInput(source) {
     section_effect: enumValue(profile.section_effect, 'Эффект разделов', SECTION_EFFECTS),
     item_effect: enumValue(profile.item_effect, 'Эффект строк', ITEM_EFFECTS),
     price_effect: enumValue(profile.price_effect, 'Эффект цен', PRICE_EFFECTS),
-    background_effect: enumValue(profile.background_effect, 'Эффект фона', BACKGROUND_EFFECTS),
-    background_zoom_percent: numberValue(profile.background_zoom_percent, 'Глубина фона', { min: 0, max: 8 }),
     visual_effect: enumValue(profile.visual_effect, 'Визуальный эффект', VISUAL_EFFECTS),
     intensity: numberValue(profile.intensity, 'Интенсивность', { min: 0, max: 100, integer: true })
   };
