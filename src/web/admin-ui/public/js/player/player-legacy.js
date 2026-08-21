@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var MODERN_WATCHDOG_MS = 6500;
+  var MODERN_WATCHDOG_MS = 12000;
   var NETWORK_TIMEOUT_MS = 5000;
   var RETRY_MS = 3000;
   var ACTIVATION_RETRY_MS = 5000;
@@ -98,7 +98,8 @@
   function remaining(expiresAt) {
     var ms = Math.max(0, Date.parse(expiresAt || '') - Date.now());
     var seconds = Math.ceil(ms / 1000);
-    return Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
+    var rest = seconds % 60;
+    return Math.floor(seconds / 60) + ':' + (rest < 10 ? '0' : '') + rest;
   }
   function fxMarkup() {
     return '<div class="animation-screen-fx" data-motion-fx aria-hidden="true">' +
@@ -282,11 +283,20 @@
     if (button) button.addEventListener('click', createActivation);
     resolveState();
   }
+  function bootStillVisible() {
+    var node = by('[data-player-boot]');
+    return !!node && !node.hidden && !node.classList.contains('is-hidden');
+  }
 
   var moduleCapable = false;
+  var modernScript = by('script[data-modern-player]');
   try { moduleCapable = 'noModule' in document.createElement('script'); } catch (_error) {}
+  if (modernScript) {
+    modernScript.addEventListener('load', function () { window.__TV_MENU_PLAYER_MODERN_READY__ = true; });
+    modernScript.addEventListener('error', function () { startLegacy(); });
+  }
   if (!moduleCapable) startLegacy();
   else setTimeout(function () {
-    if (window.__TV_MENU_PLAYER_MODERN_READY__ !== true) startLegacy();
+    if (window.__TV_MENU_PLAYER_MODERN_READY__ !== true && bootStillVisible()) startLegacy();
   }, MODERN_WATCHDOG_MS);
 }());
