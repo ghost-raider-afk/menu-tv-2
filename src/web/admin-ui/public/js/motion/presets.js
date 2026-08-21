@@ -1,5 +1,5 @@
 const BASE = Object.freeze({
-  motion_version: 2,
+  motion_version: 3,
   pattern: 'ambient',
   flow_direction: 'left-to-right',
   easing: 'smooth',
