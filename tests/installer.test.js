@@ -15,7 +15,7 @@ const DEVICE_ENV_DEFAULTS = [
 
 test('installer migrates Device Player env before application update', async () => {
   const installer = await read('menu-tv-2.sh');
-  assert.match(installer, /^SCRIPT_VERSION="1\.3\.0"$/m);
+  assert.match(installer, /^SCRIPT_VERSION="1\.3\.1"$/m);
 
   for (const [key, value] of DEVICE_ENV_DEFAULTS) {
     assert.match(
@@ -37,4 +37,15 @@ test('installer migrates Device Player env before application update', async () 
   assert.ok(migrationIndex >= 0, 'update must migrate the environment');
   assert.ok(handoffIndex < migrationIndex, 'newer installer must take over before env migration');
   assert.match(installer, /exec "\$LAUNCHER_PATH" update/);
+});
+
+test('installer reports the application version from package.json', async () => {
+  const [installer, pkg] = await Promise.all([read('menu-tv-2.sh'), read('package.json')]);
+  const packageVersion = JSON.parse(pkg).version;
+  assert.equal(packageVersion, '0.2.0');
+  assert.match(installer, /project_version_from_file\(\)/);
+  assert.match(installer, /project_version_from_file "\$INSTALL_DIR\/package\.json"/);
+  assert.match(installer, /Версия проекта: \$\(project_version\)/);
+  assert.match(installer, /printf 'Версия проекта: %s\\n' "\$\(project_version\)"/);
+  assert.match(installer, /printf ' Версия проекта: %s\\n' "\$\(project_version\)"/);
 });
