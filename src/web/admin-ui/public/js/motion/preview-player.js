@@ -6,10 +6,15 @@ const EASING = Object.freeze({
   elastic: 'cubic-bezier(.34,1.56,.64,1)'
 });
 
-const GOLD_SHADOW = 'rgba(244,201,21,.58)';
+const GOLD_SHADOW = 'rgba(244,201,21,.72)';
 
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
+}
+
+function motionGain(profile) {
+  const normalized = clamp(Number(profile.intensity) || 0, 0, 100) / 100;
+  return Math.sqrt(normalized);
 }
 
 function formatTime(milliseconds) {
@@ -42,22 +47,22 @@ function baseFrame(offset) {
 }
 
 function peakFrame(profile, kind, effect, index, offset) {
-  const gain = clamp(Number(profile.intensity) || 0, 0, 100) / 100;
+  const gain = motionGain(profile);
   const travel = (Number(profile.travel_px) || 0) * gain;
   const scaleAmount = (Number(profile.scale_amount) || 0) * gain;
   const brightness = 1 + (Number(profile.brightness_amount) || 0) * gain;
   const vector = vectorFor(profile, travel, index);
   const frame = { offset, opacity: 1, transform: transform(), filter: `brightness(${brightness.toFixed(3)})` };
 
-  if (effect === 'wave') frame.transform = transform({ ...vector, scale: 1 + scaleAmount * 0.35 });
-  if (effect === 'lift') frame.transform = transform({ x: vector.x * 0.45, y: vector.y || -travel, scale: 1 + scaleAmount * 0.45 });
-  if (effect === 'breathe') frame.transform = transform({ scale: 1 + scaleAmount * 0.6 });
+  if (effect === 'wave') frame.transform = transform({ ...vector, scale: 1 + scaleAmount * 0.45 });
+  if (effect === 'lift') frame.transform = transform({ x: vector.x * 0.5, y: vector.y || -travel, scale: 1 + scaleAmount * 0.55 });
+  if (effect === 'breathe') frame.transform = transform({ scale: 1 + scaleAmount * 0.72 });
   if (effect === 'focus') frame.transform = transform({ scale: 1 + scaleAmount });
-  if (effect === 'pulse') frame.transform = transform({ scale: 1 + scaleAmount * (kind === 'price' ? 1.5 : 1) });
-  if (effect === 'pop') frame.transform = transform({ scale: 1 + scaleAmount * 1.8 });
-  if (effect === 'shimmer') frame.transform = transform({ x: vector.x * 0.25, y: vector.y * 0.25, scale: 1 + scaleAmount * 0.25 });
+  if (effect === 'pulse') frame.transform = transform({ scale: 1 + scaleAmount * (kind === 'price' ? 1.55 : 1.08) });
+  if (effect === 'pop') frame.transform = transform({ scale: 1 + scaleAmount * 1.9 });
+  if (effect === 'shimmer') frame.transform = transform({ x: vector.x * 0.3, y: vector.y * 0.3, scale: 1 + scaleAmount * 0.35 });
   if (effect === 'glow' || effect === 'shimmer') {
-    const radius = 4 + 18 * gain;
+    const radius = 8 + 28 * gain;
     frame.filter = `brightness(${brightness.toFixed(3)}) drop-shadow(0 0 ${radius.toFixed(1)}px ${GOLD_SHADOW})`;
   }
   return frame;
@@ -88,7 +93,7 @@ function targetDelay(profile, index, count, cycleMs) {
 }
 
 function backgroundFrames(profile) {
-  const intensity = clamp(Number(profile.intensity) || 0, 0, 100) / 100;
+  const intensity = motionGain(profile);
   const travel = (Number(profile.travel_px) || 0) * intensity;
   const depth = (Number(profile.background_zoom_percent) || 0) / 100;
   const baseScale = 1.035 + depth * 0.35;
@@ -111,11 +116,11 @@ function backgroundFrames(profile) {
 function shimmerFrames(profile) {
   const cycleMs = Math.max(4000, Number(profile.cycle_seconds) * 1000 || 12000);
   const eventFraction = clamp((Number(profile.event_duration_ms) || 1800) / cycleMs, 0.08, 0.72);
-  const gain = clamp(Number(profile.intensity) || 0, 0, 100) / 100;
+  const gain = motionGain(profile);
   return [
     { offset: 0, opacity: 0, transform: 'translateX(0) skewX(-18deg)' },
-    { offset: eventFraction * 0.15, opacity: 0, transform: 'translateX(0) skewX(-18deg)' },
-    { offset: eventFraction * 0.45, opacity: 0.28 * gain, transform: 'translateX(320%) skewX(-18deg)' },
+    { offset: eventFraction * 0.12, opacity: 0, transform: 'translateX(0) skewX(-18deg)' },
+    { offset: eventFraction * 0.45, opacity: 0.5 * gain, transform: 'translateX(320%) skewX(-18deg)' },
     { offset: eventFraction, opacity: 0, transform: 'translateX(720%) skewX(-18deg)' },
     { offset: 1, opacity: 0, transform: 'translateX(720%) skewX(-18deg)' }
   ];
