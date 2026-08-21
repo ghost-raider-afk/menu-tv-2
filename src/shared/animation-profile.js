@@ -1,13 +1,10 @@
-export const ANIMATION_PROFILE_VERSION = 2;
+export const ANIMATION_PROFILE_VERSION = 3;
 export const ANIMATION_PATTERNS = Object.freeze(['ambient', 'wave', 'focus', 'pulse', 'spark', 'parallax']);
 export const ANIMATION_FLOW_DIRECTIONS = Object.freeze(['none', 'left-to-right', 'right-to-left', 'top-to-bottom', 'bottom-to-top', 'alternate']);
 export const ANIMATION_EASINGS = Object.freeze(['standard', 'smooth', 'snappy', 'cinematic', 'elastic']);
 export const SECTION_EFFECTS = Object.freeze(['none', 'glow', 'pulse', 'shimmer', 'lift', 'wave']);
 export const ITEM_EFFECTS = Object.freeze(['none', 'breathe', 'wave', 'focus', 'lift']);
 export const PRICE_EFFECTS = Object.freeze(['none', 'pulse', 'glow', 'wave', 'pop']);
-// Kept as a compatibility constant for previously stored v2 profiles. Background
-// motion is no longer configurable: the canonical background is always static.
-export const BACKGROUND_EFFECTS = Object.freeze(['none']);
 export const VISUAL_EFFECTS = Object.freeze(['none', 'ocean-wave', 'aurora', 'ripple', 'sun-sweep', 'spotlight', 'liquid-glass']);
 
 export const DEFAULT_ANIMATION_PROFILE = Object.freeze({
@@ -24,8 +21,6 @@ export const DEFAULT_ANIMATION_PROFILE = Object.freeze({
   section_effect: 'glow',
   item_effect: 'focus',
   price_effect: 'glow',
-  background_effect: 'none',
-  background_zoom_percent: 0,
   visual_effect: 'none',
   intensity: 72
 });
@@ -51,11 +46,13 @@ function canonicalCurrent(source) {
     section_effect: present(source.section_effect, DEFAULT_ANIMATION_PROFILE.section_effect),
     item_effect: present(source.item_effect, DEFAULT_ANIMATION_PROFILE.item_effect),
     price_effect: present(source.price_effect, DEFAULT_ANIMATION_PROFILE.price_effect),
-    background_effect: 'none',
-    background_zoom_percent: 0,
     visual_effect: present(source.visual_effect, DEFAULT_ANIMATION_PROFILE.visual_effect),
     intensity: present(source.intensity, DEFAULT_ANIMATION_PROFILE.intensity)
   };
+}
+
+function migrateV2Profile(source) {
+  return canonicalCurrent(source);
 }
 
 function legacyDirection(value) { if (value === 'right') return 'right-to-left'; if (value === 'up') return 'bottom-to-top'; if (value === 'down') return 'top-to-bottom'; if (value === 'none') return 'none'; return 'left-to-right'; }
@@ -69,17 +66,28 @@ function migrateLegacyProfile(source) {
   const oldScale = number(source.scale_from, 1);
   return {
     motion_version: ANIMATION_PROFILE_VERSION,
-    pattern: legacyPattern(source), flow_direction: legacyDirection(source.direction), easing: oneOf(source.easing, ANIMATION_EASINGS, DEFAULT_ANIMATION_PROFILE.easing),
-    cycle_seconds: clamp(number(source.ambient_speed_seconds, 14), 4, 60), event_duration_ms: clamp(Math.round(number(source.duration_ms, 1200) * 1.35), 400, 6000),
-    wave_stagger_ms: clamp(Math.round(number(source.stagger_ms, 70) * 2), 0, 1000), travel_px: clamp(Math.round(number(source.distance_px, 0) * 0.12), 0, 24),
-    scale_amount: clamp(Math.abs(1 - oldScale), 0, 0.08), brightness_amount: clamp(0.08 + intensity / 500, 0, 0.5), section_effect: legacySectionEffect(source),
-    item_effect: legacyItemEffect(source), price_effect: legacyPriceEffect(source), background_effect: 'none',
-    background_zoom_percent: 0, visual_effect: 'none', intensity
+    pattern: legacyPattern(source),
+    flow_direction: legacyDirection(source.direction),
+    easing: oneOf(source.easing, ANIMATION_EASINGS, DEFAULT_ANIMATION_PROFILE.easing),
+    cycle_seconds: clamp(number(source.ambient_speed_seconds, 14), 4, 60),
+    event_duration_ms: clamp(Math.round(number(source.duration_ms, 1200) * 1.35), 400, 6000),
+    wave_stagger_ms: clamp(Math.round(number(source.stagger_ms, 70) * 2), 0, 1000),
+    travel_px: clamp(Math.round(number(source.distance_px, 0) * 0.12), 0, 24),
+    scale_amount: clamp(Math.abs(1 - oldScale), 0, 0.08),
+    brightness_amount: clamp(0.08 + intensity / 500, 0, 0.5),
+    section_effect: legacySectionEffect(source),
+    item_effect: legacyItemEffect(source),
+    price_effect: legacyPriceEffect(source),
+    visual_effect: 'none',
+    intensity
   };
 }
 
 export function completeAnimationProfile(profile = {}) {
   const source = sourceObject(profile);
   if (Object.keys(source).length === 0) return canonicalCurrent(DEFAULT_ANIMATION_PROFILE);
-  return Number(source.motion_version) === ANIMATION_PROFILE_VERSION ? canonicalCurrent(source) : migrateLegacyProfile(source);
+  const version = Number(source.motion_version);
+  if (version === ANIMATION_PROFILE_VERSION) return canonicalCurrent(source);
+  if (version === 2) return migrateV2Profile(source);
+  return migrateLegacyProfile(source);
 }
