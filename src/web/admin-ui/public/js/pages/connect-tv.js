@@ -271,14 +271,38 @@ async function nativeDetector() {
   }
 }
 
+function decodeCurrentCanvas() {
+  if (!scanContext || !scanCanvas.width || !scanCanvas.height) return null;
+  return decodeTvActivationQr(scanContext.getImageData(0, 0, scanCanvas.width, scanCanvas.height));
+}
+
 function localScanPayload() {
   if (!scanContext || !video?.videoWidth || !video?.videoHeight) return null;
-  const size = recommendedQrFrameSize(video.videoWidth, video.videoHeight);
+  const sourceWidth = video.videoWidth;
+  const sourceHeight = video.videoHeight;
+
+  // The camera UI is a square object-fit:cover viewport. Decode the same central
+  // area the user actually sees inside the yellow guide instead of shrinking the
+  // entire 16:9 sensor frame. This is especially important for iPhone cameras and
+  // QR codes displayed on a TV, where moire makes small modules harder to resolve.
+  const visibleSquare = Math.min(sourceWidth, sourceHeight);
+  const guideCrop = Math.max(1, Math.round(visibleSquare * 0.78));
+  const sourceX = Math.max(0, Math.round((sourceWidth - guideCrop) / 2));
+  const sourceY = Math.max(0, Math.round((sourceHeight - guideCrop) / 2));
+  const target = 720;
+  if (scanCanvas.width !== target) scanCanvas.width = target;
+  if (scanCanvas.height !== target) scanCanvas.height = target;
+  scanContext.drawImage(video, sourceX, sourceY, guideCrop, guideCrop, 0, 0, target, target);
+  const guided = decodeCurrentCanvas();
+  if (guided) return guided;
+
+  // Reserve attempt: analyse the complete sensor frame for QR codes that are not
+  // perfectly centred yet. Preserve the source aspect ratio for finder geometry.
+  const size = recommendedQrFrameSize(sourceWidth, sourceHeight);
   if (scanCanvas.width !== size.width) scanCanvas.width = size.width;
   if (scanCanvas.height !== size.height) scanCanvas.height = size.height;
-  scanContext.drawImage(video, 0, 0, size.width, size.height);
-  const frame = scanContext.getImageData(0, 0, size.width, size.height);
-  return decodeTvActivationQr(frame);
+  scanContext.drawImage(video, 0, 0, sourceWidth, sourceHeight, 0, 0, size.width, size.height);
+  return decodeCurrentCanvas();
 }
 
 async function scanLoop(detector) {
@@ -295,11 +319,23 @@ async function scanLoop(detector) {
     }
     if (rawValue) {
       scannerRunning = false;
+      setMessage('QR-код распознан. Проверяем телевизор…');
       await resolveActivation({ scan_payload: rawValue });
       return;
     }
-    await new Promise((resolve) => window.setTimeout(resolve, detector ? 180 : 240));
+    await new Promise((resolve) => window.setTimeout(resolve, detector ? 180 : 220));
   }
+}
+
+async function improveCameraFocus(stream) {
+  const track = stream?.getVideoTracks?.()[0];
+  if (!track?.getCapabilities || !track?.applyConstraints) return;
+  try {
+    const capabilities = track.getCapabilities();
+    if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes('continuous')) {
+      await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+    }
+  } catch {}
 }
 
 async function startScanner() {
@@ -318,17 +354,18 @@ async function startScanner() {
     mediaStream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: 'environment' },
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
       },
       audio: false
     });
+    await improveCameraFocus(mediaStream);
     video.srcObject = mediaStream;
     await video.play();
     scannerRunning = true;
     cameraWrap?.classList.remove('is-hidden');
     if (scanButton) scanButton.textContent = 'Остановить камеру';
-    setMessage('Наведите камеру на QR-код телевизора.');
+    setMessage('Поместите QR-код целиком внутрь жёлтой рамки и держите телефон неподвижно.');
     void scanLoop(detector);
   } catch (error) {
     console.warn('TV QR scanner could not start', error);
