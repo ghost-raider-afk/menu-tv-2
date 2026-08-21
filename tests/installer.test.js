@@ -15,7 +15,7 @@ const DEVICE_ENV_DEFAULTS = [
 
 test('installer migrates Device Player env before application update', async () => {
   const installer = await read('menu-tv-2.sh');
-  assert.match(installer, /^SCRIPT_VERSION="1\.3\.2"$/m);
+  assert.match(installer, /^SCRIPT_VERSION="1\.3\.3"$/m);
 
   for (const [key, value] of DEVICE_ENV_DEFAULTS) {
     assert.match(
@@ -52,9 +52,13 @@ test('installer reports the application version from package.json', async () => 
 
 test('application update uses a compact 0 to 100 percent progress bar', async () => {
   const installer = await read('menu-tv-2.sh');
+  const progressBlock = installer.match(/update_progress\(\) \{[\s\S]*?\n\}/)?.[0] || '';
   const updateBlock = installer.match(/update_app\(\) \{[\s\S]*?\n\}/)?.[0] || '';
   assert.match(installer, /update_progress\(\)/);
   assert.match(installer, /Обновление \[\%s\] \%3d\%\%/);
+  assert.match(progressBlock, /if \(\( percent == 100 \)\)/);
+  assert.match(progressBlock, /return 0/);
+  assert.doesNotMatch(progressBlock, /\(\( percent == 100 \)\) &&/);
   assert.match(updateBlock, /update_progress 0 "Подготовка"/);
   assert.match(updateBlock, /update_progress 100 "Готово"/);
   assert.match(updateBlock, /UPDATE_LOG_FILE=.*update-log/);
