@@ -9,89 +9,22 @@
     <script src="/app.js" defer></script>
   </head>
   <body data-page="animation">
-    <div class="app-shell">
-      <div class="app-content">
-        <main class="main-content animation-content">
-          <div class="page-heading animation-heading">
-            <div><p class="eyebrow">MOTION STUDIO</p><h1>Анимация экранов</h1><p>Профили рассчитаны на digital-signage: эффект должен читаться на большом ТВ с расстояния 3–6 метров, при этом меню всегда остаётся открытым и читаемым.</p></div>
-            <div class="animation-heading-actions">
-              <label class="animation-master-toggle"><input id="animation-enabled" type="checkbox" /><span><strong>Анимация включена</strong><small>Ни один пресет не скрывает меню целиком.</small></span></label>
-              <button class="button button-primary" id="animation-save" type="button">Сохранить профиль</button>
-            </div>
-          </div>
-
-          <p class="form-message is-hidden" id="animation-message" role="status" aria-live="polite"></p>
-
-          <section class="animation-studio-grid" aria-label="Студия анимации">
-            <div class="settings-card animation-preset-card">
-              <div class="card-heading"><div><p class="eyebrow">20 ТВ-ПРЕСЕТОВ</p><h2>Постоянное движение</h2><p>Спокойные, навигационные, рекламные и динамичные профили специально разведены по силе и характеру движения.</p></div></div>
-              <div class="animation-preset-list" id="animation-presets"></div>
-            </div>
-
-            <div class="settings-card animation-player-card">
-              <div class="card-heading"><div><p class="eyebrow">LIVE PREVIEW</p><h2>Мини‑плеер</h2><p id="animation-current-preset">Каскад витрины</p></div><span class="animation-live-badge">LOOP</span></div>
-              <div class="animation-screen-picker">
-                <label class="field"><span>Экран предпросмотра</span><select id="animation-screen-select" aria-label="Экран предпросмотра"><option value="">Загрузка мониторов…</option></select></label>
-                <p id="animation-screen-status">Загружаем сохранённый экран…</p>
-              </div>
-              <div class="animation-player-shell">
-                <div class="animation-stage" id="animation-stage" aria-label="Предпросмотр постоянной анимации">
-                  <p class="animation-screen-empty">Загружаем настоящий экран…</p>
-                </div>
-                <div class="animation-player-controls">
-                  <div class="animation-player-buttons">
-                    <button class="button button-secondary" id="animation-play" type="button">▶ Пуск</button>
-                    <button class="button button-secondary" id="animation-pause" type="button">⏸ Пауза</button>
-                    <button class="button button-secondary" id="animation-replay" type="button">↻ С начала цикла</button>
-                  </div>
-                  <div class="animation-timeline-wrap"><input id="animation-timeline" type="range" min="0" max="1000" value="0" aria-label="Шкала цикла" /><span id="animation-time">0.0 с / 0.0 с</span></div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section class="animation-controls-grid" aria-label="Детальные параметры постоянной анимации">
-            <div class="settings-card">
-              <div class="card-heading"><div><p class="eyebrow">ЛОГИКА</p><h2>Характер движения</h2><p>Определяет, как акцент живёт внутри уже открытого меню.</p></div></div>
-              <div class="form-grid">
-                <label class="field"><span>Режим</span><select id="animation-pattern"><option value="ambient">Ambient — спокойное дыхание</option><option value="wave">Wave — последовательная волна</option><option value="focus">Focus — фокус по элементам</option><option value="pulse">Pulse — синхронный импульс</option><option value="spark">Spark — световые акценты</option><option value="parallax">Parallax — глубина композиции</option></select></label>
-                <label class="field"><span>Направление волны</span><select id="animation-flow-direction"><option value="none">Без направления</option><option value="left-to-right">Слева направо</option><option value="right-to-left">Справа налево</option><option value="top-to-bottom">Сверху вниз</option><option value="bottom-to-top">Снизу вверх</option><option value="alternate">Встречное / попеременное</option></select></label>
-                <label class="field"><span>Easing</span><select id="animation-easing"><option value="standard">Standard</option><option value="smooth">Smooth</option><option value="snappy">Snappy</option><option value="cinematic">Cinematic</option><option value="elastic">Elastic</option></select></label>
-                <label class="field"><span>Общая интенсивность, %</span><input id="animation-intensity" type="range" min="0" max="100" step="1" /><output id="animation-intensity-output">72%</output></label>
-              </div>
-            </div>
-
-            <div class="settings-card">
-              <div class="card-heading"><div><p class="eyebrow">ТАЙМИНГ</p><h2>Ритм цикла</h2><p>После события меню остаётся полностью спокойным до следующего прохода.</p></div></div>
-              <div class="form-grid">
-                <label class="field"><span>Период полного цикла, сек</span><input id="animation-cycle" type="number" min="4" max="60" step="0.5" /></label>
-                <label class="field"><span>Длительность события, мс</span><input id="animation-event-duration" type="number" min="400" max="6000" step="50" /></label>
-                <label class="field"><span>Шаг волны между элементами, мс</span><input id="animation-wave-stagger" type="number" min="0" max="1000" step="10" /></label>
-              </div>
-            </div>
-
-            <div class="settings-card">
-              <div class="card-heading"><div><p class="eyebrow">TV MOTION</p><h2>Амплитуда</h2><p>Диапазон ограничен так, чтобы эффект был заметен с расстояния, но текст не «ездил» по экрану.</p></div></div>
-              <div class="form-grid">
-                <label class="field"><span>Перемещение, px</span><input id="animation-travel" type="number" min="0" max="24" step="0.5" /></label>
-                <label class="field"><span>Изменение масштаба</span><input id="animation-scale-amount" type="number" min="0" max="0.08" step="0.002" /></label>
-                <label class="field"><span>Изменение яркости</span><input id="animation-brightness" type="number" min="0" max="0.5" step="0.01" /></label>
-              </div>
-            </div>
-
-            <div class="settings-card">
-              <div class="card-heading"><div><p class="eyebrow">ЭФФЕКТЫ</p><h2>Что именно оживает</h2><p>Можно оставить текст полностью неподвижным и анимировать только фон или акцентные элементы.</p></div></div>
-              <div class="form-grid">
-                <label class="field"><span>Разделы</span><select id="animation-section-effect"><option value="none">Нет</option><option value="glow">Glow</option><option value="pulse">Pulse</option><option value="shimmer">Световой блик</option><option value="lift">Микро‑подъём</option><option value="wave">Микро‑волна</option></select></label>
-                <label class="field"><span>Строки продукции</span><select id="animation-item-effect"><option value="none">Нет</option><option value="breathe">Дыхание</option><option value="wave">Микро‑волна</option><option value="focus">Фокус</option><option value="lift">Микро‑подъём</option></select></label>
-                <label class="field"><span>Цены</span><select id="animation-price-effect"><option value="none">Нет</option><option value="pulse">Pulse</option><option value="glow">Glow</option><option value="wave">Микро‑волна</option><option value="pop">Короткий акцент</option></select></label>
-                <label class="field"><span>Фон</span><select id="animation-background-effect"><option value="none">Неподвижный</option><option value="drift">Медленный дрейф</option><option value="breathe">Дыхание</option><option value="zoom">Медленный zoom</option></select></label>
-                <label class="field"><span>Глубина zoom фона, %</span><input id="animation-background-zoom" type="number" min="0" max="8" step="0.1" /></label>
-              </div>
-            </div>
-          </section>
-        </main>
+    <div class="app-shell"><div class="app-content"><main class="main-content animation-content">
+      <div class="page-heading animation-heading">
+        <div><p class="eyebrow">MOTION STUDIO</p><h1>Анимация экранов</h1><p>Профили рассчитаны на digital-signage: эффект должен читаться на большом ТВ с расстояния 3–6 метров, при этом меню всегда остаётся открытым и читаемым.</p></div>
+        <div class="animation-heading-actions"><label class="animation-master-toggle"><input id="animation-enabled" type="checkbox" /><span><strong>Анимация включена</strong><small>Ни один пресет не скрывает меню целиком.</small></span></label><button class="button button-primary" id="animation-save" type="button">Сохранить профиль</button></div>
       </div>
-    </div>
+      <p class="form-message is-hidden" id="animation-message" role="status" aria-live="polite"></p>
+      <section class="animation-studio-grid" aria-label="Студия анимации">
+        <div class="settings-card animation-preset-card"><div class="card-heading"><div><p class="eyebrow">26 ТВ-ПРЕСЕТОВ</p><h2>Постоянное движение + Visual FX</h2><p>20 motion-профилей и 6 полноэкранных визуальных сцен: прибой, сияние, круги на воде, солнечный блик, spotlight и liquid glass.</p></div></div><div class="animation-preset-list" id="animation-presets"></div></div>
+        <div class="settings-card animation-player-card"><div class="card-heading"><div><p class="eyebrow">LIVE PREVIEW</p><h2>Мини‑плеер</h2><p id="animation-current-preset">Каскад витрины</p></div><span class="animation-live-badge">LOOP</span></div><div class="animation-screen-picker"><label class="field"><span>Экран предпросмотра</span><select id="animation-screen-select" aria-label="Экран предпросмотра"><option value="">Загрузка мониторов…</option></select></label><p id="animation-screen-status">Загружаем сохранённый экран…</p></div><div class="animation-player-shell"><div class="animation-stage" id="animation-stage" aria-label="Предпросмотр постоянной анимации"><p class="animation-screen-empty">Загружаем настоящий экран…</p></div><div class="animation-player-controls"><div class="animation-player-buttons"><button class="button button-secondary" id="animation-play" type="button">▶ Пуск</button><button class="button button-secondary" id="animation-pause" type="button">⏸ Пауза</button><button class="button button-secondary" id="animation-replay" type="button">↻ С начала цикла</button></div><div class="animation-timeline-wrap"><input id="animation-timeline" type="range" min="0" max="1000" value="0" aria-label="Шкала цикла" /><span id="animation-time">0.0 с / 0.0 с</span></div></div></div></div>
+      </section>
+      <section class="animation-controls-grid" aria-label="Детальные параметры постоянной анимации">
+        <div class="settings-card"><div class="card-heading"><div><p class="eyebrow">ЛОГИКА</p><h2>Характер движения</h2><p>Определяет, как акцент живёт внутри уже открытого меню.</p></div></div><div class="form-grid"><label class="field"><span>Режим</span><select id="animation-pattern"><option value="ambient">Ambient — спокойное дыхание</option><option value="wave">Wave — последовательная волна</option><option value="focus">Focus — фокус по элементам</option><option value="pulse">Pulse — синхронный импульс</option><option value="spark">Spark — световые акценты</option><option value="parallax">Parallax — глубина композиции</option></select></label><label class="field"><span>Направление волны</span><select id="animation-flow-direction"><option value="none">Без направления</option><option value="left-to-right">Слева направо</option><option value="right-to-left">Справа налево</option><option value="top-to-bottom">Сверху вниз</option><option value="bottom-to-top">Снизу вверх</option><option value="alternate">Встречное / попеременное</option></select></label><label class="field"><span>Easing</span><select id="animation-easing"><option value="standard">Standard</option><option value="smooth">Smooth</option><option value="snappy">Snappy</option><option value="cinematic">Cinematic</option><option value="elastic">Elastic</option></select></label><label class="field"><span>Общая интенсивность, %</span><input id="animation-intensity" type="range" min="0" max="100" step="1" /><output id="animation-intensity-output">72%</output></label></div></div>
+        <div class="settings-card"><div class="card-heading"><div><p class="eyebrow">ТАЙМИНГ</p><h2>Ритм цикла</h2><p>После события меню остаётся полностью спокойным до следующего прохода.</p></div></div><div class="form-grid"><label class="field"><span>Период полного цикла, сек</span><input id="animation-cycle" type="number" min="4" max="60" step="0.5" /></label><label class="field"><span>Длительность события, мс</span><input id="animation-event-duration" type="number" min="400" max="6000" step="50" /></label><label class="field"><span>Шаг волны между элементами, мс</span><input id="animation-wave-stagger" type="number" min="0" max="1000" step="10" /></label></div></div>
+        <div class="settings-card"><div class="card-heading"><div><p class="eyebrow">TV MOTION</p><h2>Амплитуда</h2><p>Диапазон ограничен так, чтобы эффект был заметен с расстояния, но текст не «ездил» по экрану.</p></div></div><div class="form-grid"><label class="field"><span>Перемещение, px</span><input id="animation-travel" type="number" min="0" max="24" step="0.5" /></label><label class="field"><span>Изменение масштаба</span><input id="animation-scale-amount" type="number" min="0" max="0.08" step="0.002" /></label><label class="field"><span>Изменение яркости</span><input id="animation-brightness" type="number" min="0" max="0.5" step="0.01" /></label></div></div>
+        <div class="settings-card"><div class="card-heading"><div><p class="eyebrow">ЭФФЕКТЫ</p><h2>Что именно оживает</h2><p>Visual FX — отдельный полноэкранный слой поверх фона и под читаемым меню.</p></div></div><div class="form-grid"><label class="field"><span>Visual FX</span><select id="animation-visual-effect"><option value="none">Нет</option><option value="ocean-wave">Морской прибой</option><option value="aurora">Северное сияние</option><option value="ripple">Круги на воде</option><option value="sun-sweep">Солнечный блик</option><option value="spotlight">Spotlight</option><option value="liquid-glass">Liquid Glass</option></select></label><label class="field"><span>Разделы</span><select id="animation-section-effect"><option value="none">Нет</option><option value="glow">Glow</option><option value="pulse">Pulse</option><option value="shimmer">Световой блик</option><option value="lift">Микро‑подъём</option><option value="wave">Микро‑волна</option></select></label><label class="field"><span>Строки продукции</span><select id="animation-item-effect"><option value="none">Нет</option><option value="breathe">Дыхание</option><option value="wave">Микро‑волна</option><option value="focus">Фокус</option><option value="lift">Микро‑подъём</option></select></label><label class="field"><span>Цены</span><select id="animation-price-effect"><option value="none">Нет</option><option value="pulse">Pulse</option><option value="glow">Glow</option><option value="wave">Микро‑волна</option><option value="pop">Короткий акцент</option></select></label><label class="field"><span>Фон</span><select id="animation-background-effect"><option value="none">Неподвижный</option><option value="drift">Медленный дрейф</option><option value="breathe">Дыхание</option><option value="zoom">Медленный zoom</option></select></label><label class="field"><span>Глубина zoom фона, %</span><input id="animation-background-zoom" type="number" min="0" max="8" step="0.1" /></label></div></div>
+      </section>
+    </main></div></div>
   </body>
 </html>
