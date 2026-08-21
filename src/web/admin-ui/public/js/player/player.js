@@ -3,6 +3,7 @@ import { renderAnimationScreenPreview } from '../motion/screen-preview.js';
 
 const ACTIVATION_STORAGE_KEY = 'tv-menu.device-activation';
 const PLAYER_CONTEXT_STORAGE_KEY = 'tv-menu.player-context.v1';
+const NETWORK_TIMEOUT_MS = 5000;
 const bootView = document.querySelector('[data-player-boot]');
 const bootMessage = document.querySelector('[data-player-boot-message]');
 const activationView = document.querySelector('[data-activation-view]');
@@ -35,6 +36,23 @@ function showBootScreen(message = 'Проверяем авторизацию т�
   setHidden(activationView, true);
   setHidden(player, true);
   setHidden(playerMessage, true);
+}
+
+async function fetchWithTimeout(input, init = {}, timeoutMs = NETWORK_TIMEOUT_MS) {
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  let timer = null;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      try { controller?.abort(); } catch {}
+      reject(new Error('network-timeout'));
+    }, Math.max(1000, Number(timeoutMs) || NETWORK_TIMEOUT_MS));
+  });
+  try {
+    const request = fetch(input, controller ? { ...init, signal: controller.signal } : init);
+    return await Promise.race([request, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function activationFromStorage() {
@@ -139,7 +157,7 @@ async function pollActivation(record) {
   }
 
   try {
-    const response = await fetch(`/api/device/activations/${encodeURIComponent(record.activation_id)}/status`, {
+    const response = await fetchWithTimeout(`/api/device/activations/${encodeURIComponent(record.activation_id)}/status`, {
       headers: { 'x-device-activation-secret': record.poll_secret },
       cache: 'no-store'
     });
@@ -171,7 +189,7 @@ async function createActivation() {
   activationStatus.textContent = 'Создаём код подключения…';
   try {
     await enterImmersiveMode();
-    const response = await fetch('/api/device/activations', {
+    const response = await fetchWithTimeout('/api/device/activations', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: '{}',
@@ -265,7 +283,7 @@ function schedulePlayerRefresh() {
   refreshTimer = setTimeout(() => void refreshPlayer(), playerRefreshMs);
 }
 
-async function fetchPlayerContext(timeoutMs = 5000) {
+async function fetchPlayerContext(timeoutMs = NETWORK_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -345,18 +363,16 @@ async function loadPlayer() {
     const cached = cachedPlayerContext();
     if (showCachedPlayer(cached)) return true;
     showBootScreen('Нет связи с сервером. Ожидаем восстановление соединения…');
+    scheduleInitialRetry();
     return false;
   }
 }
 
-async function registerOfflinePlayer() {
+function registerOfflinePlayer() {
   if (!('serviceWorker' in navigator)) return;
-  try {
-    await navigator.serviceWorker.register('/player-sw.js', { scope: '/player' });
-    await navigator.serviceWorker.ready;
-  } catch (error) {
+  navigator.serviceWorker.register('/player-sw.js', { scope: '/player' }).catch((error) => {
     console.warn('Offline TV player service worker could not start', error);
-  }
+  });
 }
 
 function scheduleInitialRetry() {
@@ -370,7 +386,7 @@ async function resolveInitialPlayerState() {
   showBootScreen();
 
   try {
-    const response = await fetch('/api/device/session', { cache: 'no-store' });
+    const response = await fetchWithTimeout('/api/device/session', { cache: 'no-store' });
     if (response.ok) {
       await loadPlayer();
       return;
@@ -403,7 +419,7 @@ async function initialisePlayer() {
     if (document.visibilityState === 'visible') void requestWakeLock();
   });
 
-  await registerOfflinePlayer();
+  registerOfflinePlayer();
   await resolveInitialPlayerState();
 }
 
