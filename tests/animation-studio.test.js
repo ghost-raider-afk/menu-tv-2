@@ -23,6 +23,20 @@ test('animation studio ships exactly twenty continuous unique presets', () => {
   }
 });
 
+test('TV presets keep a distance-readable visual signal', () => {
+  const distanceReadable = ANIMATION_PRESETS.filter(({ profile }) => (
+    profile.travel_px >= 10
+    || profile.scale_amount >= 0.03
+    || profile.brightness_amount >= 0.3
+    || profile.background_zoom_percent >= 4
+  ));
+  assert.ok(distanceReadable.length >= 19, `distance-readable presets: ${distanceReadable.length}/20`);
+
+  for (const preset of ANIMATION_PRESETS.filter((item) => ['Dynamic', 'Promo'].includes(item.category))) {
+    assert.ok(preset.profile.intensity >= 80, `${preset.id} is too weak for retail TV distance`);
+  }
+});
+
 test('animation settings contract rejects invalid continuous motion controls', () => {
   const profile = ANIMATION_PRESETS[0].profile;
   assert.throws(() => animationSettingsInput({ enabled: true, preset_id: 'bad id', profile }), /Идентификатор пресета/);
@@ -73,8 +87,11 @@ test('animation studio uses a real-screen continuous loop instead of slide entra
   assert.match(screenPreview, /buildDisplayLines/);
   assert.match(screenPreview, /buildRenderLayout/);
   assert.match(screenPreview, /buildTableSvg/);
+  assert.match(player, /function motionGain/);
+  assert.match(player, /Math\.sqrt\(normalized\)/);
   assert.match(player, /iterations:\s*Infinity/);
   assert.match(player, /opacity:\s*1/);
+  assert.match(player, /0\.5 \* gain/);
   assert.doesNotMatch(player, /opacity_from|entranceTransform|clipFrames/);
   assert.match(player, /currentTime/);
   assert.match(css, /\.animation-stage/);
