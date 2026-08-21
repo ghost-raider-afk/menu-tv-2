@@ -74,7 +74,8 @@ test('animation studio uses a real-screen continuous loop instead of slide entra
   }
   assert.doesNotMatch(html, /animation-entrance|Тип появления|Начальная прозрачность|Появление<\/h2>/);
   assert.doesNotMatch(html, /animation-demo-|БИР КОМ СВЕТЛОЕ|ЖИГУЛЕВСКОЕ/);
-  assert.match(html, /Меню всегда остаётся открытым и читаемым/);
+  assert.match(html, /меню всегда остаётся открытым и читаемым/i);
+  assert.match(html, /3–6 метров/);
   assert.match(navigation, /\/animation\.html/);
   assert.match(navigation, /\['Анимация', '\/animation\.html'\]/);
   assert.match(app, /initialiseAnimationStudio/);
