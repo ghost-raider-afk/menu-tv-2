@@ -16,13 +16,13 @@ test('animation studio ships twenty-six continuous unique TV presets', () => {
   for (const preset of ANIMATION_PRESETS) {
     const parsed = animationSettingsInput({ enabled: true, preset_id: preset.id, profile: preset.profile });
     assert.equal(parsed.preset_id, preset.id);
-    assert.equal(parsed.profile.motion_version, 2);
+    assert.equal(parsed.profile.motion_version, 3);
     assert.equal(parsed.profile.cycle_seconds, preset.profile.cycle_seconds);
     assert.ok(VISUAL_EFFECTS.includes(parsed.profile.visual_effect));
     assert.ok(parsed.profile.event_duration_ms >= 400);
     assert.ok(parsed.profile.cycle_seconds >= 4);
-    assert.equal(parsed.profile.background_effect, 'none');
-    assert.equal(parsed.profile.background_zoom_percent, 0);
+    assert.equal('background_effect' in parsed.profile, false);
+    assert.equal('background_zoom_percent' in parsed.profile, false);
     assert.equal('background_effect' in preset.profile, false);
     assert.equal('background_zoom_percent' in preset.profile, false);
     assert.equal('entrance' in parsed.profile, false);
@@ -67,20 +67,35 @@ test('animation settings contract rejects invalid continuous motion controls', (
   assert.throws(() => animationSettingsInput({ enabled: true, preset_id: 'custom', profile: { ...profile, visual_effect: 'unknown-fx' } }), /Визуальный эффект/);
 });
 
-test('legacy entrance profile is migrated into always-visible continuous motion with a static background', () => {
+test('v2 profiles migrate structurally to v3 and discard removed background fields', () => {
+  const migrated = completeAnimationProfile({
+    motion_version: 2,
+    pattern: 'wave', flow_direction: 'left-to-right', easing: 'smooth', cycle_seconds: 9,
+    event_duration_ms: 1600, wave_stagger_ms: 180, travel_px: 12, scale_amount: 0.03,
+    brightness_amount: 0.25, section_effect: 'glow', item_effect: 'focus', price_effect: 'glow',
+    background_effect: 'zoom', background_zoom_percent: 7, visual_effect: 'aurora', intensity: 74
+  });
+  assert.equal(migrated.motion_version, 3);
+  assert.equal(migrated.pattern, 'wave');
+  assert.equal(migrated.visual_effect, 'aurora');
+  assert.equal('background_effect' in migrated, false);
+  assert.equal('background_zoom_percent' in migrated, false);
+});
+
+test('legacy entrance profile is migrated into always-visible continuous motion', () => {
   const migrated = completeAnimationProfile({
     entrance: 'cascade', direction: 'left', easing: 'smooth', duration_ms: 900, stagger_ms: 70,
     distance_px: 54, scale_from: 0.98, opacity_from: 0, section_emphasis: 'pulse', price_emphasis: 'pop',
     shimmer: false, glow: true, background_motion: true, ambient_speed_seconds: 28, intensity: 55
   });
-  assert.equal(migrated.motion_version, 2);
+  assert.equal(migrated.motion_version, 3);
   assert.equal(migrated.pattern, 'wave');
   assert.equal(migrated.flow_direction, 'left-to-right');
   assert.equal(migrated.section_effect, 'glow');
   assert.equal(migrated.price_effect, 'pulse');
-  assert.equal(migrated.background_effect, 'none');
-  assert.equal(migrated.background_zoom_percent, 0);
   assert.equal(migrated.visual_effect, 'none');
+  assert.equal('background_effect' in migrated, false);
+  assert.equal('background_zoom_percent' in migrated, false);
   assert.equal('entrance' in migrated, false);
   assert.equal('opacity_from' in migrated, false);
 });
@@ -103,18 +118,18 @@ test('animation studio uses real screen, Visual FX and continuous loop', async (
   assert.doesNotMatch(html, /animation-demo-|БИР КОМ СВЕТЛОЕ|ЖИГУЛЕВСКОЕ/);
   assert.match(html, /меню всегда остаётся открытым и читаемым/i);
   assert.match(html, /3–6 метров/);
-  assert.match(html, /Фоновое изображение всегда остаётся статичным/);
   assert.match(navigation, /\/animation\.html/);
   assert.match(navigation, /\['Анимация', '\/animation\.html'\]/);
   assert.match(app, /initialiseAnimationStudio/);
   assert.match(config, /animationSettings:\s*'\/api\/settings\/animation'/);
+  assert.match(page, /motion_version:3/);
   assert.match(page, /visual_effect/);
-  assert.match(page, /background_effect:'none'/);
-  assert.match(page, /background_zoom_percent:0/);
+  assert.doesNotMatch(page, /background_effect|background_zoom_percent/);
   assert.match(page, /ANIMATION_PRESETS/);
   assert.match(page, /api\.get\(API\.screens\)/);
   assert.match(page, /renderAnimationScreenPreview/);
   assert.match(screenPreview, /data-motion-fx/);
+  assert.doesNotMatch(screenPreview, /data-motion-background/);
   assert.match(screenPreview, /motion-fx-ocean/);
   assert.match(screenPreview, /buildRenderModel/);
   assert.match(screenPreview, /buildDisplayLines/);
@@ -124,6 +139,7 @@ test('animation studio uses real screen, Visual FX and continuous loop', async (
   assert.match(player, /Math\.sqrt\(/);
   assert.match(player, /animateVisualFx/);
   assert.match(player, /visual_effect/);
+  assert.doesNotMatch(player, /backgroundFrames|background_effect|background_zoom_percent|data-motion-background/);
   assert.match(player, /iterations:\s*Infinity/);
   assert.match(player, /opacity:\s*1/);
   assert.doesNotMatch(player, /opacity_from|entranceTransform|clipFrames/);
