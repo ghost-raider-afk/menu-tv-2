@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'tv-menu-player-shell-v13';
+const SHELL_CACHE = 'tv-menu-player-shell-v14';
 const DATA_CACHE = 'tv-menu-player-data-v1';
 const PLAYER_CONTEXT = '/api/device/player-context';
 const SHELL_ASSETS = [
@@ -13,8 +13,35 @@ const SHELL_ASSETS = [
   '/js/motion/screen-preview.js'
 ];
 
+function expectedContentType(pathname) {
+  if (pathname.endsWith('.html')) return 'text/html';
+  if (pathname.endsWith('.css')) return 'text/css';
+  if (pathname.endsWith('.js')) return 'javascript';
+  return '';
+}
+
+function isValidShellResponse(pathname, response) {
+  if (!response || !response.ok) return false;
+  const expected = expectedContentType(pathname);
+  const actual = String(response.headers.get('content-type') || '').toLowerCase();
+  return !expected || actual.includes(expected);
+}
+
+async function fetchShellAsset(request) {
+  const response = await networkWithTimeout(request, 4000);
+  const pathname = new URL(request.url).pathname;
+  if (!isValidShellResponse(pathname, response)) throw new Error(`Invalid Player shell response for ${pathname}`);
+  return response;
+}
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.addAll(SHELL_ASSETS)));
+  event.waitUntil((async () => {
+    const cache = await caches.open(SHELL_CACHE);
+    await Promise.all(SHELL_ASSETS.map(async (pathname) => {
+      const response = await fetchShellAsset(new Request(pathname, { cache: 'no-store' }));
+      await cache.put(pathname, response);
+    }));
+  })());
   self.skipWaiting();
 });
 self.addEventListener('activate', (event) => {
@@ -34,9 +61,12 @@ async function networkWithTimeout(request, timeoutMs = 4000) {
 async function playerPage(request) {
   try {
     const response = await networkWithTimeout(request, 4000);
-    if (response.ok) { const cache = await caches.open(SHELL_CACHE); await cache.put('/player.html', response.clone()); }
+    if (isValidShellResponse('/player.html', response)) { const cache = await caches.open(SHELL_CACHE); await cache.put('/player.html', response.clone()); }
     return response;
-  } catch { return (await caches.match('/player.html')) || Response.error(); }
+  } catch {
+    const cached = await caches.match('/player.html');
+    return isValidShellResponse('/player.html', cached) ? cached : Response.error();
+  }
 }
 async function playerContext(request) {
   const cache = await caches.open(DATA_CACHE);
@@ -53,14 +83,16 @@ async function playerContext(request) {
   }
 }
 async function refreshShellAsset(cache, request) {
-  try { const response = await networkWithTimeout(request, 4000); if (response.ok) await cache.put(request, response.clone()); return response.ok ? response : null; }
+  try { const response = await fetchShellAsset(request); await cache.put(request, response.clone()); return response; }
   catch { return null; }
 }
 async function shellAsset(request, event) {
   const cache = await caches.open(SHELL_CACHE);
   const cached = await cache.match(request);
   const refresh = refreshShellAsset(cache, request);
-  if (cached) { event.waitUntil(refresh); return cached; }
+  const pathname = new URL(request.url).pathname;
+  if (isValidShellResponse(pathname, cached)) { event.waitUntil(refresh); return cached; }
+  if (cached) await cache.delete(request);
   return (await refresh) || Response.error();
 }
 async function assetRequest(request) {

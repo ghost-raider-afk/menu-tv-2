@@ -27,7 +27,7 @@ test('offline player keeps its shell, motion engine, Visual FX, context and same
     read('src/web/admin-ui/public/player-sw.js'),
     read('src/web/admin-ui/public/js/player/player.js')
   ]);
-  assert.match(worker, /tv-menu-player-shell-v13/);
+  assert.match(worker, /tv-menu-player-shell-v14/);
   assert.match(worker, /PLAYER_CONTEXT = '\/api\/device\/player-context'/);
   assert.match(worker, /\/css\/motion-effects\.css/);
   assert.match(worker, /\/js\/player\/player-legacy\.js/);
@@ -83,7 +83,17 @@ test('rapid reload cannot expose raw Player screens or drop a cached shell asset
   assert.match(player, /element\.hidden = Boolean\(hidden\)/);
   const shellAsset = worker.match(/async function shellAsset\([\s\S]*?\n\}/)?.[0] || '';
   assert.match(shellAsset, /const cached = await cache\.match\(request\)/);
-  assert.match(shellAsset, /if \(cached\)[\s\S]*event\.waitUntil\(refresh\)[\s\S]*return cached/);
+  assert.match(shellAsset, /isValidShellResponse\(pathname, cached\)[\s\S]*event\.waitUntil\(refresh\)[\s\S]*return cached/);
+});
+
+test('Player shell cache rejects HTML responses stored under CSS or JavaScript URLs', async () => {
+  const worker = await read('src/web/admin-ui/public/player-sw.js');
+  assert.match(worker, /function expectedContentType\(pathname\)/);
+  assert.match(worker, /pathname\.endsWith\('\.css'\)[\s\S]*'text\/css'/);
+  assert.match(worker, /pathname\.endsWith\('\.js'\)[\s\S]*'javascript'/);
+  assert.match(worker, /function isValidShellResponse\(pathname, response\)/);
+  assert.match(worker, /if \(cached\) await cache\.delete\(request\)/);
+  assert.match(worker, /fetchShellAsset\(new Request\(pathname, \{ cache: 'no-store' \}\)\)/);
 });
 
 test('Player boot spinner cannot wait forever on service worker or session fetch', async () => {
