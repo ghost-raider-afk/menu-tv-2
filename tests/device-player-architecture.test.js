@@ -27,7 +27,7 @@ test('offline player keeps its shell, motion engine, Visual FX, context and same
     read('src/web/admin-ui/public/player-sw.js'),
     read('src/web/admin-ui/public/js/player/player.js')
   ]);
-  assert.match(worker, /tv-menu-player-shell-v8/);
+  assert.match(worker, /tv-menu-player-shell-v9/);
   assert.match(worker, /PLAYER_CONTEXT = '\/api\/device\/player-context'/);
   assert.match(worker, /\/css\/motion-effects\.css/);
   assert.match(worker, /\/js\/motion\/preview-player\.js/);
@@ -63,6 +63,17 @@ test('rapid reload cannot expose raw Player screens or drop a cached shell asset
   const shellAsset = worker.match(/async function shellAsset\([\s\S]*?\n\}/)?.[0] || '';
   assert.match(shellAsset, /const cached = await cache\.match\(request\)/);
   assert.match(shellAsset, /if \(cached\)[\s\S]*event\.waitUntil\(refresh\)[\s\S]*return cached/);
+});
+
+test('Player boot spinner cannot wait forever on service worker or session fetch', async () => {
+  const player = await read('src/web/admin-ui/public/js/player/player.js');
+  assert.match(player, /const NETWORK_TIMEOUT_MS = 5000/);
+  assert.match(player, /function fetchWithTimeout|async function fetchWithTimeout/);
+  assert.match(player, /fetchWithTimeout\('\/api\/device\/session'/);
+  assert.doesNotMatch(player, /await navigator\.serviceWorker\.ready/);
+  assert.doesNotMatch(player, /await registerOfflinePlayer\(\)/);
+  assert.match(player, /registerOfflinePlayer\(\);[\s\S]*await resolveInitialPlayerState\(\)/);
+  assert.match(player, /showBootScreen\('Нет связи с сервером\. Проверяем повторно…'\)[\s\S]*scheduleInitialRetry\(\)/);
 });
 
 test('legacy TV browser boot layout does not depend on CSS grid', async () => {
