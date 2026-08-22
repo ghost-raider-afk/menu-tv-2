@@ -65,6 +65,22 @@ async function initialisePage(name) {
   }
 }
 
+function showApplicationFailure(error) {
+  const message = error instanceof Error && error.message
+    ? error.message
+    : 'Не удалось открыть раздел.';
+  const main = document.querySelector('.main-content');
+  if (main) {
+    main.removeAttribute('inert');
+    main.removeAttribute('aria-busy');
+    main.dataset.routeState = 'error';
+    main.innerHTML = `<section class="settings-card app-route-error" role="alert"><div class="card-heading"><div><p class="eyebrow">ОШИБКА РАЗДЕЛА</p><h2>Раздел не удалось загрузить</h2></div></div><p class="muted-copy">${String(message).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</p><div class="form-actions"><button class="button button-primary" type="button" data-reload-page>Повторить</button></div></section>`;
+    main.querySelector('[data-reload-page]')?.addEventListener('click', () => window.location.reload());
+    return;
+  }
+  document.body.dataset.appState = 'error';
+}
+
 async function initialiseApplication() {
   const current = pageName();
   if (current === 'signin') {
@@ -81,7 +97,7 @@ async function initialiseApplication() {
     await router.start();
   } catch (error) {
     console.error('Application initialization failed', error);
-    window.location.replace('/signin.html');
+    showApplicationFailure(error);
   }
 }
 
