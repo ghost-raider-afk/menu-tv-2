@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ТВ МЕНЮ</title>
+    <script src="/theme-bootstrap.js"></script>
+    <link rel="stylesheet" href="/css/index.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body data-page="diagnostics">
+    <div class="app-shell">
+      <div class="app-content">
+        <main class="main-content settings-content diagnostics-content">
+          <div class="page-heading compact-heading diagnostics-heading">
+            <div>
+              <p class="eyebrow">ДИАГНОСТИКА</p>
+              <h1>Журнал ошибок</h1>
+              <p class="muted-copy">Ошибки браузера и сервера, сбои API, SPA-навигации, сессии и жизненного цикла страниц.</p>
+            </div>
+            <div class="compact-heading-actions">
+              <button class="button button-secondary" id="refresh-diagnostics" type="button">Обновить</button>
+              <button class="button button-secondary" id="save-diagnostics" type="button">Сохранить</button>
+              <button class="button button-danger" id="clear-diagnostics" type="button">Очистить</button>
+            </div>
+          </div>
+
+          <section class="activity-card diagnostics-card" aria-labelledby="diagnostics-title">
+            <div class="card-heading">
+              <div><p class="eyebrow">СОБЫТИЯ СИСТЕМЫ</p><h2 id="diagnostics-title">Что происходит с сайтом</h2></div>
+              <span class="muted" id="diagnostics-count">—</span>
+            </div>
+            <div class="diagnostics-filters" aria-label="Фильтры журнала ошибок">
+              <label class="field">Уровень
+                <select id="diagnostics-severity">
+                  <option value="">Все уровни</option>
+                  <option value="error">Ошибки</option>
+                  <option value="warn">Предупреждения</option>
+                  <option value="info">Информация</option>
+                </select>
+              </label>
+              <label class="field">Источник
+                <select id="diagnostics-source">
+                  <option value="">Клиент и сервер</option>
+                  <option value="client">Браузер</option>
+                  <option value="server">Сервер</option>
+                </select>
+              </label>
+              <label class="field">Страница / маршрут
+                <input id="diagnostics-query" type="search" placeholder="animation, /api/screens, request id…" autocomplete="off" />
+              </label>
+            </div>
+            <p class="form-message is-hidden" id="diagnostics-message" role="status" aria-live="polite"></p>
+            <div class="diagnostics-summary" id="diagnostics-summary" aria-live="polite"></div>
+            <div class="diagnostics-list" data-diagnostics-list></div>
+            <p class="empty-state is-hidden" data-diagnostics-empty>Диагностических событий пока нет.</p>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
