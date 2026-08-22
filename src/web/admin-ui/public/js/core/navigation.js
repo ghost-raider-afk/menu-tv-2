@@ -10,6 +10,7 @@ export const ROUTE_DEFINITIONS = Object.freeze([
   Object.freeze({ path: '/settings.html', page: 'settings', section: 'settings', title: 'Настройки сайта', prefetch: true }),
   Object.freeze({ path: '/sftp-settings.html', page: 'sftp-settings', section: 'settings', title: 'SFTP', prefetch: true }),
   Object.freeze({ path: '/animation.html', page: 'animation', section: 'settings', title: 'Анимация', prefetch: true }),
+  Object.freeze({ path: '/activity.html', page: 'activity', section: 'settings', title: 'Журнал действий', prefetch: true }),
   Object.freeze({ path: '/profile.html', page: 'profile', section: 'settings', title: 'Профиль', prefetch: true })
 ]);
 
@@ -61,6 +62,7 @@ const CONTEXT_GROUPS = Object.freeze({
         ['Настройки сайта', '/settings.html'],
         ['SFTP', '/sftp-settings.html'],
         ['Анимация', '/animation.html'],
+        ['Журнал действий', '/activity.html'],
         ['Профиль', '/profile.html']
       ])
     })
