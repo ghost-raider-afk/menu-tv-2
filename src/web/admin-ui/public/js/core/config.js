@@ -11,6 +11,8 @@ export const API = Object.freeze({
   animationSettings: '/api/settings/animation',
   animationPresets: '/api/settings/animation/presets',
   notifications: '/api/notifications',
+  diagnosticsEvents: '/api/diagnostics/events',
+  diagnosticsClientEvents: '/api/diagnostics/client-events',
   locations: '/api/locations',
   screens: '/api/screens',
   deviceResolve: '/api/device-admin/resolve',
