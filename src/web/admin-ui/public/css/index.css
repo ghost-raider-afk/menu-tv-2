@@ -15,6 +15,7 @@
 @import url('./pages/sftp-settings.css');
 @import url('./pages/animation.css');
 @import url('./pages/animation-screen-preview.css');
+@import url('./pages/diagnostics.css');
 @import url('./editor/editor.css');
 @import url('./auth/signin.css');
 @import url('./responsive.css');
