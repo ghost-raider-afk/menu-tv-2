@@ -11,107 +11,116 @@ async function login(page) {
 }
 
 async function animationSettings(page) {
-  return page.evaluate(async () => {
-    const response = await fetch('/api/settings/animation', { credentials: 'same-origin', cache: 'no-store' });
-    if (!response.ok) throw new Error(`animation settings GET failed: ${response.status}`);
-    return response.json();
-  });
+  const response = await page.request.get('/api/settings/animation');
+  expect(response.ok()).toBeTruthy();
+  return response.json();
 }
 
 async function restoreAnimationSettings(page, settings) {
-  await page.evaluate(async (payload) => {
-    const response = await fetch('/api/settings/animation', {
-      method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-    });
-    if (!response.ok) throw new Error(`animation settings restore failed: ${response.status}`);
-  }, { enabled: settings.enabled, preset_id: settings.preset_id, profile: settings.profile });
+  const response = await page.request.put('/api/settings/animation', {
+    data: { enabled: settings.enabled, preset_id: settings.preset_id, profile: settings.profile }
+  });
+  expect(response.ok()).toBeTruthy();
 }
 
 async function createPreviewFixture(page) {
-  return page.evaluate(async () => {
-    async function request(url, init = {}) {
-      const response = await fetch(url, {
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', ...(init.headers || {}) },
-        ...init
-      });
-      if (!response.ok) throw new Error(`${init.method || 'GET'} ${url} failed: ${response.status}`);
-      return response.status === 204 ? null : response.json();
-    }
-
-    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const location = await request('/api/locations', {
-      method: 'POST', body: JSON.stringify({ name: `Animation ${suffix}`, address: '', active: true })
-    });
-    const screen = await request(`/api/locations/${location.id}/screens`, { method: 'POST', body: '{}' });
-    const editor = await request(`/api/screens/${screen.id}/editor`);
-    await request(`/api/screens/${screen.id}/draft`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        revision: editor.draft.revision,
-        rows: [{ id: 'real-preview-section', kind: 'section', name: 'НАСТОЯЩИЙ ЭКРАН MOTION STUDIO', enabled: true }],
-        settings: { background_color: '#123456', accent_color: '#F4C915', text_color: '#F8FAFC' }
-      })
-    });
-    return { locationId: location.id, screenId: screen.id, locationName: location.name, screenName: screen.name };
+  const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const locationResponse = await page.request.post('/api/locations', {
+    data: { name: `Animation ${suffix}`, address: 'Motion Studio CI', active: true }
   });
+  expect(locationResponse.status()).toBe(201);
+  const location = await locationResponse.json();
+
+  const productResponse = await page.request.post('/api/catalog/products', {
+    data: {
+      name: `СНЕЖНЫЙ ЭЛЬ ${suffix}`,
+      producer: 'Motion Studio CI',
+      characteristics: 'Светлое',
+      strength: '4,5%',
+      price_primary: '256',
+      alcoholic: true,
+      beverage_color: 'light',
+      filtration: 'filtered',
+      active: true
+    }
+  });
+  expect(productResponse.status()).toBe(201);
+  const product = await productResponse.json();
+
+  const screenResponse = await page.request.post(`/api/locations/${location.id}/screens`, { data: {} });
+  expect(screenResponse.status()).toBe(201);
+  const screen = await screenResponse.json();
+  const editor = await (await page.request.get(`/api/screens/${screen.id}/editor`)).json();
+
+  const draftResponse = await page.request.put(`/api/screens/${screen.id}/draft`, {
+    data: {
+      revision: editor.draft.revision,
+      rows: [
+        { id: `section-${suffix}`, kind: 'section', name: 'АКЦИОННОЕ МЕНЮ', enabled: true },
+        { id: `item-${suffix}`, kind: 'item', product_id: product.id, promotion: true, promotion_text: 'АКЦИЯ 3+1', enabled: true }
+      ],
+      settings: {
+        background_color: '#101828', accent_color: '#F6C90E', text_color: '#F8FAFC',
+        font_scale_percent: 100, font_family: 'arial-narrow',
+        table_x: 56, table_y: 15, table_width_px: 1374, table_height_px: 925
+      },
+      screen: { location_id: screen.location_id, name: screen.name, resolution: '1920×1080', status: 'draft', active: true }
+    }
+  });
+  expect(draftResponse.ok()).toBeTruthy();
+  return { locationId: location.id, screenId: screen.id, productId: product.id };
 }
 
 async function removePreviewFixture(page, fixture) {
-  await page.evaluate(async ({ screenId, locationId }) => {
-    await fetch(`/api/screens/${screenId}`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => undefined);
-    await fetch(`/api/locations/${locationId}`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => undefined);
-  }, fixture);
+  await page.request.delete(`/api/screens/${fixture.screenId}`).catch(() => undefined);
+  await page.request.delete(`/api/locations/${fixture.locationId}`).catch(() => undefined);
+  await page.request.delete(`/api/catalog/products/${fixture.productId}`).catch(() => undefined);
 }
 
-test('animation studio keeps the selected real menu visible while 20 continuous presets loop', async ({ page }) => {
+test('Motion Studio animates promo badge as one object and allows a truly invisible red row background', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await login(page);
   const fixture = await createPreviewFixture(page);
   const original = await animationSettings(page);
 
   try {
     await page.goto(`/animation.html?screen=${fixture.screenId}`);
-    await expect(page.getByRole('heading', { name: 'Анимация экранов' })).toBeVisible();
-    await expect(page.getByText('Меню всегда остаётся открытым и читаемым.')).toBeVisible();
-    await expect(page.locator('[data-animation-preset]')).toHaveCount(20);
-    await expect(page.locator('#animation-stage')).toBeVisible();
-    await expect(page.locator('#animation-screen-select')).toHaveValue(String(fixture.screenId));
+    await expect(page.getByRole('heading', { name: 'Редактируемый пресет экрана' })).toBeVisible();
+    await expect(page.locator('#animation-preset-select')).toBeVisible();
     await expect(page.locator('#animation-stage')).toHaveAttribute('data-screen-id', String(fixture.screenId));
-    await expect(page.locator('#animation-stage .section-title')).toHaveText('НАСТОЯЩИЙ ЭКРАН MOTION STUDIO');
-    await expect(page.locator('#animation-stage .animation-screen-background')).toHaveCSS('background-color', 'rgb(18, 52, 86)');
-    await expect(page.locator('#animation-screen-status')).toContainText(fixture.screenName);
 
-    await page.getByRole('button', { name: /Световая волна слева/ }).click();
-    await expect(page.locator('#animation-current-preset')).toHaveText('Световая волна слева');
-    await expect(page.locator('#animation-pattern')).toHaveValue('wave');
-    await expect(page.locator('#animation-flow-direction')).toHaveValue('left-to-right');
+    const badge = page.locator('#animation-stage g.promotion-badge-group');
+    await expect(badge).toHaveCount(1);
+    await expect(badge.locator('path.promotion-badge')).toHaveCount(1);
+    await expect(badge.locator('text.promotion')).toHaveText('АКЦИЯ 3+1');
+    await expect(badge).toHaveAttribute('data-motion-promo-badge', 'true');
+    await expect(badge.locator('path.promotion-badge')).not.toHaveAttribute('data-motion-promo-badge', 'true');
+    await expect(badge.locator('text.promotion')).not.toHaveAttribute('data-motion-promo-badge', 'true');
 
-    await expect.poll(() => page.evaluate(() => document.querySelector('#animation-stage').getAnimations({ subtree: true }).filter((item) => item.playState === 'running').length)).toBeGreaterThan(0);
-    await expect.poll(() => page.evaluate(() => getComputedStyle(document.querySelector('#animation-stage g.table-section')).opacity)).toBe('1');
+    await page.locator('#promo-badge-effect').selectOption('pulse');
+    await page.locator('#promo-badge-scale').fill('1.25');
+    await expect.poll(() => badge.evaluate((node) => node.getAnimations().length)).toBeGreaterThan(0);
+    expect(await badge.locator('path.promotion-badge').evaluate((node) => node.getAnimations().length)).toBe(0);
+    expect(await badge.locator('text.promotion').evaluate((node) => node.getAnimations().length)).toBe(0);
 
-    await page.locator('#animation-pause').click();
-    await expect.poll(() => page.evaluate(() => document.querySelector('#animation-stage').getAnimations({ subtree: true }).filter((item) => item.playState === 'running').length)).toBe(0);
-    await page.locator('#animation-timeline').fill('600');
-    await expect.poll(() => page.evaluate(() => getComputedStyle(document.querySelector('#animation-stage g.table-section')).opacity)).toBe('1');
-    await page.locator('#animation-play').click();
-    await expect.poll(() => page.evaluate(() => document.querySelector('#animation-stage').getAnimations({ subtree: true }).filter((item) => item.playState === 'running').length)).toBeGreaterThan(0);
-    await page.locator('#animation-replay').click();
-    await expect(page.locator('#animation-time')).not.toHaveText('0.0 с / 0.0 с');
+    const tint = page.locator('#promo-row-tint');
+    await expect(tint).toHaveAttribute('min', '0');
+    await expect(tint).toHaveAttribute('max', '0.18');
+    await tint.fill('0');
+    await expect.poll(() => page.locator('#animation-stage .promotion-row-highlight').getAttribute('opacity')).toBe('0');
 
     await page.locator('#animation-enabled').check();
     const responsePromise = page.waitForResponse((response) => response.url().endsWith('/api/settings/animation') && response.request().method() === 'PUT');
     await page.locator('#animation-save').click();
     const response = await responsePromise;
     expect(response.ok()).toBeTruthy();
-    await expect(page.locator('#animation-message')).toContainText('Профиль постоянной анимации сохранён');
 
     const saved = await animationSettings(page);
     expect(saved.enabled).toBe(true);
-    expect(saved.preset_id).toBe('slide-left');
-    expect(saved.profile.motion_version).toBe(2);
-    expect(saved.profile.pattern).toBe('wave');
-    expect(saved.profile.flow_direction).toBe('left-to-right');
-    expect(saved.profile.entrance).toBeUndefined();
+    expect(saved.profile.motion_version).toBe(5);
+    expect(saved.profile.promo_style.badge_effect).toBe('pulse');
+    expect(saved.profile.promo_style.badge_scale).toBe(1.25);
+    expect(saved.profile.promo_style.row_tint).toBe(0);
   } finally {
     await restoreAnimationSettings(page, original);
     await removePreviewFixture(page, fixture);
