@@ -1,18 +1,33 @@
 import { isoNow, normaliseRow } from './helpers.js';
 import { completeAnimationProfile } from '../shared/animation-profile.js';
 
+function profileFromJson(value) {
+  let profile = {};
+  try { profile = JSON.parse(value || '{}'); }
+  catch { profile = {}; }
+  return completeAnimationProfile(profile);
+}
 function normaliseAnimationSettings(row) {
   const value = normaliseRow(row);
   if (!value) return null;
-  let profile = {};
-  try { profile = JSON.parse(value.profile_json || '{}'); }
-  catch { profile = {}; }
   return {
     id: value.id,
     enabled: value.enabled === true,
-    preset_id: value.preset_id || 'cascade-soft',
-    profile: completeAnimationProfile(profile),
+    preset_id: value.preset_id || 'custom',
+    profile: profileFromJson(value.profile_json),
     updated_by: value.updated_by || '',
+    created_at: value.created_at,
+    updated_at: value.updated_at
+  };
+}
+function normaliseAnimationPreset(row) {
+  const value = normaliseRow(row);
+  if (!value) return null;
+  return {
+    id: value.id,
+    name: value.name,
+    profile: profileFromJson(value.profile_json),
+    created_by: value.created_by || '',
     created_at: value.created_at,
     updated_at: value.updated_at
   };
@@ -54,6 +69,39 @@ export function createSettingsRepository(pool) {
         [enabled, preset_id, JSON.stringify(profile), updated_by, isoNow()]
       );
       return normaliseAnimationSettings(rows[0]);
+    },
+
+    async listAnimationPresets() {
+      const { rows } = await pool.query('SELECT * FROM animation_presets ORDER BY LOWER(name), id');
+      return rows.map(normaliseAnimationPreset);
+    },
+
+    async getAnimationPreset(id) {
+      const { rows } = await pool.query('SELECT * FROM animation_presets WHERE id = $1', [id]);
+      return normaliseAnimationPreset(rows[0]);
+    },
+
+    async createAnimationPreset({ name, profile, created_by }) {
+      const now = isoNow();
+      const { rows } = await pool.query(
+        `INSERT INTO animation_presets (name, profile_json, created_by, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $4) RETURNING *`,
+        [name, JSON.stringify(profile), created_by, now]
+      );
+      return normaliseAnimationPreset(rows[0]);
+    },
+
+    async updateAnimationPreset(id, { name, profile }) {
+      const { rows } = await pool.query(
+        'UPDATE animation_presets SET name = $1, profile_json = $2, updated_at = $3 WHERE id = $4 RETURNING *',
+        [name, JSON.stringify(profile), isoNow(), id]
+      );
+      return normaliseAnimationPreset(rows[0]);
+    },
+
+    async deleteAnimationPreset(id) {
+      const result = await pool.query('DELETE FROM animation_presets WHERE id = $1', [id]);
+      return result.rowCount > 0;
     },
 
     async setSiteAsset(kind, filename, updatedBy) {
