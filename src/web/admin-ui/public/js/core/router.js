@@ -5,7 +5,9 @@ import {
   verifySessionAuthority
 } from './session-authority.js';
 import { createClientRequestId, reportClientDiagnosticSoon } from './diagnostics.js';
+import { beginRouteRuntime, endRouteRuntime } from './route-runtime.js';
 
+const PREFETCH_MAX_AGE_MS = 10_000;
 let activeRouter = null;
 
 function canonicalUrl(value) {
@@ -101,7 +103,6 @@ function scrollToRouteTarget(target) {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     return;
   }
-
   let id = target.hash.slice(1);
   try { id = decodeURIComponent(id); } catch {}
   const targetNode = document.getElementById(id);
@@ -122,6 +123,7 @@ export function createAppRouter({ mountPage, syncShell }) {
 
   const prefetchedViews = new Map();
   let lifecycle = null;
+  let routeRuntime = null;
   let activeIdentity = routeIdentity(canonicalUrl(window.location.href));
   let started = false;
   let navigationQueue = Promise.resolve();
@@ -134,7 +136,6 @@ export function createAppRouter({ mountPage, syncShell }) {
       cache: 'no-cache',
       headers: { 'X-TV-Menu-View': '1', 'X-Request-Id': requestId }
     });
-
     if (response.redirected && canonicalUrl(response.url).pathname === '/signin.html') {
       return { authChallenge: true, requestId };
     }
@@ -156,19 +157,18 @@ export function createAppRouter({ mountPage, syncShell }) {
 
   async function loadView(target, { cacheResult = false } = {}) {
     const cacheKey = target.pathname;
-    if (prefetchedViews.has(cacheKey)) {
-      const cached = prefetchedViews.get(cacheKey);
+    const prefetched = prefetchedViews.get(cacheKey);
+    if (prefetched) {
       prefetchedViews.delete(cacheKey);
-      return cached;
+      if (Date.now() - prefetched.fetchedAt <= PREFETCH_MAX_AGE_MS) return prefetched.view;
     }
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const result = await fetchViewAttempt(cacheKey);
       if (!result.authChallenge) {
-        if (cacheResult) prefetchedViews.set(cacheKey, result.view);
+        if (cacheResult) prefetchedViews.set(cacheKey, { view: result.view, fetchedAt: Date.now() });
         return result.view;
       }
-
       const sessionState = await verifySessionAuthority();
       if (sessionState === SESSION_AUTHORITY_STATES.UNAUTHENTICATED) {
         transitionToSignIn();
@@ -176,26 +176,18 @@ export function createAppRouter({ mountPage, syncShell }) {
       }
       if (sessionState === SESSION_AUTHORITY_STATES.UNKNOWN) {
         reportClientDiagnosticSoon({
-          severity: 'warn',
-          category: 'router.session',
-          code: 'router.session_unknown',
+          severity: 'warn', category: 'router.session', code: 'router.session_unknown',
           message: 'HTML-раздел вернул страницу входа, но состояние сессии не подтверждено.',
-          route: cacheKey,
-          request_id: result.requestId
+          route: cacheKey, request_id: result.requestId
         });
         throw new Error('Не удалось подтвердить состояние сессии. Раздел не переключён.');
       }
       reportClientDiagnosticSoon({
-        severity: 'error',
-        category: 'router.session',
-        code: 'router.false_auth_challenge',
+        severity: 'error', category: 'router.session', code: 'router.false_auth_challenge',
         message: 'Сервер вернул страницу входа для защищённого раздела при активной сессии.',
-        route: cacheKey,
-        request_id: result.requestId
+        route: cacheKey, request_id: result.requestId
       }, { dedupeMs: 2000 });
-      if (attempt === 1) {
-        throw new Error('Сессия активна, но сервер ошибочно вернул страницу входа. Раздел не переключён.');
-      }
+      if (attempt === 1) throw new Error('Сессия активна, но сервер ошибочно вернул страницу входа. Раздел не переключён.');
     }
     return null;
   }
@@ -206,22 +198,31 @@ export function createAppRouter({ mountPage, syncShell }) {
   }
 
   async function disposeCurrentPage() {
-    if (typeof lifecycle?.dispose === 'function') await lifecycle.dispose();
+    const previousLifecycle = lifecycle;
+    const previousRuntime = routeRuntime;
     lifecycle = null;
+    routeRuntime = null;
+    if (typeof previousLifecycle?.dispose === 'function') await previousLifecycle.dispose();
+    endRouteRuntime(previousRuntime);
+    // Allow AbortError continuations/finally blocks to finish while the old DOM still exists.
+    await Promise.resolve();
   }
 
   async function mountCurrentPage(page, main = currentMain()) {
+    const runtime = beginRouteRuntime(page);
+    routeRuntime = runtime;
     setRouteMountState(main, true);
     try {
-      lifecycle = normaliseLifecycle(await mountPage(page));
+      const mounted = normaliseLifecycle(await mountPage(page));
+      if (!runtime.isCurrent()) throw new Error(`Инициализация страницы «${page}» была отменена.`);
+      lifecycle = mounted;
     } catch (error) {
+      endRouteRuntime(runtime, 'route-mount-failed');
+      if (routeRuntime === runtime) routeRuntime = null;
       reportClientDiagnosticSoon({
-        severity: 'error',
-        category: 'router.mount',
-        code: 'route.mount_failed',
+        severity: 'error', category: 'router.mount', code: 'route.mount_failed',
         message: error?.message || `Не удалось инициализировать страницу ${page}.`,
-        page,
-        details: { name: error?.name || '', stack: error?.stack || '' }
+        page, details: { name: error?.name || '', stack: error?.stack || '' }
       }, { dedupeMs: 1000 });
       throw error;
     } finally {
@@ -257,12 +258,9 @@ export function createAppRouter({ mountPage, syncShell }) {
         await restorePreviousView(previousView, previousIdentity, { fromHistory });
       } catch (restoreError) {
         reportClientDiagnosticSoon({
-          severity: 'error',
-          category: 'router.rollback',
-          code: 'route.rollback_failed',
+          severity: 'error', category: 'router.rollback', code: 'route.rollback_failed',
           message: restoreError?.message || 'Не удалось восстановить предыдущий раздел после ошибки.',
-          page: previousView.page,
-          details: { stack: restoreError?.stack || '' }
+          page: previousView.page, details: { stack: restoreError?.stack || '' }
         }, { dedupeMs: 1000 });
       }
       throw error;
@@ -275,12 +273,8 @@ export function createAppRouter({ mountPage, syncShell }) {
     }
     activeIdentity = routeIdentity(target);
     reportClientDiagnosticSoon({
-      severity: 'info',
-      category: 'client.lifecycle',
-      code: 'route.enter',
-      message: `Открыт раздел «${view.page}».`,
-      page: view.page,
-      route: activeIdentity,
+      severity: 'info', category: 'client.lifecycle', code: 'route.enter',
+      message: `Открыт раздел «${view.page}».`, page: view.page, route: activeIdentity,
       details: { previous_route: previousIdentity }
     }, { dedupeMs: 0 });
     scrollToRouteTarget(target);
@@ -296,7 +290,6 @@ export function createAppRouter({ mountPage, syncShell }) {
 
     const targetIdentity = routeIdentity(target);
     const activeUrl = canonicalUrl(activeIdentity);
-
     if (!options.force && documentIdentity(target) === documentIdentity(activeUrl) && target.hash !== activeUrl.hash) {
       if (!options.fromHistory) {
         const href = targetIdentity;
@@ -308,7 +301,6 @@ export function createAppRouter({ mountPage, syncShell }) {
       scrollToRouteTarget(target);
       return true;
     }
-
     if (!options.force && !options.fromHistory && targetIdentity === activeIdentity) {
       if (typeof syncShell === 'function') syncShell();
       scrollToRouteTarget(target);
@@ -321,11 +313,8 @@ export function createAppRouter({ mountPage, syncShell }) {
     } catch (error) {
       console.error('Client-side navigation failed', error);
       reportClientDiagnosticSoon({
-        severity: 'error',
-        category: 'router.navigation',
-        code: 'route.navigation_failed',
-        message: error?.message || 'Не удалось переключить раздел.',
-        route: targetIdentity,
+        severity: 'error', category: 'router.navigation', code: 'route.navigation_failed',
+        message: error?.message || 'Не удалось переключить раздел.', route: targetIdentity,
         details: { active_route: activeIdentity, stack: error?.stack || '' }
       }, { dedupeMs: 1000 });
       return false;
@@ -371,11 +360,8 @@ export function createAppRouter({ mountPage, syncShell }) {
       window.history.replaceState({ tvMenu: true }, '', routeIdentity(canonicalUrl(window.location.href)));
       await mountCurrentPage(document.body.dataset.page || '');
       reportClientDiagnosticSoon({
-        severity: 'info',
-        category: 'client.lifecycle',
-        code: 'route.initial',
-        message: `Инициализирован раздел «${document.body.dataset.page || ''}».`,
-        route: activeIdentity
+        severity: 'info', category: 'client.lifecycle', code: 'route.initial',
+        message: `Инициализирован раздел «${document.body.dataset.page || ''}».`, route: activeIdentity
       }, { dedupeMs: 0 });
       document.addEventListener('click', onDocumentClick);
       window.addEventListener('popstate', onPopState);
