@@ -15,17 +15,15 @@ function setSvgAttribute(node, name, value) {
   node.setAttribute(name, String(value));
 }
 
-function injectPromoRowLayer(row) {
-  if (!row || row.querySelector('.promotion-row-highlight')) return;
+function injectPromoRowLayer(row, box) {
+  if (!row || !box || row.querySelector('.promotion-row-highlight')) return;
   const separator = row.querySelector('line.separator');
-  let box;
-  try { box = row.getBBox(); } catch { box = null; }
-  if (!box) return;
-  const left = Number(separator?.getAttribute('x1')) || box.x;
-  const right = Number(separator?.getAttribute('x2')) || (box.x + box.width);
-  const top = Math.max(0, box.y - 5);
-  const height = Math.max(36, box.height + 10);
-  const width = Math.max(1, right - left);
+  const left = Number(separator?.getAttribute('x1'));
+  const right = Number(separator?.getAttribute('x2'));
+  const top = Number(box.top);
+  const height = Number(box.height);
+  if (![left, right, top, height].every(Number.isFinite) || right <= left || height <= 0) return;
+  const width = right - left;
 
   const highlight = document.createElementNS(SVG_NS, 'rect');
   highlight.classList.add('promotion-row-highlight');
@@ -56,20 +54,29 @@ function injectPromoRowLayer(row) {
   row.style.transformOrigin = 'center';
 }
 
-function markPromotionTargets(stage) {
-  stage.querySelectorAll('text.promotion').forEach((label) => {
-    label.dataset.motionPromoBadge = 'true';
-    label.style.transformBox = 'fill-box';
-    label.style.transformOrigin = 'center';
-    const shape = label.previousElementSibling;
-    if (shape?.tagName?.toLowerCase() === 'path') {
-      shape.dataset.motionPromoBadge = 'true';
-      shape.style.transformBox = 'fill-box';
-      shape.style.transformOrigin = 'center';
+function markPromotionTargets(stage, lines, layout) {
+  const itemRows = [...stage.querySelectorAll('g.table-item')];
+  let itemRowIndex = 0;
+  lines.forEach((line, lineIndex) => {
+    if (line.kind !== 'item') return;
+    const row = itemRows[itemRowIndex];
+    itemRowIndex += 1;
+    if (!row || line.promotion !== true) return;
+
+    const label = row.querySelector('text.promotion');
+    if (label) {
+      label.dataset.motionPromoBadge = 'true';
+      label.style.transformBox = 'fill-box';
+      label.style.transformOrigin = 'center';
+      const shape = label.previousElementSibling;
+      if (shape?.tagName?.toLowerCase() === 'path') {
+        shape.dataset.motionPromoBadge = 'true';
+        shape.style.transformBox = 'fill-box';
+        shape.style.transformOrigin = 'center';
+      }
     }
-    const row = label.closest('g.table-item');
-    if (!row) return;
-    injectPromoRowLayer(row);
+
+    injectPromoRowLayer(row, layout?.vertical?.boxes?.[lineIndex]);
     row.querySelectorAll('text.price').forEach((price) => {
       price.dataset.motionPromoPrice = 'true';
       price.style.transformBox = 'fill-box';
@@ -84,11 +91,11 @@ function markBrandTargets(stage) {
   });
 }
 
-function markMotionTargets(stage) {
+function markMotionTargets(stage, lines, layout) {
   stage.querySelectorAll('g.table-section').forEach((node) => { node.dataset.motion = 'section'; });
   stage.querySelectorAll('g.table-item, g.table-packaging').forEach((node) => { node.dataset.motion = 'item'; });
   stage.querySelectorAll('text.price, text.packaging-price').forEach((node) => { node.dataset.motion = 'price'; });
-  markPromotionTargets(stage);
+  markPromotionTargets(stage, lines, layout);
   markBrandTargets(stage);
 }
 
@@ -140,7 +147,7 @@ export function renderAnimationScreenPreview(stage, bundle, { fallbackTitle = 'Ð
     <div class="animation-screen-shimmer" aria-hidden="true"></div>`;
   backgroundStyle(stage.querySelector('.animation-screen-background'), model, layout.palette, backgroundUrl);
   applyTypography(stage, layout);
-  markMotionTargets(stage);
+  markMotionTargets(stage, lines, layout);
   return { model, lines, layout };
 }
 
