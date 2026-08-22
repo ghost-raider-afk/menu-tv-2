@@ -10,6 +10,7 @@ import { createOverviewRepository } from './overview.js';
 import { createUsersRepository } from './users.js';
 import { createSettingsRepository } from './settings.js';
 import { createNotificationsRepository } from './notifications.js';
+import { createDiagnosticsRepository } from './diagnostics.js';
 import { createLocationsRepository } from './locations.js';
 import { createScreensRepository } from './screens.js';
 import { createCatalogRepository } from './catalog.js';
@@ -24,6 +25,7 @@ function createRepositories(queryable) {
     createUsersRepository(queryable),
     createSettingsRepository(queryable),
     createNotificationsRepository(queryable),
+    createDiagnosticsRepository(queryable),
     locations,
     createScreensRepository(queryable),
     createCatalogRepository(queryable),
