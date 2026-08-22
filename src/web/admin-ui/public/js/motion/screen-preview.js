@@ -15,6 +15,22 @@ function setSvgAttribute(node, name, value) {
   node.setAttribute(name, String(value));
 }
 
+function composePromoBadge(row) {
+  if (!row) return null;
+  const existing = row.querySelector('g.promotion-badge-group');
+  if (existing) return existing;
+
+  const shape = row.querySelector('path.promotion-badge');
+  const label = row.querySelector('text.promotion');
+  if (!shape || !label || shape.parentNode !== row || label.parentNode !== row) return null;
+
+  const group = document.createElementNS(SVG_NS, 'g');
+  group.classList.add('promotion-badge-group');
+  row.insertBefore(group, shape);
+  group.append(shape, label);
+  return group;
+}
+
 function injectPromoRowLayer(row, box) {
   if (!row || !box || row.querySelector('.promotion-row-highlight')) return;
   const separator = row.querySelector('line.separator');
@@ -33,7 +49,7 @@ function injectPromoRowLayer(row, box) {
   setSvgAttribute(highlight, 'height', height);
   setSvgAttribute(highlight, 'rx', 6);
   setSvgAttribute(highlight, 'fill', '#D92D35');
-  setSvgAttribute(highlight, 'opacity', 0.12);
+  setSvgAttribute(highlight, 'opacity', 0);
   highlight.dataset.motionPromoLayer = 'highlight';
 
   const sweep = document.createElementNS(SVG_NS, 'rect');
@@ -63,17 +79,11 @@ function markPromotionTargets(stage, lines, layout) {
     itemRowIndex += 1;
     if (!row || line.promotion !== true) return;
 
-    const label = row.querySelector('text.promotion');
-    if (label) {
-      label.dataset.motionPromoBadge = 'true';
-      label.style.transformBox = 'fill-box';
-      label.style.transformOrigin = 'center';
-      const shape = label.previousElementSibling;
-      if (shape?.tagName?.toLowerCase() === 'path') {
-        shape.dataset.motionPromoBadge = 'true';
-        shape.style.transformBox = 'fill-box';
-        shape.style.transformOrigin = 'center';
-      }
+    const badge = composePromoBadge(row);
+    if (badge) {
+      badge.dataset.motionPromoBadge = 'true';
+      badge.style.transformBox = 'fill-box';
+      badge.style.transformOrigin = 'center';
     }
 
     injectPromoRowLayer(row, layout?.vertical?.boxes?.[lineIndex]);
