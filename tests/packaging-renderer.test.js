@@ -17,7 +17,8 @@ test('packaging uses the same menu visual language instead of card chrome', () =
       { id: 2, name: 'ПЭТ 1,5 л', unit_price: '25' }
     ]
   });
-  const svg = buildTableSvg(model, lines, buildRenderLayout(model, lines));
+  const layout = buildRenderLayout(model, lines);
+  const svg = buildTableSvg(model, lines, layout);
   const packagingStart = svg.indexOf('<g class="table-packaging">');
   const packagingEnd = svg.indexOf('</g>', packagingStart + 1);
   const packaging = svg.slice(packagingStart, packagingEnd + 4);
@@ -28,4 +29,9 @@ test('packaging uses the same menu visual language instead of card chrome', () =
   assert.match(packaging, /class="item-name packaging-name"/);
   assert.match(packaging, /class="price"/);
   assert.match(packaging, /class="separator"/);
+  assert.equal(lines.length, 2, 'two packaging records share one compact visual row');
+  assert.equal(layout.vertical.boxes[0].density, 'standard');
+  assert.equal(layout.vertical.boxes[1].density, 'compact');
+  assert.ok(layout.vertical.boxes[1].height < layout.vertical.boxes[0].height * 0.8, 'packaging row is materially shorter than a normal row');
+  assert.ok(layout.vertical.boxes[1].height > layout.vertical.boxes[0].height * 0.65, 'packaging row stays readable rather than over-compressed');
 });
