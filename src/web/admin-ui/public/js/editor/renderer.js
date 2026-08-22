@@ -382,8 +382,10 @@ function promotionMarkup(line, x, box, scale, typography) {
   const strokeWidth = Math.max(1.2, 1.35 * scale);
   return {
     width,
-    markup: `<path class="promotion-badge" d="M${x} ${top}H${x + width - notch}L${x + width} ${top + height / 2}L${x + width - notch} ${top + height}H${x}Z" fill="${MENU_TABLE_STYLE.promotion}" stroke="${MENU_TABLE_STYLE.defaultAccent}" stroke-width="${strokeWidth}"/>
-      <text x="${x + (width - notch) / 2}" y="${top + 21.5 * fontScale}" class="promotion" ${textAttributes({ size: 14.5 * fontScale, weight: 900, fill: '#FFFFFF', letterSpacing: 0.65 * scale, anchor: 'middle' }, typography)}>${escapeXml(text)}</text>`
+    markup: `<g class="promotion-badge-group">
+      <path class="promotion-badge" d="M${x} ${top}H${x + width - notch}L${x + width} ${top + height / 2}L${x + width - notch} ${top + height}H${x}Z" fill="${MENU_TABLE_STYLE.promotion}" stroke="${MENU_TABLE_STYLE.defaultAccent}" stroke-width="${strokeWidth}"/>
+      <text x="${x + (width - notch) / 2}" y="${top + 21.5 * fontScale}" class="promotion" ${textAttributes({ size: 14.5 * fontScale, weight: 900, fill: '#FFFFFF', letterSpacing: 0.65 * scale, anchor: 'middle' }, typography)}>${escapeXml(text)}</text>
+    </g>`
   };
 }
 
