@@ -20,7 +20,11 @@ let screenLoadSequence = 0;
 let customPresets = [];
 let selectedPresetId = null;
 let dirty = false;
+let mountGeneration = 0;
 
+function isCurrent(generation = mountGeneration) {
+  return generation === mountGeneration && document.body?.dataset?.page === 'animation';
+}
 function number(id) { return Number(element(id)?.value ?? 0); }
 function checked(id) { return element(id)?.checked === true; }
 function value(id) { return element(id)?.value || ''; }
@@ -150,15 +154,17 @@ function renderPresetSelect() {
   updatePresetUi();
 }
 
-function restartPreview(reason = 'preview') {
+function restartPreview(reason = 'preview', generation = mountGeneration) {
   cancelAnimationFrame(previewFrame);
   previewFrame = requestAnimationFrame(() => {
+    if (!isCurrent(generation)) return;
     player?.restart(collectProfile(), { reason });
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) player?.pause();
   });
 }
 
 function markDirty() {
+  if (!isCurrent()) return;
   dirty = true;
   updateIntensityOutput();
   updatePresetUi();
@@ -174,13 +180,16 @@ function bindProfileControls() {
   });
 }
 
-async function loadCustomPresets() {
+async function loadCustomPresets(generation = mountGeneration) {
   const result = await api.get(API.animationPresets);
+  if (!isCurrent(generation)) return false;
   customPresets = Array.isArray(result) ? result : [];
   renderPresetSelect();
+  return true;
 }
 
 function selectPreset(id) {
+  if (!isCurrent()) return;
   selectedPresetId = id ? Number(id) : null;
   const preset = selectedPreset();
   populateProfile(preset?.profile || profileForPreset(DEFAULT_PRESET_ID));
@@ -191,26 +200,29 @@ function selectPreset(id) {
 }
 
 async function savePresetAsNew() {
+  const generation = mountGeneration;
   const button = element('animation-preset-save-as');
   const name = value('animation-preset-name').trim();
   if (!name) return setMessage('animation-message', 'Введите название нового пресета.');
   setPending(button, true, 'Сохраняем…');
   try {
     const saved = await api.post(API.animationPresets, { name, profile: collectProfile() });
-    await loadCustomPresets();
+    if (!isCurrent(generation)) return;
+    if (!await loadCustomPresets(generation) || !isCurrent(generation)) return;
     selectedPresetId = Number(saved.id);
     dirty = false;
     renderPresetSelect();
     updatePresetUi();
     setMessage('animation-message', `Пресет «${saved.name}» сохранён.`, 'success');
   } catch (error) {
-    setMessage('animation-message', error.message);
+    if (isCurrent(generation)) setMessage('animation-message', error.message);
   } finally {
-    setPending(button, false, 'Сохраняем…');
+    if (isCurrent(generation)) setPending(button, false, 'Сохраняем…');
   }
 }
 
 async function updateSelectedPreset() {
+  const generation = mountGeneration;
   const preset = selectedPreset();
   if (!preset) return;
   const button = element('animation-preset-update');
@@ -218,20 +230,22 @@ async function updateSelectedPreset() {
   setPending(button, true, 'Обновляем…');
   try {
     const saved = await api.put(`${API.animationPresets}/${preset.id}`, { name, profile: collectProfile() });
-    await loadCustomPresets();
+    if (!isCurrent(generation)) return;
+    if (!await loadCustomPresets(generation) || !isCurrent(generation)) return;
     selectedPresetId = Number(saved.id);
     dirty = false;
     renderPresetSelect();
     updatePresetUi();
     setMessage('animation-message', `Пресет «${saved.name}» обновлён.`, 'success');
   } catch (error) {
-    setMessage('animation-message', error.message);
+    if (isCurrent(generation)) setMessage('animation-message', error.message);
   } finally {
-    setPending(button, false, 'Обновляем…');
+    if (isCurrent(generation)) setPending(button, false, 'Обновляем…');
   }
 }
 
 async function deleteSelectedPreset() {
+  const generation = mountGeneration;
   const preset = selectedPreset();
   if (!preset) return;
   if (!window.confirm(`Удалить пресет «${preset.name}»?`)) return;
@@ -239,16 +253,17 @@ async function deleteSelectedPreset() {
   setPending(button, true, 'Удаляем…');
   try {
     await api.delete(`${API.animationPresets}/${preset.id}`);
+    if (!isCurrent(generation)) return;
     selectedPresetId = null;
-    await loadCustomPresets();
+    if (!await loadCustomPresets(generation) || !isCurrent(generation)) return;
     populateProfile(profileForPreset(DEFAULT_PRESET_ID));
     renderPresetSelect();
-    restartPreview('preview');
+    restartPreview('preview', generation);
     setMessage('animation-message', 'Пресет удалён.', 'success');
   } catch (error) {
-    setMessage('animation-message', error.message);
+    if (isCurrent(generation)) setMessage('animation-message', error.message);
   } finally {
-    setPending(button, false, 'Удаляем…');
+    if (isCurrent(generation)) setPending(button, false, 'Удаляем…');
   }
 }
 
@@ -257,77 +272,84 @@ function setScreenStatus(text) { const node = element('animation-screen-status')
 function screenFromUrl(screens) { const candidate = Number(new URL(window.location.href).searchParams.get('screen')); return screens.find((screen) => Number(screen.id) === candidate) || screens[0] || null; }
 function rememberSelectedScreen(screenId) { const url = new URL(window.location.href); url.searchParams.set('screen', String(screenId)); history.replaceState(history.state, '', `${url.pathname}${url.search}${url.hash}`); }
 
-async function loadScreenPreview(screenId) {
+async function loadScreenPreview(screenId, generation = mountGeneration) {
   const stage = element('animation-stage');
   const select = element('animation-screen-select');
-  if (!stage || !screenId) return;
+  if (!stage || !screenId || !isCurrent(generation)) return;
   const sequence = ++screenLoadSequence;
   if (select) select.disabled = true;
   setScreenStatus('Загружаем сохранённый экран…');
   try {
     const bundle = await api.get(`${API.screens}/${screenId}/editor`);
-    if (sequence !== screenLoadSequence) return;
+    if (!isCurrent(generation) || sequence !== screenLoadSequence) return;
     renderAnimationScreenPreview(stage, bundle);
     setScreenStatus(`${bundle.screen.location_name || 'Без точки'} · ${bundle.screen.name} · ${bundle.screen.resolution}`);
-    restartPreview('preview');
+    restartPreview('preview', generation);
   } catch (error) {
-    if (sequence !== screenLoadSequence) return;
+    if (!isCurrent(generation) || sequence !== screenLoadSequence) return;
     renderAnimationScreenEmpty(stage, 'Не удалось загрузить выбранный монитор.');
     setScreenStatus(error.message);
   } finally {
-    if (sequence === screenLoadSequence && select) select.disabled = false;
+    if (isCurrent(generation) && sequence === screenLoadSequence && select) select.disabled = false;
   }
 }
 
-async function loadScreenOptions() {
+async function loadScreenOptions(generation = mountGeneration) {
   const stage = element('animation-stage');
   const select = element('animation-screen-select');
-  if (!stage || !(select instanceof HTMLSelectElement)) return;
+  if (!stage || !(select instanceof HTMLSelectElement) || !isCurrent(generation)) return false;
   const screens = await api.get(API.screens);
+  if (!isCurrent(generation)) return false;
   if (!Array.isArray(screens) || screens.length === 0) {
     select.innerHTML = '<option value="">Нет мониторов</option>';
     select.disabled = true;
     renderAnimationScreenEmpty(stage);
     setScreenStatus('В проекте пока нет мониторов.');
     player?.destroy();
-    return;
+    return true;
   }
   select.innerHTML = screens.map((screen) => `<option value="${screen.id}">${screenLabel(screen)}</option>`).join('');
   const selected = screenFromUrl(screens);
   select.value = String(selected.id);
   select.addEventListener('change', () => {
+    if (!isCurrent(generation)) return;
     const id = Number(select.value);
     if (!id) return;
     rememberSelectedScreen(id);
-    void loadScreenPreview(id);
+    void loadScreenPreview(id, generation);
   });
-  await loadScreenPreview(selected.id);
+  await loadScreenPreview(selected.id, generation);
+  return isCurrent(generation);
 }
 
-async function loadSettings() {
+async function loadSettings(generation = mountGeneration) {
   const settings = await api.get(API.animationSettings);
+  if (!isCurrent(generation)) return false;
   const match = /^user-(\d+)$/.exec(String(settings?.preset_id || ''));
   selectedPresetId = match ? Number(match[1]) : null;
   const enabled = element('animation-enabled');
   if (enabled) enabled.checked = settings?.enabled === true;
   populateProfile(settings?.profile || profileForPreset(DEFAULT_PRESET_ID));
   renderPresetSelect();
-  restartPreview('preview');
+  restartPreview('preview', generation);
+  return true;
 }
 
 async function saveSettings() {
+  const generation = mountGeneration;
   const button = element('animation-save');
   setPending(button, true, 'Применяем…');
   try {
     const presetId = selectedPresetId ? `user-${selectedPresetId}` : DEFAULT_PRESET_ID;
     const saved = await api.put(API.animationSettings, { enabled: checked('animation-enabled'), preset_id: presetId, profile: collectProfile() });
+    if (!isCurrent(generation)) return;
     populateProfile(saved.profile);
     renderPresetSelect();
     setMessage('animation-message', 'Редактируемый профиль применён к экранам.', 'success');
   } catch (error) {
-    setMessage('animation-message', error.message);
+    if (isCurrent(generation)) setMessage('animation-message', error.message);
   } finally {
-    setPending(button, false, 'Применяем…');
+    if (isCurrent(generation)) setPending(button, false, 'Применяем…');
   }
 }
 
@@ -339,10 +361,28 @@ function bindPresetManager() {
   element('animation-preset-reset')?.addEventListener('click', () => selectPreset(null));
 }
 
+function disposeAnimationStudio(generation) {
+  if (generation !== mountGeneration) return;
+  mountGeneration += 1;
+  screenLoadSequence += 1;
+  cancelAnimationFrame(previewFrame);
+  previewFrame = null;
+  player?.destroy();
+  player = null;
+  customPresets = [];
+  selectedPresetId = null;
+  dirty = false;
+}
+
 export function initialiseAnimationStudio() {
   const stage = element('animation-stage');
   if (!stage) return;
   player?.destroy();
+  cancelAnimationFrame(previewFrame);
+  customPresets = [];
+  selectedPresetId = null;
+  dirty = false;
+  const generation = ++mountGeneration;
   player = new AnimationPreviewPlayer({
     stage,
     timeline: element('animation-timeline'),
@@ -354,7 +394,13 @@ export function initialiseAnimationStudio() {
   bindProfileControls();
   bindPresetManager();
   element('animation-save')?.addEventListener('click', () => void saveSettings());
-  void Promise.all([loadCustomPresets(), loadScreenOptions()])
-    .then(() => loadSettings())
-    .catch((error) => setMessage('animation-message', error.message));
+  void Promise.all([loadCustomPresets(generation), loadScreenOptions(generation)])
+    .then(() => isCurrent(generation) ? loadSettings(generation) : false)
+    .catch((error) => { if (isCurrent(generation)) setMessage('animation-message', error.message); });
+
+  return {
+    dispose() {
+      disposeAnimationStudio(generation);
+    }
+  };
 }
