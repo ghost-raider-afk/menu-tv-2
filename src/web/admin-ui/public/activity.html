@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ТВ МЕНЮ</title>
+    <script src="/theme-bootstrap.js"></script>
+    <link rel="stylesheet" href="/css/index.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body data-page="activity">
+    <div class="app-shell">
+      <div class="app-content">
+        <main class="main-content settings-content">
+          <div class="page-heading compact-heading">
+            <div><p class="eyebrow">АУДИТ</p><h1>Журнал действий</h1></div>
+            <div class="compact-heading-actions">
+              <button class="button button-secondary" id="refresh-activity" type="button">Обновить</button>
+              <button class="button button-secondary" id="save-activity" type="button">Сохранить</button>
+              <button class="button button-danger" id="clear-activity" type="button">Очистить</button>
+            </div>
+          </div>
+          <section class="activity-card activity-page-card" aria-labelledby="activity-title">
+            <div class="card-heading"><div><p class="eyebrow">СОБЫТИЯ</p><h2 id="activity-title">История действий</h2></div><span class="muted" id="activity-count">—</span></div>
+            <p class="form-message is-hidden" id="activity-message" role="status" aria-live="polite"></p>
+            <div class="activity-list" data-activity-list></div>
+            <p class="empty-state is-hidden" data-activity-empty>Журнал пуст.</p>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
