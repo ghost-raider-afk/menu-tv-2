@@ -3,10 +3,22 @@ const EASING = Object.freeze({
   cinematic: 'cubic-bezier(.22,.61,.36,1)', elastic: 'cubic-bezier(.34,1.56,.64,1)'
 });
 const GOLD_SHADOW = 'rgba(244,201,21,.72)';
+const PROMO_SHADOW = 'rgba(217,45,53,.9)';
 function clamp(value, minimum, maximum) { return Math.max(minimum, Math.min(maximum, value)); }
 function motionGain(profile) { return Math.sqrt(clamp(Number(profile.intensity) || 0, 0, 100) / 100); }
 function formatTime(milliseconds) { return `${(milliseconds / 1000).toFixed(1)} с`; }
-function effectFor(profile, kind) { if (kind === 'section') return profile.section_effect; if (kind === 'price') return profile.price_effect; return profile.item_effect; }
+function promotionEffect(profile) {
+  if (profile.promotion_effect === 'sheen') return 'shimmer';
+  if (profile.promotion_effect === 'pulse' || profile.promotion_effect === 'pulse-price') return 'pulse';
+  if (profile.promotion_effect === 'glow') return 'glow';
+  return 'none';
+}
+function effectFor(profile, kind) {
+  if (kind === 'section') return profile.section_effect;
+  if (kind === 'price') return profile.price_effect;
+  if (kind === 'promotion') return promotionEffect(profile);
+  return profile.item_effect;
+}
 function vectorFor(profile, travel, index) {
   switch (profile.flow_direction) {
     case 'right-to-left': return { x: -travel, y: 0 };
@@ -30,12 +42,13 @@ function peakFrame(profile, kind, effect, index, offset) {
   if (effect === 'lift') frame.transform = transform({ x: vector.x * 0.5, y: vector.y || -travel, scale: 1 + scaleAmount * 0.55 });
   if (effect === 'breathe') frame.transform = transform({ scale: 1 + scaleAmount * 0.72 });
   if (effect === 'focus') frame.transform = transform({ scale: 1 + scaleAmount });
-  if (effect === 'pulse') frame.transform = transform({ scale: 1 + scaleAmount * (kind === 'price' ? 1.55 : 1.08) });
+  if (effect === 'pulse') frame.transform = transform({ scale: 1 + scaleAmount * (kind === 'price' ? 1.55 : kind === 'promotion' ? 1.85 : 1.08) });
   if (effect === 'pop') frame.transform = transform({ scale: 1 + scaleAmount * 1.9 });
-  if (effect === 'shimmer') frame.transform = transform({ x: vector.x * 0.3, y: vector.y * 0.3, scale: 1 + scaleAmount * 0.35 });
+  if (effect === 'shimmer') frame.transform = transform({ x: vector.x * (kind === 'promotion' ? 0.12 : 0.3), y: vector.y * 0.3, scale: 1 + scaleAmount * (kind === 'promotion' ? 0.9 : 0.35) });
   if (effect === 'glow' || effect === 'shimmer') {
-    const radius = 8 + 28 * gain;
-    frame.filter = `brightness(${brightness.toFixed(3)}) drop-shadow(0 0 ${radius.toFixed(1)}px ${GOLD_SHADOW})`;
+    const radius = kind === 'promotion' ? 12 + 34 * gain : 8 + 28 * gain;
+    const shadow = kind === 'promotion' ? PROMO_SHADOW : GOLD_SHADOW;
+    frame.filter = `brightness(${brightness.toFixed(3)}) drop-shadow(0 0 ${radius.toFixed(1)}px ${shadow})`;
   }
   return frame;
 }
@@ -149,13 +162,27 @@ export class AnimationPreviewPlayer {
     const intensity = clamp(Number(profile.intensity) || 0, 0, 100);
     this.stage.style.setProperty('--motion-intensity', String(intensity / 100));
     this.stage.dataset.motionMode = 'continuous';
+    this.stage.dataset.promotionEffect = profile.promotion_effect || 'none';
     this.total = Math.max(4000, Number(profile.cycle_seconds) * 1000 || 12000);
-    const byKind = { section: [...this.stage.querySelectorAll('[data-motion="section"]')], item: [...this.stage.querySelectorAll('[data-motion="item"]')], price: [...this.stage.querySelectorAll('[data-motion="price"]')] };
+    const byKind = {
+      section: [...this.stage.querySelectorAll('[data-motion="section"]')],
+      item: [...this.stage.querySelectorAll('[data-motion="item"]')],
+      price: [...this.stage.querySelectorAll('[data-motion="price"]')],
+      promotion: [...this.stage.querySelectorAll('[data-motion="promotion"]')]
+    };
     for (const [kind, targets] of Object.entries(byKind)) {
       const effect = effectFor(profile, kind);
       if (!effect || effect === 'none') continue;
       targets.forEach((element, index) => addAnimation(this.animations, element, elementFrames(profile, kind, effect, index), {
         duration: this.total, delay: targetDelay(profile, index, targets.length, this.total), easing: EASING[profile.easing] || EASING.smooth
+      }));
+    }
+    if (profile.promotion_effect === 'pulse-price') {
+      const promoPrices = [...this.stage.querySelectorAll('[data-promotion-price="true"]')];
+      promoPrices.forEach((element, index) => addAnimation(this.animations, element, elementFrames(profile, 'price', 'pulse', index), {
+        duration: this.total,
+        delay: targetDelay(profile, index, promoPrices.length, this.total),
+        easing: EASING[profile.easing] || EASING.smooth
       }));
     }
     const shimmer = this.stage.querySelector('.animation-screen-shimmer');
