@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { animationSettingsInput, customAnimationPresetInput } from '../src/contracts/animation.js';
-import { completeAnimationProfile } from '../src/shared/animation-profile.js';
+import { completeAnimationProfile, PROMO_ROW_TINT_MAX } from '../src/shared/animation-profile.js';
 import { ANIMATION_PRESETS } from '../src/web/admin-ui/public/js/motion/presets.js';
 
 const publicRoot = new URL('../src/web/admin-ui/public/', import.meta.url);
@@ -40,6 +40,9 @@ test('v4 promotion channel migrates into the v5 promo style', () => {
 test('Brand Reveal and promo style contracts validate editable bounds', () => {
   const profile = structuredClone(ANIMATION_PRESETS[0].profile);
   assert.throws(() => animationSettingsInput({ enabled: true, preset_id: 'custom-base', profile: { ...profile, promo_style: { ...profile.promo_style, badge_scale: 2 } } }), /Масштаб плашки/);
+  assert.throws(() => animationSettingsInput({ enabled: true, preset_id: 'custom-base', profile: { ...profile, promo_style: { ...profile.promo_style, row_tint: PROMO_ROW_TINT_MAX + 0.01 } } }), /Подложка строки акции/);
+  const zeroTint = animationSettingsInput({ enabled: true, preset_id: 'custom-base', profile: { ...profile, promo_style: { ...profile.promo_style, row_tint: 0 } } });
+  assert.equal(zeroTint.profile.promo_style.row_tint, 0);
   assert.throws(() => animationSettingsInput({ enabled: true, preset_id: 'custom-base', profile: { ...profile, brand_reveal: { ...profile.brand_reveal, flight_ms: 100 } } }), /Полёт Brand Reveal/);
   assert.throws(() => animationSettingsInput({ enabled: true, preset_id: 'custom-base', profile: { ...profile, brand_reveal: { ...profile.brand_reveal, order: 'explode' } } }), /Порядок букв/);
   assert.throws(() => customAnimationPresetInput({ name: '', profile }), /Название пресета/);
@@ -69,11 +72,12 @@ test('custom animation presets are first-class database and API resources', asyn
 });
 
 test('Motion Studio edits promo, Brand Reveal and named user presets', async () => {
-  const [html, page, player, screenPreview] = await Promise.all([
+  const [html, page, player, screenPreview, renderer] = await Promise.all([
     readPublic('animation.html'),
     readPublic('js/pages/animation.js'),
     readPublic('js/motion/preview-player.js'),
-    readPublic('js/motion/screen-preview.js')
+    readPublic('js/motion/screen-preview.js'),
+    readPublic('js/editor/renderer.js')
   ]);
   for (const id of [
     'animation-preset-select','animation-preset-name','animation-preset-save-as','animation-preset-update','animation-preset-delete',
@@ -83,15 +87,24 @@ test('Motion Studio edits promo, Brand Reveal and named user presets', async () 
   assert.doesNotMatch(html, /26 ТВ-ПРЕСЕТОВ/);
   assert.match(html, /Один канонический стиль/);
   assert.match(html, /каждая буква улетает точно в своё место/);
+  assert.match(html, /id="promo-row-tint" type="range" min="0" max="0\.18"/);
+  assert.match(html, /0 — фон полностью скрыт/);
   assert.match(page, /motion_version:\s*5/);
   assert.match(page, /promo_style/);
   assert.match(page, /brand_reveal/);
   assert.match(page, /api\.post\(API\.animationPresets/);
   assert.match(page, /api\.put\(`\$\{API\.animationPresets\}/);
   assert.match(page, /api\.delete\(`\$\{API\.animationPresets\}/);
+  assert.match(renderer, /<g class="promotion-badge-group">[\s\S]*class="promotion-badge"[\s\S]*class="promotion"/);
+  assert.match(screenPreview, /composePromoBadge/);
+  assert.match(screenPreview, /badge\.dataset\.motionPromoBadge = 'true'/);
+  assert.doesNotMatch(screenPreview, /label\.dataset\.motionPromoBadge|shape\.dataset\.motionPromoBadge/);
   assert.match(screenPreview, /promotion-row-highlight/);
   assert.match(screenPreview, /promotion-row-sweep/);
   assert.match(screenPreview, /data\.brandTarget/);
+  assert.match(player, /g\.promotion-badge-group\[data-motion-promo-badge="true"\]/);
+  assert.match(player, /style\.enabled === false\s*\? 0/);
+  assert.doesNotMatch(player, /Number\(style\.row_tint\) \|\| 0\.18/);
   assert.match(player, /animatePromoStyle/);
   assert.match(player, /brandDestinations/);
   assert.match(player, /getStartPositionOfChar/);
