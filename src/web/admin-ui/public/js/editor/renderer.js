@@ -23,6 +23,8 @@ export const MENU_REFERENCE = Object.freeze({
   tableBottom: 940,
   tableHeight: 925,
   rowHeight: 53.5,
+  packagingRowScale: 0.72,
+  packagingFontScale: 0.85,
   sectionInset: 4,
   separatorInset: 9,
   secondaryPriceX: 1405,
@@ -280,22 +282,34 @@ function tableFrame(model) {
   return Object.freeze({ x, y, width, height });
 }
 
+function baseLineHeight(line) {
+  return MENU_REFERENCE.rowHeight * (line.kind === 'packaging' ? MENU_REFERENCE.packagingRowScale : 1);
+}
+
 export function buildRenderLayout(model, lines) {
   const frame = tableFrame(model);
   const available = frame.height;
-  const baseHeight = Math.max(1, lines.length * MENU_REFERENCE.rowHeight);
+  const baseHeights = lines.map(baseLineHeight);
+  const baseHeight = Math.max(1, baseHeights.reduce((sum, value) => sum + value, 0));
   const requestedPercent = requestedFontScalePercent(model.settings);
   const fitPercent = (available / baseHeight) * 100;
   const effectivePercent = Math.max(MENU_REFERENCE.fontScaleMinPercent, Math.min(requestedPercent, fitPercent));
   const scale = effectivePercent / 100;
   const rowHeight = MENU_REFERENCE.rowHeight * scale;
   const fits = baseHeight * scale <= available + 0.5;
-  const boxes = lines.map((_line, index) => Object.freeze({
-    top: frame.y + index * rowHeight,
-    height: rowHeight,
-    bottom: frame.y + (index + 1) * rowHeight,
-    gapBefore: 0
-  }));
+  let cursor = frame.y;
+  const boxes = lines.map((line, index) => {
+    const height = baseHeights[index] * scale;
+    const top = cursor;
+    cursor += height;
+    return Object.freeze({
+      top,
+      height,
+      bottom: cursor,
+      gapBefore: 0,
+      density: line.kind === 'packaging' ? 'compact' : 'standard'
+    });
+  });
   const scaleX = frame.width / MENU_REFERENCE.tableWidth;
   const secondaryPriceX = frame.x + (MENU_REFERENCE.secondaryPriceX - MENU_REFERENCE.tableX) * scaleX;
   const primaryPriceX = secondaryPriceX - MENU_REFERENCE.priceColumnGap * scaleX;
@@ -321,7 +335,7 @@ export function buildRenderLayout(model, lines) {
       effectivePercent: Math.round(effectivePercent * 10) / 10,
       scale,
       rowHeight,
-      usedHeight: lines.length * rowHeight,
+      usedHeight: cursor - frame.y,
       fits,
       autoReduced: effectivePercent + 0.05 < requestedPercent,
       boxes: Object.freeze(boxes)
@@ -415,19 +429,20 @@ function itemMarkup(line, box, horizontal, palette, scale, typography) {
 }
 
 function packagingMarkup(line, box, horizontal, palette, scale, typography) {
-  const fontScale = TV1_REFERENCE_SCALE * scale;
+  const compactScale = scale * MENU_REFERENCE.packagingFontScale;
+  const fontScale = TV1_REFERENCE_SCALE * compactScale;
   const columnGap = 36 * horizontal.scaleX;
   const cellWidth = (horizontal.tableWidth - columnGap) / 2;
-  const baseline = box.top + 35 * fontScale;
+  const baseline = box.top + 29 * fontScale;
   const cells = line.items.map((item, index) => {
     const x = horizontal.left + index * (cellWidth + columnGap);
     const nameX = x + 22 * horizontal.scaleX;
     const priceX = x + cellWidth - 10 * horizontal.scaleX;
     const toneColor = item.tone === 'accent' ? palette.accentText : palette.primaryText;
-    const maximumCharacters = Math.max(8, Math.floor((priceX - nameX - 76 * horizontal.scaleX) / (13 * fontScale)));
+    const maximumCharacters = Math.max(8, Math.floor((priceX - nameX - 68 * horizontal.scaleX) / (12 * fontScale)));
     return `<g class="packaging-item tone-${item.tone === 'accent' ? 'accent' : 'light'}">
       <text x="${nameX}" y="${baseline}" class="item-name packaging-name" ${textAttributes({ size: 25 * fontScale, weight: 700, fill: toneColor }, typography)}>${escapeXml(truncateText(item.name, maximumCharacters))}</text>
-      ${priceMarkup(item.unitPrice, priceX, baseline, scale, toneColor, typography)}
+      ${priceMarkup(item.unitPrice, priceX, baseline, compactScale, toneColor, typography)}
     </g>`;
   }).join('\n');
   return `<g class="table-packaging">${separatorMarkup(box, horizontal, scale)}${cells}</g>`;
