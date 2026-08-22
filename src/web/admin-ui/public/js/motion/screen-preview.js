@@ -8,10 +8,26 @@ function applyTypography(stage, layout) {
   svg.style.fontWeight = String(layout.typography.weightFloor || 400);
   svg.dataset.fontKey = layout.typography.key;
 }
+function markPromotionTargets(stage) {
+  stage.querySelectorAll('text.promotion').forEach((label) => {
+    label.dataset.motion = 'promotion';
+    label.style.transformBox = 'fill-box';
+    label.style.transformOrigin = 'center';
+    const shape = label.previousElementSibling;
+    if (shape?.tagName?.toLowerCase() === 'path') {
+      shape.dataset.motion = 'promotion';
+      shape.style.transformBox = 'fill-box';
+      shape.style.transformOrigin = 'center';
+    }
+    const row = label.closest('g.table-item');
+    row?.querySelectorAll('text.price').forEach((price) => { price.dataset.promotionPrice = 'true'; });
+  });
+}
 function markMotionTargets(stage) {
   stage.querySelectorAll('g.table-section').forEach((node) => { node.dataset.motion = 'section'; });
   stage.querySelectorAll('g.table-item, g.table-packaging').forEach((node) => { node.dataset.motion = 'item'; });
   stage.querySelectorAll('text.price, text.packaging-price').forEach((node) => { node.dataset.motion = 'price'; });
+  markPromotionTargets(stage);
 }
 function backgroundStyle(layer, model, palette, overrideUrl = null) {
   if (!layer) return;
