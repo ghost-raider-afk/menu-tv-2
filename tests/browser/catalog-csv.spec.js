@@ -15,7 +15,7 @@ async function waitForRouteReady(page) {
   await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
 }
 
-test('products can be exported and imported as one round-trip CSV', async ({ page }) => {
+test('products can be exported and imported as one round-trip CSV while secondary price stays derived', async ({ page }) => {
   await login(page);
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const originalName = `CSV ${suffix}`;
@@ -48,7 +48,7 @@ test('products can be exported and imported as one round-trip CSV', async ({ pag
   expect(csv).toContain('\uFEFFID;Название;Производитель;');
   expect(csv).toContain(originalName);
 
-  const importCsv = `\uFEFFID;Название;Производитель;Характеристики;Крепость;Цена 1 л;Цена 1,5 л;Алкогольная;Цвет напитка;Фильтрация;Активна\r\n${product.id};${updatedName};Browser CI;после импорта;4,5%;250;375;да;светлый;фильтрованное;да\r\n;CSV NEW ${suffix};Новый;создано импортом;;100;150;нет;;;да\r\n`;
+  const importCsv = `\uFEFFID;Название;Производитель;Характеристики;Крепость;Цена 1 л;Цена 1,5 л;Алкогольная;Цвет напитка;Фильтрация;Активна\r\n${product.id};${updatedName};Browser CI;после импорта;4,5%;256;999999;да;светлый;фильтрованное;да\r\n;CSV NEW ${suffix};Новый;создано импортом;;100;1;нет;;;да\r\n`;
   await page.locator('#product-import-file').setInputFiles({
     name: 'products.csv',
     mimeType: 'text/csv',
@@ -62,8 +62,10 @@ test('products can be exported and imported as one round-trip CSV', async ({ pag
   const updated = products.find((item) => item.id === product.id);
   const created = products.find((item) => item.name === `CSV NEW ${suffix}`);
   expect(updated?.name).toBe(updatedName);
-  expect(updated?.price_primary).toBe('250');
+  expect(updated?.price_primary).toBe('256');
+  expect(updated?.price_secondary).toBe('384');
   expect(created?.price_primary).toBe('100');
+  expect(created?.price_secondary).toBe('150');
 
   await page.request.delete(`/api/catalog/products/${product.id}`);
   if (created) await page.request.delete(`/api/catalog/products/${created.id}`);
