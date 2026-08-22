@@ -70,15 +70,15 @@
         </div>
 
         <div class="settings-card">
-          <div class="card-heading"><div><p class="eyebrow">PROMO STYLE</p><h2>Акционная позиция</h2><p>Один масштабный стиль акции: отдельно управляются плашка, вся строка и цена.</p></div></div>
+          <div class="card-heading"><div><p class="eyebrow">PROMO STYLE</p><h2>Акционная позиция</h2><p>Один масштабный стиль акции: отдельно управляются цельная плашка, вся строка и цена.</p></div></div>
           <div class="form-grid">
             <label class="animation-master-toggle"><input id="promo-enabled" type="checkbox" /><span><strong>Акцент акции включён</strong><small>Работает только для строк с полем «Акция».</small></span></label>
             <label class="field"><span>Эффект плашки</span><select id="promo-badge-effect"><option value="static">Статично</option><option value="glow">Glow</option><option value="sheen">Sheen</option><option value="pulse">Pulse</option></select></label>
-            <label class="field"><span>Масштаб плашки</span><input id="promo-badge-scale" type="number" min="1" max="1.35" step="0.01" /></label>
+            <label class="field"><span>Масштаб цельной плашки</span><input id="promo-badge-scale" type="number" min="1" max="1.35" step="0.01" /></label>
             <label class="field"><span>Свечение плашки</span><input id="promo-badge-glow" type="range" min="0" max="1" step="0.01" /></label>
             <label class="field"><span>Эффект всей строки</span><select id="promo-row-effect"><option value="none">Нет</option><option value="glow">Glow</option><option value="sweep">Большой световой проход</option><option value="pulse">Pulse</option></select></label>
             <label class="field"><span>Свечение строки</span><input id="promo-row-glow" type="range" min="0" max="1" step="0.01" /></label>
-            <label class="field"><span>Подложка строки</span><input id="promo-row-tint" type="range" min="0" max="0.5" step="0.01" /></label>
+            <label class="field"><span>Красный фон строки</span><input id="promo-row-tint" type="range" min="0" max="0.18" step="0.01" /><small>0 — фон полностью скрыт; максимум — текущая лёгкая полупрозрачная полоса.</small></label>
             <label class="field"><span>Акцент цены</span><select id="promo-price-effect"><option value="none">Нет</option><option value="glow">Glow</option><option value="pulse">Pulse</option><option value="pop">Pop</option></select></label>
             <label class="field"><span>Длительность sweep, сек</span><input id="promo-sweep-seconds" type="number" min="0.5" max="6" step="0.1" /></label>
             <label class="field"><span>Период промо-цикла, сек</span><input id="promo-cycle-seconds" type="number" min="3" max="30" step="0.5" /></label>
