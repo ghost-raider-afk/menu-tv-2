@@ -18,7 +18,7 @@ function renderPromotionRow(row) {
 
 test('promotion flag is visually self-contained even without custom promotion text', () => {
   const svg = renderPromotionRow({ promotion: true, promotion_text: '' });
-  assert.match(svg, /class="promotion-badge"/);
+  assert.match(svg, /<g class="promotion-badge-group">[\s\S]*class="promotion-badge"[\s\S]*class="promotion"[\s\S]*<\/g>/);
   assert.match(svg, />АКЦИЯ<\/text>/);
   assert.match(svg, /stroke="#F6C90E"/);
   assert.match(svg, /font-weight="900"/);
