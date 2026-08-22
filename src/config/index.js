@@ -29,6 +29,7 @@ export function loadConfig(env = process.env) {
     loginWindowMinutes: integer('LOGIN_WINDOW_MINUTES', env.LOGIN_WINDOW_MINUTES, { minimum: 1, maximum: 1440 }),
     loginLimiterMaxEntries: integer('LOGIN_LIMITER_MAX_ENTRIES', env.LOGIN_LIMITER_MAX_ENTRIES, { minimum: 10, maximum: 100000 }),
     jsonBodyMaxBytes: integer('JSON_BODY_MAX_BYTES', env.JSON_BODY_MAX_BYTES, { minimum: 1024, maximum: 10485760 }),
+    catalogCsvMaxBytes: integer('CATALOG_CSV_MAX_BYTES', env.CATALOG_CSV_MAX_BYTES, { minimum: 1024, maximum: 52428800 }),
     menuDraftMaxBytes: integer('MENU_DRAFT_MAX_BYTES', env.MENU_DRAFT_MAX_BYTES, { minimum: 1024, maximum: 10485760 }),
     screenSourceMaxBytes: integer('SCREEN_SOURCE_MAX_BYTES', env.SCREEN_SOURCE_MAX_BYTES, { minimum: 1024, maximum: 52428800 }),
     dashboardRefreshMinSeconds,
