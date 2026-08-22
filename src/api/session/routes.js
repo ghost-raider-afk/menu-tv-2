@@ -13,6 +13,11 @@ function sessionResponse(request, preferences, settings, config) {
   };
 }
 
+function markAuthenticatedSessionAuthority(response) {
+  response.setHeader('X-Session-State', 'authenticated');
+  response.setHeader('Cache-Control', 'no-store');
+}
+
 export function createSessionRouter({ store, config }) {
   const router = express.Router();
 
@@ -30,6 +35,7 @@ export function createSessionRouter({ store, config }) {
       store.getUserPreferences(request.session.sub),
       store.getSiteSettings()
     ]);
+    markAuthenticatedSessionAuthority(response);
     response.setHeader('Set-Cookie', themeCookie(preferences.theme, config));
     response.json({
       session: sessionResponse(request, preferences, settings, config),
