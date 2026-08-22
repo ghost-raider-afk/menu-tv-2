@@ -121,8 +121,9 @@ async function importProducts(file) {
   setPending(button, true, 'Загружаем…');
   clearMessage('product-message');
   try {
-    const csv = await file.text();
-    const result = await api.post(API.productsImport, { csv });
+    const result = await api.post(API.productsImport, file, {
+      headers: { 'Content-Type': 'application/octet-stream' }
+    });
     resetProductForm();
     await Promise.all([loadCatalog(), loadNotifications()]);
     setMessage('product-message', `CSV загружен: создано ${result.created}, обновлено ${result.updated}.`, 'success');
