@@ -10,6 +10,6 @@ export function createNotificationsPanel() {
   panel.className = 'notification-panel is-hidden';
   panel.id = 'notifications-panel';
   panel.setAttribute('aria-label', 'Уведомления');
-  panel.innerHTML = `<div class="panel-heading"><strong>Уведомления</strong><button class="text-button" id="mark-notifications-read" type="button">Прочитать все</button></div><div data-notification-list></div><p class="empty-state is-hidden" data-notification-empty>Новых уведомлений нет.</p><a class="panel-footer" href="/settings.html#activity">Открыть журнал действий</a>`;
+  panel.innerHTML = `<div class="panel-heading"><strong>Уведомления</strong><button class="text-button" id="mark-notifications-read" type="button">Прочитать все</button></div><div data-notification-list></div><p class="empty-state is-hidden" data-notification-empty>Новых уведомлений нет.</p><a class="panel-footer" data-open-activity-log href="/activity.html">Открыть журнал действий</a>`;
   return panel;
 }
