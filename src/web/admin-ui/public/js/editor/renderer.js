@@ -371,17 +371,19 @@ function priceMarkup(value, x, baseline, scale, toneColor, typography) {
 }
 
 function promotionMarkup(line, x, box, scale, typography) {
-  if (!line.promotion || !line.promotionText) return { markup: '', width: 0 };
+  if (!line.promotion) return { markup: '', width: 0 };
   const fontScale = TV1_REFERENCE_SCALE * scale;
-  const text = truncateText(line.promotionText, 12);
-  const width = Math.min(130 * fontScale, Math.max(68 * fontScale, ([...text].length * 9 + 24) * fontScale));
-  const height = 27 * fontScale;
-  const top = box.top + 4 * scale;
-  const notch = 9 * fontScale;
+  const sourceText = String(line.promotionText || '').trim() || 'АКЦИЯ';
+  const text = truncateText(sourceText, 14);
+  const width = Math.min(165 * fontScale, Math.max(86 * fontScale, ([...text].length * 10 + 30) * fontScale));
+  const height = 32 * fontScale;
+  const top = box.top + 2 * scale;
+  const notch = 10.5 * fontScale;
+  const strokeWidth = Math.max(1.2, 1.35 * scale);
   return {
     width,
-    markup: `<path d="M${x} ${top}H${x + width - notch}L${x + width} ${top + height / 2}L${x + width - notch} ${top + height}H${x}Z" fill="${MENU_TABLE_STYLE.promotion}"/>
-      <text x="${x + (width - notch) / 2}" y="${top + 18.5 * fontScale}" class="promotion" ${textAttributes({ size: 12 * fontScale, weight: 800, fill: '#FFFFFF', letterSpacing: 0.2 * scale, anchor: 'middle' }, typography)}>${escapeXml(text)}</text>`
+    markup: `<path class="promotion-badge" d="M${x} ${top}H${x + width - notch}L${x + width} ${top + height / 2}L${x + width - notch} ${top + height}H${x}Z" fill="${MENU_TABLE_STYLE.promotion}" stroke="${MENU_TABLE_STYLE.defaultAccent}" stroke-width="${strokeWidth}"/>
+      <text x="${x + (width - notch) / 2}" y="${top + 21.5 * fontScale}" class="promotion" ${textAttributes({ size: 14.5 * fontScale, weight: 900, fill: '#FFFFFF', letterSpacing: 0.65 * scale, anchor: 'middle' }, typography)}>${escapeXml(text)}</text>`
   };
 }
 
