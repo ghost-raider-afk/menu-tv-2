@@ -1,4 +1,9 @@
 import { canonicalRoutePath, isAppRoutePath, PREFETCH_ROUTE_PATHS } from './navigation.js';
+import {
+  SESSION_AUTHORITY_STATES,
+  transitionToSignIn,
+  verifySessionAuthority
+} from './session-authority.js';
 
 let activeRouter = null;
 
@@ -67,17 +72,17 @@ function currentViewSnapshot() {
 function parseViewDocument(html, responseUrl) {
   const parsed = new DOMParser().parseFromString(html, 'text/html');
   const page = parsed.body?.dataset?.page || '';
-  if (page === 'signin') {
-    window.location.replace('/signin.html');
-    return null;
-  }
+  if (page === 'signin') return { authChallenge: true };
   const main = parsed.querySelector('.main-content');
   if (!main || !page) throw new Error(`Маршрут ${responseUrl} не содержит рабочую область.`);
   return {
-    page,
-    mainClassName: main.className,
-    mainHtml: main.innerHTML,
-    documentTitle: parsed.title || document.title
+    authChallenge: false,
+    view: {
+      page,
+      mainClassName: main.className,
+      mainHtml: main.innerHTML,
+      documentTitle: parsed.title || document.title
+    }
   };
 }
 
@@ -113,10 +118,7 @@ export function createAppRouter({ mountPage, syncShell }) {
 
   viewCache.set(canonicalUrl(window.location.href).pathname, currentViewSnapshot());
 
-  async function loadView(target) {
-    const cacheKey = target.pathname;
-    if (viewCache.has(cacheKey)) return viewCache.get(cacheKey);
-
+  async function fetchViewAttempt(cacheKey) {
     const response = await fetch(cacheKey, {
       method: 'GET',
       credentials: 'same-origin',
@@ -125,14 +127,36 @@ export function createAppRouter({ mountPage, syncShell }) {
     });
 
     if (response.redirected && canonicalUrl(response.url).pathname === '/signin.html') {
-      window.location.replace('/signin.html');
-      return null;
+      return { authChallenge: true };
     }
     if (!response.ok) throw new Error(`Не удалось открыть раздел (${response.status}).`);
+    return parseViewDocument(await response.text(), response.url || cacheKey);
+  }
 
-    const view = parseViewDocument(await response.text(), response.url || cacheKey);
-    if (view) viewCache.set(cacheKey, view);
-    return view;
+  async function loadView(target) {
+    const cacheKey = target.pathname;
+    if (viewCache.has(cacheKey)) return viewCache.get(cacheKey);
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const result = await fetchViewAttempt(cacheKey);
+      if (!result.authChallenge) {
+        viewCache.set(cacheKey, result.view);
+        return result.view;
+      }
+
+      const sessionState = await verifySessionAuthority();
+      if (sessionState === SESSION_AUTHORITY_STATES.UNAUTHENTICATED) {
+        transitionToSignIn();
+        return null;
+      }
+      if (sessionState === SESSION_AUTHORITY_STATES.UNKNOWN) {
+        throw new Error('Не удалось подтвердить состояние сессии. Раздел не переключён.');
+      }
+      if (attempt === 1) {
+        throw new Error('Сессия активна, но сервер ошибочно вернул страницу входа. Раздел не переключён.');
+      }
+    }
+    return null;
   }
 
   async function canLeaveCurrentPage() {
@@ -215,7 +239,6 @@ export function createAppRouter({ mountPage, syncShell }) {
       return await commit(target, view, options);
     } catch (error) {
       console.error('Client-side navigation failed', error);
-      window.location.assign(target.href);
       return false;
     }
   }
