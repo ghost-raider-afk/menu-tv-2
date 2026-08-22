@@ -1,6 +1,8 @@
 import { buildDisplayLines, buildRenderLayout, buildRenderModel, buildTableSvg } from '../editor/renderer.js';
 import { parseResolution } from '../editor/settings.js';
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
 function applyTypography(stage, layout) {
   const svg = stage.querySelector('svg.menu-table-svg');
   if (!(svg instanceof SVGElement)) return;
@@ -8,27 +10,88 @@ function applyTypography(stage, layout) {
   svg.style.fontWeight = String(layout.typography.weightFloor || 400);
   svg.dataset.fontKey = layout.typography.key;
 }
+
+function setSvgAttribute(node, name, value) {
+  node.setAttribute(name, String(value));
+}
+
+function injectPromoRowLayer(row) {
+  if (!row || row.querySelector('.promotion-row-highlight')) return;
+  const separator = row.querySelector('line.separator');
+  let box;
+  try { box = row.getBBox(); } catch { box = null; }
+  if (!box) return;
+  const left = Number(separator?.getAttribute('x1')) || box.x;
+  const right = Number(separator?.getAttribute('x2')) || (box.x + box.width);
+  const top = Math.max(0, box.y - 5);
+  const height = Math.max(36, box.height + 10);
+  const width = Math.max(1, right - left);
+
+  const highlight = document.createElementNS(SVG_NS, 'rect');
+  highlight.classList.add('promotion-row-highlight');
+  setSvgAttribute(highlight, 'x', left);
+  setSvgAttribute(highlight, 'y', top);
+  setSvgAttribute(highlight, 'width', width);
+  setSvgAttribute(highlight, 'height', height);
+  setSvgAttribute(highlight, 'rx', 6);
+  setSvgAttribute(highlight, 'fill', '#D92D35');
+  setSvgAttribute(highlight, 'opacity', 0.12);
+  highlight.dataset.motionPromoLayer = 'highlight';
+
+  const sweep = document.createElementNS(SVG_NS, 'rect');
+  sweep.classList.add('promotion-row-sweep');
+  setSvgAttribute(sweep, 'x', left - width * 0.32);
+  setSvgAttribute(sweep, 'y', top);
+  setSvgAttribute(sweep, 'width', width * 0.28);
+  setSvgAttribute(sweep, 'height', height);
+  setSvgAttribute(sweep, 'rx', 6);
+  setSvgAttribute(sweep, 'fill', '#F6C90E');
+  setSvgAttribute(sweep, 'opacity', 0);
+  sweep.dataset.motionPromoLayer = 'sweep';
+
+  row.insertBefore(sweep, row.firstChild);
+  row.insertBefore(highlight, row.firstChild);
+  row.dataset.motionPromoRow = 'true';
+  row.style.transformBox = 'fill-box';
+  row.style.transformOrigin = 'center';
+}
+
 function markPromotionTargets(stage) {
   stage.querySelectorAll('text.promotion').forEach((label) => {
-    label.dataset.motion = 'promotion';
+    label.dataset.motionPromoBadge = 'true';
     label.style.transformBox = 'fill-box';
     label.style.transformOrigin = 'center';
     const shape = label.previousElementSibling;
     if (shape?.tagName?.toLowerCase() === 'path') {
-      shape.dataset.motion = 'promotion';
+      shape.dataset.motionPromoBadge = 'true';
       shape.style.transformBox = 'fill-box';
       shape.style.transformOrigin = 'center';
     }
     const row = label.closest('g.table-item');
-    row?.querySelectorAll('text.price').forEach((price) => { price.dataset.promotionPrice = 'true'; });
+    if (!row) return;
+    injectPromoRowLayer(row);
+    row.querySelectorAll('text.price').forEach((price) => {
+      price.dataset.motionPromoPrice = 'true';
+      price.style.transformBox = 'fill-box';
+      price.style.transformOrigin = 'center';
+    });
   });
 }
+
+function markBrandTargets(stage) {
+  stage.querySelectorAll('text.item-name').forEach((node, index) => {
+    node.dataset.brandTarget = String(index);
+  });
+}
+
 function markMotionTargets(stage) {
   stage.querySelectorAll('g.table-section').forEach((node) => { node.dataset.motion = 'section'; });
   stage.querySelectorAll('g.table-item, g.table-packaging').forEach((node) => { node.dataset.motion = 'item'; });
   stage.querySelectorAll('text.price, text.packaging-price').forEach((node) => { node.dataset.motion = 'price'; });
   markPromotionTargets(stage);
+  markBrandTargets(stage);
 }
+
 function backgroundStyle(layer, model, palette, overrideUrl = null) {
   if (!layer) return;
   const backgroundUrl = overrideUrl === null ? model.settings.background_image_url : overrideUrl;
@@ -37,6 +100,7 @@ function backgroundStyle(layer, model, palette, overrideUrl = null) {
   layer.style.backgroundSize = '100% 100%';
   layer.style.backgroundPosition = 'center';
 }
+
 function visualFxMarkup() {
   return `<div class="animation-screen-fx" data-motion-fx aria-hidden="true">
     <div class="motion-fx motion-fx-ocean"><i></i><i></i></div>
