@@ -3,8 +3,17 @@ import { packagingInput, positiveId, productInput } from '../../contracts/input.
 import { importProductsCsv, productsToCsv } from '../../services/catalog-csv-service.js';
 import { activity, conflict, notFound } from '../helpers.js';
 
-export function createCatalogRouter({ store }) {
+function csvImportSource(body) {
+  if (Buffer.isBuffer(body) || body instanceof Uint8Array || typeof body === 'string') return body;
+  return body?.csv;
+}
+
+export function createCatalogRouter({ store, config }) {
   const router = express.Router();
+  const parseCsvUpload = express.raw({
+    type: ['application/octet-stream', 'text/csv', 'text/plain'],
+    limit: config.catalogCsvMaxBytes
+  });
 
   router.get('/products', async (_request, response) => response.json(await store.listProducts()));
   router.get('/products/export.csv', async (_request, response) => {
@@ -14,8 +23,8 @@ export function createCatalogRouter({ store }) {
     response.setHeader('Cache-Control', 'no-store');
     response.send(csv);
   });
-  router.post('/products/import', async (request, response) => {
-    const result = await importProductsCsv(store, request.body?.csv);
+  router.post('/products/import', parseCsvUpload, async (request, response) => {
+    const result = await importProductsCsv(store, csvImportSource(request.body));
     await activity(store, request, {
       action: 'catalog.products.imported',
       entity_type: 'catalog_product',
