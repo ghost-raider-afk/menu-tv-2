@@ -4,7 +4,10 @@ import test from 'node:test';
 
 const root = new URL('../src/web/admin-ui/public/', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
-const htmlPages = ['index.html','locations.html','screens.html','screen-editor.html','catalog.html','settings.html','sftp-settings.html','animation.html','profile.html','signin.html'];
+const htmlPages = [
+  'index.html','locations.html','screens.html','connect-tv.html','screen-editor.html','catalog.html',
+  'settings.html','sftp-settings.html','animation.html','activity.html','diagnostics.html','profile.html','signin.html'
+];
 
 test('all current pages use the single final CSS entrypoint', async () => {
   for (const page of htmlPages) {
@@ -26,9 +29,10 @@ test('templates frontend is physically absent', async () => {
 
 test('CSS architecture is compact and has one permanent entrypoint', async () => {
   const [entry, tokens] = await Promise.all([read('css/index.css'), read('css/tokens.css')]);
-  for (const required of ['./tokens.css','./base.css','./shell.css','./components.css','./forms.css','./tables.css','./editor/editor.css','./auth/signin.css']) {
-    assert.ok(entry.includes(required), required);
-  }
+  for (const required of [
+    './tokens.css','./base.css','./shell.css','./components.css','./forms.css','./tables.css',
+    './pages/diagnostics.css','./editor/editor.css','./auth/signin.css'
+  ]) assert.ok(entry.includes(required), required);
   assert.doesNotMatch(entry, /tv1|templates\.css/i);
   assert.match(tokens, /--brand-accent:#f4c915/i);
   assert.match(tokens, /--ui-rail-width:64px/);
@@ -38,14 +42,15 @@ test('CSS architecture is compact and has one permanent entrypoint', async () =>
   assert.match(tokens, /--ui-accent-on-chrome:/);
 });
 
-test('shell remains modular and catalog submenu has one product entry', async () => {
+test('shell remains modular and catalog submenu exposes products and packaging', async () => {
   const [shell, navigation] = await Promise.all([read('js/components/shell.js'), read('js/core/navigation.js')]);
   assert.match(shell, /createSidebar/);
   assert.match(shell, /createContextPanel/);
   assert.match(shell, /createHeader/);
   assert.doesNotMatch(shell, /legacy|\.sidebar|\.topbar/i);
-  assert.match(navigation, /catalog:\s*Object\.freeze\(\[\['Продукция', '\/catalog\.html'\]\]\)/);
-  assert.doesNotMatch(navigation, /#packaging|\['Тара'/);
+  assert.match(navigation, /\['Продукция', '\/catalog\.html#products'\]/);
+  assert.match(navigation, /\['Тара', '\/catalog\.html#packaging'\]/);
+  assert.match(navigation, /\['Журнал ошибок', '\/diagnostics\.html'\]/);
   assert.doesNotMatch(navigation, /Шаблоны/);
 });
 
@@ -71,6 +76,8 @@ test('authenticated navigation uses one persistent client-side shell', async () 
   assert.match(router, /PREFETCH_ROUTE_PATHS/);
   assert.match(router, /canLeaveCurrentPage/);
   assert.match(router, /canonicalRoutePath/);
+  assert.match(router, /beginRouteRuntime/);
+  assert.match(router, /restorePreviousView/);
   assert.match(navigation, /ROUTE_DEFINITIONS/);
   assert.match(navigation, /PREFETCH_ROUTE_PATHS/);
   assert.match(shell, /refreshShellRoute/);
