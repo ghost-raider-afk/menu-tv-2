@@ -11,19 +11,100 @@
   <body data-page="animation">
     <div class="app-shell"><div class="app-content"><main class="main-content animation-content">
       <div class="page-heading animation-heading">
-        <div><p class="eyebrow">MOTION STUDIO</p><h1>Анимация экранов</h1><p>Профили рассчитаны на digital-signage: эффект должен читаться на большом ТВ с расстояния 3–6 метров. Фоновое изображение всегда остаётся статичным; оживают меню, промо-акценты, световые FX и персонажи.</p></div>
-        <div class="animation-heading-actions"><label class="animation-master-toggle"><input id="animation-enabled" type="checkbox" /><span><strong>Анимация включена</strong><small>Ни один пресет не скрывает меню целиком.</small></span></label><button class="button button-primary" id="animation-save" type="button">Сохранить профиль</button></div>
+        <div>
+          <p class="eyebrow">MOTION STUDIO</p>
+          <h1>Редактируемый пресет экрана</h1>
+          <p>Один канонический стиль: движение меню, акция, Brand Reveal и Visual FX настраиваются независимо. Фоновое изображение всегда остаётся статичным.</p>
+        </div>
+        <div class="animation-heading-actions">
+          <label class="animation-master-toggle"><input id="animation-enabled" type="checkbox" /><span><strong>Анимация включена</strong><small>При выключении меню остаётся статичным и читаемым.</small></span></label>
+          <button class="button button-primary" id="animation-save" type="button">Применить к экранам</button>
+        </div>
       </div>
       <p class="form-message is-hidden" id="animation-message" role="status" aria-live="polite"></p>
-      <section class="animation-studio-grid" aria-label="Студия анимации">
-        <div class="settings-card animation-preset-card"><div class="card-heading"><div><p class="eyebrow">26 ТВ-ПРЕСЕТОВ</p><h2>Постоянное движение + Visual FX</h2><p>20 motion-профилей и 6 полноэкранных визуальных сцен. Все работают поверх неподвижного фонового изображения.</p></div></div><div class="animation-preset-list" id="animation-presets"></div></div>
-        <div class="settings-card animation-player-card"><div class="card-heading"><div><p class="eyebrow">LIVE PREVIEW</p><h2>Мини‑плеер</h2><p id="animation-current-preset">Каскад витрины</p></div><span class="animation-live-badge">LOOP</span></div><div class="animation-screen-picker"><label class="field"><span>Экран предпросмотра</span><select id="animation-screen-select" aria-label="Экран предпросмотра"><option value="">Загрузка мониторов…</option></select></label><p id="animation-screen-status">Загружаем сохранённый экран…</p></div><div class="animation-player-shell"><div class="animation-stage" id="animation-stage" aria-label="Предпросмотр постоянной анимации"><p class="animation-screen-empty">Загружаем настоящий экран…</p></div><div class="animation-player-controls"><div class="animation-player-buttons"><button class="button button-secondary" id="animation-play" type="button">▶ Пуск</button><button class="button button-secondary" id="animation-pause" type="button">⏸ Пауза</button><button class="button button-secondary" id="animation-replay" type="button">↻ С начала цикла</button></div><div class="animation-timeline-wrap"><input id="animation-timeline" type="range" min="0" max="1000" value="0" aria-label="Шкала цикла" /><span id="animation-time">0.0 с / 0.0 с</span></div></div></div></div>
+
+      <section class="animation-studio-grid" aria-label="Пресет и предпросмотр">
+        <div class="settings-card animation-preset-card">
+          <div class="card-heading"><div><p class="eyebrow">МОИ ПРЕСЕТЫ</p><h2>Сохранённые настройки</h2><p>Сохраните текущую комбинацию параметров под своим названием и используйте её повторно.</p></div></div>
+          <div class="form-grid">
+            <label class="field"><span>Выбранный пресет</span><select id="animation-preset-select"><option value="">Редактируемый стиль</option></select></label>
+            <label class="field"><span>Название</span><input id="animation-preset-name" type="text" maxlength="80" placeholder="Например: Вечерняя акция" /></label>
+          </div>
+          <div class="button-row">
+            <button class="button button-primary" id="animation-preset-save-as" type="button">Сохранить как новый</button>
+            <button class="button button-secondary" id="animation-preset-update" type="button" disabled>Обновить выбранный</button>
+            <button class="button button-danger" id="animation-preset-delete" type="button" disabled>Удалить</button>
+            <button class="button button-secondary" id="animation-preset-reset" type="button">Сбросить к базовому</button>
+          </div>
+        </div>
+
+        <div class="settings-card animation-player-card">
+          <div class="card-heading"><div><p class="eyebrow">LIVE PREVIEW</p><h2>Мини‑плеер</h2><p id="animation-current-preset">Редактируемый стиль</p></div><span class="animation-live-badge">LOOP</span></div>
+          <div class="animation-screen-picker"><label class="field"><span>Экран предпросмотра</span><select id="animation-screen-select"><option value="">Загрузка мониторов…</option></select></label><p id="animation-screen-status">Загружаем сохранённый экран…</p></div>
+          <div class="animation-player-shell">
+            <div class="animation-stage" id="animation-stage" aria-label="Предпросмотр анимации"><p class="animation-screen-empty">Загружаем настоящий экран…</p></div>
+            <div class="animation-player-controls"><div class="animation-player-buttons"><button class="button button-secondary" id="animation-play" type="button">▶ Пуск</button><button class="button button-secondary" id="animation-pause" type="button">⏸ Пауза</button><button class="button button-secondary" id="animation-replay" type="button">↻ С начала</button></div><div class="animation-timeline-wrap"><input id="animation-timeline" type="range" min="0" max="1000" value="0" /><span id="animation-time">0.0 с / 0.0 с</span></div></div>
+          </div>
+        </div>
       </section>
-      <section class="animation-controls-grid" aria-label="Детальные параметры постоянной анимации">
-        <div class="settings-card"><div class="card-heading"><div><p class="eyebrow">ЛОГИКА</p><h2>Характер движения</h2><p>Определяет, как акцент живёт внутри уже открытого меню.</p></div></div><div class="form-grid"><label class="field"><span>Режим</span><select id="animation-pattern"><option value="ambient">Ambient — спокойное дыхание</option><option value="wave">Wave — последовательная волна</option><option value="focus">Focus — фокус по элементам</option><option value="pulse">Pulse — синхронный импульс</option><option value="spark">Spark — световые акценты</option><option value="parallax">Parallax — глубина элементов</option></select></label><label class="field"><span>Направление волны</span><select id="animation-flow-direction"><option value="none">Без направления</option><option value="left-to-right">Слева направо</option><option value="right-to-left">Справа налево</option><option value="top-to-bottom">Сверху вниз</option><option value="bottom-to-top">Снизу вверх</option><option value="alternate">Встречное / попеременное</option></select></label><label class="field"><span>Easing</span><select id="animation-easing"><option value="standard">Standard</option><option value="smooth">Smooth</option><option value="snappy">Snappy</option><option value="cinematic">Cinematic</option><option value="elastic">Elastic</option></select></label><label class="field"><span>Общая интенсивность, %</span><input id="animation-intensity" type="range" min="0" max="100" step="1" /><output id="animation-intensity-output">72%</output></label></div></div>
-        <div class="settings-card"><div class="card-heading"><div><p class="eyebrow">ТАЙМИНГ</p><h2>Ритм цикла</h2><p>После события меню остаётся полностью спокойным до следующего прохода.</p></div></div><div class="form-grid"><label class="field"><span>Период полного цикла, сек</span><input id="animation-cycle" type="number" min="4" max="60" step="0.5" /></label><label class="field"><span>Длительность события, мс</span><input id="animation-event-duration" type="number" min="400" max="6000" step="50" /></label><label class="field"><span>Шаг волны между элементами, мс</span><input id="animation-wave-stagger" type="number" min="0" max="1000" step="10" /></label></div></div>
-        <div class="settings-card"><div class="card-heading"><div><p class="eyebrow">TV MOTION</p><h2>Амплитуда</h2><p>Диапазон ограничен так, чтобы эффект был заметен с расстояния, но текст не «ездил» по экрану.</p></div></div><div class="form-grid"><label class="field"><span>Перемещение, px</span><input id="animation-travel" type="number" min="0" max="24" step="0.5" /></label><label class="field"><span>Изменение масштаба</span><input id="animation-scale-amount" type="number" min="0" max="0.08" step="0.002" /></label><label class="field"><span>Изменение яркости</span><input id="animation-brightness" type="number" min="0" max="0.5" step="0.01" /></label></div></div>
-        <div class="settings-card"><div class="card-heading"><div><p class="eyebrow">ЭФФЕКТЫ</p><h2>Что именно оживает</h2><p>Промо-канал работает только для позиций с включённым полем «Акция». Visual FX — отдельный полноэкранный слой поверх статичного фона и под читаемым меню.</p></div></div><div class="form-grid"><label class="field"><span>Visual FX</span><select id="animation-visual-effect"><option value="none">Нет</option><option value="ocean-wave">Морской прибой</option><option value="aurora">Северное сияние</option><option value="ripple">Круги на воде</option><option value="sun-sweep">Солнечный блик</option><option value="spotlight">Spotlight</option><option value="liquid-glass">Liquid Glass</option></select></label><label class="field"><span>Разделы</span><select id="animation-section-effect"><option value="none">Нет</option><option value="glow">Glow</option><option value="pulse">Pulse</option><option value="shimmer">Световой блик</option><option value="lift">Микро‑подъём</option><option value="wave">Микро‑волна</option></select></label><label class="field"><span>Строки продукции</span><select id="animation-item-effect"><option value="none">Нет</option><option value="breathe">Дыхание</option><option value="wave">Микро‑волна</option><option value="focus">Фокус</option><option value="lift">Микро‑подъём</option></select></label><label class="field"><span>Цены</span><select id="animation-price-effect"><option value="none">Нет</option><option value="pulse">Pulse</option><option value="glow">Glow</option><option value="wave">Микро‑волна</option><option value="pop">Короткий акцент</option></select></label><label class="field"><span>Акция</span><select id="animation-promotion-effect"><option value="none">Только статическая метка</option><option value="glow">Glow метки</option><option value="sheen">Световой блик</option><option value="pulse">Pulse метки</option><option value="pulse-price">Pulse метки + цены</option></select></label></div></div>
+
+      <section class="animation-controls-grid" aria-label="Параметры пресета">
+        <div class="settings-card">
+          <div class="card-heading"><div><p class="eyebrow">MENU MOTION</p><h2>Основное движение</h2><p>Общий ритм меню без движения фонового изображения.</p></div></div>
+          <div class="form-grid">
+            <label class="field"><span>Режим</span><select id="animation-pattern"><option value="ambient">Ambient</option><option value="wave">Wave</option><option value="focus">Focus</option><option value="pulse">Pulse</option><option value="spark">Spark</option><option value="parallax">Parallax</option></select></label>
+            <label class="field"><span>Направление</span><select id="animation-flow-direction"><option value="none">Без направления</option><option value="left-to-right">Слева направо</option><option value="right-to-left">Справа налево</option><option value="top-to-bottom">Сверху вниз</option><option value="bottom-to-top">Снизу вверх</option><option value="alternate">Попеременно</option></select></label>
+            <label class="field"><span>Easing</span><select id="animation-easing"><option value="standard">Standard</option><option value="smooth">Smooth</option><option value="snappy">Snappy</option><option value="cinematic">Cinematic</option><option value="elastic">Elastic</option></select></label>
+            <label class="field"><span>Интенсивность, %</span><input id="animation-intensity" type="range" min="0" max="100" step="1" /><output id="animation-intensity-output">72%</output></label>
+            <label class="field"><span>Период цикла, сек</span><input id="animation-cycle" type="number" min="4" max="60" step="0.5" /></label>
+            <label class="field"><span>Длительность события, мс</span><input id="animation-event-duration" type="number" min="400" max="6000" step="50" /></label>
+            <label class="field"><span>Шаг волны, мс</span><input id="animation-wave-stagger" type="number" min="0" max="1000" step="10" /></label>
+            <label class="field"><span>Перемещение, px</span><input id="animation-travel" type="number" min="0" max="24" step="0.5" /></label>
+            <label class="field"><span>Изменение масштаба</span><input id="animation-scale-amount" type="number" min="0" max="0.08" step="0.002" /></label>
+            <label class="field"><span>Изменение яркости</span><input id="animation-brightness" type="number" min="0" max="0.5" step="0.01" /></label>
+            <label class="field"><span>Разделы</span><select id="animation-section-effect"><option value="none">Нет</option><option value="glow">Glow</option><option value="pulse">Pulse</option><option value="shimmer">Блик</option><option value="lift">Подъём</option><option value="wave">Волна</option></select></label>
+            <label class="field"><span>Строки</span><select id="animation-item-effect"><option value="none">Нет</option><option value="breathe">Дыхание</option><option value="wave">Волна</option><option value="focus">Фокус</option><option value="lift">Подъём</option></select></label>
+            <label class="field"><span>Цены</span><select id="animation-price-effect"><option value="none">Нет</option><option value="pulse">Pulse</option><option value="glow">Glow</option><option value="wave">Волна</option><option value="pop">Pop</option></select></label>
+            <label class="field"><span>Visual FX</span><select id="animation-visual-effect"><option value="none">Нет</option><option value="ocean-wave">Морской прибой</option><option value="aurora">Северное сияние</option><option value="ripple">Круги на воде</option><option value="sun-sweep">Солнечный блик</option><option value="spotlight">Spotlight</option><option value="liquid-glass">Liquid Glass</option></select></label>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <div class="card-heading"><div><p class="eyebrow">PROMO STYLE</p><h2>Акционная позиция</h2><p>Один масштабный стиль акции: отдельно управляются плашка, вся строка и цена.</p></div></div>
+          <div class="form-grid">
+            <label class="animation-master-toggle"><input id="promo-enabled" type="checkbox" /><span><strong>Акцент акции включён</strong><small>Работает только для строк с полем «Акция».</small></span></label>
+            <label class="field"><span>Эффект плашки</span><select id="promo-badge-effect"><option value="static">Статично</option><option value="glow">Glow</option><option value="sheen">Sheen</option><option value="pulse">Pulse</option></select></label>
+            <label class="field"><span>Масштаб плашки</span><input id="promo-badge-scale" type="number" min="1" max="1.35" step="0.01" /></label>
+            <label class="field"><span>Свечение плашки</span><input id="promo-badge-glow" type="range" min="0" max="1" step="0.01" /></label>
+            <label class="field"><span>Эффект всей строки</span><select id="promo-row-effect"><option value="none">Нет</option><option value="glow">Glow</option><option value="sweep">Большой световой проход</option><option value="pulse">Pulse</option></select></label>
+            <label class="field"><span>Свечение строки</span><input id="promo-row-glow" type="range" min="0" max="1" step="0.01" /></label>
+            <label class="field"><span>Подложка строки</span><input id="promo-row-tint" type="range" min="0" max="0.5" step="0.01" /></label>
+            <label class="field"><span>Акцент цены</span><select id="promo-price-effect"><option value="none">Нет</option><option value="glow">Glow</option><option value="pulse">Pulse</option><option value="pop">Pop</option></select></label>
+            <label class="field"><span>Длительность sweep, сек</span><input id="promo-sweep-seconds" type="number" min="0.5" max="6" step="0.1" /></label>
+            <label class="field"><span>Период промо-цикла, сек</span><input id="promo-cycle-seconds" type="number" min="3" max="30" step="0.5" /></label>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <div class="card-heading"><div><p class="eyebrow">BRAND REVEAL</p><h2>Название бренда на весь экран</h2><p>Название появляется крупно, затем каждая буква улетает точно в своё место в реальном SVG-рендерере.</p></div></div>
+          <div class="form-grid">
+            <label class="animation-master-toggle"><input id="brand-enabled" type="checkbox" /><span><strong>Brand Reveal включён</strong><small>При reduced-motion полёт автоматически отключается.</small></span></label>
+            <label class="field"><span>Название бренда</span><input id="brand-text" type="text" maxlength="80" placeholder="Текст должен присутствовать в названии позиции" /></label>
+            <label class="field"><span>Старт X, %</span><input id="brand-start-x" type="number" min="0" max="100" step="1" /></label>
+            <label class="field"><span>Старт Y, %</span><input id="brand-start-y" type="number" min="0" max="100" step="1" /></label>
+            <label class="field"><span>Стартовый масштаб</span><input id="brand-start-scale" type="number" min="1" max="6" step="0.1" /></label>
+            <label class="field"><span>Показ названия, мс</span><input id="brand-hold-ms" type="number" min="0" max="6000" step="100" /></label>
+            <label class="field"><span>Полёт букв, мс</span><input id="brand-flight-ms" type="number" min="400" max="6000" step="100" /></label>
+            <label class="field"><span>Задержка между буквами, мс</span><input id="brand-stagger-ms" type="number" min="0" max="500" step="10" /></label>
+            <label class="field"><span>Easing</span><select id="brand-easing"><option value="standard">Standard</option><option value="smooth">Smooth</option><option value="snappy">Snappy</option><option value="cinematic">Cinematic</option><option value="elastic">Elastic</option></select></label>
+            <label class="field"><span>Порядок букв</span><select id="brand-order"><option value="left-to-right">Слева направо</option><option value="center">Из центра</option><option value="random">Случайный</option><option value="wave">Волна</option></select></label>
+            <label class="field"><span>Поворот букв, °</span><input id="brand-rotation" type="number" min="0" max="45" step="1" /></label>
+            <label class="field"><span>Свечение</span><input id="brand-glow" type="range" min="0" max="1" step="0.01" /></label>
+            <label class="field"><span>Когда запускать</span><select id="brand-trigger"><option value="player-start">При запуске Player</option><option value="menu-update">После изменения меню</option><option value="interval">По интервалу</option></select></label>
+            <label class="field"><span>Интервал, сек</span><input id="brand-interval-seconds" type="number" min="30" max="3600" step="10" /></label>
+          </div>
+          <p class="helper-text">Финальные координаты букв не сохраняются: Player вычисляет их из фактического SVG-текста при каждом запуске.</p>
+        </div>
       </section>
     </main></div></div>
   </body>
