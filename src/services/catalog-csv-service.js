@@ -1,5 +1,5 @@
 import { TextDecoder } from 'node:util';
-import { normalisePrice, productInput, positiveId } from '../contracts/input.js';
+import { productInput, positiveId } from '../contracts/input.js';
 import { ValidationError } from '../shared/errors.js';
 
 const EXPORT_HEADERS = Object.freeze([
@@ -230,15 +230,6 @@ function filtrationValue(value) {
   throw new ValidationError('Поле «Фильтрация» содержит неизвестное значение.');
 }
 
-function validateSecondaryPrice(row, columns, product) {
-  const source = cell(row, columns, 'price_secondary');
-  if (!source) return;
-  const supplied = normalisePrice(source, 'Цена за 1,5 л');
-  if (supplied !== product.price_secondary) {
-    throw new ValidationError(`Цена за 1,5 л рассчитывается автоматически из цены за 1 л. Ожидается ${readablePrice(product.price_secondary)}.`);
-  }
-}
-
 function productForExistingEntry(existing, entry) {
   const source = {
     ...existing,
@@ -283,7 +274,6 @@ export function productsFromCsv(source) {
         filtration: filtrationValue(cell(row, columns, 'filtration')),
         active: booleanValue(cell(row, columns, 'active'), 'Активна', true)
       });
-      validateSecondaryPrice(row, columns, product);
       entries.push({ line, id, product, providedFields });
     } catch (error) {
       if (error instanceof ValidationError) throw new ValidationError(`Строка ${line}: ${error.message}`);
