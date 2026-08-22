@@ -7,6 +7,7 @@ import {
   DEFAULT_ANIMATION_PROFILE,
   ITEM_EFFECTS,
   PRICE_EFFECTS,
+  PROMOTION_EFFECTS,
   SECTION_EFFECTS,
   VISUAL_EFFECTS,
   completeAnimationProfile
@@ -38,6 +39,7 @@ export function animationProfileInput(source) {
     section_effect: enumValue(profile.section_effect, 'Эффект разделов', SECTION_EFFECTS),
     item_effect: enumValue(profile.item_effect, 'Эффект строк', ITEM_EFFECTS),
     price_effect: enumValue(profile.price_effect, 'Эффект цен', PRICE_EFFECTS),
+    promotion_effect: enumValue(profile.promotion_effect, 'Эффект акции', PROMOTION_EFFECTS),
     visual_effect: enumValue(profile.visual_effect, 'Визуальный эффект', VISUAL_EFFECTS),
     intensity: numberValue(profile.intensity, 'Интенсивность', { min: 0, max: 100, integer: true })
   };
