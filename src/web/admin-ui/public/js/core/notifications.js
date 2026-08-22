@@ -31,6 +31,11 @@ function updateBadge(count) {
   badge.classList.toggle('is-hidden', visible === 0);
 }
 
+function closeNotifications(panel, button) {
+  panel.classList.add('is-hidden');
+  button.setAttribute('aria-expanded', 'false');
+}
+
 export async function loadNotifications(limit = 20) {
   const result = await api.get(`${API.notifications}?limit=${limit}`);
   renderEvents(document.querySelector('[data-notification-list]'), document.querySelector('[data-notification-empty]'), result.items);
@@ -38,10 +43,9 @@ export async function loadNotifications(limit = 20) {
   return result;
 }
 
-export async function loadActivity() {
-  const result = await api.get(`${API.notifications}?limit=100`);
+export async function loadActivity(limit = 2000) {
+  const result = await api.get(`${API.notifications}/activity?limit=${limit}`);
   renderEvents(document.querySelector('[data-activity-list]'), document.querySelector('[data-activity-empty]'), result.items);
-  updateBadge(result.unread_count);
   return result;
 }
 
@@ -67,9 +71,9 @@ export function initialiseNotifications() {
   });
   document.addEventListener('click', (event) => {
     if (panel.classList.contains('is-hidden') || panel.contains(event.target) || button.contains(event.target)) return;
-    panel.classList.add('is-hidden');
-    button.setAttribute('aria-expanded', 'false');
+    closeNotifications(panel, button);
   });
+  panel.querySelector('[data-open-activity-log]')?.addEventListener('click', () => closeNotifications(panel, button));
   element('mark-notifications-read')?.addEventListener('click', async () => {
     try {
       await api.post(`${API.notifications}/read`);
