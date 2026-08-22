@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.3.3"
+SCRIPT_VERSION="1.3.4"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
@@ -479,6 +479,7 @@ ensure_sftp_env() {
   [[ -n "$(env_value LOGIN_WINDOW_MINUTES "$env_file")" ]] || set_env_value "$env_file" LOGIN_WINDOW_MINUTES "15"
   [[ -n "$(env_value LOGIN_LIMITER_MAX_ENTRIES "$env_file")" ]] || set_env_value "$env_file" LOGIN_LIMITER_MAX_ENTRIES "500"
   [[ -n "$(env_value JSON_BODY_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" JSON_BODY_MAX_BYTES "65536"
+  [[ -n "$(env_value CATALOG_CSV_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" CATALOG_CSV_MAX_BYTES "5242880"
   [[ -n "$(env_value MENU_DRAFT_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" MENU_DRAFT_MAX_BYTES "49152"
   [[ -n "$(env_value SCREEN_SOURCE_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" SCREEN_SOURCE_MAX_BYTES "12582912"
   [[ -n "$(env_value DASHBOARD_REFRESH_MIN_SECONDS "$env_file")" ]] || set_env_value "$env_file" DASHBOARD_REFRESH_MIN_SECONDS "15"
