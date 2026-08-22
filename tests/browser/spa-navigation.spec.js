@@ -10,6 +10,19 @@ async function login(page) {
   ]);
 }
 
+async function expectCatalogContextItems(page) {
+  const links = page.locator('.ui-context-body .app-route-link');
+  await expect(links).toHaveCount(2);
+  await expect(links).toHaveText(['Продукция', 'Тара']);
+}
+
+async function expectContextCollapsed(page) {
+  const context = page.locator('.ui-context');
+  await expect(context).toHaveClass(/is-collapsed/);
+  await page.waitForTimeout(100);
+  await expect(context).toHaveClass(/is-collapsed/);
+}
+
 test('main menu and context submenu navigate inside one persistent document', async ({ page }) => {
   await login(page);
   await page.evaluate(() => { window.__tvMenuSpaSentinel = `sentinel-${Math.random()}`; });
@@ -33,8 +46,7 @@ test('main menu and context submenu navigate inside one persistent document', as
   await expect(page).toHaveURL(/\/catalog\.html$/);
   await expect(page.locator('#product-form')).toBeVisible();
   expect(await page.evaluate(() => window.__tvMenuSpaSentinel)).toBe(sentinel);
-  await expect(page.locator('.ui-context-body .app-route-link')).toHaveCount(1);
-  await expect(page.locator('.ui-context-body .app-route-link')).toHaveText(/Продукция/);
+  await expectCatalogContextItems(page);
 
   await page.locator('.ui-rail-button[aria-label="Настройки"]').click();
   await expect(page).toHaveURL(/\/settings\.html$/);
@@ -48,6 +60,46 @@ test('main menu and context submenu navigate inside one persistent document', as
   expect(await page.evaluate(() => window.__tvMenuSpaSentinel)).toBe(sentinel);
 
   expect(documentRequests).toEqual([]);
+});
+
+test('catalog submenu closes after selection on desktop and stays closed after hover reflow', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await login(page);
+
+  const catalogButton = page.locator('.ui-rail-button[aria-label="Каталог"]');
+  await catalogButton.click();
+  await expect(page).toHaveURL(/\/catalog\.html$/);
+  await expectCatalogContextItems(page);
+
+  await page.getByRole('link', { name: /^Тара$/ }).click();
+  await expect(page).toHaveURL(/\/catalog\.html#packaging$/);
+  await expectContextCollapsed(page);
+
+  await catalogButton.click();
+  await expect(page.locator('.ui-context')).not.toHaveClass(/is-collapsed/);
+  await page.getByRole('link', { name: /^Продукция$/ }).click();
+  await expect(page).toHaveURL(/\/catalog\.html#products$/);
+  await expectContextCollapsed(page);
+});
+
+test('catalog submenu closes after selection on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page);
+
+  const catalogButton = page.locator('.ui-rail-button[aria-label="Каталог"]');
+  await catalogButton.click();
+  await expect(page).toHaveURL(/\/catalog\.html$/);
+  await expectCatalogContextItems(page);
+
+  await page.getByRole('link', { name: /^Тара$/ }).click();
+  await expect(page).toHaveURL(/\/catalog\.html#packaging$/);
+  await expectContextCollapsed(page);
+
+  await catalogButton.click();
+  await expect(page.locator('.ui-context')).not.toHaveClass(/is-collapsed/);
+  await page.getByRole('link', { name: /^Продукция$/ }).click();
+  await expect(page).toHaveURL(/\/catalog\.html#products$/);
+  await expectContextCollapsed(page);
 });
 
 test('browser back and forward keep the same application document', async ({ page }) => {
