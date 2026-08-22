@@ -20,6 +20,20 @@ export function createNotificationsRepository(pool) {
       return { items: events.rows.map(normaliseActivityEvent), unread_count: Number(unread.rows[0].count) };
     },
 
+    async listActivity(limit = 2000) {
+      const safeLimit = Math.max(1, Math.min(Number.parseInt(limit, 10) || 2000, 5000));
+      const { rows } = await pool.query(
+        'SELECT * FROM activity_events ORDER BY created_at DESC, id DESC LIMIT $1',
+        [safeLimit]
+      );
+      return rows.map(normaliseActivityEvent);
+    },
+
+    async clearActivity() {
+      const { rowCount } = await pool.query('DELETE FROM activity_events');
+      return rowCount;
+    },
+
     async markNotificationsRead() {
       const { rowCount } = await pool.query('UPDATE activity_events SET read_at = $1 WHERE read_at IS NULL', [isoNow()]);
       return rowCount;
