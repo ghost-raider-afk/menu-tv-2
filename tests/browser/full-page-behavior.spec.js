@@ -23,6 +23,14 @@ async function spaNavigate(page, path) {
   await expect(page).toHaveURL((url) => url.pathname === path, { timeout: 10_000 });
 }
 
+async function diagnosticItems(page) {
+  return page.evaluate(async () => {
+    const response = await fetch('/api/diagnostics/events?limit=5000', { credentials: 'same-origin', cache: 'no-store' });
+    if (!response.ok) throw new Error(`Diagnostics HTTP ${response.status}`);
+    return (await response.json()).items || [];
+  });
+}
+
 const ROUTES = [
   ['/', 'overview'],
   ['/locations.html', 'locations'],
@@ -37,7 +45,7 @@ const ROUTES = [
   ['/profile.html', 'profile']
 ];
 
-test('all admin pages survive two complete SPA mount/unmount cycles without auth loss', async ({ page }) => {
+test('all admin pages survive two complete SPA mount/unmount cycles without auth loss or runtime errors', async ({ page }) => {
   const pageErrors = [];
   const documentRequests = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -46,6 +54,8 @@ test('all admin pages survive two complete SPA mount/unmount cycles without auth
   });
 
   await login(page);
+  const baselineItems = await diagnosticItems(page);
+  const baselineId = baselineItems.reduce((maximum, item) => Math.max(maximum, Number(item.id) || 0), 0);
   documentRequests.length = 0;
   await page.evaluate(() => { window.__fullPageAuditSentinel = `audit-${Math.random()}`; });
   const sentinel = await page.evaluate(() => window.__fullPageAuditSentinel);
@@ -61,9 +71,13 @@ test('all admin pages survive two complete SPA mount/unmount cycles without auth
       await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
       await expect(page).not.toHaveURL(/signin\.html/);
       expect(await page.evaluate(() => window.__fullPageAuditSentinel)).toBe(sentinel);
+      await page.waitForTimeout(120);
     }
   }
 
+  await page.waitForTimeout(800);
+  const auditErrors = (await diagnosticItems(page)).filter((item) => Number(item.id) > baselineId && item.severity === 'error');
+  expect(auditErrors, auditErrors.map((item) => `${item.category}: ${item.message} @ ${item.route || item.page}`).join('\n')).toEqual([]);
   expect(documentRequests).toEqual([]);
   expect(pageErrors).toEqual([]);
 });
