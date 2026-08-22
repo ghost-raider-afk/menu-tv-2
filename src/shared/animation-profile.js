@@ -9,6 +9,7 @@ export const VISUAL_EFFECTS = Object.freeze(['none', 'ocean-wave', 'aurora', 'ri
 export const PROMO_BADGE_EFFECTS = Object.freeze(['static', 'glow', 'sheen', 'pulse']);
 export const PROMO_ROW_EFFECTS = Object.freeze(['none', 'glow', 'sweep', 'pulse']);
 export const PROMO_PRICE_EFFECTS = Object.freeze(['none', 'glow', 'pulse', 'pop']);
+export const PROMO_ROW_TINT_MAX = 0.18;
 export const BRAND_REVEAL_ORDERS = Object.freeze(['left-to-right', 'center', 'random', 'wave']);
 export const BRAND_REVEAL_TRIGGERS = Object.freeze(['player-start', 'menu-update', 'interval']);
 
@@ -19,7 +20,7 @@ export const DEFAULT_PROMO_STYLE = Object.freeze({
   badge_glow: 0.82,
   row_effect: 'sweep',
   row_glow: 0.48,
-  row_tint: 0.18,
+  row_tint: PROMO_ROW_TINT_MAX,
   price_effect: 'pulse',
   sweep_seconds: 1.4,
   cycle_seconds: 7.5
@@ -78,7 +79,7 @@ export function completePromoStyle(value = {}) {
     badge_glow: clamp(number(source.badge_glow, DEFAULT_PROMO_STYLE.badge_glow), 0, 1),
     row_effect: oneOf(source.row_effect, PROMO_ROW_EFFECTS, DEFAULT_PROMO_STYLE.row_effect),
     row_glow: clamp(number(source.row_glow, DEFAULT_PROMO_STYLE.row_glow), 0, 1),
-    row_tint: clamp(number(source.row_tint, DEFAULT_PROMO_STYLE.row_tint), 0, 0.5),
+    row_tint: clamp(number(source.row_tint, DEFAULT_PROMO_STYLE.row_tint), 0, PROMO_ROW_TINT_MAX),
     price_effect: oneOf(source.price_effect, PROMO_PRICE_EFFECTS, DEFAULT_PROMO_STYLE.price_effect),
     sweep_seconds: clamp(number(source.sweep_seconds, DEFAULT_PROMO_STYLE.sweep_seconds), 0.5, 6),
     cycle_seconds: clamp(number(source.cycle_seconds, DEFAULT_PROMO_STYLE.cycle_seconds), 3, 30)
