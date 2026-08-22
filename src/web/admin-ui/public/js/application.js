@@ -32,6 +32,10 @@ async function initialisePage(name) {
       const { initialiseAnimationStudio } = await import('./pages/animation.js');
       return initialiseAnimationStudio();
     }
+    case 'activity': {
+      const { initialiseActivityLog } = await import('./pages/activity.js');
+      return initialiseActivityLog();
+    }
     case 'profile': {
       const { initialiseProfile } = await import('./pages/profile.js');
       return initialiseProfile();
