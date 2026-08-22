@@ -65,6 +65,13 @@ function brandRevealInput(source) {
 export function animationProfileInput(source) {
   if (!source || typeof source !== 'object' || Array.isArray(source)) throw new ValidationError('Профиль анимации должен быть объектом.');
   const profile = completeAnimationProfile(source);
+  const currentVersion = Number(source.motion_version) === ANIMATION_PROFILE_VERSION;
+  const promoSource = currentVersion && source.promo_style && typeof source.promo_style === 'object' && !Array.isArray(source.promo_style)
+    ? source.promo_style
+    : profile.promo_style;
+  const brandSource = currentVersion && source.brand_reveal && typeof source.brand_reveal === 'object' && !Array.isArray(source.brand_reveal)
+    ? source.brand_reveal
+    : profile.brand_reveal;
   return {
     motion_version: ANIMATION_PROFILE_VERSION,
     pattern: enumValue(profile.pattern, 'Характер движения', ANIMATION_PATTERNS),
@@ -81,8 +88,8 @@ export function animationProfileInput(source) {
     price_effect: enumValue(profile.price_effect, 'Эффект цен', PRICE_EFFECTS),
     visual_effect: enumValue(profile.visual_effect, 'Визуальный эффект', VISUAL_EFFECTS),
     intensity: numberValue(profile.intensity, 'Интенсивность', { min: 0, max: 100, integer: true }),
-    promo_style: promoStyleInput(profile.promo_style),
-    brand_reveal: brandRevealInput(profile.brand_reveal)
+    promo_style: promoStyleInput(promoSource),
+    brand_reveal: brandRevealInput(brandSource)
   };
 }
 export function animationSettingsInput(body) {
