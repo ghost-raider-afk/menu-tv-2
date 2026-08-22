@@ -3,11 +3,12 @@ import { isoNow, jsonValue, normaliseRow } from './helpers.js';
 function normaliseDiagnosticEvent(row) {
   const event = normaliseRow(row);
   if (!event) return null;
+  const { details_json: detailsJson, ...publicEvent } = event;
   return {
-    ...event,
+    ...publicEvent,
     status: event.status === null || event.status === undefined ? null : Number(event.status),
     duration_ms: event.duration_ms === null || event.duration_ms === undefined ? null : Number(event.duration_ms),
-    details: jsonValue(event.details_json, {})
+    details: jsonValue(detailsJson, {})
   };
 }
 
