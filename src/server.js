@@ -156,8 +156,8 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
   await recoverRuntimeState(store, sftp, config);
 
   const app = express();
-  configureSecurity(app, config);
   app.use(createRequestDiagnosticsMiddleware({ store }));
+  configureSecurity(app, config);
   mountPublicRoutes(app, { store, config });
   app.use('/api/auth', createAuthRouter({ store, config }));
 
