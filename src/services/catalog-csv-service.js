@@ -416,7 +416,8 @@ export async function applyProductsImport(store, rows) {
         await transaction.createProduct(row.normalized);
         created += 1;
       } else if (row.status === 'changed') {
-        await transaction.updateProduct(row.id, row.normalized);
+        const product = await transaction.updateProduct(row.id, row.normalized);
+        if (!product) throw new ValidationError(`Строка ${row.line}: продукция с ID ${row.id} больше не существует.`);
         updated += 1;
       }
     }
