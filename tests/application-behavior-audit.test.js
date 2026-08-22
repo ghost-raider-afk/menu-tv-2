@@ -28,7 +28,7 @@ test('every registered SPA route has protected HTML and an application controlle
   assert.match(application, /default:[\s\S]*throw new Error/);
 });
 
-test('route controllers never capture page DOM once at ES-module evaluation time', async () => {
+test('route controllers do not retain stale DOM or bypass the route-scoped API client', async () => {
   const pagesDir = new URL('../src/web/admin-ui/public/js/pages/', import.meta.url);
   const filenames = (await readdir(pagesDir)).filter((name) => name.endsWith('.js') && name !== 'signin.js');
   for (const filename of filenames) {
@@ -37,6 +37,11 @@ test('route controllers never capture page DOM once at ES-module evaluation time
       source,
       /^(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*document\.(?:querySelector|getElementById)\(/m,
       `${filename} captures route DOM at module scope and will break after SPA remount`
+    );
+    assert.doesNotMatch(
+      source,
+      /\bfetch\s*\(/,
+      `${filename} bypasses core/api.js and therefore request IDs, Session Authority and route cancellation`
     );
   }
 });
