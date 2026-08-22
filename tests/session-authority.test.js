@@ -18,19 +18,29 @@ test('business API 401 cannot log out a user while Session Authority is authenti
   const originalFetch = globalThis.fetch;
   const redirects = [];
   const calls = [];
+  let businessCalls = 0;
 
   globalThis.window = {
     location: {
       origin: 'https://tv.example.test',
       pathname: '/animation.html',
+      search: '',
+      hash: '',
       replace(value) { redirects.push(value); }
     }
   };
   globalThis.document = { body: { dataset: { page: 'animation' } } };
   globalThis.fetch = async (url) => {
-    calls.push(String(url));
-    if (calls.length === 1) return response({ error: 'Требуется вход в систему.' }, { status: 401 });
-    if (calls.length === 2) return response({ session: { status: 'ok' } }, { headers: { 'x-session-state': 'authenticated' } });
+    const target = String(url);
+    calls.push(target);
+    if (target === '/api/diagnostics/client-events') return response({ id: 1 }, { status: 201 });
+    if (target === '/api/session/context') return response({ session: { status: 'ok' } }, { headers: { 'x-session-state': 'authenticated' } });
+    if (target === '/api/settings/animation/presets') {
+      businessCalls += 1;
+      return businessCalls === 1
+        ? response({ error: 'Требуется вход в систему.' }, { status: 401 })
+        : response({ ok: true });
+    }
     return response({ ok: true });
   };
 
@@ -38,7 +48,7 @@ test('business API 401 cannot log out a user while Session Authority is authenti
     const { request } = await import(`../src/web/admin-ui/public/js/core/api.js?session-authority=${Date.now()}`);
     const result = await request('/api/settings/animation/presets', { method: 'GET' });
     assert.deepEqual(result, { ok: true });
-    assert.deepEqual(calls, [
+    assert.deepEqual(calls.filter((url) => url !== '/api/diagnostics/client-events'), [
       '/api/settings/animation/presets',
       '/api/session/context',
       '/api/settings/animation/presets'
@@ -56,28 +66,38 @@ test('only authoritative unauthenticated session state may transition to sign in
   const originalDocument = globalThis.document;
   const originalFetch = globalThis.fetch;
   const redirects = [];
-  let call = 0;
+  let businessCalls = 0;
 
   globalThis.window = {
     location: {
       origin: 'https://tv.example.test',
       pathname: '/animation.html',
+      search: '',
+      hash: '',
       replace(value) { redirects.push(value); }
     }
   };
   globalThis.document = { body: { dataset: { page: 'animation' } } };
-  globalThis.fetch = async () => {
-    call += 1;
-    if (call === 1) return response({ error: 'Требуется вход в систему.' }, { status: 401 });
-    return response({ error: 'Требуется вход в систему.' }, {
-      status: 401,
-      headers: { 'x-session-state': 'unauthenticated' }
-    });
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target === '/api/diagnostics/client-events') return response({ id: 1 }, { status: 201 });
+    if (target === '/api/session/context') {
+      return response({ error: 'Требуется вход в систему.' }, {
+        status: 401,
+        headers: { 'x-session-state': 'unauthenticated' }
+      });
+    }
+    if (target === '/api/screens') {
+      businessCalls += 1;
+      return response({ error: 'Требуется вход в систему.' }, { status: 401 });
+    }
+    return response({ ok: true });
   };
 
   try {
     const { request } = await import(`../src/web/admin-ui/public/js/core/api.js?session-expired=${Date.now()}`);
     await assert.rejects(() => request('/api/screens', { method: 'GET' }));
+    assert.equal(businessCalls, 1);
     assert.deepEqual(redirects, ['/signin.html']);
   } finally {
     globalThis.window = originalWindow;
@@ -104,11 +124,11 @@ test('SPA router and API client delegate authentication decisions to Session Aut
 
   assert.doesNotMatch(api, /window\.location\.replace\('\/signin\.html'\)/);
   assert.match(api, /verifySessionAuthority\(\)/);
-  assert.match(api, /fetchResponse\(url, init\)[\s\S]*fetchResponse\(url, init\)/);
+  assert.match(api, /fetchResponse\(url, init, requestId, routeSignal\)[\s\S]*fetchResponse\(url, init, requestId, routeSignal\)/);
 
   assert.doesNotMatch(router, /window\.location\.replace\('\/signin\.html'\)/);
   assert.match(router, /verifySessionAuthority\(\)/);
-  const navigationCatch = router.match(/catch \(error\) \{[\s\S]*?return false;\n    \}/)?.[0] || '';
+  const navigationCatch = router.match(/catch \(error\) \{[\s\S]*?route\.navigation_failed[\s\S]*?return false;/)?.[0] || '';
   assert.doesNotMatch(navigationCatch, /location\.assign|location\.replace/);
 
   assert.match(middleware, /X-Session-State', 'unauthenticated'/);
