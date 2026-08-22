@@ -56,7 +56,7 @@ test('product CSV import accepts new rows without ID and validates required colu
 });
 
 test('product CSV accepts comma-delimited files when comma-bearing headers are quoted', () => {
-  const [entry] = productsFromCsv('"Название","Цена 1 л","Цена 1,5 л"\r\n"Новая позиция",199.50,299.25\r\n');
+  const [entry] = productsFromCsv('"Название","Цена 1 л","Цена 1,5 л"\r\n"Новая позиция",199.50,12345\r\n');
   assert.equal(entry.product.name, 'Новая позиция');
   assert.equal(entry.product.price_primary, '199.50');
   assert.equal(entry.product.price_secondary, '299.25');
@@ -77,11 +77,14 @@ test('product CSV decodes UTF-16LE files with BOM', () => {
   assert.equal(entry.product.price_primary, '100');
 });
 
-test('automatic 1.5 litre price cannot be silently overridden by CSV formatting', () => {
-  assert.throws(
-    () => productsFromCsv('Название;Цена 1 л;Цена 1,5 л\r\nТест;200;999\r\n'),
-    /Цена за 1,5 л рассчитывается автоматически.*Ожидается 300/
-  );
+test('secondary 1.5 litre price column is informational and ignored during import', () => {
+  const [entry] = productsFromCsv('Название;Цена 1 л;Цена 1,5 л\r\nТест;256;384\r\n');
+  assert.equal(entry.product.price_primary, '256');
+  assert.equal(entry.product.price_secondary, '384');
+
+  const [mismatched] = productsFromCsv('Название;Цена 1 л;Цена 1,5 л\r\nТест;256;999999\r\n');
+  assert.equal(mismatched.product.price_primary, '256');
+  assert.equal(mismatched.product.price_secondary, '384');
 });
 
 test('extra unquoted CSV separators are rejected instead of shifting columns', () => {
