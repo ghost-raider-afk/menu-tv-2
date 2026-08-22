@@ -4,7 +4,9 @@ const EASING = Object.freeze({
 });
 const GOLD_SHADOW = 'rgba(244,201,21,.72)';
 const PROMO_SHADOW = 'rgba(217,45,53,.95)';
+const PROMO_ROW_TINT_MAX = 0.18;
 function clamp(value, minimum, maximum) { return Math.max(minimum, Math.min(maximum, value)); }
+function finiteNumber(value, fallback) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
 function motionGain(profile) { return Math.sqrt(clamp(Number(profile.intensity) || 0, 0, 100) / 100); }
 function formatTime(milliseconds) { return `${(milliseconds / 1000).toFixed(1)} с`; }
 function effectFor(profile, kind) { if (kind === 'section') return profile.section_effect; if (kind === 'price') return profile.price_effect; return profile.item_effect; }
@@ -134,19 +136,22 @@ function animatePromoStyle(stage, profile, animations) {
   const style = profile?.promo_style || {};
   const highlights = [...stage.querySelectorAll('[data-motion-promo-layer="highlight"]')];
   const sweeps = [...stage.querySelectorAll('[data-motion-promo-layer="sweep"]')];
-  const badges = [...stage.querySelectorAll('[data-motion-promo-badge="true"]')];
+  const badges = [...stage.querySelectorAll('g.promotion-badge-group[data-motion-promo-badge="true"]')];
   const prices = [...stage.querySelectorAll('[data-motion-promo-price="true"]')];
-  const baseOpacity = style.enabled === false ? 0.08 : clamp(Number(style.row_tint) || 0.18, 0, 0.5);
+  const baseOpacity = style.enabled === false
+    ? 0
+    : clamp(finiteNumber(style.row_tint, PROMO_ROW_TINT_MAX), 0, PROMO_ROW_TINT_MAX);
+  const rowGlow = clamp(finiteNumber(style.row_glow, 0), 0, 1);
   highlights.forEach((node) => node.setAttribute('opacity', String(baseOpacity)));
   if (style.enabled === false) return;
   const cycleMs = Math.max(3000, Number(style.cycle_seconds) * 1000 || 7500);
   const easing = EASING[profile.easing] || EASING.smooth;
   badges.forEach((node, index) => addAnimation(animations, node, promoBadgeFrames(style), { duration: cycleMs, delay: index * 90, easing }));
-  const rowPeak = clamp(baseOpacity + Number(style.row_glow || 0) * 0.42, baseOpacity, 0.72);
-  if (style.row_effect === 'glow' || style.row_effect === 'pulse' || style.row_effect === 'sweep') {
+  const rowPeak = baseOpacity === 0 ? 0 : clamp(baseOpacity * (1 + rowGlow * 2), baseOpacity, 0.42);
+  if (baseOpacity > 0 && (style.row_effect === 'glow' || style.row_effect === 'pulse' || style.row_effect === 'sweep')) {
     highlights.forEach((node, index) => addAnimation(animations, node, [
       { opacity: baseOpacity, filter: 'brightness(1)' },
-      { opacity: rowPeak, filter: `brightness(1.3) drop-shadow(0 0 ${(12 + Number(style.row_glow || 0) * 30).toFixed(1)}px ${PROMO_SHADOW})` },
+      { opacity: rowPeak, filter: `brightness(1.3) drop-shadow(0 0 ${(12 + rowGlow * 30).toFixed(1)}px ${PROMO_SHADOW})` },
       { opacity: baseOpacity, filter: 'brightness(1)' }
     ], { duration: cycleMs, delay: index * 120, easing }));
   }
@@ -159,12 +164,12 @@ function animatePromoStyle(stage, profile, animations) {
     sweeps.forEach((node, index) => addAnimation(animations, node, [
       { offset: 0, opacity: 0, transform: 'translateX(0)' },
       { offset: start, opacity: 0, transform: 'translateX(0)' },
-      { offset: mid, opacity: 0.42 + Number(style.row_glow || 0) * 0.3, transform: 'translateX(250%)' },
+      { offset: mid, opacity: 0.42 + rowGlow * 0.3, transform: 'translateX(250%)' },
       { offset: end, opacity: 0, transform: 'translateX(520%)' },
       { offset: 1, opacity: 0, transform: 'translateX(520%)' }
     ], { duration: cycleMs, delay: index * 220, easing: 'ease-in-out' }));
   }
-  const priceFrames = promoPriceFrames(style.price_effect, Number(style.row_glow || 0));
+  const priceFrames = promoPriceFrames(style.price_effect, rowGlow);
   if (priceFrames) prices.forEach((node, index) => addAnimation(animations, node, priceFrames, { duration: cycleMs, delay: index * 110, easing }));
 }
 function normalized(value) { return String(value || '').trim().toLocaleLowerCase('ru-RU'); }
