@@ -136,6 +136,24 @@ export async function initialiseSchema(pool) {
       read_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS diagnostic_events (
+      id BIGSERIAL PRIMARY KEY,
+      severity TEXT NOT NULL CHECK(severity IN ('info', 'warn', 'error')),
+      source TEXT NOT NULL CHECK(source IN ('client', 'server')),
+      category TEXT NOT NULL DEFAULT 'runtime',
+      code TEXT NOT NULL DEFAULT '',
+      message TEXT NOT NULL,
+      page TEXT NOT NULL DEFAULT '',
+      route TEXT NOT NULL DEFAULT '',
+      method TEXT NOT NULL DEFAULT '',
+      status INTEGER,
+      duration_ms INTEGER,
+      request_id TEXT NOT NULL DEFAULT '',
+      actor_username TEXT NOT NULL DEFAULT '',
+      user_agent TEXT NOT NULL DEFAULT '',
+      details_json TEXT NOT NULL DEFAULT '{}',
+      created_at TIMESTAMPTZ NOT NULL
+    );
     ALTER TABLE locations ADD COLUMN IF NOT EXISTS sftp_directory_id BIGINT REFERENCES sftp_directories(id) ON DELETE RESTRICT;
     ALTER TABLE locations ADD COLUMN IF NOT EXISTS sftp_username TEXT;
     ALTER TABLE locations ADD COLUMN IF NOT EXISTS sftp_password_issued_at TIMESTAMPTZ;
@@ -173,6 +191,9 @@ export async function initialiseSchema(pool) {
     CREATE UNIQUE INDEX IF NOT EXISTS animation_presets_name_lower_unique ON animation_presets(LOWER(name));
     CREATE INDEX IF NOT EXISTS activity_events_created_at_index ON activity_events(created_at DESC);
     CREATE INDEX IF NOT EXISTS activity_events_unread_index ON activity_events(read_at) WHERE read_at IS NULL;
+    CREATE INDEX IF NOT EXISTS diagnostic_events_created_at_index ON diagnostic_events(created_at DESC, id DESC);
+    CREATE INDEX IF NOT EXISTS diagnostic_events_severity_created_index ON diagnostic_events(severity, created_at DESC);
+    CREATE INDEX IF NOT EXISTS diagnostic_events_request_id_index ON diagnostic_events(request_id) WHERE request_id <> '';
     UPDATE web_users SET password_changed_at = created_at WHERE password_changed_at IS NULL;
     UPDATE site_settings SET accent_color = '#F4C915' WHERE accent_color = '#2563EB' AND COALESCE(updated_by, '') = '';
     UPDATE site_settings SET signin_logo_size = 1 WHERE signin_logo_size IS NULL OR signin_logo_size < 1 OR signin_logo_size > 7;
