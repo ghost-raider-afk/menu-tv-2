@@ -5,14 +5,16 @@ import {
   verifySessionAuthority
 } from './session-authority.js';
 import { createClientRequestId, reportClientDiagnosticSoon } from './diagnostics.js';
+import { currentRouteSignal } from './route-runtime.js';
 
 export class ApiError extends Error {
-  constructor(message, { status = 0, body = null, requestId = '' } = {}) {
+  constructor(message, { status = 0, body = null, requestId = '', cancelled = false } = {}) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.body = body;
     this.requestId = requestId;
+    this.cancelled = cancelled;
   }
 }
 
@@ -24,9 +26,11 @@ async function parseResponse(response) {
 }
 
 function fetchInit(init = {}, requestId = '') {
+  const routeSignal = currentRouteSignal();
   return {
     credentials: 'same-origin',
     cache: 'no-store',
+    ...(routeSignal && !init.signal ? { signal: routeSignal } : {}),
     ...init,
     headers: {
       ...(init.body && !(init.body instanceof Blob) && typeof init.body !== 'string' ? { 'Content-Type': 'application/json' } : {}),
@@ -43,6 +47,9 @@ async function fetchResponse(url, init, requestId) {
   try {
     return await fetch(url, fetchInit(init, requestId));
   } catch (cause) {
+    if (cause?.name === 'AbortError' || currentRouteSignal()?.aborted) {
+      throw new ApiError('Запрос отменён при смене раздела.', { requestId, cancelled: true });
+    }
     throw new ApiError('Сервер недоступен. Проверьте подключение и повторите попытку.', {
       body: { cause },
       requestId
@@ -126,7 +133,7 @@ export async function request(url, init = {}) {
     }
     return body;
   } catch (error) {
-    if (error instanceof ApiError && error.status === 0 && !String(url).includes('/api/diagnostics/client-events')) {
+    if (error instanceof ApiError && error.status === 0 && !error.cancelled && !String(url).includes('/api/diagnostics/client-events')) {
       reportClientDiagnosticSoon({
         severity: 'error',
         category: 'api.network',
