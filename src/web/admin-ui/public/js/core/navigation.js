@@ -51,7 +51,7 @@ const CONTEXT_GROUPS = Object.freeze({
     Object.freeze({
       label: 'БАЗА ПРОДУКЦИИ',
       links: Object.freeze([
-        ['Продукция', '/catalog.html#products']
+        ['Продукция', '/catalog.html']
       ])
     })
   ]),
