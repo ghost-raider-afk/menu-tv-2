@@ -1,6 +1,7 @@
 import { pageName } from './core/config.js';
 import { loadAuthenticatedContext } from './core/session.js';
 import { initialiseNotifications } from './core/notifications.js';
+import { initialiseClientDiagnostics, reportClientDiagnosticSoon } from './core/diagnostics.js';
 import { createAppRouter } from './core/router.js';
 import { state } from './core/state.js';
 import { initialiseShell, refreshShellRoute } from './components/shell.js';
@@ -36,6 +37,10 @@ async function initialisePage(name) {
       const { initialiseActivityLog } = await import('./pages/activity.js');
       return initialiseActivityLog();
     }
+    case 'diagnostics': {
+      const { initialiseDiagnosticsLog } = await import('./pages/diagnostics.js');
+      return initialiseDiagnosticsLog();
+    }
     case 'profile': {
       const { initialiseProfile } = await import('./pages/profile.js');
       return initialiseProfile();
@@ -61,7 +66,7 @@ async function initialisePage(name) {
       return initialiseCatalog();
     }
     default:
-      return undefined;
+      throw new Error(`Для страницы «${name || 'unknown'}» не зарегистрирован controller.`);
   }
 }
 
@@ -91,12 +96,21 @@ async function initialiseApplication() {
 
   try {
     await loadAuthenticatedContext();
+    initialiseClientDiagnostics();
     initialiseShell();
     initialiseNotifications();
     const router = createAppRouter({ mountPage: initialisePage, syncShell: refreshShellRoute });
     await router.start();
   } catch (error) {
     console.error('Application initialization failed', error);
+    reportClientDiagnosticSoon({
+      severity: 'error',
+      category: 'application.bootstrap',
+      code: 'application.initialization_failed',
+      message: error?.message || 'Не удалось инициализировать приложение.',
+      page: current,
+      details: { name: error?.name || '', stack: error?.stack || '' }
+    }, { dedupeMs: 1000 });
     showApplicationFailure(error);
   }
 }
