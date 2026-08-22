@@ -41,7 +41,6 @@ export const MENU_TABLE_STYLE = Object.freeze({
   separator: '#8B929A',
   secondaryText: '#C5CBD2',
   accentSecondaryText: '#DFC34F',
-  packagingBackground: '#121820',
   promotion: '#D92D35'
 });
 
@@ -417,19 +416,18 @@ function itemMarkup(line, box, horizontal, palette, scale, typography) {
 
 function packagingMarkup(line, box, horizontal, palette, scale, typography) {
   const fontScale = TV1_REFERENCE_SCALE * scale;
-  const gap = 12 * horizontal.scaleX;
-  const cellWidth = (horizontal.tableWidth - gap) / 2;
-  const baseline = box.top + 34 * fontScale;
+  const columnGap = 36 * horizontal.scaleX;
+  const cellWidth = (horizontal.tableWidth - columnGap) / 2;
+  const baseline = box.top + 35 * fontScale;
   const cells = line.items.map((item, index) => {
-    const x = horizontal.left + index * (cellWidth + gap);
+    const x = horizontal.left + index * (cellWidth + columnGap);
+    const nameX = x + 22 * horizontal.scaleX;
+    const priceX = x + cellWidth - 10 * horizontal.scaleX;
     const toneColor = item.tone === 'accent' ? palette.accentText : palette.primaryText;
-    const maximumCharacters = Math.max(8, Math.floor((cellWidth - 180 * horizontal.scaleX) / (11 * fontScale)));
-    const parts = priceParts(item.unitPrice);
-    const price = parts ? `${parts.whole},${parts.cents}` : '—';
-    return `<g class="packaging-cell tone-${item.tone === 'accent' ? 'accent' : 'light'}">
-      <rect x="${x}" y="${box.top + 2}" width="${cellWidth}" height="${Math.max(1, box.height - 6)}" rx="7" fill="${MENU_TABLE_STYLE.packagingBackground}" stroke="${toneColor}" stroke-width="1.5" opacity="0.96"/>
-      <text x="${x + 16 * horizontal.scaleX}" y="${baseline}" class="packaging-name" ${textAttributes({ size: 21 * fontScale, weight: 700, fill: toneColor }, typography)}>${escapeXml(truncateText(item.name, maximumCharacters))}</text>
-      <text x="${x + cellWidth - 15 * horizontal.scaleX}" y="${baseline}" class="packaging-price" ${textAttributes({ size: 21 * fontScale, weight: 700, fill: toneColor, anchor: 'end' }, typography)}>${escapeXml(price)}</text>
+    const maximumCharacters = Math.max(8, Math.floor((priceX - nameX - 76 * horizontal.scaleX) / (13 * fontScale)));
+    return `<g class="packaging-item tone-${item.tone === 'accent' ? 'accent' : 'light'}">
+      <text x="${nameX}" y="${baseline}" class="item-name packaging-name" ${textAttributes({ size: 25 * fontScale, weight: 700, fill: toneColor }, typography)}>${escapeXml(truncateText(item.name, maximumCharacters))}</text>
+      ${priceMarkup(item.unitPrice, priceX, baseline, scale, toneColor, typography)}
     </g>`;
   }).join('\n');
   return `<g class="table-packaging">${separatorMarkup(box, horizontal, scale)}${cells}</g>`;
