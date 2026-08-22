@@ -12,8 +12,9 @@ async function login(page) {
 
 async function expectCatalogContextItems(page) {
   const links = page.locator('.ui-context-body .app-route-link');
-  await expect(links).toHaveCount(2);
-  await expect(links).toHaveText(['Продукция', 'Тара']);
+  await expect(links).toHaveCount(1);
+  await expect(links).toHaveText(['Продукция']);
+  await expect(page.getByRole('link', { name: /^Тара$/ })).toHaveCount(0);
 }
 
 async function expectContextCollapsed(page) {
@@ -62,7 +63,7 @@ test('main menu and context submenu navigate inside one persistent document', as
   expect(documentRequests).toEqual([]);
 });
 
-test('catalog submenu closes after selection on desktop and stays closed after hover reflow', async ({ page }) => {
+test('catalog submenu closes after product selection on desktop and stays closed after hover reflow', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await login(page);
 
@@ -71,18 +72,12 @@ test('catalog submenu closes after selection on desktop and stays closed after h
   await expect(page).toHaveURL(/\/catalog\.html$/);
   await expectCatalogContextItems(page);
 
-  await page.getByRole('link', { name: /^Тара$/ }).click();
-  await expect(page).toHaveURL(/\/catalog\.html#packaging$/);
-  await expectContextCollapsed(page);
-
-  await catalogButton.click();
-  await expect(page.locator('.ui-context')).not.toHaveClass(/is-collapsed/);
   await page.getByRole('link', { name: /^Продукция$/ }).click();
   await expect(page).toHaveURL(/\/catalog\.html#products$/);
   await expectContextCollapsed(page);
 });
 
-test('catalog submenu closes after selection on mobile', async ({ page }) => {
+test('catalog submenu closes after product selection on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
 
@@ -91,12 +86,6 @@ test('catalog submenu closes after selection on mobile', async ({ page }) => {
   await expect(page).toHaveURL(/\/catalog\.html$/);
   await expectCatalogContextItems(page);
 
-  await page.getByRole('link', { name: /^Тара$/ }).click();
-  await expect(page).toHaveURL(/\/catalog\.html#packaging$/);
-  await expectContextCollapsed(page);
-
-  await catalogButton.click();
-  await expect(page.locator('.ui-context')).not.toHaveClass(/is-collapsed/);
   await page.getByRole('link', { name: /^Продукция$/ }).click();
   await expect(page).toHaveURL(/\/catalog\.html#products$/);
   await expectContextCollapsed(page);
