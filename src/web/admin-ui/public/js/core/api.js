@@ -25,8 +25,7 @@ async function parseResponse(response) {
   return response.text().catch(() => '');
 }
 
-function fetchInit(init = {}, requestId = '') {
-  const routeSignal = currentRouteSignal();
+function fetchInit(init = {}, requestId = '', routeSignal = null) {
   return {
     credentials: 'same-origin',
     cache: 'no-store',
@@ -43,11 +42,11 @@ function fetchInit(init = {}, requestId = '') {
   };
 }
 
-async function fetchResponse(url, init, requestId) {
+async function fetchResponse(url, init, requestId, routeSignal) {
   try {
-    return await fetch(url, fetchInit(init, requestId));
+    return await fetch(url, fetchInit(init, requestId, routeSignal));
   } catch (cause) {
-    if (cause?.name === 'AbortError' || currentRouteSignal()?.aborted) {
+    if (cause?.name === 'AbortError' || routeSignal?.aborted) {
       throw new ApiError('Запрос отменён при смене раздела.', { requestId, cancelled: true });
     }
     throw new ApiError('Сервер недоступен. Проверьте подключение и повторите попытку.', {
@@ -57,8 +56,8 @@ async function fetchResponse(url, init, requestId) {
   }
 }
 
-async function sessionAwareResponse(url, init, requestId) {
-  let response = await fetchResponse(url, init, requestId);
+async function sessionAwareResponse(url, init, requestId, routeSignal) {
+  let response = await fetchResponse(url, init, requestId, routeSignal);
   if (response.status !== 401 || document.body?.dataset?.page === 'signin') return response;
 
   if (isSessionAuthorityUrl(url)) {
@@ -68,44 +67,36 @@ async function sessionAwareResponse(url, init, requestId) {
   }
 
   const state = await verifySessionAuthority();
+  if (routeSignal?.aborted) throw new ApiError('Запрос отменён при смене раздела.', { requestId, cancelled: true });
   if (state === SESSION_AUTHORITY_STATES.UNAUTHENTICATED) {
     transitionToSignIn();
     return response;
   }
   if (state === SESSION_AUTHORITY_STATES.UNKNOWN) {
     reportClientDiagnosticSoon({
-      severity: 'warn',
-      category: 'session.authority',
-      code: 'session.state_unknown',
+      severity: 'warn', category: 'session.authority', code: 'session.state_unknown',
       message: 'Прикладной API вернул 401, но состояние сессии не удалось подтвердить.',
-      method: init.method || 'GET',
-      route: String(url),
-      status: 401,
-      request_id: requestId
+      method: init.method || 'GET', route: String(url), status: 401, request_id: requestId
     }, { dedupeMs: 2000 });
     throw new ApiError('Не удалось подтвердить состояние сессии. Повторите запрос.', { status: 0, requestId });
   }
 
   reportClientDiagnosticSoon({
-    severity: 'error',
-    category: 'session.anomaly',
-    code: 'session.false_401',
+    severity: 'error', category: 'session.anomaly', code: 'session.false_401',
     message: 'Прикладной API вернул 401 при подтверждённой активной сессии.',
-    method: init.method || 'GET',
-    route: String(url),
-    status: 401,
-    request_id: requestId
+    method: init.method || 'GET', route: String(url), status: 401, request_id: requestId
   }, { dedupeMs: 2000 });
 
-  response = await fetchResponse(url, init, requestId);
+  response = await fetchResponse(url, init, requestId, routeSignal);
   return response;
 }
 
 export async function request(url, init = {}) {
   const requestId = createClientRequestId();
+  const routeSignal = init.signal || currentRouteSignal();
   const startedAt = performance.now();
   try {
-    const response = await sessionAwareResponse(url, init, requestId);
+    const response = await sessionAwareResponse(url, init, requestId, routeSignal);
     const body = await parseResponse(response);
     const duration = Math.max(0, Math.round(performance.now() - startedAt));
     if (!response.ok) {
@@ -118,33 +109,26 @@ export async function request(url, init = {}) {
       if (!String(url).includes('/api/diagnostics/client-events')) {
         reportClientDiagnosticSoon({
           severity: response.status >= 500 ? 'error' : 'warn',
-          category: 'api.http',
-          code: `api.http_${response.status}`,
-          message,
-          method: init.method || 'GET',
-          route: String(url),
-          status: response.status,
-          duration_ms: duration,
-          request_id: response.headers.get('x-request-id') || requestId,
+          category: 'api.http', code: `api.http_${response.status}`, message,
+          method: init.method || 'GET', route: String(url), status: response.status,
+          duration_ms: duration, request_id: response.headers.get('x-request-id') || requestId,
           details: { response: body && typeof body === 'object' ? body : undefined }
         });
       }
-      throw new ApiError(message, { status: response.status, body, requestId: response.headers.get('x-request-id') || requestId });
+      throw new ApiError(message, {
+        status: response.status,
+        body,
+        requestId: response.headers.get('x-request-id') || requestId
+      });
     }
     return body;
   } catch (error) {
     if (error instanceof ApiError && error.status === 0 && !error.cancelled && !String(url).includes('/api/diagnostics/client-events')) {
       reportClientDiagnosticSoon({
-        severity: 'error',
-        category: 'api.network',
-        code: 'api.network_error',
-        message: error.message,
-        method: init.method || 'GET',
-        route: String(url),
-        status: 0,
+        severity: 'error', category: 'api.network', code: 'api.network_error', message: error.message,
+        method: init.method || 'GET', route: String(url), status: 0,
         duration_ms: Math.max(0, Math.round(performance.now() - startedAt)),
-        request_id: error.requestId || requestId,
-        details: { error_name: error.name }
+        request_id: error.requestId || requestId, details: { error_name: error.name }
       });
     }
     throw error;
