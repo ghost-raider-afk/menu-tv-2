@@ -1,10 +1,11 @@
-export const ANIMATION_PROFILE_VERSION = 3;
+export const ANIMATION_PROFILE_VERSION = 4;
 export const ANIMATION_PATTERNS = Object.freeze(['ambient', 'wave', 'focus', 'pulse', 'spark', 'parallax']);
 export const ANIMATION_FLOW_DIRECTIONS = Object.freeze(['none', 'left-to-right', 'right-to-left', 'top-to-bottom', 'bottom-to-top', 'alternate']);
 export const ANIMATION_EASINGS = Object.freeze(['standard', 'smooth', 'snappy', 'cinematic', 'elastic']);
 export const SECTION_EFFECTS = Object.freeze(['none', 'glow', 'pulse', 'shimmer', 'lift', 'wave']);
 export const ITEM_EFFECTS = Object.freeze(['none', 'breathe', 'wave', 'focus', 'lift']);
 export const PRICE_EFFECTS = Object.freeze(['none', 'pulse', 'glow', 'wave', 'pop']);
+export const PROMOTION_EFFECTS = Object.freeze(['none', 'glow', 'sheen', 'pulse', 'pulse-price']);
 export const VISUAL_EFFECTS = Object.freeze(['none', 'ocean-wave', 'aurora', 'ripple', 'sun-sweep', 'spotlight', 'liquid-glass']);
 
 export const DEFAULT_ANIMATION_PROFILE = Object.freeze({
@@ -21,6 +22,7 @@ export const DEFAULT_ANIMATION_PROFILE = Object.freeze({
   section_effect: 'glow',
   item_effect: 'focus',
   price_effect: 'glow',
+  promotion_effect: 'sheen',
   visual_effect: 'none',
   intensity: 72
 });
@@ -46,13 +48,25 @@ function canonicalCurrent(source) {
     section_effect: present(source.section_effect, DEFAULT_ANIMATION_PROFILE.section_effect),
     item_effect: present(source.item_effect, DEFAULT_ANIMATION_PROFILE.item_effect),
     price_effect: present(source.price_effect, DEFAULT_ANIMATION_PROFILE.price_effect),
+    promotion_effect: present(source.promotion_effect, DEFAULT_ANIMATION_PROFILE.promotion_effect),
     visual_effect: present(source.visual_effect, DEFAULT_ANIMATION_PROFILE.visual_effect),
     intensity: present(source.intensity, DEFAULT_ANIMATION_PROFILE.intensity)
   };
 }
 
+function promotionFromV3(source) {
+  if (source.price_effect === 'pulse' || source.price_effect === 'pop') return 'pulse-price';
+  if (source.price_effect === 'glow') return 'glow';
+  if (source.section_effect === 'shimmer') return 'sheen';
+  return 'glow';
+}
+
+function migrateV3Profile(source) {
+  return canonicalCurrent({ ...source, promotion_effect: promotionFromV3(source) });
+}
+
 function migrateV2Profile(source) {
-  return canonicalCurrent(source);
+  return canonicalCurrent({ ...source, promotion_effect: promotionFromV3(source) });
 }
 
 function legacyDirection(value) { if (value === 'right') return 'right-to-left'; if (value === 'up') return 'bottom-to-top'; if (value === 'down') return 'top-to-bottom'; if (value === 'none') return 'none'; return 'left-to-right'; }
@@ -64,6 +78,7 @@ function legacyPriceEffect(source) { if (source.price_emphasis === 'pop') return
 function migrateLegacyProfile(source) {
   const intensity = clamp(number(source.intensity, DEFAULT_ANIMATION_PROFILE.intensity), 0, 100);
   const oldScale = number(source.scale_from, 1);
+  const priceEffect = legacyPriceEffect(source);
   return {
     motion_version: ANIMATION_PROFILE_VERSION,
     pattern: legacyPattern(source),
@@ -77,7 +92,8 @@ function migrateLegacyProfile(source) {
     brightness_amount: clamp(0.08 + intensity / 500, 0, 0.5),
     section_effect: legacySectionEffect(source),
     item_effect: legacyItemEffect(source),
-    price_effect: legacyPriceEffect(source),
+    price_effect: priceEffect,
+    promotion_effect: priceEffect === 'pulse' ? 'pulse-price' : 'glow',
     visual_effect: 'none',
     intensity
   };
@@ -88,6 +104,7 @@ export function completeAnimationProfile(profile = {}) {
   if (Object.keys(source).length === 0) return canonicalCurrent(DEFAULT_ANIMATION_PROFILE);
   const version = Number(source.motion_version);
   if (version === ANIMATION_PROFILE_VERSION) return canonicalCurrent(source);
+  if (version === 3) return migrateV3Profile(source);
   if (version === 2) return migrateV2Profile(source);
   return migrateLegacyProfile(source);
 }
