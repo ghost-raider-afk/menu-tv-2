@@ -12,6 +12,7 @@ import {
   PROMO_BADGE_EFFECTS,
   PROMO_PRICE_EFFECTS,
   PROMO_ROW_EFFECTS,
+  PROMO_ROW_TINT_MAX,
   SECTION_EFFECTS,
   VISUAL_EFFECTS,
   completeAnimationProfile
@@ -38,7 +39,7 @@ function promoStyleInput(source) {
     badge_glow: numberValue(source.badge_glow, 'Свечение плашки акции', { min: 0, max: 1 }),
     row_effect: enumValue(source.row_effect, 'Эффект строки акции', PROMO_ROW_EFFECTS),
     row_glow: numberValue(source.row_glow, 'Свечение строки акции', { min: 0, max: 1 }),
-    row_tint: numberValue(source.row_tint, 'Подложка строки акции', { min: 0, max: 0.5 }),
+    row_tint: numberValue(source.row_tint, 'Подложка строки акции', { min: 0, max: PROMO_ROW_TINT_MAX }),
     price_effect: enumValue(source.price_effect, 'Акцент цены акции', PROMO_PRICE_EFFECTS),
     sweep_seconds: numberValue(source.sweep_seconds, 'Скорость блика акции', { min: 0.5, max: 6 }),
     cycle_seconds: numberValue(source.cycle_seconds, 'Период акции', { min: 3, max: 30 })
