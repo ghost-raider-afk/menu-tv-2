@@ -108,6 +108,23 @@ export async function initialiseSchema(pool) {
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS animation_settings (
+      id SMALLINT PRIMARY KEY,
+      enabled BOOLEAN NOT NULL DEFAULT FALSE,
+      preset_id TEXT NOT NULL DEFAULT 'custom-base',
+      profile_json TEXT NOT NULL DEFAULT '{}',
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS animation_presets (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      profile_json TEXT NOT NULL,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS activity_events (
       id BIGSERIAL PRIMARY KEY,
       actor_username TEXT NOT NULL,
@@ -153,6 +170,7 @@ export async function initialiseSchema(pool) {
     ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS signin_logo_size SMALLINT NOT NULL DEFAULT 1;
     CREATE UNIQUE INDEX IF NOT EXISTS locations_sftp_directory_id_unique ON locations(sftp_directory_id) WHERE sftp_directory_id IS NOT NULL;
     CREATE UNIQUE INDEX IF NOT EXISTS locations_sftp_username_unique ON locations(sftp_username) WHERE sftp_username IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS animation_presets_name_lower_unique ON animation_presets(LOWER(name));
     CREATE INDEX IF NOT EXISTS activity_events_created_at_index ON activity_events(created_at DESC);
     CREATE INDEX IF NOT EXISTS activity_events_unread_index ON activity_events(read_at) WHERE read_at IS NULL;
     UPDATE web_users SET password_changed_at = created_at WHERE password_changed_at IS NULL;
@@ -164,5 +182,10 @@ export async function initialiseSchema(pool) {
   await pool.query(
     'INSERT INTO site_settings (id, timezone, created_at, updated_at) VALUES (1, $1, $2, $2) ON CONFLICT (id) DO NOTHING',
     ['Europe/Moscow', now]
+  );
+  await pool.query(
+    `INSERT INTO animation_settings (id, enabled, preset_id, profile_json, created_at, updated_at)
+     VALUES (1, FALSE, 'custom-base', '{}', $1, $1) ON CONFLICT (id) DO NOTHING`,
+    [now]
   );
 }
