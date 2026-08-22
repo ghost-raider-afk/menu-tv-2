@@ -1,4 +1,5 @@
-import { productInput, positiveId } from '../contracts/input.js';
+import { TextDecoder } from 'node:util';
+import { normalisePrice, productInput, positiveId } from '../contracts/input.js';
 import { ValidationError } from '../shared/errors.js';
 
 const EXPORT_HEADERS = Object.freeze([
@@ -27,6 +28,10 @@ const HEADER_ALIASES = new Map([
 
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'да', 'д']);
 const FALSE_VALUES = new Set(['0', 'false', 'no', 'нет', 'н']);
+const UTF8 = new TextDecoder('utf-8', { fatal: true });
+const UTF16_LE = new TextDecoder('utf-16le');
+const UTF16_BE = new TextDecoder('utf-16be');
+const WINDOWS_1251 = new TextDecoder('windows-1251');
 
 function csvValue(value) {
   const text = String(value ?? '');
@@ -76,22 +81,58 @@ export function productsToCsv(products) {
   return `\uFEFF${[header, ...rows].join('\r\n')}\r\n`;
 }
 
-function delimiterFromHeader(source) {
-  let semicolons = 0;
-  let commas = 0;
-  let quoted = false;
-  for (const char of source.replace(/^\uFEFF/, '')) {
-    if (char === '"') quoted = !quoted;
-    else if (!quoted && char === ';') semicolons += 1;
-    else if (!quoted && char === ',') commas += 1;
-    else if (!quoted && (char === '\n' || char === '\r')) break;
+function byteSource(source) {
+  if (Buffer.isBuffer(source)) return source;
+  if (source instanceof Uint8Array) return Buffer.from(source.buffer, source.byteOffset, source.byteLength);
+  return null;
+}
+
+export function decodeProductsCsvSource(source) {
+  if (typeof source === 'string') return source;
+  const bytes = byteSource(source);
+  if (!bytes || bytes.length === 0) throw new ValidationError('CSV-файл пуст.');
+
+  let text;
+  if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
+    text = UTF16_LE.decode(bytes);
+  } else if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
+    text = UTF16_BE.decode(bytes);
+  } else {
+    try {
+      text = UTF8.decode(bytes);
+    } catch {
+      text = WINDOWS_1251.decode(bytes);
+    }
   }
-  return semicolons >= commas ? ';' : ',';
+
+  if (text.includes('\u0000')) throw new ValidationError('CSV-файл имеет неподдерживаемое текстовое форматирование.');
+  return text;
+}
+
+function delimiterFromHeader(source) {
+  const counts = new Map([[';', 0], [',', 0], ['\t', 0]]);
+  let quoted = false;
+  const text = source.replace(/^\uFEFF/, '');
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === '"') {
+      if (quoted && text[index + 1] === '"') {
+        index += 1;
+        continue;
+      }
+      quoted = !quoted;
+      continue;
+    }
+    if (!quoted && counts.has(char)) counts.set(char, counts.get(char) + 1);
+    if (!quoted && (char === '\n' || char === '\r')) break;
+  }
+  return [...counts.entries()].sort((left, right) => right[1] - left[1])[0][0];
 }
 
 function parseRows(source) {
-  if (typeof source !== 'string' || source.trim().length === 0) throw new ValidationError('CSV-файл пуст.');
-  const text = source.replace(/^\uFEFF/, '');
+  const decoded = decodeProductsCsvSource(source);
+  if (decoded.trim().length === 0) throw new ValidationError('CSV-файл пуст.');
+  const text = decoded.replace(/^\uFEFF/, '');
   const delimiter = delimiterFromHeader(text);
   const rows = [];
   let row = [];
@@ -186,15 +227,31 @@ function filtrationValue(value) {
   throw new ValidationError('Поле «Фильтрация» содержит неизвестное значение.');
 }
 
+function validateSecondaryPrice(row, columns, product) {
+  const source = cell(row, columns, 'price_secondary');
+  if (!source) return;
+  const supplied = normalisePrice(source, 'Цена за 1,5 л');
+  if (supplied !== product.price_secondary) {
+    throw new ValidationError(`Цена за 1,5 л рассчитывается автоматически из цены за 1 л. Ожидается ${readablePrice(product.price_secondary)}.`);
+  }
+}
+
 export function productsFromCsv(source) {
   const rows = parseRows(source);
   const columns = headerMap(rows[0]);
+  const columnCount = rows[0].length;
   const entries = [];
   const usedIds = new Set();
 
-  rows.slice(1).forEach((row, offset) => {
+  rows.slice(1).forEach((sourceRow, offset) => {
     const line = offset + 2;
     try {
+      if (sourceRow.length > columnCount) {
+        throw new ValidationError(`обнаружено ${sourceRow.length} столбцов, ожидалось ${columnCount}. Проверьте разделитель и кавычки.`);
+      }
+      const row = sourceRow.length < columnCount
+        ? [...sourceRow, ...Array(columnCount - sourceRow.length).fill('')]
+        : sourceRow;
       const rawId = cell(row, columns, 'id');
       const id = rawId ? positiveId(rawId, 'ID') : null;
       if (id && usedIds.has(id)) throw new ValidationError(`ID ${id} встречается в CSV несколько раз.`);
@@ -210,6 +267,7 @@ export function productsFromCsv(source) {
         filtration: filtrationValue(cell(row, columns, 'filtration')),
         active: booleanValue(cell(row, columns, 'active'), 'Активна', true)
       });
+      validateSecondaryPrice(row, columns, product);
       entries.push({ line, id, product });
     } catch (error) {
       if (error instanceof ValidationError) throw new ValidationError(`Строка ${line}: ${error.message}`);
