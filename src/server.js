@@ -30,7 +30,7 @@ const publicDir = path.join(__dirname, 'web', 'admin-ui', 'public');
 const protectedPages = [
   '/', '/index.html', '/locations.html', '/screens.html', '/catalog.html',
   '/screen-editor.html', '/profile.html', '/settings.html', '/sftp-settings.html',
-  '/animation.html', '/connect-tv.html'
+  '/animation.html', '/connect-tv.html', '/activity.html'
 ];
 
 async function initialiseStore(store, config) {
