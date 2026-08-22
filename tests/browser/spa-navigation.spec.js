@@ -73,7 +73,7 @@ test('catalog submenu closes after product selection on desktop and stays closed
   await expectCatalogContextItems(page);
 
   await page.getByRole('link', { name: /^Продукция$/ }).click();
-  await expect(page).toHaveURL(/\/catalog\.html#products$/);
+  await expect(page).toHaveURL(/\/catalog\.html$/);
   await expectContextCollapsed(page);
 });
 
@@ -87,7 +87,7 @@ test('catalog submenu closes after product selection on mobile', async ({ page }
   await expectCatalogContextItems(page);
 
   await page.getByRole('link', { name: /^Продукция$/ }).click();
-  await expect(page).toHaveURL(/\/catalog\.html#products$/);
+  await expect(page).toHaveURL(/\/catalog\.html$/);
   await expectContextCollapsed(page);
 });
 
