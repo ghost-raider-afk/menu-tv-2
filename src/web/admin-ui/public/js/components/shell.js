@@ -37,21 +37,34 @@ function isMobileShell() {
 }
 
 function wireContext(shell, rail, context, header) {
+  let hoverReopenSuppressed = false;
+
   if (isMobileShell()) setCollapsed(shell, context, true, { persist: false });
   else if (savedCollapsedState()) setCollapsed(shell, context, true, { persist: false });
 
-  context.querySelector('.ui-context-close')?.addEventListener('click', () => setCollapsed(shell, context, true));
+  const dismissContext = () => {
+    hoverReopenSuppressed = true;
+    setCollapsed(shell, context, true);
+  };
+
+  context.querySelector('.ui-context-close')?.addEventListener('click', dismissContext);
   context.addEventListener('click', (event) => {
     const link = event.target instanceof Element ? event.target.closest('.app-route-link') : null;
     if (!link || !context.contains(link)) return;
-    setCollapsed(shell, context, true);
+    dismissContext();
   });
 
   rail.querySelectorAll('.ui-rail-button').forEach((link) => {
     link.addEventListener('pointerenter', () => {
-      if (window.innerWidth > 720 && link.classList.contains('active')) setCollapsed(shell, context, false);
+      if (window.innerWidth > 720 && !hoverReopenSuppressed && link.classList.contains('active')) {
+        setCollapsed(shell, context, false);
+      }
+    }, { passive: true });
+    link.addEventListener('pointerleave', () => {
+      hoverReopenSuppressed = false;
     }, { passive: true });
     link.addEventListener('click', (event) => {
+      hoverReopenSuppressed = false;
       if (window.innerWidth <= 720) {
         const section = link.dataset.routeSection;
         const usesContextMenu = section === 'monitors' || section === 'settings' || section === 'catalog';
