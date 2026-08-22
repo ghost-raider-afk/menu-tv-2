@@ -6,7 +6,7 @@ export async function migrateAnimationSettings(pool) {
     CREATE TABLE IF NOT EXISTS animation_settings (
       id SMALLINT PRIMARY KEY,
       enabled BOOLEAN NOT NULL DEFAULT FALSE,
-      preset_id TEXT NOT NULL DEFAULT 'custom',
+      preset_id TEXT NOT NULL DEFAULT 'custom-base',
       profile_json TEXT NOT NULL DEFAULT '{}',
       updated_by TEXT NOT NULL DEFAULT '',
       created_at TIMESTAMPTZ NOT NULL,
@@ -27,7 +27,7 @@ export async function migrateAnimationSettings(pool) {
   const now = isoNow();
   await pool.query(
     `INSERT INTO animation_settings (id, enabled, preset_id, profile_json, created_at, updated_at)
-     VALUES (1, FALSE, 'custom', '{}', $1, $1)
+     VALUES (1, FALSE, 'custom-base', '{}', $1, $1)
      ON CONFLICT (id) DO NOTHING`,
     [now]
   );
@@ -42,7 +42,7 @@ export async function migrateAnimationSettings(pool) {
     if (Number(source.motion_version) === ANIMATION_PROFILE_VERSION && serialized === JSON.stringify(source)) continue;
     await pool.query(
       'UPDATE animation_settings SET profile_json = $1, preset_id = $2, updated_at = $3 WHERE id = $4',
-      [serialized, 'custom', now, row.id]
+      [serialized, 'custom-base', now, row.id]
     );
   }
 
