@@ -87,7 +87,7 @@ function animateVisualFx(stage, profile, total, animations) {
   } else if (effect === 'aurora') {
     stage.querySelectorAll('.motion-fx-aurora i').forEach((node, index) => addAnimation(animations, node, [
       { transform: `translate3d(${-12 + index * 4}%,-3%,0) rotate(${-9 + index * 7}deg) scale(.92)`, opacity: 0.28 * gain },
-      { transform: `translate3d(${18 - index * 5}%,7%,0) rotate(${8 - index * 5}deg) scale(1.16)`, opacity: 0.74 * gain },
+      { transform: `translate3d(${18 - index * 5}% ,7%,0) rotate(${8 - index * 5}deg) scale(1.16)`, opacity: 0.74 * gain },
       { transform: `translate3d(${-12 + index * 4}%,-3%,0) rotate(${-9 + index * 7}deg) scale(.92)`, opacity: 0.28 * gain }
     ], { duration: total * (1 + index * 0.12), easing }));
   } else if (effect === 'ripple') {
@@ -105,13 +105,13 @@ function animateVisualFx(stage, profile, total, animations) {
     addAnimation(animations, stage.querySelector('.motion-fx-spotlight i'), [
       { transform: 'translate3d(0,0,0) scale(.92)', opacity: 0.35 * gain }, { transform: 'translate3d(95%,15%,0) scale(1.12)', opacity: 0.62 * gain },
       { transform: 'translate3d(48%,58%,0) scale(1)', opacity: 0.48 * gain }, { transform: 'translate3d(0,0,0) scale(.92)', opacity: 0.35 * gain }
-    ], { duration: total, easing }));
+    ], { duration: total, easing });
   } else if (effect === 'liquid-glass') {
     addAnimation(animations, stage.querySelector('.motion-fx-glass i'), [
       { offset: 0, transform: 'translateX(-120%) skewX(-10deg) scaleX(.82)', opacity: 0 }, { offset: 0.12, opacity: 0 },
       { offset: 0.34, transform: 'translateX(250%) skewX(-7deg) scaleX(1.08)', opacity: 0.66 * gain }, { offset: 0.6, transform: 'translateX(530%) skewX(-12deg) scaleX(.9)', opacity: 0 },
       { offset: 1, transform: 'translateX(530%) skewX(-12deg) scaleX(.9)', opacity: 0 }
-    ], { duration: total, easing }));
+    ], { duration: total, easing });
   }
 }
 function promoBadgeFrames(style) {
