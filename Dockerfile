@@ -7,6 +7,11 @@ COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY src ./src
 
+# Production images must never contain JavaScript that Node cannot parse.
+# The check uses only Node and shell utilities, so it remains available with
+# devDependencies omitted from the runtime image.
+RUN npm run build
+
 RUN groupadd --gid 11000 sftp-storage \
   && useradd --uid 10001 --gid sftp-storage --create-home menu-tv \
   && chown -R menu-tv:sftp-storage /app
