@@ -2,35 +2,61 @@ import { api } from '../core/api.js';
 import { API } from '../core/config.js';
 import { decodeTvActivationQr, recommendedQrFrameSize } from '../device/qr-decoder.js';
 
-const message = document.querySelector('#connect-tv-message');
-const scanButton = document.querySelector('[data-start-scan]');
-const cameraWrap = document.querySelector('[data-camera-wrap]');
-const video = document.querySelector('[data-camera]');
-const codeInput = document.querySelector('#connect-tv-code');
-const codeButton = document.querySelector('[data-use-code]');
-const deviceFound = document.querySelector('[data-device-found]');
-const activationValidity = document.querySelector('[data-activation-validity]');
-const locationStep = document.querySelector('[data-connect-step="location"]');
-const screenStep = document.querySelector('[data-connect-step="screen"]');
-const locationOptions = document.querySelector('[data-location-options]');
-const screenOptions = document.querySelector('[data-screen-options]');
-const authorizeButton = document.querySelector('[data-authorize]');
-const success = document.querySelector('[data-connect-success]');
-const successText = document.querySelector('[data-connect-success-text]');
-const bindingsList = document.querySelector('[data-device-bindings]');
-const refreshBindingsButton = document.querySelector('[data-refresh-bindings]');
+let message = null;
+let scanButton = null;
+let cameraWrap = null;
+let video = null;
+let codeInput = null;
+let codeButton = null;
+let deviceFound = null;
+let activationValidity = null;
+let locationStep = null;
+let screenStep = null;
+let locationOptions = null;
+let screenOptions = null;
+let authorizeButton = null;
+let success = null;
+let successText = null;
+let bindingsList = null;
+let refreshBindingsButton = null;
 const scanCanvas = document.createElement('canvas');
 const scanContext = scanCanvas.getContext('2d', { willReadFrequently: true });
 
 let activationId = null;
 let activationExpiresAt = null;
 let activationTimer = null;
+let bindingsRefreshTimer = null;
 let locations = [];
 let screens = [];
 let selectedLocationId = null;
 let selectedScreenId = null;
 let mediaStream = null;
 let scannerRunning = false;
+let mountGeneration = 0;
+
+function bindDom() {
+  message = document.querySelector('#connect-tv-message');
+  scanButton = document.querySelector('[data-start-scan]');
+  cameraWrap = document.querySelector('[data-camera-wrap]');
+  video = document.querySelector('[data-camera]');
+  codeInput = document.querySelector('#connect-tv-code');
+  codeButton = document.querySelector('[data-use-code]');
+  deviceFound = document.querySelector('[data-device-found]');
+  activationValidity = document.querySelector('[data-activation-validity]');
+  locationStep = document.querySelector('[data-connect-step="location"]');
+  screenStep = document.querySelector('[data-connect-step="screen"]');
+  locationOptions = document.querySelector('[data-location-options]');
+  screenOptions = document.querySelector('[data-screen-options]');
+  authorizeButton = document.querySelector('[data-authorize]');
+  success = document.querySelector('[data-connect-success]');
+  successText = document.querySelector('[data-connect-success-text]');
+  bindingsList = document.querySelector('[data-device-bindings]');
+  refreshBindingsButton = document.querySelector('[data-refresh-bindings]');
+}
+
+function isCurrent(generation) {
+  return generation === mountGeneration && document.body?.dataset?.page === 'connect-tv';
+}
 
 function setMessage(text = '', error = false) {
   if (!message) return;
@@ -44,6 +70,11 @@ function stopActivationTimer() {
   activationTimer = null;
 }
 
+function stopBindingsRefreshTimer() {
+  if (bindingsRefreshTimer) window.clearTimeout(bindingsRefreshTimer);
+  bindingsRefreshTimer = null;
+}
+
 function remainingText(expiresAt) {
   const remaining = Math.max(0, Date.parse(expiresAt || '') - Date.now());
   const seconds = Math.ceil(remaining / 1000);
@@ -55,7 +86,9 @@ function startActivationTimer(expiresAt) {
   stopActivationTimer();
   activationExpiresAt = expiresAt || null;
   if (!activationValidity || !activationExpiresAt) return;
+  const generation = mountGeneration;
   const update = () => {
+    if (!isCurrent(generation)) return stopActivationTimer();
     const remaining = Date.parse(activationExpiresAt) - Date.now();
     if (remaining <= 0) {
       stopActivationTimer();
@@ -158,11 +191,15 @@ function renderLocations() {
   }
 }
 
-async function loadStructure() {
-  [locations, screens] = await Promise.all([
+async function loadStructure(generation = mountGeneration) {
+  const [nextLocations, nextScreens] = await Promise.all([
     api.get(API.locations),
     api.get(API.screens)
   ]);
+  if (!isCurrent(generation)) return false;
+  locations = nextLocations;
+  screens = nextScreens;
+  return true;
 }
 
 function formatLastSeen(value) {
@@ -190,13 +227,16 @@ function bindingRow(binding) {
   revokeButton.addEventListener('click', async () => {
     const confirmed = window.confirm(`Отменить авторизацию телевизора для «${binding.screen_name}»?`);
     if (!confirmed) return;
+    const generation = mountGeneration;
     revokeButton.disabled = true;
     setMessage('Отключаем телевизор…');
     try {
       await api.delete(`${API.deviceBindings}/${encodeURIComponent(binding.screen_id)}`);
+      if (!isCurrent(generation)) return;
       setMessage(`Авторизация телевизора для «${binding.screen_name}» отменена.`);
-      await loadBindings();
+      await loadBindings(generation);
     } catch (error) {
+      if (!isCurrent(generation)) return;
       setMessage(error.message || 'Не удалось отключить телевизор.', true);
       revokeButton.disabled = false;
     }
@@ -206,11 +246,12 @@ function bindingRow(binding) {
   return row;
 }
 
-async function loadBindings() {
-  if (!bindingsList) return;
+async function loadBindings(generation = mountGeneration) {
+  if (!bindingsList || !isCurrent(generation)) return;
   if (refreshBindingsButton) refreshBindingsButton.disabled = true;
   try {
     const bindings = await api.get(API.deviceBindings);
+    if (!isCurrent(generation) || !bindingsList) return;
     bindingsList.innerHTML = '';
     if (!Array.isArray(bindings) || !bindings.length) {
       const empty = document.createElement('p');
@@ -221,17 +262,19 @@ async function loadBindings() {
     }
     bindings.forEach((binding) => bindingsList.append(bindingRow(binding)));
   } catch (error) {
+    if (!isCurrent(generation) || !bindingsList) return;
     bindingsList.innerHTML = '';
     const empty = document.createElement('p');
     empty.className = 'connect-tv-bindings-empty';
     empty.textContent = error.message || 'Не удалось загрузить подключённые телевизоры.';
     bindingsList.append(empty);
   } finally {
-    if (refreshBindingsButton) refreshBindingsButton.disabled = false;
+    if (isCurrent(generation) && refreshBindingsButton) refreshBindingsButton.disabled = false;
   }
 }
 
 async function resolveActivation(payload) {
+  const generation = mountGeneration;
   resetSelection();
   stopActivationTimer();
   setMessage('Проверяем код подключения…');
@@ -240,9 +283,10 @@ async function resolveActivation(payload) {
       ? { scan_payload: payload.scan_payload }
       : { reserve_code: payload.reserve_code };
     const activation = await api.post(API.deviceResolve, body);
+    if (!isCurrent(generation)) return;
     activationId = activation.activation_id;
     activationExpiresAt = activation.expires_at;
-    await loadStructure();
+    if (!await loadStructure(generation) || !isCurrent(generation)) return;
     if (deviceFound) {
       deviceFound.textContent = 'Телевизор найден. Теперь выберите торговую точку и монитор.';
       deviceFound.classList.remove('is-hidden');
@@ -254,6 +298,7 @@ async function resolveActivation(payload) {
     setMessage('Телевизор найден. Выберите место установки.');
     stopCamera();
   } catch (error) {
+    if (!isCurrent(generation)) return;
     activationId = null;
     activationExpiresAt = null;
     setMessage(error.message || 'Не удалось проверить код подключения.', true);
@@ -281,10 +326,6 @@ function localScanPayload() {
   const sourceWidth = video.videoWidth;
   const sourceHeight = video.videoHeight;
 
-  // The camera UI is a square object-fit:cover viewport. Decode the same central
-  // area the user actually sees inside the yellow guide instead of shrinking the
-  // entire 16:9 sensor frame. This is especially important for iPhone cameras and
-  // QR codes displayed on a TV, where moire makes small modules harder to resolve.
   const visibleSquare = Math.min(sourceWidth, sourceHeight);
   const guideCrop = Math.max(1, Math.round(visibleSquare * 0.78));
   const sourceX = Math.max(0, Math.round((sourceWidth - guideCrop) / 2));
@@ -296,8 +337,6 @@ function localScanPayload() {
   const guided = decodeCurrentCanvas();
   if (guided) return guided;
 
-  // Reserve attempt: analyse the complete sensor frame for QR codes that are not
-  // perfectly centred yet. Preserve the source aspect ratio for finder geometry.
   const size = recommendedQrFrameSize(sourceWidth, sourceHeight);
   if (scanCanvas.width !== size.width) scanCanvas.width = size.width;
   if (scanCanvas.height !== size.height) scanCanvas.height = size.height;
@@ -305,8 +344,8 @@ function localScanPayload() {
   return decodeCurrentCanvas();
 }
 
-async function scanLoop(detector) {
-  while (scannerRunning) {
+async function scanLoop(detector, generation) {
+  while (scannerRunning && isCurrent(generation)) {
     let rawValue = null;
     if (detector) {
       try {
@@ -317,7 +356,7 @@ async function scanLoop(detector) {
     if (!rawValue) {
       try { rawValue = localScanPayload(); } catch {}
     }
-    if (rawValue) {
+    if (rawValue && isCurrent(generation)) {
       scannerRunning = false;
       setMessage('QR-код распознан. Проверяем телевизор…');
       await resolveActivation({ scan_payload: rawValue });
@@ -339,6 +378,7 @@ async function improveCameraFocus(stream) {
 }
 
 async function startScanner() {
+  const generation = mountGeneration;
   setMessage('');
   if (scannerRunning) {
     stopCamera();
@@ -349,9 +389,11 @@ async function startScanner() {
     return;
   }
 
+  let stream = null;
   try {
     const detector = await nativeDetector();
-    mediaStream = await navigator.mediaDevices.getUserMedia({
+    if (!isCurrent(generation)) return;
+    stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: 'environment' },
         width: { ideal: 1920 },
@@ -359,15 +401,26 @@ async function startScanner() {
       },
       audio: false
     });
+    if (!isCurrent(generation)) {
+      for (const track of stream.getTracks?.() || []) track.stop();
+      return;
+    }
+    mediaStream = stream;
     await improveCameraFocus(mediaStream);
+    if (!isCurrent(generation)) return stopCamera();
     video.srcObject = mediaStream;
     await video.play();
+    if (!isCurrent(generation)) return stopCamera();
     scannerRunning = true;
     cameraWrap?.classList.remove('is-hidden');
     if (scanButton) scanButton.textContent = 'Остановить камеру';
     setMessage('Поместите QR-код целиком внутрь жёлтой рамки и держите телефон неподвижно.');
-    void scanLoop(detector);
+    void scanLoop(detector, generation);
   } catch (error) {
+    if (!isCurrent(generation)) {
+      for (const track of stream?.getTracks?.() || []) track.stop();
+      return;
+    }
     console.warn('TV QR scanner could not start', error);
     stopCamera();
     setMessage('Не удалось открыть камеру. Разрешите доступ к камере или используйте 6-значный код.', true);
@@ -381,6 +434,7 @@ function normalizeReserveCode() {
 }
 
 async function authorize() {
+  const generation = mountGeneration;
   if (!activationId || !selectedScreenId) return;
   if (Date.parse(activationExpiresAt || '') <= Date.now()) {
     activationId = null;
@@ -395,22 +449,43 @@ async function authorize() {
       activation_id: activationId,
       screen_id: selectedScreenId
     });
+    if (!isCurrent(generation)) return;
     stopActivationTimer();
     activationExpiresAt = null;
     if (successText) successText.textContent = `${result.screen.location_name} → ${result.screen.name}. Телевизор автоматически перейдёт в полноэкранный Player.`;
     success?.classList.remove('is-hidden');
     setMessage('Подключение подтверждено.');
     activationId = null;
-    window.setTimeout(() => void loadBindings(), 2500);
+    stopBindingsRefreshTimer();
+    bindingsRefreshTimer = window.setTimeout(() => {
+      bindingsRefreshTimer = null;
+      if (isCurrent(generation)) void loadBindings(generation);
+    }, 2500);
   } catch (error) {
+    if (!isCurrent(generation)) return;
     setMessage(error.message || 'Не удалось авторизовать телевизор.', true);
     if (authorizeButton) authorizeButton.disabled = false;
   }
 }
 
+function resetRuntimeState() {
+  stopCamera();
+  stopActivationTimer();
+  stopBindingsRefreshTimer();
+  activationId = null;
+  activationExpiresAt = null;
+  locations = [];
+  screens = [];
+  selectedLocationId = null;
+  selectedScreenId = null;
+}
+
 export function initialiseConnectTv() {
+  resetRuntimeState();
+  bindDom();
+  const generation = ++mountGeneration;
   resetSelection();
-  void loadBindings();
+  void loadBindings(generation);
   scanButton?.addEventListener('click', () => void startScanner());
   codeInput?.addEventListener('input', normalizeReserveCode);
   codeButton?.addEventListener('click', () => {
@@ -422,9 +497,21 @@ export function initialiseConnectTv() {
     void resolveActivation({ reserve_code: code });
   });
   authorizeButton?.addEventListener('click', () => void authorize());
-  refreshBindingsButton?.addEventListener('click', () => void loadBindings());
-  window.addEventListener('pagehide', () => {
+  refreshBindingsButton?.addEventListener('click', () => void loadBindings(generation));
+
+  const onPageHide = () => {
     stopCamera();
     stopActivationTimer();
-  }, { once: true });
+    stopBindingsRefreshTimer();
+  };
+  window.addEventListener('pagehide', onPageHide);
+
+  return {
+    dispose() {
+      if (generation !== mountGeneration) return;
+      mountGeneration += 1;
+      window.removeEventListener('pagehide', onPageHide);
+      resetRuntimeState();
+    }
+  };
 }
