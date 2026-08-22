@@ -143,7 +143,7 @@ function animatePromoStyle(stage, profile, animations) {
   const easing = EASING[profile.easing] || EASING.smooth;
   badges.forEach((node, index) => addAnimation(animations, node, promoBadgeFrames(style), { duration: cycleMs, delay: index * 90, easing }));
   const rowPeak = clamp(baseOpacity + Number(style.row_glow || 0) * 0.42, baseOpacity, 0.72);
-  if (style.row_effect === 'glow' || style.row_effect === 'pulse') {
+  if (style.row_effect === 'glow' || style.row_effect === 'pulse' || style.row_effect === 'sweep') {
     highlights.forEach((node, index) => addAnimation(animations, node, [
       { opacity: baseOpacity, filter: 'brightness(1)' },
       { opacity: rowPeak, filter: `brightness(1.3) drop-shadow(0 0 ${(12 + Number(style.row_glow || 0) * 30).toFixed(1)}px ${PROMO_SHADOW})` },
@@ -151,14 +151,18 @@ function animatePromoStyle(stage, profile, animations) {
     ], { duration: cycleMs, delay: index * 120, easing }));
   }
   if (style.row_effect === 'sweep') {
-    highlights.forEach((node, index) => addAnimation(animations, node, [
-      { opacity: baseOpacity, filter: 'brightness(1)' }, { opacity: rowPeak, filter: `brightness(1.22) drop-shadow(0 0 ${(10 + Number(style.row_glow || 0) * 26).toFixed(1)}px ${PROMO_SHADOW})` }, { opacity: baseOpacity, filter: 'brightness(1)' }
-    ], { duration: cycleMs, delay: index * 150, easing }));
+    const sweepMs = clamp(Number(style.sweep_seconds) * 1000 || 1400, 500, Math.max(500, cycleMs * 0.8));
+    const sweepFraction = clamp(sweepMs / cycleMs, 0.08, 0.8);
+    const start = 0.08;
+    const mid = start + sweepFraction * 0.52;
+    const end = Math.min(0.94, start + sweepFraction);
     sweeps.forEach((node, index) => addAnimation(animations, node, [
-      { offset: 0, opacity: 0, transform: 'translateX(0)' }, { offset: 0.12, opacity: 0 },
-      { offset: 0.35, opacity: 0.42 + Number(style.row_glow || 0) * 0.3, transform: 'translateX(250%)' },
-      { offset: 0.58, opacity: 0, transform: 'translateX(520%)' }, { offset: 1, opacity: 0, transform: 'translateX(520%)' }
-    ], { duration: Math.max(500, Number(style.sweep_seconds) * 1000 || 1400), delay: index * 220, easing: 'ease-in-out' }));
+      { offset: 0, opacity: 0, transform: 'translateX(0)' },
+      { offset: start, opacity: 0, transform: 'translateX(0)' },
+      { offset: mid, opacity: 0.42 + Number(style.row_glow || 0) * 0.3, transform: 'translateX(250%)' },
+      { offset: end, opacity: 0, transform: 'translateX(520%)' },
+      { offset: 1, opacity: 0, transform: 'translateX(520%)' }
+    ], { duration: cycleMs, delay: index * 220, easing: 'ease-in-out' }));
   }
   const priceFrames = promoPriceFrames(style.price_effect, Number(style.row_glow || 0));
   if (priceFrames) prices.forEach((node, index) => addAnimation(animations, node, priceFrames, { duration: cycleMs, delay: index * 110, easing }));
@@ -195,7 +199,7 @@ function brandDestinations(stage, target, text) {
     point.x = origin.x + extent.width / 2;
     point.y = origin.y + extent.height / 2;
     const screenPoint = point.matrixTransform(matrix);
-    return { character, x: screenPoint.x - stageRect.left, y: screenPoint.y - stageRect.top, width: extent.width, height: extent.height };
+    return { character, x: screenPoint.x - stageRect.left, y: screenPoint.y - stageRect.top };
   });
 }
 function reducedMotion() { return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true; }
@@ -203,7 +207,8 @@ function reducedMotion() { return window.matchMedia?.('(prefers-reduced-motion: 
 export class AnimationPreviewPlayer {
   constructor({ stage, timeline, timeLabel, playButton, pauseButton, replayButton }) {
     this.stage = stage; this.timeline = timeline; this.timeLabel = timeLabel; this.playButton = playButton; this.pauseButton = pauseButton; this.replayButton = replayButton;
-    this.animations = []; this.master = null; this.total = 12000; this.raf = null; this.profile = null; this.brandTimer = null; this.brandOverlay = null; this.brandTarget = null; this.bindControls();
+    this.animations = []; this.master = null; this.total = 12000; this.raf = null; this.profile = null; this.hasStarted = false;
+    this.brandCleanupTimer = null; this.brandIntervalTimer = null; this.brandOverlay = null; this.brandTarget = null; this.bindControls();
   }
   bindControls() {
     this.playButton?.addEventListener('click', () => this.play());
@@ -211,19 +216,24 @@ export class AnimationPreviewPlayer {
     this.replayButton?.addEventListener('click', () => this.replay());
     this.timeline?.addEventListener('input', () => { if (!this.master) return; const value = Number(this.timeline.value) / Number(this.timeline.max || 1000); this.seek(value * this.total); });
   }
-  clearBrandReveal() {
-    if (this.brandTimer) clearTimeout(this.brandTimer);
-    this.brandTimer = null;
+  clearBrandOverlay() {
+    if (this.brandCleanupTimer) clearTimeout(this.brandCleanupTimer);
+    this.brandCleanupTimer = null;
     this.brandOverlay?.remove();
     this.brandOverlay = null;
     if (this.brandTarget) this.brandTarget.style.opacity = '';
     this.brandTarget = null;
   }
+  clearBrandTimers() {
+    if (this.brandIntervalTimer) clearTimeout(this.brandIntervalTimer);
+    this.brandIntervalTimer = null;
+    this.clearBrandOverlay();
+  }
   destroy() {
     cancelAnimationFrame(this.raf);
     this.animations.forEach((animation) => animation.cancel());
     this.animations = []; this.master = null;
-    this.clearBrandReveal();
+    this.clearBrandTimers();
     if (this.stage) { delete this.stage.dataset.visualEffect; delete this.stage.dataset.motionMode; }
   }
   shouldRunBrand(reason) {
@@ -235,15 +245,16 @@ export class AnimationPreviewPlayer {
   scheduleBrandInterval() {
     const brand = this.profile?.brand_reveal;
     if (!brand?.enabled || brand.trigger !== 'interval' || reducedMotion()) return;
+    if (this.brandIntervalTimer) clearTimeout(this.brandIntervalTimer);
     const delay = Math.max(30000, Number(brand.interval_seconds) * 1000 || 300000);
-    this.brandTimer = setTimeout(() => {
-      this.brandTimer = null;
+    this.brandIntervalTimer = setTimeout(() => {
+      this.brandIntervalTimer = null;
       this.runBrandReveal();
       this.scheduleBrandInterval();
     }, delay);
   }
   runBrandReveal() {
-    this.clearBrandReveal();
+    this.clearBrandOverlay();
     const brand = this.profile?.brand_reveal;
     const text = String(brand?.text || '').trim();
     if (!brand?.enabled || !text || reducedMotion()) return false;
@@ -294,10 +305,12 @@ export class AnimationPreviewPlayer {
         { offset: 1, left: `${destination.x}px`, top: `${destination.y}px`, opacity: 1, transform: 'translate(-50%,-50%) scale(1) rotate(0deg)', textShadow: '0 0 0 rgba(244,201,21,0)' }
       ], { duration, delay, easing, fill: 'forwards' });
     });
-    this.brandTimer = setTimeout(() => this.clearBrandReveal(), maxEnd + 120);
+    this.brandCleanupTimer = setTimeout(() => this.clearBrandOverlay(), maxEnd + 120);
     return true;
   }
-  restart(profile, { reason = 'preview' } = {}) {
+  restart(profile, { reason = null } = {}) {
+    const resolvedReason = reason || (this.hasStarted ? 'menu-update' : 'player-start');
+    if (!reason) this.hasStarted = true;
     this.destroy();
     this.profile = structuredClone(profile || {});
     const intensity = clamp(Number(profile.intensity) || 0, 0, 100);
@@ -324,7 +337,7 @@ export class AnimationPreviewPlayer {
     this.animations.push(this.master);
     if (reducedMotion()) this.pause();
     else {
-      if (this.shouldRunBrand(reason)) requestAnimationFrame(() => this.runBrandReveal());
+      if (this.shouldRunBrand(resolvedReason)) requestAnimationFrame(() => this.runBrandReveal());
       this.scheduleBrandInterval();
     }
     this.updateProgress();
