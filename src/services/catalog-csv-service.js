@@ -28,6 +28,9 @@ const HEADER_ALIASES = new Map([
 
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'да', 'д']);
 const FALSE_VALUES = new Set(['0', 'false', 'no', 'нет', 'н']);
+const UPDATE_OPTIONAL_FIELDS = Object.freeze([
+  'producer', 'characteristics', 'strength', 'alcoholic', 'beverage_color', 'filtration', 'active'
+]);
 const UTF8 = new TextDecoder('utf-8', { fatal: true });
 const UTF16_LE = new TextDecoder('utf-16le');
 const UTF16_BE = new TextDecoder('utf-16be');
@@ -236,10 +239,23 @@ function validateSecondaryPrice(row, columns, product) {
   }
 }
 
+function productForExistingEntry(existing, entry) {
+  const source = {
+    ...existing,
+    name: entry.product.name,
+    price_primary: entry.product.price_primary
+  };
+  for (const field of UPDATE_OPTIONAL_FIELDS) {
+    if (entry.providedFields.includes(field)) source[field] = entry.product[field];
+  }
+  return productInput(source);
+}
+
 export function productsFromCsv(source) {
   const rows = parseRows(source);
   const columns = headerMap(rows[0]);
   const columnCount = rows[0].length;
+  const providedFields = Object.freeze([...columns.keys()]);
   const entries = [];
   const usedIds = new Set();
 
@@ -268,7 +284,7 @@ export function productsFromCsv(source) {
         active: booleanValue(cell(row, columns, 'active'), 'Активна', true)
       });
       validateSecondaryPrice(row, columns, product);
-      entries.push({ line, id, product });
+      entries.push({ line, id, product, providedFields });
     } catch (error) {
       if (error instanceof ValidationError) throw new ValidationError(`Строка ${line}: ${error.message}`);
       throw error;
@@ -288,7 +304,7 @@ export async function importProductsCsv(store, source) {
       if (entry.id) {
         const existing = await transaction.getProduct(entry.id);
         if (!existing) throw new ValidationError(`Строка ${entry.line}: продукция с ID ${entry.id} не найдена. Удалите ID, чтобы создать новую запись.`);
-        await transaction.updateProduct(entry.id, entry.product);
+        await transaction.updateProduct(entry.id, productForExistingEntry(existing, entry));
         updated += 1;
       } else {
         await transaction.createProduct(entry.product);
