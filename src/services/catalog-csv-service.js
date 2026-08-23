@@ -8,7 +8,7 @@ const EXPORT_HEADERS = Object.freeze([
   ['characteristics', 'Характеристики'],
   ['strength', 'Крепость'],
   ['price_primary', 'Цена 1 л'],
-  ['price_secondary', 'Цена 1,5 л'],
+  ['price_secondary', 'Цена 1,5 л (расчётная)'],
   ['alcoholic', 'Алкогольная'],
   ['beverage_color', 'Цвет напитка'],
   ['filtration', 'Фильтрация'],
@@ -19,7 +19,8 @@ const HEADER_ALIASES = new Map([
   ['id', 'id'], ['название', 'name'], ['name', 'name'], ['производитель', 'producer'], ['producer', 'producer'],
   ['характеристики', 'characteristics'], ['characteristics', 'characteristics'], ['крепость', 'strength'], ['strength', 'strength'],
   ['цена 1 л', 'price_primary'], ['цена за 1 л', 'price_primary'], ['price_primary', 'price_primary'],
-  ['цена 1,5 л', 'price_secondary'], ['цена за 1,5 л', 'price_secondary'], ['price_secondary', 'price_secondary'],
+  ['цена 1,5 л', 'price_secondary'], ['цена за 1,5 л', 'price_secondary'], ['цена 1,5 л (расчётная)', 'price_secondary'],
+  ['цена 1,5 л — расчётная', 'price_secondary'], ['цена 1,5 л - расчётная', 'price_secondary'], ['price_secondary', 'price_secondary'],
   ['алкогольная', 'alcoholic'], ['алкогольная продукция', 'alcoholic'], ['alcoholic', 'alcoholic'],
   ['цвет напитка', 'beverage_color'], ['beverage_color', 'beverage_color'], ['фильтрация', 'filtration'], ['filtration', 'filtration'],
   ['активна', 'active'], ['active', 'active']
