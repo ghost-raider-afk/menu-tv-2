@@ -47,9 +47,10 @@ test('products can be previewed, corrected and applied as one round-trip CSV', a
   const download = await downloadPromise;
   const csv = await readFile(await download.path(), 'utf8');
   expect(csv).toContain('\uFEFFID;Название;Производитель;');
+  expect(csv).toContain('Цена 1,5 л (расчётная)');
   expect(csv).toContain(originalName);
 
-  const importCsv = `\uFEFFID;Название;Производитель;Характеристики;Крепость;Цена 1 л;Цена 1,5 л;Алкогольная;Цвет напитка;Фильтрация;Активна\r\n${product.id};${updatedName};Browser CI;после импорта;4,5%;250;375;да;светлый;фильтрованное;да\r\n;${newName};Новый;создано импортом;;ошибка;150;нет;;;да\r\n`;
+  const importCsv = `\uFEFFID;Название;Производитель;Характеристики;Крепость;Цена 1 л;Цена 1,5 л (расчётная);Алкогольная;Цвет напитка;Фильтрация;Активна\r\n${product.id};${updatedName};Browser CI;после импорта;4,5%;250;999999;да;светлый;фильтрованное;да\r\n;${newName};Новый;создано импортом;;ошибка;999999;нет;;;да\r\n`;
   await page.locator('#product-import-file').setInputFiles({
     name: 'products.csv',
     mimeType: 'text/csv',
@@ -63,11 +64,14 @@ test('products can be previewed, corrected and applied as one round-trip CSV', a
   await expect(preview.locator('[data-import-count="error"]')).toHaveText('1');
   await expect(page.locator('#product-import-apply')).toBeDisabled();
 
+  const changedRow = page.locator('#product-import-body tr').first();
+  await expect(changedRow.locator('.catalog-import-calculated')).toHaveText('375 расчётная');
+
   const newRow = page.locator('#product-import-body tr').nth(1);
   await newRow.locator('[data-import-field="price_primary"]').fill('100');
   await expect(preview.locator('[data-import-count="new"]')).toHaveText('1');
   await expect(preview.locator('[data-import-count="error"]')).toHaveText('0');
-  await expect(newRow.locator('.catalog-import-calculated')).toHaveText('150');
+  await expect(newRow.locator('.catalog-import-calculated')).toHaveText('150 расчётная');
   await expect(page.locator('#product-import-apply')).toBeEnabled();
 
   await page.locator('#product-import-apply').click();
@@ -81,6 +85,7 @@ test('products can be previewed, corrected and applied as one round-trip CSV', a
   const created = products.find((item) => item.name === newName);
   expect(updated?.name).toBe(updatedName);
   expect(updated?.price_primary).toBe('250');
+  expect(updated?.price_secondary).toBe('375');
   expect(created?.price_primary).toBe('100');
   expect(created?.price_secondary).toBe('150');
 
