@@ -1,5 +1,5 @@
-const SHELL_CACHE = 'tv-menu-player-shell-v1';
-const DATA_CACHE = 'tv-menu-player-data-v1';
+const SHELL_CACHE = 'tv-menu-player-shell-v2';
+const DATA_CACHE = 'tv-menu-player-data-v2';
 const PLAYER_CONTEXT = '/api/device/player-context';
 const SHELL_ASSETS = [
   '/player.html',
@@ -26,7 +26,7 @@ async function networkWithTimeout(request, timeoutMs = 4000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(request, { signal: controller.signal });
+    return await fetch(request, { signal: controller.signal, cache: 'no-cache' });
   } finally {
     clearTimeout(timer);
   }
@@ -53,6 +53,9 @@ async function playerContext(request) {
       await cache.delete(PLAYER_CONTEXT);
       return response;
     }
+    if (response.status === 304) {
+      return (await cache.match(PLAYER_CONTEXT)) || response;
+    }
     if (response.ok) {
       await cache.put(PLAYER_CONTEXT, response.clone());
       return response;
@@ -72,15 +75,15 @@ async function playerContext(request) {
   }
 }
 
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-  const response = await fetch(request);
-  if (response.ok) {
-    const cache = await caches.open(SHELL_CACHE);
-    await cache.put(request, response.clone());
+async function networkFirstShell(request) {
+  const cache = await caches.open(SHELL_CACHE);
+  try {
+    const response = await networkWithTimeout(request, 4000);
+    if (response.ok) await cache.put(request, response.clone());
+    return response.ok ? response : ((await cache.match(request)) || response);
+  } catch {
+    return (await cache.match(request)) || Response.error();
   }
-  return response;
 }
 
 async function assetRequest(request) {
@@ -110,7 +113,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (SHELL_ASSETS.includes(url.pathname)) {
-    event.respondWith(cacheFirst(event.request));
+    event.respondWith(networkFirstShell(event.request));
     return;
   }
 
