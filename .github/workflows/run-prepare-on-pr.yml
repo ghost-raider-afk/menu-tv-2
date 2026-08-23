@@ -24,52 +24,102 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-      - name: Extract and run prepared migration
+      - name: Repair and validate generated workflow
         shell: bash
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          source = Path('.github/workflows/prepare-single-main.yml').read_text().splitlines()
-          start = next(i for i, line in enumerate(source) if line.strip() == "python3 <<'PY'") + 1
-          end = next(i for i in range(start, len(source)) if source[i].strip() == 'PY')
-          body = []
-          for line in source[start:end]:
-              body.append(line[10:] if line.startswith('          ') else line)
-          target = Path('/tmp/prepare_single_main.py')
-          code = '\n'.join(body) + '\n'
-          old = """if old_check not in workflow:\n    raise SystemExit('old installer CI contract not found')\nworkflow = workflow.replace(old_check, new_check, 1)"""
-          new = """if old_check in workflow:\n    workflow = workflow.replace(old_check, new_check, 1)\nelse:\n    installer_check = re.compile(r'(?m)^      - name: Check installer ref\\n        run: \\|\\n(?:          .*\\n){3}')\n    workflow, check_count = installer_check.subn(new_check, workflow, count=1)\n    if check_count != 1:\n        raise SystemExit(f'old installer CI contract not found: {check_count}')"""
-          if old not in code:
-              raise SystemExit('migration patch anchor not found')
-          target.write_text(code.replace(old, new, 1))
-          PY
-          python3 /tmp/prepare_single_main.py
-          rm -f .github/workflows/run-prepare-on-pr.yml
           python3 - <<'PY'
           from pathlib import Path
           import re
-          for name in ['README.md', '.github/workflows/check.yml']:
-              path = Path(name)
-              path.write_text(path.read_text().rstrip() + '\n')
-          test_path = Path('tests/versioning.test.js')
-          test = test_path.read_text()
-          test, changelog_count = re.subn(r"^\s*assert\.match\(changelog,.*$", "  assert.ok(changelog.includes(`## [${pkg.version}]`));", test, count=1, flags=re.M)
-          test, installer_count = re.subn(r"^\s*assert\.match\(installer, new RegExp\(.*$", "  assert.ok(installer.includes(`SCRIPT_VERSION=\\\"${pkg.version}\\\"`));", test, count=1, flags=re.M)
-          if changelog_count != 1 or installer_count != 1:
-              raise SystemExit(f'version assertion rewrite failed: changelog={changelog_count}, installer={installer_count}')
-          test_path.write_text(test)
-          PY
-          bash -n menu-tv-2.sh
-          git diff --check
-          npm ci
-          npm run check
-      - name: Commit generated migration without workflow mutation
+
+          path = Path('check.generated.yml')
+          text = path.read_text()
+
+          stable_block = '''      - name: Check stable release installer
+        run: |
+          bash menu-tv-2.sh help | grep -F 'Канал обновлений: стабильные GitHub Releases'
+          bash menu-tv-2.sh help | grep -F 'Версия скрипта: 1.3.0'
+          ! grep -q 'MENU_TV_REF' menu-tv-2.sh
+          ! grep -q '^BRANCH=' menu-tv-2.sh
+'''
+          text, count = re.subn(
+              r"      - name: Check stable release installer\n        run: \|\n.*?(?=      - name: Check canonical environment\n)",
+              stable_block,
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit(f'installer check block rewrite failed: {count}')
+
+          marker = '\n  release-and-cleanup:\n'
+          if marker not in text:
+              raise SystemExit('release job marker missing')
+          prefix = text.split(marker, 1)[0].rstrip()
+          release_job = r'''
+
+  release-and-cleanup:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - node-check
+      - browser-visual
+      - clean-install-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout verified main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve canonical version
+        id: version
         shell: bash
         run: |
-          cp .github/workflows/check.yml check.generated.yml
-          git checkout -- .github/workflows/check.yml .github/workflows/prepare-single-main.yml .github/workflows/run-prepare-on-pr.yml
+          VERSION="$(node -p "require('./package.json').version")"
+          LOCK_VERSION="$(node -p "require('./package-lock.json').version")"
+          ROOT_LOCK_VERSION="$(node -p "require('./package-lock.json').packages[''].version")"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$LOCK_VERSION" == "$VERSION" ]]
+          [[ "$ROOT_LOCK_VERSION" == "$VERSION" ]]
+          grep -F "## [$VERSION]" CHANGELOG.md
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Publish immutable GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        shell: bash
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Release tag $TAG already exists; no new release is created."
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "TV Menu 2 $TAG" --generate-notes
+          fi
+      - name: Remove every branch except main
+        shell: bash
+        run: |
+          git ls-remote --heads origin | while read -r _ ref; do
+            branch="${ref#refs/heads/}"
+            [[ "$branch" == main ]] && continue
+            echo "Deleting obsolete branch: $branch"
+            git push origin --delete "$branch"
+          done
+'''
+          path.write_text(prefix + release_job.rstrip() + '\n')
+          PY
+          ruby -e "require 'yaml'; YAML.load_file('check.generated.yml')"
+          cp .github/workflows/check.yml /tmp/check.yml.original
+          cp check.generated.yml .github/workflows/check.yml
+          npm ci
+          npm run check
+          cp /tmp/check.yml.original .github/workflows/check.yml
+          git diff --check
+      - name: Commit validated generated workflow
+        shell: bash
+        run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -A
-          git commit -m 'Adopt single-main release versioning'
+          git add check.generated.yml
+          git commit -m 'Fix release workflow structure'
           git push origin HEAD:agent/consolidate-single-main
