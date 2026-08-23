@@ -44,6 +44,10 @@ async function initialisePage(name) {
       const { initialiseScreens } = await import('./pages/screens.js');
       return initialiseScreens();
     }
+    case 'connect-tv': {
+      const { initialiseConnectTv } = await import('./pages/connect-tv.js');
+      return initialiseConnectTv();
+    }
     case 'screen-editor': {
       const { initialiseScreenEditor } = await import('./editor/editor.js');
       return initialiseScreenEditor();

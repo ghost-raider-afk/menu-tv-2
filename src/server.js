@@ -22,12 +22,15 @@ import { createCatalogRouter } from './api/catalog/routes.js';
 import { createLocationsRouter } from './api/locations/routes.js';
 import { createScreensRouter } from './api/screens/routes.js';
 import { createSftpRouter } from './api/sftp/routes.js';
+import { createDevicePublicRouter } from './api/device/public-routes.js';
+import { createDeviceAdminRouter } from './api/device/admin-routes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, 'web', 'admin-ui', 'public');
 const protectedPages = [
   '/', '/index.html', '/locations.html', '/screens.html', '/catalog.html',
-  '/screen-editor.html', '/profile.html', '/settings.html'
+  '/screen-editor.html', '/profile.html', '/settings.html', '/sftp-settings.html',
+  '/animation.html', '/connect-tv.html'
 ];
 
 async function initialiseStore(store, config) {
@@ -105,6 +108,7 @@ function mountPublicRoutes(app, { store, config }) {
       signin_logo_size: site.signin_logo_size
     });
   });
+  app.use('/api/device', createDevicePublicRouter({ store, config }));
 }
 
 function mountProtectedApi(app, dependencies, requireApiSession) {
@@ -115,6 +119,7 @@ function mountProtectedApi(app, dependencies, requireApiSession) {
   app.use('/api/notifications', createNotificationsRouter(dependencies));
   app.use('/api/catalog', createCatalogRouter(dependencies));
   app.use('/api/locations', createLocationsRouter(dependencies));
+  app.use('/api/device-admin', createDeviceAdminRouter(dependencies));
   app.use('/api', createScreensRouter(dependencies));
   app.use('/api', createSftpRouter(dependencies));
 }

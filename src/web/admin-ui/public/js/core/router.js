@@ -50,18 +50,6 @@ function setRouteMountState(main, mounting) {
   }
 }
 
-function scrollToRouteTarget(target) {
-  if (!target.hash) {
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-    return;
-  }
-  let id = target.hash.slice(1);
-  try { id = decodeURIComponent(id); } catch {}
-  const targetNode = document.getElementById(id);
-  if (targetNode) targetNode.scrollIntoView({ block: 'start', behavior: 'auto' });
-  else window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-}
-
 function currentViewSnapshot() {
   const main = currentMain();
   return {
@@ -173,7 +161,7 @@ export function createAppRouter({ mountPage, syncShell }) {
     if (typeof syncShell === 'function') syncShell();
     await mountCurrentPage(view.page, main);
     activeIdentity = routeIdentity(target);
-    scrollToRouteTarget(target);
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     return true;
   }
 
@@ -187,7 +175,6 @@ export function createAppRouter({ mountPage, syncShell }) {
     const targetIdentity = routeIdentity(target);
     if (!options.force && !options.fromHistory && targetIdentity === activeIdentity) {
       if (typeof syncShell === 'function') syncShell();
-      scrollToRouteTarget(target);
       return true;
     }
 
