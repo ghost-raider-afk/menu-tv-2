@@ -1,6 +1,7 @@
 import { pageName } from './core/config.js';
 import { loadAuthenticatedContext } from './core/session.js';
 import { initialiseNotifications } from './core/notifications.js';
+import { installFrontendDiagnostics, reportFrontendError } from './core/diagnostics.js';
 import { createAppRouter } from './core/router.js';
 import { state } from './core/state.js';
 import { initialiseShell, refreshShellRoute } from './components/shell.js';
@@ -31,6 +32,10 @@ async function initialisePage(name) {
     case 'animation': {
       const { initialiseAnimationStudio } = await import('./pages/animation.js');
       return initialiseAnimationStudio();
+    }
+    case 'error-log': {
+      const { initialiseErrorLog } = await import('./pages/error-log.js');
+      return initialiseErrorLog();
     }
     case 'profile': {
       const { initialiseProfile } = await import('./pages/profile.js');
@@ -69,6 +74,7 @@ async function initialiseApplication() {
     return;
   }
 
+  installFrontendDiagnostics();
   try {
     await loadAuthenticatedContext();
     initialiseShell();
@@ -76,6 +82,7 @@ async function initialiseApplication() {
     const router = createAppRouter({ mountPage: initialisePage, syncShell: refreshShellRoute });
     await router.start();
   } catch (error) {
+    reportFrontendError(error, { type: 'application', source: 'application.js' });
     console.error('Application initialization failed', error);
     window.location.replace('/signin.html');
   }
