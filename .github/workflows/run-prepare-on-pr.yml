@@ -63,9 +63,11 @@ jobs:
           git diff --check
           npm ci
           npm run check
-      - name: Commit generated migration
+      - name: Commit generated migration without workflow mutation
         shell: bash
         run: |
+          cp .github/workflows/check.yml check.generated.yml
+          git checkout -- .github/workflows/check.yml .github/workflows/prepare-single-main.yml .github/workflows/run-prepare-on-pr.yml
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
