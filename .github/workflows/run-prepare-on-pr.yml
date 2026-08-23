@@ -3,14 +3,14 @@ name: run-prepare-on-pr
 on:
   pull_request:
     branches:
-      - feature/device-player-activation
+      - agent/consolidate-single-main
 
 permissions:
   contents: write
 
 jobs:
   prepare:
-    if: github.head_ref == 'agent/consolidate-single-main'
+    if: github.head_ref == 'agent/finalize-single-main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
