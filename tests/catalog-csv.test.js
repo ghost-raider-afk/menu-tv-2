@@ -62,7 +62,7 @@ test('product CSV import updates existing IDs, creates blank IDs and uses one tr
     async transaction(run) {
       transactions += 1;
       return run({
-        async listProducts() { return [PRODUCT]; },
+        async getProduct(id) { return id === 7 ? PRODUCT : null; },
         async updateProduct(id, product) { calls.push(['update', id, product.name]); return { id, ...product }; },
         async createProduct(product) { calls.push(['create', product.name]); return { id: 8, ...product }; }
       });
@@ -79,7 +79,7 @@ test('unknown CSV ID is rejected instead of silently changing product identity',
   const store = {
     async transaction(run) {
       return run({
-        async listProducts() { return []; },
+        async getProduct() { return null; },
         async updateProduct() { throw new Error('must not update'); },
         async createProduct() { throw new Error('must not create'); }
       });

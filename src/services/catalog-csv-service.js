@@ -27,10 +27,6 @@ const HEADER_ALIASES = new Map([
 
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'да', 'д']);
 const FALSE_VALUES = new Set(['0', 'false', 'no', 'нет', 'н']);
-const PRODUCT_FIELDS = Object.freeze([
-  'name', 'producer', 'characteristics', 'strength', 'price_primary', 'price_secondary',
-  'alcoholic', 'beverage_color', 'filtration', 'active'
-]);
 
 function csvValue(value) {
   const text = String(value ?? '');
@@ -163,7 +159,6 @@ function cell(row, columns, field) {
 }
 
 function booleanValue(value, field, fallback) {
-  if (typeof value === 'boolean') return value;
   const text = String(value || '').trim().toLocaleLowerCase('ru-RU');
   if (!text) return fallback;
   if (TRUE_VALUES.has(text)) return true;
@@ -191,247 +186,57 @@ function filtrationValue(value) {
   throw new ValidationError('Поле «Фильтрация» содержит неизвестное значение.');
 }
 
-function csvDraftRows(source) {
+export function productsFromCsv(source) {
   const rows = parseRows(source);
   const columns = headerMap(rows[0]);
-  const entries = rows.slice(1).map((row, offset) => {
+  const entries = [];
+  const usedIds = new Set();
+
+  rows.slice(1).forEach((row, offset) => {
     const line = offset + 2;
-    return {
-      key: `row-${line}`,
-      line,
-      excluded: false,
-      values: {
-        id: cell(row, columns, 'id'),
+    try {
+      const rawId = cell(row, columns, 'id');
+      const id = rawId ? positiveId(rawId, 'ID') : null;
+      if (id && usedIds.has(id)) throw new ValidationError(`ID ${id} встречается в CSV несколько раз.`);
+      if (id) usedIds.add(id);
+      const product = productInput({
         name: cell(row, columns, 'name'),
         producer: cell(row, columns, 'producer'),
         characteristics: cell(row, columns, 'characteristics'),
         strength: cell(row, columns, 'strength'),
         price_primary: cell(row, columns, 'price_primary'),
-        alcoholic: cell(row, columns, 'alcoholic'),
-        beverage_color: cell(row, columns, 'beverage_color'),
-        filtration: cell(row, columns, 'filtration'),
-        active: cell(row, columns, 'active')
-      }
-    };
+        alcoholic: booleanValue(cell(row, columns, 'alcoholic'), 'Алкогольная', false),
+        beverage_color: beverageColorValue(cell(row, columns, 'beverage_color')),
+        filtration: filtrationValue(cell(row, columns, 'filtration')),
+        active: booleanValue(cell(row, columns, 'active'), 'Активна', true)
+      });
+      entries.push({ line, id, product });
+    } catch (error) {
+      if (error instanceof ValidationError) throw new ValidationError(`Строка ${line}: ${error.message}`);
+      throw error;
+    }
   });
+
   if (!entries.length) throw new ValidationError('В CSV нет строк продукции.');
   return entries;
 }
 
-function strictProductFromDraft(entry) {
-  const rawId = String(entry.values.id || '').trim();
-  const id = rawId ? positiveId(rawId, 'ID') : null;
-  return {
-    line: entry.line,
-    id,
-    product: productInput({
-      name: entry.values.name,
-      producer: entry.values.producer,
-      characteristics: entry.values.characteristics,
-      strength: entry.values.strength,
-      price_primary: entry.values.price_primary,
-      alcoholic: booleanValue(entry.values.alcoholic, 'Алкогольная', false),
-      beverage_color: beverageColorValue(entry.values.beverage_color),
-      filtration: filtrationValue(entry.values.filtration),
-      active: booleanValue(entry.values.active, 'Активна', true)
-    })
-  };
-}
-
-export function productsFromCsv(source) {
-  const drafts = csvDraftRows(source);
-  const entries = [];
-  const usedIds = new Set();
-  for (const draft of drafts) {
-    try {
-      const entry = strictProductFromDraft(draft);
-      if (entry.id && usedIds.has(entry.id)) throw new ValidationError(`ID ${entry.id} встречается в CSV несколько раз.`);
-      if (entry.id) usedIds.add(entry.id);
-      entries.push(entry);
-    } catch (error) {
-      if (error instanceof ValidationError) throw new ValidationError(`Строка ${draft.line}: ${error.message}`);
-      throw error;
-    }
-  }
-  return entries;
-}
-
-function importDraftRow(input, index) {
-  const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
-  const values = source.values && typeof source.values === 'object' && !Array.isArray(source.values) ? source.values : source;
-  const line = Number.isSafeInteger(Number(source.line)) && Number(source.line) > 0 ? Number(source.line) : index + 1;
-  const candidateKey = typeof source.key === 'string' && /^[a-zA-Z0-9._:-]{1,80}$/.test(source.key) ? source.key : `row-${index + 1}`;
-  const text = (value) => value === undefined || value === null ? '' : String(value);
-  return {
-    key: candidateKey,
-    line,
-    excluded: source.excluded === true,
-    values: {
-      id: text(values.id).trim(),
-      name: text(values.name),
-      producer: text(values.producer),
-      characteristics: text(values.characteristics),
-      strength: text(values.strength),
-      price_primary: text(values.price_primary),
-      alcoholic: typeof values.alcoholic === 'boolean' ? values.alcoholic : text(values.alcoholic),
-      beverage_color: text(values.beverage_color),
-      filtration: text(values.filtration),
-      active: typeof values.active === 'boolean' ? values.active : text(values.active)
-    }
-  };
-}
-
-function importDraftRows(rows) {
-  if (!Array.isArray(rows) || rows.length === 0) throw new ValidationError('Нет строк продукции для импорта.');
-  return rows.map(importDraftRow);
-}
-
-function errorField(error) {
-  const message = String(error?.message || 'Некорректное значение.');
-  if (message.includes('Название продукции')) return 'name';
-  if (message.includes('Производитель')) return 'producer';
-  if (message.includes('Характеристики')) return 'characteristics';
-  if (message.includes('Крепость')) return 'strength';
-  if (message.includes('Цена за 1 л')) return 'price_primary';
-  return '_row';
-}
-
-function addError(errors, field, error) {
-  errors.push({ field, message: String(error?.message || error || 'Некорректное значение.') });
-}
-
-function comparable(value) {
-  if (value === undefined || value === null) return '';
-  if (typeof value === 'boolean') return value;
-  return String(value);
-}
-
-function productChanges(existing, product) {
-  return PRODUCT_FIELDS.flatMap((field) => comparable(existing?.[field]) === comparable(product?.[field])
-    ? []
-    : [{ field, before: existing?.[field] ?? '', after: product?.[field] ?? '' }]);
-}
-
-function previewRow(draft, existingById, idCounts) {
-  const values = { ...draft.values };
-  const errors = [];
-  let id = null;
-
-  if (values.id) {
-    try { id = positiveId(values.id, 'ID'); }
-    catch (error) { addError(errors, 'id', error); }
-  }
-  if (id && idCounts.get(id) > 1) addError(errors, 'id', `ID ${id} встречается в импорте несколько раз.`);
-
-  let alcoholic = values.alcoholic;
-  let beverageColor = values.beverage_color;
-  let filtration = values.filtration;
-  let active = values.active;
-
-  try { alcoholic = booleanValue(values.alcoholic, 'Алкогольная', false); values.alcoholic = alcoholic; }
-  catch (error) { addError(errors, 'alcoholic', error); }
-  try { beverageColor = beverageColorValue(values.beverage_color); values.beverage_color = beverageColor; }
-  catch (error) { addError(errors, 'beverage_color', error); }
-  try { filtration = filtrationValue(values.filtration); values.filtration = filtration; }
-  catch (error) { addError(errors, 'filtration', error); }
-  try { active = booleanValue(values.active, 'Активна', true); values.active = active; }
-  catch (error) { addError(errors, 'active', error); }
-
-  let product = null;
-  if (!errors.some((item) => ['alcoholic', 'beverage_color', 'filtration', 'active'].includes(item.field))) {
-    try {
-      product = productInput({
-        name: values.name,
-        producer: values.producer,
-        characteristics: values.characteristics,
-        strength: values.strength,
-        price_primary: values.price_primary,
-        alcoholic,
-        beverage_color: beverageColor,
-        filtration,
-        active
-      });
-    } catch (error) {
-      if (error instanceof ValidationError) addError(errors, errorField(error), error);
-      else throw error;
-    }
-  }
-
-  const existing = id ? existingById.get(id) : null;
-  if (id && !existing) addError(errors, 'id', `Продукция с ID ${id} не найдена. Удалите ID, чтобы создать новую запись.`);
-
-  if (draft.excluded) {
-    return { ...draft, values, id, normalized: product, status: 'excluded', errors: [], changes: [] };
-  }
-  if (errors.length || !product) {
-    return { ...draft, values, id, normalized: product, status: 'error', errors, changes: [] };
-  }
-  if (!id) return { ...draft, values, id: null, normalized: product, status: 'new', errors: [], changes: [] };
-  const changes = productChanges(existing, product);
-  return { ...draft, values, id, normalized: product, status: changes.length ? 'changed' : 'unchanged', errors: [], changes };
-}
-
-function buildPreview(products, drafts) {
-  const existingById = new Map(products.map((product) => [Number(product.id), product]));
-  const idCounts = new Map();
-  for (const draft of drafts) {
-    if (draft.excluded || !draft.values.id) continue;
-    try {
-      const id = positiveId(draft.values.id, 'ID');
-      idCounts.set(id, (idCounts.get(id) || 0) + 1);
-    } catch { /* row-level validation reports the invalid ID */ }
-  }
-
-  const rows = drafts.map((draft) => previewRow(draft, existingById, idCounts));
-  const summary = { total: rows.length, new: 0, changed: 0, unchanged: 0, error: 0, excluded: 0 };
-  rows.forEach((row) => { summary[row.status] += 1; });
-  return {
-    rows,
-    summary,
-    canApply: summary.error === 0 && (summary.new + summary.changed) > 0
-  };
-}
-
-export async function previewProductsImport(store, input = {}) {
-  const drafts = typeof input?.csv === 'string' ? csvDraftRows(input.csv) : importDraftRows(input?.rows);
-  return buildPreview(await store.listProducts(), drafts);
-}
-
-function previewValidationError(preview) {
-  const row = preview.rows.find((item) => item.status === 'error');
-  const error = row?.errors?.[0];
-  return new ValidationError(row && error ? `Строка ${row.line}: ${error.message}` : 'Импорт содержит ошибки.');
-}
-
-export async function applyProductsImport(store, rows) {
-  const drafts = importDraftRows(rows);
+export async function importProductsCsv(store, source) {
+  const entries = productsFromCsv(source);
   return store.transaction(async (transaction) => {
-    const preview = buildPreview(await transaction.listProducts(), drafts);
-    if (preview.summary.error) throw previewValidationError(preview);
-
     let created = 0;
     let updated = 0;
-    for (const row of preview.rows) {
-      if (row.status === 'new') {
-        await transaction.createProduct(row.normalized);
-        created += 1;
-      } else if (row.status === 'changed') {
-        const product = await transaction.updateProduct(row.id, row.normalized);
-        if (!product) throw new ValidationError(`Строка ${row.line}: продукция с ID ${row.id} больше не существует.`);
+    for (const entry of entries) {
+      if (entry.id) {
+        const existing = await transaction.getProduct(entry.id);
+        if (!existing) throw new ValidationError(`Строка ${entry.line}: продукция с ID ${entry.id} не найдена. Удалите ID, чтобы создать новую запись.`);
+        await transaction.updateProduct(entry.id, entry.product);
         updated += 1;
+      } else {
+        await transaction.createProduct(entry.product);
+        created += 1;
       }
     }
-    return {
-      created,
-      updated,
-      unchanged: preview.summary.unchanged,
-      excluded: preview.summary.excluded,
-      total: created + updated
-    };
+    return { created, updated, total: created + updated };
   });
-}
-
-export async function importProductsCsv(store, source) {
-  const result = await applyProductsImport(store, csvDraftRows(source));
-  return { created: result.created, updated: result.updated, total: result.total };
 }

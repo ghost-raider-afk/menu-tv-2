@@ -15,12 +15,11 @@ async function waitForRouteReady(page) {
   await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
 }
 
-test('products can be previewed, corrected and applied as one round-trip CSV', async ({ page }) => {
+test('products can be exported and imported as one round-trip CSV', async ({ page }) => {
   await login(page);
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const originalName = `CSV ${suffix}`;
   const updatedName = `CSV UPDATED ${suffix}`;
-  const newName = `CSV NEW ${suffix}`;
   const createResponse = await page.request.post('/api/catalog/products', {
     data: {
       name: originalName,
@@ -49,40 +48,22 @@ test('products can be previewed, corrected and applied as one round-trip CSV', a
   expect(csv).toContain('\uFEFFID;Название;Производитель;');
   expect(csv).toContain(originalName);
 
-  const importCsv = `\uFEFFID;Название;Производитель;Характеристики;Крепость;Цена 1 л;Цена 1,5 л;Алкогольная;Цвет напитка;Фильтрация;Активна\r\n${product.id};${updatedName};Browser CI;после импорта;4,5%;250;375;да;светлый;фильтрованное;да\r\n;${newName};Новый;создано импортом;;ошибка;150;нет;;;да\r\n`;
+  const importCsv = `\uFEFFID;Название;Производитель;Характеристики;Крепость;Цена 1 л;Цена 1,5 л;Алкогольная;Цвет напитка;Фильтрация;Активна\r\n${product.id};${updatedName};Browser CI;после импорта;4,5%;250;375;да;светлый;фильтрованное;да\r\n;CSV NEW ${suffix};Новый;создано импортом;;100;150;нет;;;да\r\n`;
   await page.locator('#product-import-file').setInputFiles({
     name: 'products.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from(importCsv, 'utf8')
   });
 
-  const preview = page.locator('#product-import-preview');
-  await expect(preview).toBeVisible();
-  await expect(preview.locator('[data-import-count="changed"]')).toHaveText('1');
-  await expect(preview.locator('[data-import-count="new"]')).toHaveText('0');
-  await expect(preview.locator('[data-import-count="error"]')).toHaveText('1');
-  await expect(page.locator('#product-import-apply')).toBeDisabled();
-
-  const newRow = page.locator('#product-import-body tr').nth(1);
-  await newRow.locator('[data-import-field="price_primary"]').fill('100');
-  await expect(preview.locator('[data-import-count="new"]')).toHaveText('1');
-  await expect(preview.locator('[data-import-count="error"]')).toHaveText('0');
-  await expect(newRow.locator('.catalog-import-calculated')).toHaveText('150');
-  await expect(page.locator('#product-import-apply')).toBeEnabled();
-
-  await page.locator('#product-import-apply').click();
   await expect(page.locator('#product-message')).toContainText('создано 1, обновлено 1');
-  await expect(preview).toBeHidden();
-
   const productsResponse = await page.request.get('/api/catalog/products');
   expect(productsResponse.status()).toBe(200);
   const products = await productsResponse.json();
   const updated = products.find((item) => item.id === product.id);
-  const created = products.find((item) => item.name === newName);
+  const created = products.find((item) => item.name === `CSV NEW ${suffix}`);
   expect(updated?.name).toBe(updatedName);
   expect(updated?.price_primary).toBe('250');
   expect(created?.price_primary).toBe('100');
-  expect(created?.price_secondary).toBe('150');
 
   await page.request.delete(`/api/catalog/products/${product.id}`);
   if (created) await page.request.delete(`/api/catalog/products/${created.id}`);

@@ -1,6 +1,6 @@
 import express from 'express';
 import { packagingInput, positiveId, productInput } from '../../contracts/input.js';
-import { applyProductsImport, importProductsCsv, previewProductsImport, productsToCsv } from '../../services/catalog-csv-service.js';
+import { importProductsCsv, productsToCsv } from '../../services/catalog-csv-service.js';
 import { activity, conflict, notFound } from '../helpers.js';
 
 export function createCatalogRouter({ store }) {
@@ -14,18 +14,13 @@ export function createCatalogRouter({ store }) {
     response.setHeader('Cache-Control', 'no-store');
     response.send(csv);
   });
-  router.post('/products/import/preview', async (request, response) => {
-    response.json(await previewProductsImport(store, request.body));
-  });
   router.post('/products/import', async (request, response) => {
-    const result = Array.isArray(request.body?.rows)
-      ? await applyProductsImport(store, request.body.rows)
-      : await importProductsCsv(store, request.body?.csv);
+    const result = await importProductsCsv(store, request.body?.csv);
     await activity(store, request, {
       action: 'catalog.products.imported',
       entity_type: 'catalog_product',
       entity_id: null,
-      message: `Импортирована продукция: создано ${result.created}, обновлено ${result.updated}.`
+      message: `Импортирована продукция из CSV: создано ${result.created}, обновлено ${result.updated}.`
     });
     response.json(result);
   });
