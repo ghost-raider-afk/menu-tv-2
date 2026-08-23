@@ -169,7 +169,15 @@ jobs:
         run: |
           grep -F 'tcp://docker-socket-proxy:2375' infra/traefik-compose.yaml
           test "$(grep -c '/var/run/docker.sock:/var/run/docker.sock:ro' infra/traefik-compose.yaml)" -eq 1
-          docker compose -f infra/traefik-compose.yaml --env-file <(printf 'TRAEFIK_ACME_EMAIL=ci@example.test\n') config -q
+          TRAEFIK_ACME_EMAIL=ci@example.test docker compose -f infra/traefik-compose.yaml config -q
+      - name: Check immutable external images
+        run: |
+          grep -Eq '^FROM node:[^ ]+@sha256:[0-9a-f]{64} AS runtime$' Dockerfile
+          grep -Eq 'image: postgres:[^ ]+@sha256:[0-9a-f]{64}$' compose.yaml
+          test "$(grep -Ec 'image: busybox:[^ ]+@sha256:[0-9a-f]{64}$' compose.yaml)" -eq 2
+          grep -Eq 'image: drakkan/sftpgo:[^ ]+@sha256:[0-9a-f]{64}$' compose.yaml
+          grep -Eq 'image: ghcr.io/tecnativa/docker-socket-proxy:[^ ]+@sha256:[0-9a-f]{64}$' infra/traefik-compose.yaml
+          grep -Eq 'image: traefik:[^ ]+@sha256:[0-9a-f]{64}$' infra/traefik-compose.yaml
       - name: Prepare clean-install environment
         run: |
           cp .env.example .env
@@ -303,9 +311,16 @@ jobs:
           const allScreens = await (await fetch(`${base}/api/screens`, { headers: { Cookie: cookie } })).json();
           if (allScreens.filter((item) => item.location_id === locationClone.id).length !== 2) throw new Error('location monitor cloning failed');
 
-          const rendererResponse = await fetch(`${base}/js/editor/renderer.js`);
-          const rendererSource = await rendererResponse.text();
-          if (!rendererResponse.ok || !rendererSource.includes('MENU_REFERENCE') || !rendererSource.includes('buildTableSvg') || !rendererSource.includes('table_width_px') || !rendererSource.includes('autoReduced')) throw new Error('canonical monitor renderer contract missing');
+          const [facadeResponse, modelResponse, svgResponse] = await Promise.all([
+            fetch(`${base}/js/editor/renderer.js`),
+            fetch(`${base}/js/editor/renderer-model.js`),
+            fetch(`${base}/js/editor/renderer-svg.js`)
+          ]);
+          const [facadeSource, modelSource, svgSource] = await Promise.all([facadeResponse.text(), modelResponse.text(), svgResponse.text()]);
+          if (!facadeResponse.ok || !modelResponse.ok || !svgResponse.ok) throw new Error('canonical renderer modules not served');
+          if (!facadeSource.includes('renderer-model.js') || !facadeSource.includes('renderer-svg.js')) throw new Error('renderer facade contract missing');
+          if (!modelSource.includes('MENU_REFERENCE') || !modelSource.includes('table_width_px') || !modelSource.includes('autoReduced')) throw new Error('renderer model contract missing');
+          if (!svgSource.includes('buildTableSvg')) throw new Error('renderer SVG contract missing');
           NODE
       - name: Smoke test SFTP service
         run: docker compose --project-name menu-tv-2-ci --env-file .env exec -T sftp sftpgo ping
