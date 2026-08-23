@@ -7,6 +7,8 @@ function validEnv(overrides = {}) {
   return {
     APP_NAME: 'ТВ МЕНЮ', NODE_ENV: 'test', HOST: '127.0.0.1', PORT: '8080', MENU_TV_2_DOMAIN: 'menu.example.test',
     SESSION_SECRET: 's'.repeat(48), SESSION_TTL_HOURS: '12', SECURE_COOKIES: 'false',
+    DEVICE_ACTIVATION_TTL_MINUTES: '10', DEVICE_ACTIVATION_POLL_SECONDS: '2', DEVICE_SESSION_TTL_DAYS: '365',
+    DEVICE_HEARTBEAT_WRITE_SECONDS: '30', PLAYER_REFRESH_SECONDS: '5',
     PASSWORD_MIN_LENGTH: '10', PASSWORD_MAX_LENGTH: '32', GENERATED_PASSWORD_LENGTH: '10',
     LOGIN_MAX_ATTEMPTS: '8', LOGIN_IP_MAX_ATTEMPTS: '32', LOGIN_WINDOW_MINUTES: '15', LOGIN_LIMITER_MAX_ENTRIES: '500',
     JSON_BODY_MAX_BYTES: '65536', MENU_DRAFT_MAX_BYTES: '49152', SCREEN_SOURCE_MAX_BYTES: '12582912',
@@ -25,6 +27,7 @@ test('runtime limits are controlled only by environment values', () => {
     JSON_BODY_MAX_BYTES: '70000', MENU_DRAFT_MAX_BYTES: '50000', SCREEN_SOURCE_MAX_BYTES: '13000000', SCREEN_BACKGROUND_MAX_BYTES: '20000000',
     DASHBOARD_REFRESH_MIN_SECONDS: '20', DASHBOARD_REFRESH_MAX_SECONDS: '240', SCREEN_MAX_WIDTH: '1600', SCREEN_MAX_HEIGHT: '900', IMAGE_MAX_PIXELS: '12000000',
     LOGIN_MAX_ATTEMPTS: '6', LOGIN_IP_MAX_ATTEMPTS: '24', LOGIN_WINDOW_MINUTES: '10', LOGIN_LIMITER_MAX_ENTRIES: '700', GENERATED_PASSWORD_LENGTH: '18',
+    DEVICE_ACTIVATION_TTL_MINUTES: '8', DEVICE_ACTIVATION_POLL_SECONDS: '3', DEVICE_SESSION_TTL_DAYS: '540', DEVICE_HEARTBEAT_WRITE_SECONDS: '45', PLAYER_REFRESH_SECONDS: '7',
     SFTP_API_TIMEOUT_MS: '4200', SFTP_STAGING_MAX_AGE_HOURS: '36', POSTGRES_POOL_MAX: '9', POSTGRES_CONNECTION_TIMEOUT_MS: '4100',
     POSTGRES_IDLE_TIMEOUT_MS: '28000', HEALTH_READINESS_CACHE_MS: '1500'
   }));
@@ -42,6 +45,11 @@ test('runtime limits are controlled only by environment values', () => {
   assert.equal(config.loginWindowMinutes, 10);
   assert.equal(config.loginLimiterMaxEntries, 700);
   assert.equal(config.generatedPasswordLength, 18);
+  assert.equal(config.deviceActivationTtlMinutes, 8);
+  assert.equal(config.deviceActivationPollSeconds, 3);
+  assert.equal(config.deviceSessionTtlDays, 540);
+  assert.equal(config.deviceHeartbeatWriteSeconds, 45);
+  assert.equal(config.playerRefreshSeconds, 7);
   assert.equal(config.sftp.apiTimeoutMs, 4200);
   assert.equal(config.sftp.stagingMaxAgeHours, 36);
   assert.equal(config.db.poolMax, 9);

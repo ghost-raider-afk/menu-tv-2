@@ -3,16 +3,13 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.2.0"
+SCRIPT_VERSION="1.3.0"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
-PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
-BRANCH="${MENU_TV_REF:-}"
-if [[ -z "$BRANCH" && -r "$PROJECT_REF_FILE" ]]; then
-  BRANCH="$(head -n 1 "$PROJECT_REF_FILE")"
-fi
-BRANCH="${BRANCH:-main}"
-SCRIPT_RAW_URL="https://raw.githubusercontent.com/ghost-raider-afk/menu-tv-2/$BRANCH/menu-tv-2.sh"
+LEGACY_PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
+GITHUB_REPO="ghost-raider-afk/menu-tv-2"
+GITHUB_API_URL="https://api.github.com/repos/$GITHUB_REPO"
+GITHUB_RAW_URL="https://raw.githubusercontent.com/$GITHUB_REPO"
 COMPOSE_PROJECT="menu-tv-2"
 APP_SERVICE="app"
 DB_SERVICE="db"
@@ -66,7 +63,7 @@ Menu TV 2.0 — управление независимым приложение
   sudo $PROGRAM_NAME status
 
 Версия скрипта: $SCRIPT_VERSION
-Ветка/реф: $BRANCH
+Канал обновлений: стабильные GitHub Releases
 Проект устанавливается только в: $INSTALL_DIR
 Контейнеры: $APP_CONTAINER, $DB_CONTAINER, $SFTP_CONTAINER
 USAGE
@@ -78,6 +75,39 @@ require_root() {
 
 command_exists() { command -v "$1" >/dev/null 2>&1; }
 
+
+project_version_from_file() {
+  local file="$1" version
+  version="$(sed -nE 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"([0-9]+(\.[0-9]+){2})",?[[:space:]]*$/\1/p' "$file" | head -n 1)"
+  [[ -n "$version" ]] || return 1
+  printf '%s\n' "$version"
+}
+
+installed_project_version() {
+  project_version_from_file "$INSTALL_DIR/package.json"
+}
+
+release_tag_version() {
+  local tag="$1"
+  [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]] || return 1
+  printf '%s\n' "${BASH_REMATCH[1]}"
+}
+
+version_is_newer() {
+  local current="$1" candidate="$2"
+  [[ "$current" != "$candidate" ]] || return 1
+  [[ "$(printf '%s\n%s\n' "$current" "$candidate" | sort -V | tail -n 1)" == "$candidate" ]]
+}
+
+latest_release_tag() {
+  local payload tag
+  command_exists curl || return 1
+  payload="$(curl -fsSL --connect-timeout 10 --max-time 30 -H 'Accept: application/vnd.github+json' "$GITHUB_API_URL/releases/latest")" || return 1
+  tag="$(printf '%s\n' "$payload" | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' | head -n 1)"
+  release_tag_version "$tag" >/dev/null || return 1
+  printf '%s\n' "$tag"
+}
+
 script_version_from_file() {
   local file="$1" version
   version="$(sed -nE 's/^SCRIPT_VERSION="([0-9]+(\.[0-9]+){2})"$/\1/p' "$file" | head -n 1)"
@@ -85,10 +115,13 @@ script_version_from_file() {
   printf '%s\n' "$version"
 }
 
+
 fetch_latest_script() {
-  local destination="$1"
+  local destination="$1" release_tag raw_url
   command_exists curl || { warn "Для проверки обновлений нужен curl."; return 1; }
-  curl -fsSL --connect-timeout 10 --max-time 60 "$SCRIPT_RAW_URL" -o "$destination" || return 1
+  release_tag="$(latest_release_tag)" || return 1
+  raw_url="$GITHUB_RAW_URL/$release_tag/menu-tv-2.sh"
+  curl -fsSL --connect-timeout 10 --max-time 60 "$raw_url" -o "$destination" || return 1
   bash -n "$destination" && script_version_from_file "$destination" >/dev/null
 }
 
@@ -218,7 +251,7 @@ compose() {
 
 check_dependencies() {
   local tool
-  for tool in docker git tar openssl awk sed find install mktemp runuser od tr fold shuf dig cmp; do
+  for tool in docker git tar openssl awk sed find install mktemp runuser od tr fold shuf dig cmp sort; do
     command_exists "$tool" || die "Не найдена команда: $tool"
   done
   docker info >/dev/null 2>&1 || die "Docker daemon недоступен."
@@ -370,57 +403,48 @@ write_new_env() {
   chmod 600 "$env_file"
 }
 
+
+merge_missing_env_from_example() {
+  local env_file="$INSTALL_DIR/.env" example_file="$INSTALL_DIR/.env.example" line key value
+  [[ -f "$env_file" ]] || die "Отсутствует $env_file"
+  [[ -f "$example_file" ]] || die "Отсутствует $example_file"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ ^[A-Z][A-Z0-9_]*= ]] || continue
+    key="${line%%=*}"
+    value="${line#*=}"
+    if ! grep -q "^${key}=" "$env_file"; then
+      printf '\n%s=%s\n' "$key" "$value" >> "$env_file"
+      info "Добавлен новый параметр .env: $key"
+    fi
+  done < "$example_file"
+}
+
+
 ensure_sftp_env() {
   local env_file="$INSTALL_DIR/.env" domain app_name
   [[ -f "$env_file" ]] || die "Отсутствует $env_file"
+  merge_missing_env_from_example
   domain="$(env_value MENU_TV_2_DOMAIN "$env_file")"
   [[ -n "$domain" ]] || die "MENU_TV_2_DOMAIN в .env не настроен."
+
   app_name="$(env_value APP_NAME "$env_file")"
   if [[ -z "$app_name" || "$app_name" == "Menu TV 2.0" ]]; then
     set_env_value "$env_file" APP_NAME "ТВ МЕНЮ"
   fi
-  [[ -n "$(env_value NODE_ENV "$env_file")" ]] || set_env_value "$env_file" NODE_ENV "production"
-  [[ -n "$(env_value HOST "$env_file")" ]] || set_env_value "$env_file" HOST "0.0.0.0"
-  [[ -n "$(env_value PORT "$env_file")" ]] || set_env_value "$env_file" PORT "8080"
-  [[ -n "$(env_value POSTGRES_HOST "$env_file")" ]] || set_env_value "$env_file" POSTGRES_HOST "db"
-  [[ -n "$(env_value POSTGRES_PORT "$env_file")" ]] || set_env_value "$env_file" POSTGRES_PORT "5432"
-  [[ -n "$(env_value POSTGRES_POOL_MAX "$env_file")" ]] || set_env_value "$env_file" POSTGRES_POOL_MAX "5"
-  [[ -n "$(env_value POSTGRES_CONNECTION_TIMEOUT_MS "$env_file")" ]] || set_env_value "$env_file" POSTGRES_CONNECTION_TIMEOUT_MS "5000"
-  [[ -n "$(env_value POSTGRES_IDLE_TIMEOUT_MS "$env_file")" ]] || set_env_value "$env_file" POSTGRES_IDLE_TIMEOUT_MS "30000"
-  [[ -n "$(env_value SESSION_TTL_HOURS "$env_file")" ]] || set_env_value "$env_file" SESSION_TTL_HOURS "12"
-  [[ -n "$(env_value SECURE_COOKIES "$env_file")" ]] || set_env_value "$env_file" SECURE_COOKIES "true"
-  [[ -n "$(env_value PASSWORD_MIN_LENGTH "$env_file")" ]] || set_env_value "$env_file" PASSWORD_MIN_LENGTH "10"
-  [[ -n "$(env_value PASSWORD_MAX_LENGTH "$env_file")" ]] || set_env_value "$env_file" PASSWORD_MAX_LENGTH "32"
-  [[ -n "$(env_value GENERATED_PASSWORD_LENGTH "$env_file")" ]] || set_env_value "$env_file" GENERATED_PASSWORD_LENGTH "10"
-  [[ -n "$(env_value LOGIN_MAX_ATTEMPTS "$env_file")" ]] || set_env_value "$env_file" LOGIN_MAX_ATTEMPTS "8"
-  [[ -n "$(env_value LOGIN_IP_MAX_ATTEMPTS "$env_file")" ]] || set_env_value "$env_file" LOGIN_IP_MAX_ATTEMPTS "32"
-  [[ -n "$(env_value LOGIN_WINDOW_MINUTES "$env_file")" ]] || set_env_value "$env_file" LOGIN_WINDOW_MINUTES "15"
-  [[ -n "$(env_value LOGIN_LIMITER_MAX_ENTRIES "$env_file")" ]] || set_env_value "$env_file" LOGIN_LIMITER_MAX_ENTRIES "500"
-  [[ -n "$(env_value JSON_BODY_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" JSON_BODY_MAX_BYTES "65536"
-  [[ -n "$(env_value MENU_DRAFT_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" MENU_DRAFT_MAX_BYTES "49152"
-  [[ -n "$(env_value SCREEN_SOURCE_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" SCREEN_SOURCE_MAX_BYTES "12582912"
-  [[ -n "$(env_value DASHBOARD_REFRESH_MIN_SECONDS "$env_file")" ]] || set_env_value "$env_file" DASHBOARD_REFRESH_MIN_SECONDS "15"
-  [[ -n "$(env_value DASHBOARD_REFRESH_MAX_SECONDS "$env_file")" ]] || set_env_value "$env_file" DASHBOARD_REFRESH_MAX_SECONDS "300"
-  [[ -n "$(env_value SCREEN_MAX_WIDTH "$env_file")" ]] || set_env_value "$env_file" SCREEN_MAX_WIDTH "1920"
-  [[ -n "$(env_value SCREEN_MAX_HEIGHT "$env_file")" ]] || set_env_value "$env_file" SCREEN_MAX_HEIGHT "1080"
-  [[ -n "$(env_value IMAGE_MAX_PIXELS "$env_file")" ]] || set_env_value "$env_file" IMAGE_MAX_PIXELS "40000000"
-  [[ -n "$(env_value HEALTH_READINESS_CACHE_MS "$env_file")" ]] || set_env_value "$env_file" HEALTH_READINESS_CACHE_MS "2000"
-  [[ -n "$(env_value SITE_ASSETS_ROOT "$env_file")" ]] || set_env_value "$env_file" SITE_ASSETS_ROOT "/srv/menu-tv-site-assets"
-  [[ -n "$(env_value SITE_LOGO_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" SITE_LOGO_MAX_BYTES "2097152"
-  [[ -n "$(env_value SITE_FAVICON_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" SITE_FAVICON_MAX_BYTES "524288"
-  [[ -n "$(env_value SCREEN_BACKGROUND_MAX_BYTES "$env_file")" ]] || set_env_value "$env_file" SCREEN_BACKGROUND_MAX_BYTES "20971520"
   delete_env_value "$env_file" TEMPLATE_BACKGROUND_MAX_BYTES
+
   [[ -n "$(env_value SFTP_PUBLIC_HOST "$env_file")" ]] || set_env_value "$env_file" SFTP_PUBLIC_HOST "$domain"
-  [[ -n "$(env_value SFTP_PORT "$env_file")" ]] || set_env_value "$env_file" SFTP_PORT "2022"
-  [[ -n "$(env_value SFTP_API_URL "$env_file")" ]] || set_env_value "$env_file" SFTP_API_URL "http://sftp:8080"
-  [[ -n "$(env_value SFTP_API_TIMEOUT_MS "$env_file")" ]] || set_env_value "$env_file" SFTP_API_TIMEOUT_MS "5000"
-  [[ -n "$(env_value SFTP_STORAGE_ROOT "$env_file")" ]] || set_env_value "$env_file" SFTP_STORAGE_ROOT "/srv/menu-tv-sftp"
-  [[ -n "$(env_value SFTP_STAGING_MAX_AGE_HOURS "$env_file")" ]] || set_env_value "$env_file" SFTP_STAGING_MAX_AGE_HOURS "24"
-  [[ -n "$(env_value SFTP_ADMIN_USERNAME "$env_file")" ]] || set_env_value "$env_file" SFTP_ADMIN_USERNAME "menu_tv_2_service"
-  [[ -n "$(env_value SEED_DEMO_DATA "$env_file")" ]] || set_env_value "$env_file" SEED_DEMO_DATA "false"
+  if [[ -z "$(env_value POSTGRES_PASSWORD "$env_file")" || "$(env_value POSTGRES_PASSWORD "$env_file")" == replace-with-* ]]; then
+    set_env_value "$env_file" POSTGRES_PASSWORD "$(random_secret 24)"
+    info "Создан отсутствующий секрет PostgreSQL."
+  fi
+  if [[ -z "$(env_value SESSION_SECRET "$env_file")" || "$(env_value SESSION_SECRET "$env_file")" == replace-with-* ]]; then
+    set_env_value "$env_file" SESSION_SECRET "$(random_secret 48)"
+    info "Создан отсутствующий секрет сессии."
+  fi
   if [[ -z "$(env_value SFTP_ADMIN_PASSWORD "$env_file")" || "$(env_value SFTP_ADMIN_PASSWORD "$env_file")" == replace-with-* ]]; then
     set_env_value "$env_file" SFTP_ADMIN_PASSWORD "$(random_secret 32)"
-    info "Для нового внутреннего SFTP-сервиса создан отдельный служебный секрет."
+    info "Создан отсутствующий секрет внутреннего SFTP-сервиса."
   fi
   chown root:root "$env_file"
   chmod 600 "$env_file"
@@ -606,8 +630,10 @@ source_requires_database_backup() {
   return 1
 }
 
-fetch_remote_revision() {
-  git_as_project_owner -C "$INSTALL_DIR" fetch --depth 1 origin "$BRANCH"
+
+fetch_release_revision() {
+  local release_tag="$1"
+  git_as_project_owner -C "$INSTALL_DIR" fetch --depth 1 origin "refs/tags/$release_tag"
   git_as_project_owner -C "$INSTALL_DIR" rev-parse FETCH_HEAD
 }
 
@@ -662,7 +688,8 @@ recover_failed_update() {
 sync_existing_source() {
   local revision="$1"
   git_as_project_owner -C "$INSTALL_DIR" reset --hard "$revision"
-  git_as_project_owner -C "$INSTALL_DIR" clean -fd -e .env -e .installer-owner -e .installer-ref
+  git_as_project_owner -C "$INSTALL_DIR" clean -fd -e .env -e .installer-owner
+  rm -f -- "$LEGACY_PROJECT_REF_FILE"
   repair_permissions
   install_launcher
 }
@@ -722,7 +749,7 @@ show_credentials() {
   credentials_box_value 'Пользователь БД' "$(env_value POSTGRES_USER "$env_file")" ''
   credentials_box_value 'Пароль БД' "$(env_value POSTGRES_PASSWORD "$env_file")" ''
   credentials_box_value 'Env-файл' "$env_file" ''
-  credentials_box_value 'Ветка/реф' "$BRANCH" ''
+  credentials_box_value 'Версия проекта' "$(installed_project_version)" ''
   printf '+------------------------------------------------------------------------------+\n'
   printf 'Пароли больше не выводятся командами status. Сохраните их в менеджер паролей.\n'
 }
@@ -744,24 +771,29 @@ cleanup_failed_install() {
   info "Ресурсы неудачной установки удалены."
 }
 
+
 install_app() {
   require_root
-  local domain acme_email owner stage_dir
+  local domain acme_email owner stage_dir release_tag release_version
   [[ ! -e "$INSTALL_DIR" ]] || die "Каталог $INSTALL_DIR уже существует. Для установленного приложения используйте обновление."
   prepare_host
   check_dependencies
+  release_tag="$(latest_release_tag)" || die "Не удалось определить последний стабильный GitHub Release."
+  release_version="$(release_tag_version "$release_tag")"
   domain="$(ask_for_domain)"
   acme_email="$(ask_for_acme_email)"
   owner="$(project_owner)"
   id "$owner" >/dev/null 2>&1 || die "Не найден пользователь, запустивший sudo: $owner"
-  log "Загрузка независимого репозитория ($BRANCH)"
+  log "Загрузка стабильного релиза $release_tag"
   stage_dir="$(mktemp -d -t "${PROGRAM_NAME}.install.XXXXXX")"
   chown "$owner:$owner" "$stage_dir"
-  git_as_project_owner clone --depth 1 --branch "$BRANCH" --single-branch "$REPO_URL" "$stage_dir/source"
-  printf '%s\n' "$owner" > "$stage_dir/source/.installer-owner"
-  printf '%s\n' "$BRANCH" > "$stage_dir/source/.installer-ref"
+  git_as_project_owner clone --depth 1 --branch "$release_tag" --single-branch "$REPO_URL" "$stage_dir/source"
+  printf '%s
+' "$owner" > "$stage_dir/source/.installer-owner"
+  rm -f -- "$stage_dir/source/.installer-ref"
   mv "$stage_dir/source" "$INSTALL_DIR"
   rmdir "$stage_dir"
+  [[ "$(installed_project_version)" == "$release_version" ]] || die "Версия package.json не соответствует тегу $release_tag."
   write_new_env "$domain"
   repair_permissions full
   install_launcher
@@ -772,12 +804,33 @@ install_app() {
   show_credentials
 }
 
+
 update_app() {
-  local env_before remote_revision changed_files source_changed=false env_changed=false needs_runtime=false needs_build=false needs_database_backup=false
+  local env_before current_version latest_tag latest_version remote_revision changed_files input
+  local source_changed=false env_changed=false needs_runtime=false needs_build=false needs_database_backup=false
   require_root
+  [[ -d "$INSTALL_DIR/.git" ]] || die "Menu TV 2.0 не установлен: $INSTALL_DIR"
+  current_version="$(installed_project_version)" || die "Не удалось определить установленную версию из package.json."
+  latest_tag="$(latest_release_tag)" || die "Не удалось определить последний стабильный GitHub Release."
+  latest_version="$(release_tag_version "$latest_tag")"
+
+  printf 'Установленная версия: %s
+' "$current_version"
+  printf 'Доступная версия:     %s
+' "$latest_version"
+  if version_is_newer "$current_version" "$latest_version"; then
+    read -r -p "Обновить ТВ МЕНЮ 2 до версии $latest_version? [y/N]: " input
+    if [[ "${input,,}" != y ]]; then
+      info "Обновление отменено."
+      return
+    fi
+  elif version_is_newer "$latest_version" "$current_version"; then
+    warn "Установленная версия $current_version новее последнего опубликованного релиза $latest_version. Автоматическое понижение версии запрещено."
+    return
+  fi
+
   prepare_host
   check_dependencies
-  [[ -d "$INSTALL_DIR/.git" ]] || die "Menu TV 2.0 не установлен: $INSTALL_DIR"
   env_before="$(mktemp -t "${PROGRAM_NAME}.env.XXXXXX")"
   cp "$INSTALL_DIR/.env" "$env_before"
   ensure_sftp_env
@@ -787,10 +840,17 @@ update_app() {
   fi
   rm -f -- "$env_before"
 
-  log "Проверка изменений в репозитории ($BRANCH)"
-  remote_revision="$(fetch_remote_revision)"
+  log "Проверка стабильного релиза $latest_tag"
+  remote_revision="$(fetch_release_revision "$latest_tag")"
   if ! git_as_project_owner -C "$INSTALL_DIR" diff --quiet HEAD "$remote_revision"; then
     source_changed=true
+    if [[ "$current_version" == "$latest_version" ]]; then
+      read -r -p "Исходники отличаются от опубликованного $latest_tag. Восстановить стабильный релиз? [y/N]: " input
+      if [[ "${input,,}" != y ]]; then
+        info "Выравнивание с опубликованным релизом отменено."
+        return
+      fi
+    fi
     changed_files="$(git_as_project_owner -C "$INSTALL_DIR" diff --name-only HEAD "$remote_revision")"
     source_requires_runtime_update "$changed_files" && needs_runtime=true
     source_requires_image_rebuild "$changed_files" && needs_build=true
@@ -798,7 +858,8 @@ update_app() {
   fi
 
   if [[ "$source_changed" == false && "$env_changed" == false ]]; then
-    info "Исходники и конфигурация уже актуальны. Контейнеры, база данных и HTTPS не затрагивались."
+    rm -f -- "$LEGACY_PROJECT_REF_FILE"
+    info "Установлен актуальный стабильный релиз $latest_tag."
     return
   fi
 
@@ -807,8 +868,9 @@ update_app() {
       create_temporary_backup "$needs_database_backup"
     fi
     if ! sync_existing_source "$remote_revision"; then
-      die "Не удалось применить обновление исходников."
+      die "Не удалось применить релиз $latest_tag."
     fi
+    [[ "$(installed_project_version)" == "$latest_version" ]] || recover_failed_update
   fi
 
   if bootstrap_administrator_is_configured && administrator_is_persisted; then
@@ -817,7 +879,7 @@ update_app() {
   fi
 
   if [[ "$needs_runtime" == false && "$env_changed" == false ]]; then
-    info "Обновлены служебные файлы. Контейнеры, база данных и HTTPS не затрагивались."
+    info "Обновлены служебные файлы до $latest_tag. Контейнеры, база данных и HTTPS не затрагивались."
     return
   fi
 
@@ -826,7 +888,8 @@ update_app() {
   elif ! build_and_start apply false; then
     recover_failed_update
   fi
-  info "Обновление прошло проверку. HTTPS-сертификат не перевыпускался."
+  rm -f -- "$LEGACY_PROJECT_REF_FILE"
+  info "Обновление до $latest_tag прошло проверку. HTTPS-сертификат не перевыпускался."
 }
 
 reset_admin_password() {
@@ -898,19 +961,38 @@ remove_script() {
   info "Системный скрипт удалён. Проект, данные и другие Docker-контейнеры не затронуты."
 }
 
+
 status_app() {
+  local current_version latest_tag latest_version
   require_root
   [[ -d "$INSTALL_DIR" ]] || die "Menu TV 2.0 не установлен."
-  printf 'Installation: %s\n' "$INSTALL_DIR"
-  printf 'Ref: %s\n' "$BRANCH"
+  current_version="$(installed_project_version 2>/dev/null || printf 'unknown')"
+  printf 'Installation: %s
+' "$INSTALL_DIR"
+  printf 'Version: %s
+' "$current_version"
+  if latest_tag="$(latest_release_tag 2>/dev/null)"; then
+    latest_version="$(release_tag_version "$latest_tag")"
+    printf 'Latest release: %s
+' "$latest_version"
+  else
+    printf 'Latest release: unavailable
+'
+  fi
   printf 'Revision: '
   git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || printf 'unknown'
-  printf '\nContainers:\n'
+  printf '
+Containers:
+'
   docker ps --filter "name=^/${APP_CONTAINER}$" --filter "name=^/${DB_CONTAINER}$" --filter "name=^/${SFTP_CONTAINER}$" --format '  {{.Names}}  {{.Status}}  {{.Image}}'
   printf 'Health: '
-  verify_application >/dev/null 2>&1 && printf 'OK\n' || printf 'FAILED\n'
+  verify_application >/dev/null 2>&1 && printf 'OK
+' || printf 'FAILED
+'
   printf 'SFTP: '
-  verify_sftp >/dev/null 2>&1 && printf 'OK\n' || printf 'FAILED\n'
+  verify_sftp >/dev/null 2>&1 && printf 'OK
+' || printf 'FAILED
+'
 }
 
 menu() {
@@ -918,7 +1000,7 @@ menu() {
     printf '\n============================================\n'
     printf ' Menu TV 2.0\n'
     printf ' Версия скрипта: %s\n' "$SCRIPT_VERSION"
-    printf ' Ветка/реф: %s\n' "$BRANCH"
+    printf ' Версия проекта: %s\n' "$(installed_project_version 2>/dev/null || printf 'не установлена')"
     printf '============================================\n'
     printf '  1. Установить\n'
     printf '  2. Обновить\n'

@@ -17,10 +17,6 @@ function savedCollapsedState() {
 function wireContext(shell, rail, context, header) {
   if (savedCollapsedState()) setCollapsed(shell, context, true);
   context.querySelector('.ui-context-close')?.addEventListener('click', () => setCollapsed(shell, context, true));
-  context.addEventListener('click', (event) => {
-    const routeLink = event.target instanceof Element ? event.target.closest('.app-route-link') : null;
-    if (routeLink && context.contains(routeLink)) setCollapsed(shell, context, true);
-  });
   rail.querySelectorAll('.ui-rail-button').forEach((link) => {
     link.addEventListener('pointerenter', () => {
       if (link.classList.contains('active')) setCollapsed(shell, context, false);
