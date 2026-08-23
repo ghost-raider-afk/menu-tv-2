@@ -75,6 +75,8 @@ jobs:
       DEVICE_SESSION_TTL_DAYS: '365'
       DEVICE_HEARTBEAT_WRITE_SECONDS: '30'
       PLAYER_REFRESH_SECONDS: '5'
+      FRONTEND_ERROR_RETENTION_DAYS: '14'
+      FRONTEND_ERROR_MAX_ENTRIES: '2000'
       LOGIN_MAX_ATTEMPTS: '8'
       LOGIN_IP_MAX_ATTEMPTS: '32'
       LOGIN_WINDOW_MINUTES: '15'
@@ -164,6 +166,8 @@ jobs:
       - name: Check canonical environment
         run: |
           grep -Fx 'SCREEN_BACKGROUND_MAX_BYTES=20971520' .env.example
+          grep -Fx 'FRONTEND_ERROR_RETENTION_DAYS=14' .env.example
+          grep -Fx 'FRONTEND_ERROR_MAX_ENTRIES=2000' .env.example
           ! grep -q 'TEMPLATE_BACKGROUND_MAX_BYTES' .env.example
       - name: Check proxy socket isolation
         run: |
@@ -211,7 +215,7 @@ jobs:
 
           const cssResponse = await fetch(`${base}/css/index.css`);
           const css = await cssResponse.text();
-          if (!cssResponse.ok || !css.includes('./shell.css') || !css.includes('./editor/editor.css') || /templates\.css|tv1/i.test(css)) throw new Error('final CSS entrypoint invalid');
+          if (!cssResponse.ok || !css.includes('./shell.css') || !css.includes('./editor/editor.css') || !css.includes('./pages/error-log.css') || /templates\.css|tv1/i.test(css)) throw new Error('final CSS entrypoint invalid');
           const legacyCss = await fetch(`${base}/style.css`);
           if (legacyCss.ok) throw new Error('legacy style.css is still served');
 
@@ -233,6 +237,15 @@ jobs:
 
           const templatesGone = await fetch(`${base}/api/templates`, { headers: { Cookie: cookie } });
           if (templatesGone.status !== 404) throw new Error(`legacy templates API still exists: ${templatesGone.status}`);
+
+          const journalPost = await fetch(`${base}/api/diagnostics/frontend-errors`, {
+            method: 'POST',
+            headers: jsonHeaders,
+            body: JSON.stringify({ error_type: 'error', message: 'CI frontend journal probe', page: '/ci' })
+          });
+          if (journalPost.status !== 204) throw new Error(`frontend journal write failed: ${journalPost.status}`);
+          const journalResponse = await fetch(`${base}/api/diagnostics/frontend-errors?limit=5`, { headers: { Cookie: cookie } });
+          if (!journalResponse.ok || !(await journalResponse.json()).items.some((item) => item.message === 'CI frontend journal probe')) throw new Error('frontend journal read failed');
 
           const siteResponse = await fetch(`${base}/api/settings/site`, { headers: { Cookie: cookie } });
           if (!siteResponse.ok) throw new Error('site settings load failed');
