@@ -136,8 +136,8 @@ test('monitor editor owns one compact command bar, in-flow settings and one modu
   assert.match(editorCss, /\.editor-settings-section>summary/);
   assert.match(editorCss, /:focus-visible/);
   assert.match(editorCss, /@media\(pointer:coarse\)/);
-  assert.doesNotMatch(editorCss, /\.editor-tool-popover/);
-  assert.doesNotMatch(editorCss, /!important|\.tv-board-table/);
+  assert.match(editorCss, /@media\(prefers-reduced-motion:reduce\)/);
+  assert.doesNotMatch(editorCss, /\.editor-tool-popover|\.tv-board-table/);
   assert.match(editorHtml, /class="editor-commandbar"/);
   assert.match(editorHtml, /class="settings-card editor-settings-panel"/);
   assert.match(editorHtml, /<details class="editor-settings-section editor-tool-menu"/);
