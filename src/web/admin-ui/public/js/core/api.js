@@ -1,3 +1,5 @@
+import { reportFrontendError } from './diagnostics.js';
+
 export class ApiError extends Error {
   constructor(message, { status = 0, body = null } = {}) {
     super(message);
@@ -30,7 +32,9 @@ export async function request(url, init = {}) {
         : init.body
     });
   } catch (cause) {
-    throw new ApiError('Сервер недоступен. Проверьте подключение и повторите попытку.', { body: { cause } });
+    const error = new ApiError('Сервер недоступен. Проверьте подключение и повторите попытку.', { body: { cause } });
+    reportFrontendError(cause || error, { type: 'api-network', source: String(url) });
+    throw error;
   }
 
   const body = await parseResponse(response);
@@ -41,7 +45,9 @@ export async function request(url, init = {}) {
     const message = body && typeof body === 'object' && typeof body.error === 'string'
       ? body.error
       : 'Не удалось выполнить запрос.';
-    throw new ApiError(message, { status: response.status, body });
+    const error = new ApiError(message, { status: response.status, body });
+    if (response.status >= 500) reportFrontendError(error, { type: 'api-response', source: String(url) });
+    throw error;
   }
   return body;
 }
