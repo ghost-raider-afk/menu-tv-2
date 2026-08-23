@@ -10,7 +10,7 @@ function validEnv(overrides = {}) {
     DEVICE_ACTIVATION_TTL_MINUTES: '10', DEVICE_ACTIVATION_POLL_SECONDS: '2', DEVICE_ACTIVATION_MAX_ATTEMPTS: '20',
     DEVICE_ACTIVATION_WINDOW_MINUTES: '10', DEVICE_ACTIVATION_LIMITER_MAX_ENTRIES: '10000', DEVICE_ACTIVATION_CLEANUP_MINUTES: '15',
     DEVICE_ACTIVATION_RETENTION_HOURS: '24', DEVICE_SESSION_TTL_DAYS: '365', DEVICE_HEARTBEAT_WRITE_SECONDS: '30', PLAYER_REFRESH_SECONDS: '5',
-    FRONTEND_ERROR_RETENTION_DAYS: '14', FRONTEND_ERROR_MAX_ENTRIES: '2000',
+    EVENT_JOURNAL_RETENTION_DAYS: '30', EVENT_JOURNAL_MAX_ENTRIES: '5000',
     PASSWORD_MIN_LENGTH: '10', PASSWORD_MAX_LENGTH: '32', GENERATED_PASSWORD_LENGTH: '10',
     LOGIN_MAX_ATTEMPTS: '8', LOGIN_IP_MAX_ATTEMPTS: '32', LOGIN_WINDOW_MINUTES: '15', LOGIN_LIMITER_MAX_ENTRIES: '500',
     JSON_BODY_MAX_BYTES: '65536', MENU_DRAFT_MAX_BYTES: '49152', SCREEN_SOURCE_MAX_BYTES: '12582912',
@@ -32,7 +32,7 @@ test('runtime limits are controlled only by environment values', () => {
     DEVICE_ACTIVATION_TTL_MINUTES: '8', DEVICE_ACTIVATION_POLL_SECONDS: '3', DEVICE_ACTIVATION_MAX_ATTEMPTS: '12',
     DEVICE_ACTIVATION_WINDOW_MINUTES: '7', DEVICE_ACTIVATION_LIMITER_MAX_ENTRIES: '5000', DEVICE_ACTIVATION_CLEANUP_MINUTES: '9',
     DEVICE_ACTIVATION_RETENTION_HOURS: '18', DEVICE_SESSION_TTL_DAYS: '540', DEVICE_HEARTBEAT_WRITE_SECONDS: '45', PLAYER_REFRESH_SECONDS: '7',
-    FRONTEND_ERROR_RETENTION_DAYS: '21', FRONTEND_ERROR_MAX_ENTRIES: '3500',
+    EVENT_JOURNAL_RETENTION_DAYS: '21', EVENT_JOURNAL_MAX_ENTRIES: '3500',
     SFTP_API_TIMEOUT_MS: '4200', SFTP_STAGING_MAX_AGE_HOURS: '36', POSTGRES_POOL_MAX: '9', POSTGRES_CONNECTION_TIMEOUT_MS: '4100',
     POSTGRES_IDLE_TIMEOUT_MS: '28000', HEALTH_READINESS_CACHE_MS: '1500'
   }));
@@ -60,8 +60,8 @@ test('runtime limits are controlled only by environment values', () => {
   assert.equal(config.deviceSessionTtlDays, 540);
   assert.equal(config.deviceHeartbeatWriteSeconds, 45);
   assert.equal(config.playerRefreshSeconds, 7);
-  assert.equal(config.frontendErrorRetentionDays, 21);
-  assert.equal(config.frontendErrorMaxEntries, 3500);
+  assert.equal(config.eventJournalRetentionDays, 21);
+  assert.equal(config.eventJournalMaxEntries, 3500);
   assert.equal(config.sftp.apiTimeoutMs, 4200);
   assert.equal(config.sftp.stagingMaxAgeHours, 36);
   assert.equal(config.db.poolMax, 9);
@@ -69,6 +69,7 @@ test('runtime limits are controlled only by environment values', () => {
   assert.equal(config.db.idleTimeoutMs, 28000);
   assert.equal(config.healthReadinessCacheMs, 1500);
   assert.equal(Object.hasOwn(config, 'templateBackgroundMaxBytes'), false);
+  assert.equal(Object.hasOwn(config, 'frontendErrorRetentionDays'), false);
 });
 
 test('every declared application runtime env value is mandatory and has no code fallback', () => {
@@ -78,6 +79,15 @@ test('every declared application runtime env value is mandatory and has no code 
     delete env[key];
     assert.throws(() => loadConfig(env), new RegExp(key), key);
   }
+});
+
+test('legacy frontend error env values are not runtime sources', () => {
+  const env = validEnv();
+  delete env.EVENT_JOURNAL_RETENTION_DAYS;
+  delete env.EVENT_JOURNAL_MAX_ENTRIES;
+  env.FRONTEND_ERROR_RETENTION_DAYS = '14';
+  env.FRONTEND_ERROR_MAX_ENTRIES = '2000';
+  assert.throws(() => loadConfig(env), /EVENT_JOURNAL_RETENTION_DAYS|EVENT_JOURNAL_MAX_ENTRIES/);
 });
 
 test('legacy template background env is not a runtime source', () => {
