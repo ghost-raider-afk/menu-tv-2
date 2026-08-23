@@ -35,9 +35,10 @@ test('user message appears once at top, reaches bell and persists in event journ
   }).toBe(true);
 
   await page.locator('#notifications-button').click();
-  await expect(page.locator('[data-notification-list] .event-row').filter({ hasText: marker })).toBeVisible();
+  const notificationPanel = page.getByLabel('Последние события');
+  await expect(notificationPanel.locator('[data-notification-list] .event-row').filter({ hasText: marker })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Открыть журнал событий' }).click();
+  await notificationPanel.getByRole('link', { name: 'Открыть журнал событий' }).click();
   await expect(page).toHaveURL(/\/events\.html$/);
   await page.locator('#event-filter-severity').selectOption('warning');
   await page.locator('#event-filter-category').selectOption('settings');
