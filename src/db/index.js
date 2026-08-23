@@ -14,6 +14,7 @@ import { createNotificationsRepository } from './notifications.js';
 import { createLocationsRepository } from './locations.js';
 import { createScreensRepository } from './screens.js';
 import { createCatalogRepository } from './catalog.js';
+import { createCatalogUsageRepository } from './catalog-usage.js';
 import { createSftpRepository } from './sftp.js';
 import { createDevicesRepository } from './devices.js';
 
@@ -37,6 +38,7 @@ function createRepositories(queryable) {
     locations,
     createScreensRepository(queryable),
     createCatalogRepository(queryable),
+    createCatalogUsageRepository(queryable),
     createSftpRepository(queryable, { getLocation: locations.getLocation }),
     createDevicesRepository(queryable)
   );
