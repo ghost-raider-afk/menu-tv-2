@@ -117,3 +117,91 @@ test('animation studio keeps the selected real menu visible while 20 continuous 
     await removePreviewFixture(page, fixture);
   }
 });
+
+test('promotion badge scales as one isolated SVG motion group', async ({ page }) => {
+  await login(page);
+  await page.goto('/animation.html');
+
+  const result = await page.evaluate(async () => {
+    const [{ renderAnimationScreenPreview }, { AnimationPreviewPlayer }, { profileForPreset }] = await Promise.all([
+      import('/js/motion/screen-preview.js'),
+      import('/js/motion/preview-player.js'),
+      import('/js/motion/presets.js')
+    ]);
+
+    const stage = document.createElement('div');
+    stage.className = 'animation-stage';
+    stage.style.width = '960px';
+    document.body.append(stage);
+
+    renderAnimationScreenPreview(stage, {
+      screen: { id: 999999, resolution: '1920x1080' },
+      draft: {
+        rows: [
+          { id: 'section', kind: 'section', name: 'ПРОВЕРКА АКЦИИ', enabled: true },
+          {
+            id: 'item', kind: 'item', name: 'Тестовая позиция', price_primary: '240', price_secondary: '360',
+            promotion: true, promotion_text: 'АКЦИЯ', enabled: true
+          }
+        ],
+        settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC' }
+      },
+      products: [],
+      packaging: []
+    });
+
+    const row = stage.querySelector('g.table-item');
+    const content = row?.querySelector(':scope > g.table-item-content');
+    const badge = row?.querySelector(':scope > g.promotion-badge');
+    const badgePath = badge?.querySelector('path');
+    const badgeText = badge?.querySelector('text.promotion');
+    const player = new AnimationPreviewPlayer({ stage });
+    const profile = {
+      ...profileForPreset('accent-pulse'),
+      pattern: 'pulse',
+      flow_direction: 'none',
+      item_effect: 'pulse',
+      price_effect: 'none',
+      section_effect: 'none',
+      background_effect: 'none',
+      cycle_seconds: 8,
+      event_duration_ms: 1200,
+      scale_amount: 0.05,
+      intensity: 100
+    };
+
+    player.restart(profile);
+    player.seek(600);
+
+    const snapshot = {
+      rowMotion: row?.dataset.motion || '',
+      contentMotion: content?.dataset.motion || '',
+      badgeMotion: badge?.dataset.motion || '',
+      contentOrder: content?.dataset.motionOrder || '',
+      badgeOrder: badge?.dataset.motionOrder || '',
+      rowAnimations: row?.getAnimations().length ?? -1,
+      contentAnimations: content?.getAnimations().length ?? -1,
+      badgeAnimations: badge?.getAnimations().length ?? -1,
+      pathAnimations: badgePath?.getAnimations().length ?? -1,
+      textAnimations: badgeText?.getAnimations().length ?? -1,
+      contentTransform: content ? getComputedStyle(content).transform : 'none',
+      badgeTransform: badge ? getComputedStyle(badge).transform : 'none'
+    };
+
+    player.destroy();
+    stage.remove();
+    return snapshot;
+  });
+
+  expect(result.rowMotion).toBe('');
+  expect(result.contentMotion).toBe('item');
+  expect(result.badgeMotion).toBe('promotion');
+  expect(result.contentOrder).toBe(result.badgeOrder);
+  expect(result.rowAnimations).toBe(0);
+  expect(result.contentAnimations).toBe(1);
+  expect(result.badgeAnimations).toBe(1);
+  expect(result.pathAnimations).toBe(0);
+  expect(result.textAnimations).toBe(0);
+  expect(result.contentTransform).not.toBe('none');
+  expect(result.badgeTransform).toBe(result.contentTransform);
+});
