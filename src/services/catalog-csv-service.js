@@ -1,5 +1,5 @@
 import { productInput, positiveId } from '../contracts/input.js';
-import { ValidationError } from '../shared/errors.js';
+import { ConflictError, ValidationError } from '../shared/errors.js';
 
 const EXPORT_HEADERS = Object.freeze([
   ['id', 'ID'],
@@ -404,6 +404,18 @@ function previewValidationError(preview) {
   return new ValidationError(row && error ? `Строка ${row.line}: ${error.message}` : 'Импорт содержит ошибки.');
 }
 
+async function writeImportedProduct(row, operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error?.code !== '23505') throw error;
+    throw new ConflictError(
+      `Строка ${row.line}: продукция «${row.normalized.name}» уже существует. Укажите ID существующей записи для обновления или измените название.`,
+      { cause: error }
+    );
+  }
+}
+
 export async function applyProductsImport(store, rows) {
   const drafts = importDraftRows(rows);
   return store.transaction(async (transaction) => {
@@ -414,10 +426,10 @@ export async function applyProductsImport(store, rows) {
     let updated = 0;
     for (const row of preview.rows) {
       if (row.status === 'new') {
-        await transaction.createProduct(row.normalized);
+        await writeImportedProduct(row, () => transaction.createProduct(row.normalized));
         created += 1;
       } else if (row.status === 'changed') {
-        const product = await transaction.updateProduct(row.id, row.normalized);
+        const product = await writeImportedProduct(row, () => transaction.updateProduct(row.id, row.normalized));
         if (!product) throw new ValidationError(`Строка ${row.line}: продукция с ID ${row.id} больше не существует.`);
         updated += 1;
       }
