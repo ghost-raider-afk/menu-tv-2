@@ -35,7 +35,13 @@ jobs:
           body = []
           for line in source[start:end]:
               body.append(line[10:] if line.startswith('          ') else line)
-          Path('/tmp/prepare_single_main.py').write_text('\n'.join(body) + '\n')
+          target = Path('/tmp/prepare_single_main.py')
+          code = '\n'.join(body) + '\n'
+          old = """if old_check not in workflow:\n    raise SystemExit('old installer CI contract not found')\nworkflow = workflow.replace(old_check, new_check, 1)"""
+          new = """if old_check in workflow:\n    workflow = workflow.replace(old_check, new_check, 1)\nelse:\n    installer_check = re.compile(r'(?m)^      - name: Check installer ref\\n        run: \\|\\n(?:          .*\\n){3}')\n    workflow, check_count = installer_check.subn(new_check, workflow, count=1)\n    if check_count != 1:\n        raise SystemExit(f'old installer CI contract not found: {check_count}')"""
+          if old not in code:
+              raise SystemExit('migration patch anchor not found')
+          target.write_text(code.replace(old, new, 1))
           PY
           python3 /tmp/prepare_single_main.py
           rm -f .github/workflows/run-prepare-on-pr.yml
