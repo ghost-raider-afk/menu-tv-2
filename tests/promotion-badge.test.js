@@ -37,17 +37,17 @@ test('promotion badge keeps shape and label inside one SVG group', () => {
   assert.ok(contentStart > badgeEnd, 'promotion badge must be a sibling of the item motion content, not nested inside it');
 });
 
-test('motion preview isolates promotion scaling from the parent table item and keeps row phase synchronized', async () => {
+test('motion preview isolates promotion scaling from product row content and keeps row phase synchronized', async () => {
   const [screenPreview, player] = await Promise.all([
     readFile(new URL('js/motion/screen-preview.js', publicRoot), 'utf8'),
     readFile(new URL('js/motion/preview-player.js', publicRoot), 'utf8')
   ]);
 
+  assert.match(screenPreview, /row\.classList\.contains\('table-packaging'\)[\s\S]*markMotionTarget\(row, 'item', index, rows\.length\)/);
   assert.match(screenPreview, /:scope > g\.table-item-content/);
   assert.match(screenPreview, /:scope > g\.promotion-badge/);
   assert.match(screenPreview, /markMotionTarget\(content, 'item', index, rows\.length\)/);
   assert.match(screenPreview, /markMotionTarget\(promotion, 'promotion', index, rows\.length\)/);
-  assert.doesNotMatch(screenPreview, /markMotionTarget\(row, 'item'/);
   assert.match(player, /promotion:\s*\[\.\.\.this\.stage\.querySelectorAll\('\[data-motion="promotion"\]'\)\]/);
   assert.match(player, /sequenceFor\(element, index, targets\.length\)/);
   assert.match(player, /kind === 'promotion' \? 'item' : kind/);
