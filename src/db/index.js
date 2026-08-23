@@ -5,6 +5,7 @@ import { retireLegacyTemplates } from './migrations/template-retirement.js';
 import { migrateScreenNumbering } from './migrations/screen-numbering.js';
 import { migrateAnimationSettings } from './migrations/animation-settings.js';
 import { migrateDevicePlayer } from './migrations/device-player.js';
+import { runMigrations } from './migrations/runner.js';
 import { seedDemoData } from './migrations/seed.js';
 import { createOverviewRepository } from './overview.js';
 import { createUsersRepository } from './users.js';
@@ -15,6 +16,15 @@ import { createScreensRepository } from './screens.js';
 import { createCatalogRepository } from './catalog.js';
 import { createSftpRepository } from './sftp.js';
 import { createDevicesRepository } from './devices.js';
+
+const MIGRATIONS = Object.freeze([
+  { name: '001-schema', run: initialiseSchema },
+  { name: '002-legacy-menu-settings', run: migrateLegacyMenuSettings },
+  { name: '003-retire-legacy-templates', run: retireLegacyTemplates },
+  { name: '004-screen-numbering', run: migrateScreenNumbering },
+  { name: '005-animation-settings', run: migrateAnimationSettings },
+  { name: '006-device-player', run: migrateDevicePlayer }
+]);
 
 function createRepositories(queryable) {
   const locations = createLocationsRepository(queryable);
@@ -40,12 +50,7 @@ export class MenuTvStore {
   }
 
   async init() {
-    await initialiseSchema(this.pool);
-    await migrateLegacyMenuSettings(this.pool);
-    await retireLegacyTemplates(this.pool);
-    await migrateScreenNumbering(this.pool);
-    await migrateAnimationSettings(this.pool);
-    await migrateDevicePlayer(this.pool);
+    await runMigrations(this.pool, MIGRATIONS);
     if (this.seedDemoData) await seedDemoData(this.pool);
   }
 
