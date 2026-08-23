@@ -4,16 +4,18 @@ export async function migrateEventJournal(pool) {
     ALTER TABLE activity_events ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'system';
     ALTER TABLE activity_events ADD COLUMN IF NOT EXISTS details TEXT NOT NULL DEFAULT '';
 
-    UPDATE activity_events SET category = CASE
-      WHEN action LIKE 'auth.%' THEN 'auth'
-      WHEN action LIKE 'catalog.%' THEN 'catalog'
-      WHEN action LIKE 'sftp.%' THEN 'sftp'
-      WHEN action LIKE 'screen.%' OR action LIKE 'location.%' THEN 'monitors'
-      WHEN action LIKE 'device.%' THEN 'tv'
-      WHEN action LIKE 'settings.%' THEN 'settings'
-      ELSE category
-    END
-    WHERE category = 'system';
+    UPDATE activity_events
+    SET
+      severity = 'success',
+      category = CASE
+        WHEN action LIKE 'auth.%' THEN 'auth'
+        WHEN action LIKE 'catalog.%' THEN 'catalog'
+        WHEN action LIKE 'sftp.%' THEN 'sftp'
+        WHEN action LIKE 'screen.%' OR action LIKE 'location.%' THEN 'monitors'
+        WHEN action LIKE 'device.%' THEN 'tv'
+        WHEN action LIKE 'settings.%' OR action LIKE 'profile.%' THEN 'settings'
+        ELSE 'system'
+      END;
 
     INSERT INTO activity_events (
       actor_username, action, entity_type, entity_id, message, metadata, read_at, created_at, severity, category, details
