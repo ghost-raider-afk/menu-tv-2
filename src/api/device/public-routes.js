@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import express from 'express';
+import { createIpRateLimiter } from '../../middleware/ip-rate-limiter.js';
 import { createActivationQrSvg } from '../../services/qr-code-service.js';
 import {
   createActivationCredentials,
@@ -33,7 +34,7 @@ function publicScreen(session) {
   };
 }
 
-function filterPlayerCatalog(draft, products, packaging) {
+function playerCatalogIds(draft) {
   const productIds = new Set();
   const packagingIds = new Set();
   for (const row of draft?.rows || []) {
@@ -42,10 +43,12 @@ function filterPlayerCatalog(draft, products, packaging) {
     if (Number.isSafeInteger(productId) && productId > 0) productIds.add(productId);
     if (Number.isSafeInteger(packagingId) && packagingId > 0) packagingIds.add(packagingId);
   }
-  return {
-    products: products.filter((item) => productIds.has(Number(item.id))),
-    packaging: packaging.filter((item) => packagingIds.has(Number(item.id)))
-  };
+  return { productIds: [...productIds], packagingIds: [...packagingIds] };
+}
+
+function contextEtag(context) {
+  const digest = crypto.createHash('sha256').update(JSON.stringify(context)).digest('base64url');
+  return `"${digest}"`;
 }
 
 async function createPendingActivation(store, config, request) {
@@ -97,12 +100,19 @@ async function resolveDeviceSession(store, config, request, response) {
 
 export function createDevicePublicRouter({ store, config }) {
   const router = express.Router();
+  const activationLimiter = createIpRateLimiter({
+    maxAttempts: config.deviceActivationMaxAttempts,
+    windowMinutes: config.deviceActivationWindowMinutes,
+    maxEntries: config.deviceActivationLimiterMaxEntries,
+    message: 'Слишком много запросов на подключение ТВ. Повторите позже.'
+  });
+
   router.use((_request, response, next) => {
     response.setHeader('Cache-Control', 'no-store');
     next();
   });
 
-  router.post('/activations', async (request, response) => {
+  router.post('/activations', activationLimiter, async (request, response) => {
     const { credentials, expiresAt } = await createPendingActivation(store, config, request);
     response.status(201).json({
       activation_id: credentials.id,
@@ -179,19 +189,21 @@ export function createDevicePublicRouter({ store, config }) {
     const session = await resolveDeviceSession(store, config, request, response);
     if (!session) return response.status(401).json({ error: 'Телевизор не авторизован.' });
 
-    const [screen, draft, products, packaging] = await Promise.all([
+    const [screen, draft] = await Promise.all([
       store.getScreen(session.screen_id),
-      store.getScreenDraft(session.screen_id),
-      store.listProducts(),
-      store.listPackaging()
+      store.getScreenDraft(session.screen_id)
     ]);
     if (!screen || screen.active === false) {
       response.setHeader('Set-Cookie', deviceSessionCookie('', config, 0));
       return response.status(401).json({ error: 'Привязка телевизора больше не активна.' });
     }
-    const catalog = filterPlayerCatalog(draft, products, packaging);
 
-    return response.json({
+    const { productIds, packagingIds } = playerCatalogIds(draft);
+    const [products, packaging] = await Promise.all([
+      store.listProductsByIds(productIds),
+      store.listPackagingByIds(packagingIds)
+    ]);
+    const context = {
       screen: {
         id: screen.id,
         name: screen.name,
@@ -202,10 +214,15 @@ export function createDevicePublicRouter({ store, config }) {
         location_number: screen.location_number
       },
       draft: { rows: draft.rows || [], settings: draft.settings || {}, revision: draft.revision },
-      products: catalog.products,
-      packaging: catalog.packaging,
+      products,
+      packaging,
       refresh_interval_ms: config.playerRefreshSeconds * 1000
-    });
+    };
+    const etag = contextEtag(context);
+    response.setHeader('Cache-Control', 'private, no-cache');
+    response.setHeader('ETag', etag);
+    if (request.get('if-none-match') === etag) return response.status(304).end();
+    return response.json(context);
   });
 
   return router;
