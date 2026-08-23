@@ -1,52 +1,434 @@
 name: check
 
 on:
-  pull_request:
+  push:
     branches:
       - main
+      - 'agent/**'
+  pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  repair-release-gate:
+  node-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - name: Checkout release branch
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          ref: agent/adversarial-hardening-1.4
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run checks
+        run: npm run check
+
+  browser-visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-bookworm@sha256:84560e3b9c6874893fc4e2854f5dc3e7c1a37bc9d1dfd7a8c641310ae22ba5ad
+        env:
+          POSTGRES_DB: menu_tv_2_e2e
+          POSTGRES_USER: menu_tv_2_e2e
+          POSTGRES_PASSWORD: ci-browser-postgres-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U menu_tv_2_e2e -d menu_tv_2_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_NAME: ТВ МЕНЮ
+      NODE_ENV: test
+      HOST: 127.0.0.1
+      PORT: '8080'
+      MENU_TV_2_DOMAIN: localhost
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: '5432'
+      POSTGRES_DB: menu_tv_2_e2e
+      POSTGRES_USER: menu_tv_2_e2e
+      POSTGRES_PASSWORD: ci-browser-postgres-password
+      POSTGRES_POOL_MAX: '5'
+      POSTGRES_CONNECTION_TIMEOUT_MS: '5000'
+      POSTGRES_IDLE_TIMEOUT_MS: '30000'
+      BOOTSTRAP_ADMIN_USERNAME: admin
+      BOOTSTRAP_ADMIN_PASSWORD: Browser-CI-Password1!
+      PASSWORD_MIN_LENGTH: '10'
+      PASSWORD_MAX_LENGTH: '32'
+      SESSION_SECRET: ci-browser-session-secret-0123456789012345678901234567890123456789
+      SESSION_TTL_HOURS: '12'
+      SECURE_COOKIES: 'false'
+      DEVICE_ACTIVATION_TTL_MINUTES: '10'
+      DEVICE_ACTIVATION_POLL_SECONDS: '2'
+      DEVICE_ACTIVATION_MAX_ATTEMPTS: '20'
+      DEVICE_ACTIVATION_WINDOW_MINUTES: '10'
+      DEVICE_ACTIVATION_LIMITER_MAX_ENTRIES: '10000'
+      DEVICE_ACTIVATION_CLEANUP_MINUTES: '15'
+      DEVICE_ACTIVATION_RETENTION_HOURS: '24'
+      DEVICE_SESSION_TTL_DAYS: '365'
+      DEVICE_HEARTBEAT_WRITE_SECONDS: '30'
+      PLAYER_REFRESH_SECONDS: '5'
+      EVENT_JOURNAL_RETENTION_DAYS: '30'
+      EVENT_JOURNAL_MAX_ENTRIES: '5000'
+      LOGIN_MAX_ATTEMPTS: '8'
+      LOGIN_IP_MAX_ATTEMPTS: '32'
+      LOGIN_WINDOW_MINUTES: '15'
+      LOGIN_LIMITER_MAX_ENTRIES: '500'
+      GENERATED_PASSWORD_LENGTH: '10'
+      JSON_BODY_MAX_BYTES: '65536'
+      MENU_DRAFT_MAX_BYTES: '49152'
+      SCREEN_SOURCE_MAX_BYTES: '12582912'
+      DASHBOARD_REFRESH_MIN_SECONDS: '15'
+      DASHBOARD_REFRESH_MAX_SECONDS: '300'
+      SCREEN_MAX_WIDTH: '1920'
+      SCREEN_MAX_HEIGHT: '1080'
+      IMAGE_MAX_PIXELS: '40000000'
+      SITE_ASSETS_ROOT: /tmp/menu-tv-2-browser-assets
+      SITE_LOGO_MAX_BYTES: '2097152'
+      SITE_FAVICON_MAX_BYTES: '524288'
+      SCREEN_BACKGROUND_MAX_BYTES: '20971520'
+      HEALTH_READINESS_CACHE_MS: '0'
+      SFTP_PUBLIC_HOST: localhost
+      SFTP_PORT: '2022'
+      SFTP_API_URL: http://127.0.0.1:18080
+      SFTP_API_TIMEOUT_MS: '1000'
+      SFTP_STORAGE_ROOT: /tmp/menu-tv-2-browser-sftp
+      SFTP_STAGING_MAX_AGE_HOURS: '24'
+      SFTP_ADMIN_USERNAME: browser_service
+      SFTP_ADMIN_PASSWORD: ci-browser-sftp-admin-password-0123456789
+      SEED_DEMO_DATA: 'false'
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
+      E2E_ADMIN_PASSWORD: Browser-CI-Password1!
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Start application
+        run: |
+          node src/server.js > /tmp/menu-tv-browser.log 2>&1 &
+          echo $! > /tmp/menu-tv-browser.pid
+          for attempt in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:8080/readyz >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/menu-tv-browser.log
+          exit 1
+      - name: Run browser and visual checks
+        run: npm run test:browser
+      - name: Upload browser report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+      - name: Show application log on failure
+        if: failure()
+        run: cat /tmp/menu-tv-browser.log || true
+      - name: Stop application
+        if: always()
+        run: test ! -f /tmp/menu-tv-browser.pid || kill "$(cat /tmp/menu-tv-browser.pid)" || true
+
+  clean-install-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Check installer syntax
+        run: bash -n menu-tv-2.sh
+      - name: Check stable release installer
+        run: |
+          bash menu-tv-2.sh help | grep -F 'Канал обновлений: стабильные GitHub Releases'
+          bash menu-tv-2.sh help | grep -F 'Канал обновлений скрипта: теги installer-vX.Y.Z'
+          SCRIPT_VERSION="$(sed -nE 's/^SCRIPT_VERSION="([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' menu-tv-2.sh | head -n 1)"
+          test -n "$SCRIPT_VERSION"
+          bash menu-tv-2.sh help | grep -F "Версия скрипта: $SCRIPT_VERSION"
+          ! grep -q 'MENU_TV_REF' menu-tv-2.sh
+          ! grep -q '^BRANCH=' menu-tv-2.sh
+      - name: Check canonical environment
+        run: |
+          grep -Fx 'SCREEN_BACKGROUND_MAX_BYTES=20971520' .env.example
+          grep -Fx 'EVENT_JOURNAL_RETENTION_DAYS=30' .env.example
+          grep -Fx 'EVENT_JOURNAL_MAX_ENTRIES=5000' .env.example
+          ! grep -q 'FRONTEND_ERROR_RETENTION_DAYS' .env.example
+          ! grep -q 'FRONTEND_ERROR_MAX_ENTRIES' .env.example
+          ! grep -q 'TEMPLATE_BACKGROUND_MAX_BYTES' .env.example
+      - name: Check proxy socket isolation
+        run: |
+          grep -F 'tcp://docker-socket-proxy:2375' infra/traefik-compose.yaml
+          test "$(grep -c '/var/run/docker.sock:/var/run/docker.sock:ro' infra/traefik-compose.yaml)" -eq 1
+          TRAEFIK_ACME_EMAIL=ci@example.test docker compose -f infra/traefik-compose.yaml config -q
+      - name: Check immutable external images
+        run: |
+          grep -Eq '^FROM node:[^ ]+@sha256:[0-9a-f]{64} AS runtime$' Dockerfile
+          grep -Eq 'image: postgres:[^ ]+@sha256:[0-9a-f]{64}$' compose.yaml
+          test "$(grep -Ec 'image: busybox:[^ ]+@sha256:[0-9a-f]{64}$' compose.yaml)" -eq 2
+          grep -Eq 'image: drakkan/sftpgo:[^ ]+@sha256:[0-9a-f]{64}$' compose.yaml
+          grep -Eq 'image: ghcr.io/tecnativa/docker-socket-proxy:[^ ]+@sha256:[0-9a-f]{64}$' infra/traefik-compose.yaml
+          grep -Eq 'image: traefik:[^ ]+@sha256:[0-9a-f]{64}$' infra/traefik-compose.yaml
+      - name: Prepare clean-install environment
+        run: |
+          cp .env.example .env
+          sed -i 's|^MENU_TV_2_DOMAIN=.*|MENU_TV_2_DOMAIN=menu.example.test|' .env
+          sed -i 's|^SFTP_PUBLIC_HOST=.*|SFTP_PUBLIC_HOST=menu.example.test|' .env
+          sed -i 's|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=ci-postgres-password-0123456789|' .env
+          sed -i 's|^SESSION_SECRET=.*|SESSION_SECRET=ci-session-secret-0123456789012345678901234567890123456789|' .env
+          sed -i 's|^SFTP_ADMIN_PASSWORD=.*|SFTP_ADMIN_PASSWORD=ci-sftp-secret-0123456789012345678901234567890123456789|' .env
+          sed -i 's|^BOOTSTRAP_ADMIN_USERNAME=.*|BOOTSTRAP_ADMIN_USERNAME=admin|' .env
+          sed -i 's|^BOOTSTRAP_ADMIN_PASSWORD=.*|BOOTSTRAP_ADMIN_PASSWORD=Ci-Admin-Password1!|' .env
+          sed -i 's|^SECURE_COOKIES=.*|SECURE_COOKIES=false|' .env
+      - name: Validate Docker Compose
+        run: docker compose --env-file .env config -q
+      - name: Build production application image
+        run: docker build --pull -t menu-tv-2-ci .
+      - name: Start clean runtime stack
+        run: |
+          docker network create menu-tv-2-proxy
+          docker compose --project-name menu-tv-2-ci --env-file .env up -d --build --wait
+      - name: Smoke test application workflow
+        run: |
+          docker compose --project-name menu-tv-2-ci --env-file .env exec -T app node --input-type=module <<'NODE'
+          import sharp from 'sharp';
+
+          const base = 'http://127.0.0.1:8080';
+          const health = await fetch(`${base}/healthz`);
+          if (!health.ok || (await health.json()).service !== 'menu-tv-2.0') throw new Error('health check failed');
+          const ready = await fetch(`${base}/readyz`);
+          const readyBody = await ready.json();
+          if (!ready.ok || readyBody.status !== 'ready' || readyBody.service !== 'menu-tv-2.0') throw new Error('readiness check failed');
+
+          const cssResponse = await fetch(`${base}/css/index.css`);
+          const css = await cssResponse.text();
+          if (!cssResponse.ok || !css.includes('./shell.css') || !css.includes('./editor/editor.css') || !css.includes('./pages/events.css') || /templates\.css|tv1/i.test(css)) throw new Error('final CSS entrypoint invalid');
+          const legacyCss = await fetch(`${base}/style.css`);
+          if (legacyCss.ok) throw new Error('legacy style.css is still served');
+
+          const loaderResponse = await fetch(`${base}/app.js`);
+          const loader = await loaderResponse.text();
+          if (!loaderResponse.ok || !loader.includes("import('/js/application.js')") || /tv1|style\.css/i.test(loader)) throw new Error('frontend loader invalid');
+
+          const login = await fetch(`${base}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: 'admin', password: 'Ci-Admin-Password1!' })
+          });
+          if (login.status !== 204) throw new Error(`login failed: ${login.status}`);
+          const setCookies = typeof login.headers.getSetCookie === 'function' ? login.headers.getSetCookie() : [login.headers.get('set-cookie')];
+          const sessionCookie = setCookies.flatMap((value) => String(value || '').split(/,(?=\s*menu_tv_)/)).find((value) => value.trim().startsWith('menu_tv_2_session='));
+          if (!sessionCookie) throw new Error('session cookie missing');
+          const cookie = sessionCookie.split(';', 1)[0].trim();
+          const jsonHeaders = { 'Content-Type': 'application/json', Cookie: cookie };
+
+          const templatesGone = await fetch(`${base}/api/templates`, { headers: { Cookie: cookie } });
+          if (templatesGone.status !== 404) throw new Error(`legacy templates API still exists: ${templatesGone.status}`);
+
+          const journalPost = await fetch(`${base}/api/diagnostics/frontend-errors`, {
+            method: 'POST',
+            headers: jsonHeaders,
+            body: JSON.stringify({ error_type: 'error', message: 'CI frontend journal probe', page: '/ci' })
+          });
+          if (journalPost.status !== 204) throw new Error(`frontend journal write failed: ${journalPost.status}`);
+          const journalResponse = await fetch(`${base}/api/notifications/events?limit=5&severity=error&category=interface`, { headers: { Cookie: cookie } });
+          const journalBody = await journalResponse.json();
+          if (!journalResponse.ok || !journalBody.items.some((item) => item.message === 'CI frontend journal probe' && item.severity === 'error' && item.category === 'interface')) throw new Error('event journal read failed');
+
+          const siteResponse = await fetch(`${base}/api/settings/site`, { headers: { Cookie: cookie } });
+          if (!siteResponse.ok) throw new Error('site settings load failed');
+          const site = await siteResponse.json();
+          const siteUpdate = await fetch(`${base}/api/settings/site`, {
+            method: 'PUT', headers: jsonHeaders,
+            body: JSON.stringify({
+              application_name: site.app_name,
+              accent_color: site.accent_color,
+              timezone: site.timezone,
+              date_format: site.date_format,
+              dashboard_refresh_seconds: site.dashboard_refresh_seconds,
+              default_screen_resolution: site.default_screen_resolution,
+              signin_logo_size: 7
+            })
+          });
+          if (!siteUpdate.ok || Number((await siteUpdate.json()).signin_logo_size) !== 7) throw new Error('signin logo size setting failed');
+
+          const locationResponse = await fetch(`${base}/api/locations`, { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name: 'CI точка', address: 'CI' }) });
+          if (locationResponse.status !== 201) throw new Error(`location create failed: ${locationResponse.status}`);
+          const location = await locationResponse.json();
+
+          const screenResponse = await fetch(`${base}/api/locations/${location.id}/screens`, { method: 'POST', headers: jsonHeaders, body: '{}' });
+          if (screenResponse.status !== 201) throw new Error(`screen create failed: ${screenResponse.status}`);
+          const screen = await screenResponse.json();
+          const editorResponse = await fetch(`${base}/api/screens/${screen.id}/editor`, { headers: { Cookie: cookie } });
+          if (!editorResponse.ok) throw new Error(`editor load failed: ${editorResponse.status}`);
+          let editor = await editorResponse.json();
+          if (!Number.isInteger(Number(editor.draft?.revision)) || Number(editor.draft.revision) < 1) throw new Error('draft revision missing');
+          if ('templates' in editor || 'template_id' in editor.screen) throw new Error('template data leaked into editor contract');
+
+          const png = await sharp({ create: { width: 16, height: 16, channels: 4, background: { r: 16, g: 24, b: 40, alpha: 1 } } }).png().toBuffer();
+          const backgroundResponse = await fetch(`${base}/api/screens/${screen.id}/background`, {
+            method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/png', 'X-Draft-Revision': String(editor.draft.revision) }, body: png
+          });
+          if (!backgroundResponse.ok) throw new Error(`screen background upload failed: ${backgroundResponse.status}`);
+          const backgroundSaved = await backgroundResponse.json();
+          const backgroundUrl = backgroundSaved.draft?.settings?.background_image_url;
+          if (!/^\/site-assets\/screens\/background-[0-9a-f-]{36}\.png$/i.test(backgroundUrl || '')) throw new Error('screen background URL invalid');
+          const backgroundAsset = await fetch(`${base}${backgroundUrl}`);
+          if (!backgroundAsset.ok || Buffer.compare(Buffer.from(await backgroundAsset.arrayBuffer()), png) !== 0) throw new Error('screen background asset not served');
+          editor = backgroundSaved;
+
+          const draftPayload = {
+            revision: Number(editor.draft.revision),
+            rows: [{ id: 'ci-section', kind: 'section', name: 'CI раздел', enabled: true }],
+            settings: {
+              ...editor.draft.settings,
+              background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC', font_scale_percent: 100,
+              table_x: 56, table_y: 15, table_width_px: 1374, table_height_px: 925
+            },
+            screen: { location_id: screen.location_id, name: screen.name, resolution: screen.resolution, status: screen.status, active: screen.active }
+          };
+          const draftSave = await fetch(`${base}/api/screens/${screen.id}/draft`, { method: 'PUT', headers: jsonHeaders, body: JSON.stringify(draftPayload) });
+          if (!draftSave.ok) throw new Error(`draft save failed: ${draftSave.status}`);
+          const savedDraft = await draftSave.json();
+          if (Number(savedDraft.draft?.revision) !== Number(editor.draft.revision) + 1) throw new Error('draft revision did not increment');
+          const staleSave = await fetch(`${base}/api/screens/${screen.id}/draft`, { method: 'PUT', headers: jsonHeaders, body: JSON.stringify(draftPayload) });
+          if (staleSave.status !== 409) throw new Error(`stale editor write was not rejected: ${staleSave.status}`);
+
+          const cloneResponse = await fetch(`${base}/api/locations/${location.id}/screens`, {
+            method: 'POST', headers: jsonHeaders, body: JSON.stringify({ source_screen_id: screen.id })
+          });
+          if (cloneResponse.status !== 201) throw new Error(`screen clone failed: ${cloneResponse.status}`);
+          const clone = await cloneResponse.json();
+          if (clone.id === screen.id || clone.prepared_asset_key) throw new Error('screen clone is not independent');
+          const cloneEditor = await (await fetch(`${base}/api/screens/${clone.id}/editor`, { headers: { Cookie: cookie } })).json();
+          if (cloneEditor.draft.rows?.[0]?.name !== 'CI раздел' || cloneEditor.draft.settings?.background_image_url !== backgroundUrl) throw new Error('screen content clone failed');
+
+          const locationCloneResponse = await fetch(`${base}/api/locations/${location.id}/clone`, {
+            method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name: 'CI точка копия', address: 'CI clone', active: true })
+          });
+          if (locationCloneResponse.status !== 201) throw new Error(`location clone failed: ${locationCloneResponse.status}`);
+          const locationClone = await locationCloneResponse.json();
+          if (locationClone.id === location.id || locationClone.sftp_directory_id) throw new Error('location clone copied identity or SFTP');
+          const allScreens = await (await fetch(`${base}/api/screens`, { headers: { Cookie: cookie } })).json();
+          if (allScreens.filter((item) => item.location_id === locationClone.id).length !== 2) throw new Error('location monitor cloning failed');
+
+          const [facadeResponse, modelResponse, svgResponse] = await Promise.all([
+            fetch(`${base}/js/editor/renderer.js`),
+            fetch(`${base}/js/editor/renderer-model.js`),
+            fetch(`${base}/js/editor/renderer-svg.js`)
+          ]);
+          const [facadeSource, modelSource, svgSource] = await Promise.all([facadeResponse.text(), modelResponse.text(), svgResponse.text()]);
+          if (!facadeResponse.ok || !modelResponse.ok || !svgResponse.ok) throw new Error('canonical renderer modules not served');
+          if (!facadeSource.includes('renderer-model.js') || !facadeSource.includes('renderer-svg.js')) throw new Error('renderer facade contract missing');
+          if (!modelSource.includes('MENU_REFERENCE') || !modelSource.includes('table_width_px') || !modelSource.includes('autoReduced')) throw new Error('renderer model contract missing');
+          if (!svgSource.includes('buildTableSvg')) throw new Error('renderer SVG contract missing');
+          NODE
+      - name: Smoke test SFTP service
+        run: docker compose --project-name menu-tv-2-ci --env-file .env exec -T sftp sftpgo ping
+      - name: Show runtime status
+        if: always()
+        run: docker compose --project-name menu-tv-2-ci --env-file .env ps || true
+      - name: Show runtime logs on failure
+        if: failure()
+        run: docker compose --project-name menu-tv-2-ci --env-file .env logs --no-color --tail=200 || true
+      - name: Clean runtime stack
+        if: always()
+        run: |
+          docker compose --project-name menu-tv-2-ci --env-file .env down -v --remove-orphans || true
+          docker network rm menu-tv-2-proxy >/dev/null 2>&1 || true
+
+  release-and-cleanup:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - node-check
+      - browser-visual
+      - clean-install-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout verified main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
           fetch-depth: 0
-      - name: Restore verified lock and v1.3.1 metadata
+      - name: Resolve canonical versions
+        id: version
         shell: bash
         run: |
-          git fetch origin main
-          git show origin/main:package-lock.json > package-lock.json
-          node <<'NODE'
-          const fs = require('node:fs');
-          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
-          lock.version = '1.3.1';
-          lock.packages[''].version = '1.3.1';
-          fs.writeFileSync('package-lock.json', `${JSON.stringify(lock, null, 2)}\n`);
-          NODE
-          python3 <<'PY'
-          from pathlib import Path
-
-          changelog = Path('CHANGELOG.md')
-          changelog.write_text(changelog.read_text().replace('## [1.4.0] - 2026-08-23', '## [1.3.1] - 2026-08-23', 1))
-
-          installer = Path('menu-tv-2.sh')
-          text = installer.read_text().replace('SCRIPT_VERSION="1.4.0"', 'SCRIPT_VERSION="1.3.1"', 1)
-          anchor = '  delete_env_value "$env_file" TEMPLATE_BACKGROUND_MAX_BYTES\n'
-          additions = '  delete_env_value "$env_file" FRONTEND_ERROR_RETENTION_DAYS\n  delete_env_value "$env_file" FRONTEND_ERROR_MAX_ENTRIES\n'
-          if 'delete_env_value "$env_file" FRONTEND_ERROR_RETENTION_DAYS' not in text:
-              text = text.replace(anchor, anchor + additions, 1)
-          installer.write_text(text)
-          PY
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add package-lock.json CHANGELOG.md menu-tv-2.sh
-          git diff --cached --quiet && exit 0
-          git commit -m 'Repair v1.3.1 release metadata and dependency lock'
-          git push origin HEAD:agent/adversarial-hardening-1.4
+          VERSION="$(node -p "require('./package.json').version")"
+          LOCK_VERSION="$(node -p "require('./package-lock.json').version")"
+          ROOT_LOCK_VERSION="$(node -p "require('./package-lock.json').packages[''].version")"
+          SCRIPT_VERSION="$(sed -nE 's/^SCRIPT_VERSION="([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' menu-tv-2.sh | head -n 1)"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$SCRIPT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$LOCK_VERSION" == "$VERSION" ]]
+          [[ "$ROOT_LOCK_VERSION" == "$VERSION" ]]
+          grep -F "## [$VERSION]" CHANGELOG.md
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "script_version=$SCRIPT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "installer_tag=installer-v$SCRIPT_VERSION" >> "$GITHUB_OUTPUT"
+      - name: Verify and publish immutable application release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        shell: bash
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+            TAG_SHA="$(git rev-list -n 1 "$TAG")"
+            if [[ "$TAG_SHA" != "$GITHUB_SHA" ]]; then
+              if ! git diff --quiet "$TAG_SHA" "$GITHUB_SHA" -- .env.example Dockerfile compose.yaml package.json package-lock.json src infra; then
+                echo "Application tag $TAG already points to $TAG_SHA while verified runtime content changed at $GITHUB_SHA." >&2
+                echo "Increase package.json version before merging application/runtime changes." >&2
+                exit 1
+              fi
+              echo "Application runtime is identical to existing $TAG; only installer/docs/CI changed."
+            else
+              echo "Application tag $TAG already points to verified main."
+            fi
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "TV Menu 2 $TAG" --generate-notes
+          fi
+      - name: Verify and publish independent installer tag
+        env:
+          INSTALLER_TAG: ${{ steps.version.outputs.installer_tag }}
+        shell: bash
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$INSTALLER_TAG" >/dev/null 2>&1; then
+            git fetch --force origin "refs/tags/$INSTALLER_TAG:refs/tags/$INSTALLER_TAG"
+            if ! cmp -s menu-tv-2.sh <(git show "$INSTALLER_TAG:menu-tv-2.sh"); then
+              echo "Installer tag $INSTALLER_TAG already exists with different menu-tv-2.sh content." >&2
+              echo "Increase SCRIPT_VERSION before changing the installer again." >&2
+              exit 1
+            fi
+            echo "Installer tag $INSTALLER_TAG already contains the verified script."
+          else
+            git tag "$INSTALLER_TAG" "$GITHUB_SHA"
+            git push origin "refs/tags/$INSTALLER_TAG"
+          fi
+      - name: Remove every branch except main
+        shell: bash
+        run: |
+          git ls-remote --heads origin | while read -r _ ref; do
+            branch="${ref#refs/heads/}"
+            [[ "$branch" == main ]] && continue
+            echo "Deleting obsolete branch: $branch"
+            git push origin --delete "$branch"
+          done
