@@ -21,12 +21,14 @@ test('player is public while TV connection page remains admin protected', async 
   assert.match(connectHtml, /6-значный резервный код/);
 });
 
-test('offline player keeps only its own shell, context and same-origin assets', async () => {
+test('offline player refreshes its shell online and falls back to cache offline', async () => {
   const [worker, player] = await Promise.all([
     read('src/web/admin-ui/public/player-sw.js'),
     read('src/web/admin-ui/public/js/player/player.js')
   ]);
-  assert.match(worker, /tv-menu-player-shell-v1/);
+  assert.match(worker, /tv-menu-player-shell-v\d+/);
+  assert.match(worker, /networkFirstShell/);
+  assert.match(worker, /cache: 'no-cache'/);
   assert.match(worker, /PLAYER_CONTEXT = '\/api\/device\/player-context'/);
   assert.match(worker, /response\.status === 401 \|\| response\.status === 403[\s\S]*cache\.delete\(PLAYER_CONTEXT\)/);
   assert.match(worker, /url\.pathname\.startsWith\('\/site-assets\/'\)/);
@@ -56,6 +58,11 @@ test('runtime TV device settings are declared in env example', async () => {
   for (const key of [
     'DEVICE_ACTIVATION_TTL_MINUTES',
     'DEVICE_ACTIVATION_POLL_SECONDS',
+    'DEVICE_ACTIVATION_MAX_ATTEMPTS',
+    'DEVICE_ACTIVATION_WINDOW_MINUTES',
+    'DEVICE_ACTIVATION_LIMITER_MAX_ENTRIES',
+    'DEVICE_ACTIVATION_CLEANUP_MINUTES',
+    'DEVICE_ACTIVATION_RETENTION_HOURS',
     'DEVICE_SESSION_TTL_DAYS',
     'DEVICE_HEARTBEAT_WRITE_SECONDS',
     'PLAYER_REFRESH_SECONDS'
