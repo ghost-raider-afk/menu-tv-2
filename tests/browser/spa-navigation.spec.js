@@ -35,16 +35,24 @@ test('main menu and context submenu navigate inside one persistent document', as
   expect(await page.evaluate(() => window.__tvMenuSpaSentinel)).toBe(sentinel);
   await expect(page.locator('.ui-context-body .app-route-link')).toHaveCount(1);
   await expect(page.locator('.ui-context-body .app-route-link')).toHaveText(/Продукция/);
+  await expect(page.locator('.ui-context')).not.toHaveClass(/is-collapsed/);
+
+  await page.locator('.ui-context-body .app-route-link', { hasText: 'Продукция' }).click();
+  await expect(page).toHaveURL(/\/catalog\.html$/);
+  await expect(page.locator('.ui-context')).toHaveClass(/is-collapsed/);
+  expect(await page.evaluate(() => window.__tvMenuSpaSentinel)).toBe(sentinel);
 
   await page.locator('.ui-rail-button[aria-label="Настройки"]').click();
   await expect(page).toHaveURL(/\/settings\.html$/);
   await expect(page.locator('#site-settings-form')).toBeVisible();
+  await expect(page.locator('.ui-context')).not.toHaveClass(/is-collapsed/);
   expect(await page.evaluate(() => window.__tvMenuSpaSentinel)).toBe(sentinel);
 
   await page.getByRole('link', { name: /^SFTP$/ }).click();
   await expect(page).toHaveURL(/\/sftp-settings\.html$/);
   await expect(page.locator('#sftp-directory-form')).toBeVisible();
   await expect(page.locator('#sftp-file-list')).toBeAttached();
+  await expect(page.locator('.ui-context')).toHaveClass(/is-collapsed/);
   expect(await page.evaluate(() => window.__tvMenuSpaSentinel)).toBe(sentinel);
 
   expect(documentRequests).toEqual([]);
