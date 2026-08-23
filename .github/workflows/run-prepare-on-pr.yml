@@ -53,8 +53,10 @@ jobs:
               path.write_text(path.read_text().rstrip() + '\n')
           test_path = Path('tests/versioning.test.js')
           test = test_path.read_text()
-          test = re.sub(r"^    assert\.match\(changelog,.*$", "    assert.ok(changelog.includes(`## [${pkg.version}]`));", test, flags=re.M)
-          test = re.sub(r"^    assert\.match\(installer, new RegExp\(.*$", "    assert.ok(installer.includes(`SCRIPT_VERSION=\\\"${pkg.version}\\\"`));", test, flags=re.M)
+          test, changelog_count = re.subn(r"^\s*assert\.match\(changelog,.*$", "  assert.ok(changelog.includes(`## [${pkg.version}]`));", test, count=1, flags=re.M)
+          test, installer_count = re.subn(r"^\s*assert\.match\(installer, new RegExp\(.*$", "  assert.ok(installer.includes(`SCRIPT_VERSION=\\\"${pkg.version}\\\"`));", test, count=1, flags=re.M)
+          if changelog_count != 1 or installer_count != 1:
+              raise SystemExit(f'version assertion rewrite failed: changelog={changelog_count}, installer={installer_count}')
           test_path.write_text(test)
           PY
           bash -n menu-tv-2.sh
