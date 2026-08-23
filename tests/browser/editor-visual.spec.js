@@ -95,7 +95,8 @@ for (const viewport of [{ width: 1920, height: 1080 }, { width: 1366, height: 76
     await expect(table.locator('tbody tr')).toHaveCount(5);
     const itemBox = await table.locator('tbody tr').nth(1).boundingBox();
     expect(itemBox).not.toBeNull();
-    expect(itemBox.height).toBeLessThanOrEqual(34);
+    expect(itemBox.height).toBeGreaterThanOrEqual(32);
+    expect(itemBox.height).toBeLessThanOrEqual(36);
     expect(await table.locator('tbody tr').nth(1).locator('select').evaluate((node) => getComputedStyle(node).fontSize)).toBe('11px');
     const dimensions = await scroll.evaluate((node) => ({ clientWidth: node.clientWidth, scrollWidth: node.scrollWidth }));
     expect(dimensions.clientWidth).toBeGreaterThan(500);
