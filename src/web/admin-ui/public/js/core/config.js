@@ -10,6 +10,7 @@ export const API = Object.freeze({
   siteSettings: '/api/settings/site',
   animationSettings: '/api/settings/animation',
   notifications: '/api/notifications',
+  frontendErrors: '/api/diagnostics/frontend-errors',
   locations: '/api/locations',
   screens: '/api/screens',
   deviceResolve: '/api/device-admin/resolve',
