@@ -20,6 +20,7 @@ jobs:
       - name: Synchronize patch release metadata
         shell: bash
         run: |
+          # Deterministically synchronizes all release version owners and env migration contracts.
           node <<'NODE'
           const fs = require('node:fs');
           for (const file of ['package.json', 'package-lock.json']) {
