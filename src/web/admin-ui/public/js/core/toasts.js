@@ -38,6 +38,8 @@ function persistEvent({ message, severity, category, details }) {
       details: String(details || '').slice(0, 4000),
       page: `${window.location.pathname}${window.location.search}${window.location.hash}`.slice(0, 1000)
     })
+  }).then((response) => {
+    if (response.ok) window.dispatchEvent(new CustomEvent('menu-tv:event-recorded'));
   }).catch(() => undefined);
 }
 
