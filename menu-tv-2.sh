@@ -273,7 +273,7 @@ proxy_compose() {
 
 check_dependencies() {
   local tool
-  for tool in docker git tar openssl awk sed find install mktemp runuser od tr fold shuf dig cmp sort; do
+  for tool in docker git tar openssl awk sed find install mktemp runuser od tr fold shuf dig cmp sort readlink; do
     command_exists "$tool" || die "Не найдена команда: $tool"
   done
   docker info >/dev/null 2>&1 || die "Docker daemon недоступен."
@@ -574,6 +574,32 @@ install_launcher() {
   install -o root -g root -m 0755 "$INSTALL_DIR/menu-tv-2.sh" "$LAUNCHER_PATH"
 }
 
+running_installer_path() {
+  local source
+  if [[ -n "$TEMP_BACKUP_DIR" && -f "$TEMP_BACKUP_DIR/installer.sh" ]]; then
+    printf '%s\n' "$TEMP_BACKUP_DIR/installer.sh"
+    return
+  fi
+  source="$(readlink -f -- "${BASH_SOURCE[0]}")"
+  [[ -f "$source" ]] || die "Не удалось определить текущий файл установщика."
+  printf '%s\n' "$source"
+}
+
+sync_current_installer_into_project() {
+  local source owner
+  source="$(running_installer_path)"
+  owner="$(project_owner)"
+  id "$owner" >/dev/null 2>&1 || die "Не найден пользователь владельца проекта: $owner"
+  if [[ "$source" != "$INSTALL_DIR/menu-tv-2.sh" ]]; then
+    install -o "$owner" -g "$owner" -m 0750 "$source" "$INSTALL_DIR/menu-tv-2.sh"
+  fi
+  if [[ "$source" != "$LAUNCHER_PATH" ]]; then
+    install -o root -g root -m 0755 "$source" "$LAUNCHER_PATH"
+  else
+    chmod 0755 "$LAUNCHER_PATH"
+  fi
+}
+
 wait_for_database() {
   local attempt
   for attempt in $(seq 1 30); do
@@ -692,15 +718,19 @@ fetch_release_revision() {
 }
 
 create_temporary_backup() {
-  local with_database="${1:-false}"
+  local with_database="${1:-false}" installer_source
   [[ -d "$INSTALL_DIR/.git" ]] || die "Каталог исходников не является Git-репозиторием: $INSTALL_DIR"
   [[ -f "$INSTALL_DIR/.env" ]] || die "Отсутствует $INSTALL_DIR/.env"
+  installer_source="$(readlink -f -- "${BASH_SOURCE[0]}")"
+  [[ -f "$installer_source" ]] || die "Не удалось сохранить текущий установщик перед обновлением."
   TEMP_BACKUP_DIR="$(mktemp -d -t "${PROGRAM_NAME}.update.XXXXXX")"
   chmod 700 "$TEMP_BACKUP_DIR"
   log "Создание временной резервной копии исходников и .env"
   tar --exclude='./.git' --exclude='./.env' --exclude='./node_modules' -C "$INSTALL_DIR" -czf "$TEMP_BACKUP_DIR/source.tar.gz" .
   cp "$INSTALL_DIR/.env" "$TEMP_BACKUP_DIR/.env"
+  cp "$installer_source" "$TEMP_BACKUP_DIR/installer.sh"
   chmod 600 "$TEMP_BACKUP_DIR/.env"
+  chmod 700 "$TEMP_BACKUP_DIR/installer.sh"
   git -C "$INSTALL_DIR" rev-parse HEAD > "$TEMP_BACKUP_DIR/git-revision"
   if [[ -f "$PROXY_COMPOSE_FILE" ]]; then
     cp "$PROXY_COMPOSE_FILE" "$TEMP_BACKUP_DIR/proxy-compose.yaml"
@@ -741,7 +771,7 @@ restore_temporary_backup() {
   chmod 600 "$INSTALL_DIR/.env"
   git -C "$INSTALL_DIR" reset --hard "$(<"$TEMP_BACKUP_DIR/git-revision")"
   repair_permissions full
-  install_launcher
+  sync_current_installer_into_project
   if [[ -f "$TEMP_BACKUP_DIR/database.dump" ]]; then
     restore_database_exact "$TEMP_BACKUP_DIR/database.dump"
   fi
@@ -768,7 +798,7 @@ sync_existing_source() {
   git_as_project_owner -C "$INSTALL_DIR" clean -fd -e .env -e .installer-owner
   rm -f -- "$LEGACY_PROJECT_REF_FILE"
   repair_permissions
-  install_launcher
+  sync_current_installer_into_project
 }
 
 credentials_box_text() {
@@ -872,7 +902,7 @@ install_app() {
   write_new_env "$domain"
   validate_env
   repair_permissions full
-  install_launcher
+  sync_current_installer_into_project
   if ! setup_proxy "$acme_email" || ! build_and_start; then
     cleanup_failed_install
     die "Установка не завершилась. Исправьте ошибку и запустите установку заново."
@@ -925,6 +955,14 @@ update_app() {
 
   create_temporary_backup "$needs_database_backup"
   env_before="$TEMP_BACKUP_DIR/.env"
+
+  if [[ "$source_changed" == true ]]; then
+    if ! sync_existing_source "$remote_revision"; then
+      recover_failed_update
+    fi
+    [[ "$(installed_project_version)" == "$latest_version" ]] || recover_failed_update
+  fi
+
   ensure_sftp_env
   validate_env
   if ! cmp -s "$env_before" "$INSTALL_DIR/.env"; then
@@ -937,13 +975,6 @@ update_app() {
     return
   fi
 
-  if [[ "$source_changed" == true ]]; then
-    if ! sync_existing_source "$remote_revision"; then
-      recover_failed_update
-    fi
-    [[ "$(installed_project_version)" == "$latest_version" ]] || recover_failed_update
-  fi
-
   if [[ "$needs_proxy" == true ]]; then
     refresh_proxy || recover_failed_update
   fi
@@ -954,7 +985,11 @@ update_app() {
   fi
 
   if [[ "$needs_runtime" == false && "$env_changed" == false ]]; then
-    info "Обновлены служебные файлы до $latest_tag. Контейнеры, база данных и HTTPS не затрагивались."
+    if [[ "$needs_proxy" == true ]]; then
+      info "Обновлена конфигурация HTTPS-прокси до $latest_tag. Приложение и база данных не перезапускались."
+    else
+      info "Обновлены служебные файлы до $latest_tag. Контейнеры, база данных и HTTPS не затрагивались."
+    fi
     return
   fi
 
