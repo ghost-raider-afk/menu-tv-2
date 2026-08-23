@@ -32,7 +32,7 @@ const publicDir = path.join(__dirname, 'web', 'admin-ui', 'public');
 const protectedPages = [
   '/', '/index.html', '/locations.html', '/screens.html', '/catalog.html',
   '/screen-editor.html', '/profile.html', '/settings.html', '/sftp-settings.html',
-  '/animation.html', '/error-log.html', '/connect-tv.html'
+  '/animation.html', '/events.html', '/connect-tv.html'
 ];
 
 async function initialiseStore(store, config) {
@@ -61,8 +61,24 @@ async function cleanupDeviceActivations(store, config) {
   }
 }
 
+async function cleanupEvents(store, config) {
+  if (typeof store?.pruneEvents !== 'function') return 0;
+  try {
+    const removed = await store.pruneEvents({
+      retentionDays: config.eventJournalRetentionDays,
+      maxEntries: config.eventJournalMaxEntries
+    });
+    if (removed) logger.info('Expired event journal records removed', { removed });
+    return removed;
+  } catch (error) {
+    logger.warn('Event journal retention cleanup could not complete', { error });
+    return 0;
+  }
+}
+
 async function recoverRuntimeState(store, sftp, config) {
   await cleanupDeviceActivations(store, config);
+  await cleanupEvents(store, config);
   const requiredMethods = ['publishedInfo', 'removeStaged', 'cleanupStaging'];
   if (!requiredMethods.every((method) => typeof sftp?.[method] === 'function')) return;
   const publish = createPublishService({ store, sftp, config });
@@ -196,7 +212,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     });
   });
   const maintenanceTimer = setInterval(
-    () => void cleanupDeviceActivations(service.store, service.config),
+    () => {
+      void cleanupDeviceActivations(service.store, service.config);
+      void cleanupEvents(service.store, service.config);
+    },
     service.config.deviceActivationCleanupMinutes * 60 * 1000
   );
   maintenanceTimer.unref();
