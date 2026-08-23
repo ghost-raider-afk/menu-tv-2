@@ -15,6 +15,19 @@ async function waitForRouteReady(page) {
   await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
 }
 
+function encodeWindows1251(text) {
+  const table = new Map();
+  for (let code = 0xC0; code <= 0xFF; code += 1) table.set(String.fromCharCode(0x0410 + code - 0xC0), code);
+  table.set('Ё', 0xA8);
+  table.set('ё', 0xB8);
+  return Buffer.from([...text].map((char) => {
+    const code = char.charCodeAt(0);
+    if (code < 0x80) return code;
+    if (table.has(char)) return table.get(char);
+    throw new Error(`Unsupported Windows-1251 test character: ${char}`);
+  }));
+}
+
 test('products can be previewed, corrected and applied as one round-trip CSV', async ({ page }) => {
   await login(page);
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -75,7 +88,7 @@ test('products can be previewed, corrected and applied as one round-trip CSV', a
   await expect(page.locator('#product-import-apply')).toBeEnabled();
 
   await page.locator('#product-import-apply').click();
-  await expect(page.locator('#product-message')).toContainText('создано 1, обновлено 1');
+  await expect(page.locator('.system-toast').filter({ hasText: 'Импорт применён' })).toBeVisible();
   await expect(preview).toBeHidden();
 
   const productsResponse = await page.request.get('/api/catalog/products');
@@ -91,4 +104,28 @@ test('products can be previewed, corrected and applied as one round-trip CSV', a
 
   await page.request.delete(`/api/catalog/products/${product.id}`);
   if (created) await page.request.delete(`/api/catalog/products/${created.id}`);
+});
+
+test('Russian Excel Windows-1251 CSV is decoded before header validation', async ({ page }) => {
+  await login(page);
+  await page.goto('/catalog.html');
+  await waitForRouteReady(page);
+  const suffix = String(Date.now()).slice(-6);
+  const name = `Тест ${suffix}`;
+  const csv = `Название;Цена 1 л;Активна\r\n${name};123;да\r\n`;
+
+  await page.locator('#product-import-file').setInputFiles({
+    name: 'excel-cp1251.csv',
+    mimeType: 'text/csv',
+    buffer: encodeWindows1251(csv)
+  });
+
+  const preview = page.locator('#product-import-preview');
+  await expect(preview).toBeVisible();
+  await expect(preview.locator('[data-import-count="new"]')).toHaveText('1');
+  await expect(preview.locator('[data-import-count="error"]')).toHaveText('0');
+  await expect(page.locator('#product-import-body [data-import-field="name"]')).toHaveValue(name);
+  await expect(page.locator('.system-toast').filter({ hasText: '��������' })).toHaveCount(0);
+
+  await page.locator('#product-import-cancel').click();
 });
