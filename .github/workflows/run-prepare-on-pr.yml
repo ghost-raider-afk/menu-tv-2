@@ -47,9 +47,15 @@ jobs:
           rm -f .github/workflows/run-prepare-on-pr.yml
           python3 - <<'PY'
           from pathlib import Path
+          import re
           for name in ['README.md', '.github/workflows/check.yml']:
               path = Path(name)
               path.write_text(path.read_text().rstrip() + '\n')
+          test_path = Path('tests/versioning.test.js')
+          test = test_path.read_text()
+          test = re.sub(r"^    assert\.match\(changelog,.*$", "    assert.ok(changelog.includes(`## [${pkg.version}]`));", test, flags=re.M)
+          test = re.sub(r"^    assert\.match\(installer, new RegExp\(.*$", "    assert.ok(installer.includes(`SCRIPT_VERSION=\\\"${pkg.version}\\\"`));", test, flags=re.M)
+          test_path.write_text(test)
           PY
           bash -n menu-tv-2.sh
           git diff --check
