@@ -10,6 +10,9 @@ services:
     volumes:
       - menu-tv-2-db-data:/var/lib/postgresql/data
     restart: unless-stopped
+    cpus: ${DB_CPU_LIMIT}
+    mem_limit: ${DB_MEMORY_LIMIT}
+    pids_limit: ${DB_PIDS_LIMIT}
     networks:
       - menu-tv-2-internal
     healthcheck:
@@ -72,6 +75,13 @@ services:
     volumes:
       - menu-tv-2-sftp-data:/srv/menu-tv-sftp
     restart: unless-stopped
+    cpus: ${SFTP_CPU_LIMIT}
+    mem_limit: ${SFTP_MEMORY_LIMIT}
+    pids_limit: ${SFTP_PIDS_LIMIT}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     depends_on:
       db:
         condition: service_healthy
@@ -94,6 +104,16 @@ services:
     env_file:
       - .env
     restart: unless-stopped
+    cpus: ${APP_CPU_LIMIT}
+    mem_limit: ${APP_MEMORY_LIMIT}
+    pids_limit: ${APP_PIDS_LIMIT}
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     depends_on:
       db:
         condition: service_healthy
