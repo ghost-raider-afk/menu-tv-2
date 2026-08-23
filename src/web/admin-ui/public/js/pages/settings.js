@@ -4,7 +4,7 @@ import { state } from '../core/state.js';
 import { element, setMessage, setPending } from '../core/dom.js';
 import { applyPresentation } from '../core/presentation.js';
 import { refreshHeaderRoute } from '../components/header.js';
-import { loadNotifications, loadActivity, startNotificationPolling } from '../core/notifications.js';
+import { loadNotifications, startNotificationPolling } from '../core/notifications.js';
 
 function populateSiteForm(site) {
   element('site-app-name').value = site.app_name || site.application_name || '';
@@ -45,8 +45,6 @@ export function initialiseSettings() {
   const siteForm = element('site-settings-form');
   if (!(siteForm instanceof HTMLFormElement)) return;
   populateSiteForm(state.site);
-  void loadActivity().catch(() => undefined);
-  element('refresh-activity')?.addEventListener('click', () => { void loadActivity(); });
   element('upload-logo')?.addEventListener('click', () => uploadSiteAsset('logo'));
   element('upload-favicon')?.addEventListener('click', () => uploadSiteAsset('favicon'));
   siteForm.addEventListener('submit', async (event) => {
@@ -66,7 +64,7 @@ export function initialiseSettings() {
       applySiteSettings(site);
       startNotificationPolling();
       setMessage('site-settings-message', 'Настройки сайта сохранены.', 'success');
-      await Promise.all([loadNotifications(), loadActivity()]);
+      await loadNotifications();
     } catch (error) {
       setMessage('site-settings-message', error.message);
     } finally {
