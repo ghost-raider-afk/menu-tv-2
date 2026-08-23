@@ -6,13 +6,13 @@ import { migrateScreenNumbering } from './migrations/screen-numbering.js';
 import { migrateAnimationSettings } from './migrations/animation-settings.js';
 import { migrateDevicePlayer } from './migrations/device-player.js';
 import { migrateFrontendErrorJournal } from './migrations/frontend-error-journal.js';
+import { migrateEventJournal } from './migrations/event-journal.js';
 import { runMigrations } from './migrations/runner.js';
 import { seedDemoData } from './migrations/seed.js';
 import { createOverviewRepository } from './overview.js';
 import { createUsersRepository } from './users.js';
 import { createSettingsRepository } from './settings.js';
 import { createNotificationsRepository } from './notifications.js';
-import { createFrontendDiagnosticsRepository } from './frontend-diagnostics.js';
 import { createLocationsRepository } from './locations.js';
 import { createScreensRepository } from './screens.js';
 import { createCatalogRepository } from './catalog.js';
@@ -27,7 +27,8 @@ const MIGRATIONS = Object.freeze([
   { name: '004-screen-numbering', run: migrateScreenNumbering },
   { name: '005-animation-settings', run: migrateAnimationSettings },
   { name: '006-device-player', run: migrateDevicePlayer },
-  { name: '007-frontend-error-journal', run: migrateFrontendErrorJournal }
+  { name: '007-frontend-error-journal', run: migrateFrontendErrorJournal },
+  { name: '008-event-journal', run: migrateEventJournal }
 ]);
 
 function createRepositories(queryable) {
@@ -38,7 +39,6 @@ function createRepositories(queryable) {
     createUsersRepository(queryable),
     createSettingsRepository(queryable),
     createNotificationsRepository(queryable),
-    createFrontendDiagnosticsRepository(queryable),
     locations,
     createScreensRepository(queryable),
     createCatalogRepository(queryable),
