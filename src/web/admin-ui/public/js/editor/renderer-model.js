@@ -41,7 +41,6 @@ export const MENU_TABLE_STYLE = Object.freeze({
   separator: '#8B929A',
   secondaryText: '#C5CBD2',
   accentSecondaryText: '#DFC34F',
-  packagingBackground: '#121820',
   promotion: '#D92D35'
 });
 
@@ -298,40 +297,52 @@ export function buildRenderLayout(model, lines) {
     gapBefore: 0
   }));
   const scaleX = frame.width / MENU_REFERENCE.tableWidth;
+  const right = frame.x + frame.width;
   const secondaryPriceX = frame.x + (MENU_REFERENCE.secondaryPriceX - MENU_REFERENCE.tableX) * scaleX;
   const primaryPriceX = secondaryPriceX - MENU_REFERENCE.priceColumnGap * scaleX;
-
   return Object.freeze({
-    frame,
+    palette: buildMenuPalette(model.settings),
     horizontal: Object.freeze({
       left: frame.x,
-      right: frame.x + frame.width,
+      right,
       tableWidth: frame.width,
       scaleX,
       primaryPriceX,
-      secondaryPriceX,
-      nameWidth: primaryPriceX - frame.x
+      secondaryPriceX
     }),
     vertical: Object.freeze({
       top: frame.y,
       bottom: frame.y + frame.height,
-      availableHeight: available,
-      baseContentHeight: baseHeight,
-      requestedPercent: Math.round(requestedPercent * 10) / 10,
-      fitPercent: Math.round(fitPercent * 10) / 10,
-      effectivePercent: Math.round(effectivePercent * 10) / 10,
+      available,
+      requestedPercent,
+      effectivePercent,
+      autoReduced: effectivePercent + 0.01 < requestedPercent,
       scale,
       rowHeight,
-      usedHeight: lines.length * rowHeight,
       fits,
-      autoReduced: effectivePercent + 0.05 < requestedPercent,
       boxes: Object.freeze(boxes)
     }),
-    palette: buildMenuPalette(model.settings),
-    typography: fontDefinition(model.settings.font_family)
+    typography: Object.freeze(fontDefinition(model.settings.font_family))
   });
 }
 
-export function renderFingerprint(model) {
-  return JSON.stringify({ viewport: model.viewport, settings: model.settings, rows: model.rows });
+export function renderFingerprint(model, lines, layout) {
+  return JSON.stringify({
+    viewport: model.viewport,
+    settings: model.settings,
+    rows: model.rows,
+    lines,
+    horizontal: layout.horizontal,
+    vertical: {
+      top: layout.vertical.top,
+      bottom: layout.vertical.bottom,
+      requestedPercent: layout.vertical.requestedPercent,
+      effectivePercent: layout.vertical.effectivePercent,
+      autoReduced: layout.vertical.autoReduced,
+      rowHeight: layout.vertical.rowHeight,
+      fits: layout.vertical.fits
+    },
+    typography: layout.typography,
+    palette: layout.palette
+  });
 }
