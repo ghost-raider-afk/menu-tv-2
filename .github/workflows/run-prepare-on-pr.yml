@@ -1,0 +1,53 @@
+name: run-prepare-on-pr
+
+on:
+  pull_request:
+    branches:
+      - feature/device-player-activation
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.head_ref == 'agent/consolidate-single-main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout working branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/consolidate-single-main
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Extract and run prepared migration
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path('.github/workflows/prepare-single-main.yml').read_text().splitlines()
+          start = next(i for i, line in enumerate(source) if line.strip() == "python3 <<'PY'") + 1
+          end = next(i for i in range(start, len(source)) if source[i].strip() == 'PY')
+          body = []
+          for line in source[start:end]:
+              body.append(line[10:] if line.startswith('          ') else line)
+          Path('/tmp/prepare_single_main.py').write_text('\n'.join(body) + '\n')
+          PY
+          python3 /tmp/prepare_single_main.py
+          rm -f .github/workflows/run-prepare-on-pr.yml
+          bash -n menu-tv-2.sh
+          git diff --check
+          npm ci
+          npm run check
+      - name: Commit generated migration
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'Adopt single-main release versioning'
+          git push origin HEAD:agent/consolidate-single-main
