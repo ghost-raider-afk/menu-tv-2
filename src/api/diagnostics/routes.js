@@ -1,6 +1,5 @@
 import express from 'express';
 import { ValidationError } from '../../shared/errors.js';
-import { activity } from '../helpers.js';
 
 const ERROR_TYPES = new Set(['error', 'unhandledrejection', 'api-network', 'api-response', 'application']);
 
@@ -34,35 +33,43 @@ export function createDiagnosticsRouter({ store, config }) {
   const router = express.Router();
 
   router.get('/frontend-errors', async (request, response) => {
+    const items = await store.listEvents({
+      limit: request.query.limit,
+      severity: 'error',
+      category: 'interface',
+      query: request.query.q
+    });
     response.json({
-      items: await store.listFrontendErrors(request.query.limit),
-      retention_days: config.frontendErrorRetentionDays,
-      max_entries: config.frontendErrorMaxEntries
+      items,
+      retention_days: config.eventJournalRetentionDays,
+      max_entries: config.eventJournalMaxEntries
     });
   });
 
   router.post('/frontend-errors', async (request, response) => {
     const input = frontendErrorInput(request.body);
-    await store.recordFrontendError({
-      ...input,
-      user_agent: text(request.get('user-agent'), 1000),
-      username: request.session.sub
-    }, {
-      retentionDays: config.frontendErrorRetentionDays,
-      maxEntries: config.frontendErrorMaxEntries
+    await store.recordActivity({
+      actor_username: request.session.sub,
+      action: `frontend.${input.error_type}`,
+      entity_type: 'frontend_error',
+      entity_id: null,
+      message: input.message,
+      severity: 'error',
+      category: 'interface',
+      details: input.stack,
+      metadata: {
+        page: input.page,
+        source: input.source,
+        line_number: input.line_number,
+        column_number: input.column_number,
+        user_agent: text(request.get('user-agent'), 1000)
+      }
+    });
+    await store.pruneEvents({
+      retentionDays: config.eventJournalRetentionDays,
+      maxEntries: config.eventJournalMaxEntries
     });
     response.status(204).end();
-  });
-
-  router.delete('/frontend-errors', async (request, response) => {
-    const removed = await store.clearFrontendErrors();
-    await activity(store, request, {
-      action: 'diagnostics.frontend_errors.cleared',
-      entity_type: 'frontend_error_journal',
-      entity_id: null,
-      message: `Очищен журнал ошибок интерфейса (${removed}).`
-    });
-    response.json({ removed });
   });
 
   return router;
