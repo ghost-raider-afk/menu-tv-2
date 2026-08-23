@@ -9,10 +9,31 @@ function applyTypography(stage, layout) {
   svg.dataset.fontKey = layout.typography.key;
 }
 
+function markMotionTarget(node, kind, order = null, count = null) {
+  if (!(node instanceof SVGElement)) return;
+  node.dataset.motion = kind;
+  if (Number.isInteger(order)) node.dataset.motionOrder = String(order);
+  if (Number.isInteger(count) && count > 0) node.dataset.motionCount = String(count);
+}
+
 function markMotionTargets(stage) {
-  stage.querySelectorAll('g.table-section').forEach((node) => { node.dataset.motion = 'section'; });
-  stage.querySelectorAll('g.table-item, g.table-packaging').forEach((node) => { node.dataset.motion = 'item'; });
-  stage.querySelectorAll('text.price, text.packaging-price').forEach((node) => { node.dataset.motion = 'price'; });
+  const sections = [...stage.querySelectorAll('g.table-section')];
+  sections.forEach((node, index) => markMotionTarget(node, 'section', index, sections.length));
+
+  const rows = [...stage.querySelectorAll('g.table-item, g.table-packaging')];
+  rows.forEach((row, index) => {
+    if (row.classList.contains('table-packaging')) {
+      markMotionTarget(row, 'item', index, rows.length);
+      return;
+    }
+    const content = row.querySelector(':scope > g.table-item-content');
+    const promotion = row.querySelector(':scope > g.promotion-badge');
+    markMotionTarget(content, 'item', index, rows.length);
+    markMotionTarget(promotion, 'promotion', index, rows.length);
+  });
+
+  const prices = [...stage.querySelectorAll('text.price, text.packaging-price')];
+  prices.forEach((node, index) => markMotionTarget(node, 'price', index, prices.length));
 }
 
 function backgroundStyle(layer, model, palette) {
