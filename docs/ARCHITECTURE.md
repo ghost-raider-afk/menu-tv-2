@@ -277,7 +277,10 @@ Startup reconciliation восстанавливает незавершённые
 - screen resolution limits;
 - image pixel limits;
 - site asset limits;
-- monitor background limit.
+- monitor background limit;
+- Docker memory/PID limits для приложения, PostgreSQL и SFTPGo.
+
+CPU-квоты контейнеров не задаются. Ключи `*_CPU_LIMIT` считаются устаревшими и удаляются установщиком из существующего `.env`; ограничения памяти и количества процессов остаются обязательной частью hardening.
 
 Код не должен иметь второй production-default для значения, которое объявлено в `.env`.
 

@@ -154,6 +154,29 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Check installer syntax
         run: bash -n menu-tv-2.sh
+      - name: Check legacy CPU environment cleanup
+        shell: bash
+        run: |
+          TEST_ENV_FILE="$(mktemp)"
+          trap 'rm -f -- "$TEST_ENV_FILE"' EXIT
+          printf '%s\n' \
+            'APP_CPU_LIMIT=2.0' \
+            'APP_MEMORY_LIMIT=768m' \
+            'APP_PIDS_LIMIT=256' \
+            'DB_CPU_LIMIT=2.0' \
+            'DB_MEMORY_LIMIT=1g' \
+            'DB_PIDS_LIMIT=256' \
+            'SFTP_CPU_LIMIT=1.0' \
+            'SFTP_MEMORY_LIMIT=512m' \
+            'SFTP_PIDS_LIMIT=256' > "$TEST_ENV_FILE"
+          TEST_ENV_FILE="$TEST_ENV_FILE" bash -c '
+            source ./menu-tv-2.sh
+            cleanup_obsolete_env "$TEST_ENV_FILE"
+          '
+          ! grep -Eq '^[A-Z0-9_]*CPU_LIMIT=' "$TEST_ENV_FILE"
+          for key in APP_MEMORY_LIMIT APP_PIDS_LIMIT DB_MEMORY_LIMIT DB_PIDS_LIMIT SFTP_MEMORY_LIMIT SFTP_PIDS_LIMIT; do
+            grep -Eq "^${key}=" "$TEST_ENV_FILE"
+          done
       - name: Check stable release installer
         run: |
           bash menu-tv-2.sh help | grep -F 'Канал обновлений: стабильные GitHub Releases'
@@ -171,6 +194,13 @@ jobs:
           ! grep -q 'FRONTEND_ERROR_RETENTION_DAYS' .env.example
           ! grep -q 'FRONTEND_ERROR_MAX_ENTRIES' .env.example
           ! grep -q 'TEMPLATE_BACKGROUND_MAX_BYTES' .env.example
+          ! grep -Eq '^[A-Z0-9_]*CPU_LIMIT=' .env.example
+          ! grep -Eq '^[[:space:]]*cpus:' compose.yaml
+          for key in APP_MEMORY_LIMIT APP_PIDS_LIMIT DB_MEMORY_LIMIT DB_PIDS_LIMIT SFTP_MEMORY_LIMIT SFTP_PIDS_LIMIT; do
+            grep -Eq "^${key}=" .env.example
+          done
+          test "$(grep -Ec '^[[:space:]]+mem_limit:' compose.yaml)" -eq 3
+          test "$(grep -Ec '^[[:space:]]+pids_limit:' compose.yaml)" -eq 3
       - name: Check proxy socket isolation
         run: |
           grep -F 'tcp://docker-socket-proxy:2375' infra/traefik-compose.yaml
