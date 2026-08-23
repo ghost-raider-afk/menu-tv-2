@@ -47,8 +47,9 @@ async function initialiseStore(store, config) {
 }
 
 async function cleanupDeviceActivations(store, config) {
-  if (typeof store?.deleteExpiredDeviceActivations !== 'function') return 0;
-  const cutoff = new Date(Date.now() - config.deviceActivationRetentionHours * 60 * 60 * 1000).toISOString();
+  const retentionHours = Number(config?.deviceActivationRetentionHours);
+  if (typeof store?.deleteExpiredDeviceActivations !== 'function' || !Number.isFinite(retentionHours) || retentionHours < 1) return 0;
+  const cutoff = new Date(Date.now() - retentionHours * 60 * 60 * 1000).toISOString();
   try {
     const removed = await store.deleteExpiredDeviceActivations(cutoff);
     if (removed) logger.info('Expired TV activation records removed', { removed });
