@@ -17,12 +17,13 @@ async function seedScreen() {
      VALUES ($1, '', TRUE, $2, $2) RETURNING id`,
     [`Точка ${crypto.randomUUID()}`, now]
   );
+  const screenName = `ТВ ${crypto.randomUUID()}`;
   const screen = await pool.query(
     `INSERT INTO screens (location_id, location_number, name, resolution, status, active, created_at, updated_at)
      VALUES ($1, 1, $2, '1920×1080', 'draft', TRUE, $3, $3) RETURNING id`,
-    [location.rows[0].id, `ТВ ${crypto.randomUUID()}`, now]
+    [location.rows[0].id, screenName, now]
   );
-  return { locationId: Number(location.rows[0].id), screenId: Number(screen.rows[0].id) };
+  return { locationId: Number(location.rows[0].id), screenId: Number(screen.rows[0].id), screenName };
 }
 
 test.before(async () => {
@@ -36,7 +37,7 @@ test.after(async () => {
 
 test('TV activation can be approved, consumed and resolved as an active device session', async () => {
   const repository = createDevicesRepository(pool);
-  const { screenId } = await seedScreen();
+  const { screenId, screenName } = await seedScreen();
   const activationId = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 60_000).toISOString();
   const scanHash = crypto.randomBytes(32).toString('hex');
@@ -83,7 +84,8 @@ test('TV activation can be approved, consumed and resolved as an active device s
   const session = await repository.getActiveDeviceSessionByHash(rawTokenHash);
   assert.equal(session.device_id, device.id);
   assert.equal(session.screen_id, screenId);
-  assert.equal(session.screen_name, 'ТВ 1');
+  assert.equal(session.screen_name, screenName);
+  assert.equal(session.device_label, 'ТВ 1');
 });
 
 test('re-authorizing a screen revokes the old device before a replacement is created', async () => {
