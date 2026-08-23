@@ -81,10 +81,11 @@ test('authenticated navigation uses one persistent client-side shell', async () 
   assert.doesNotMatch(screens, /window\.location\.assign/);
 });
 
-test('monitor editor owns one left-aligned exclusive command bar and one canonical renderer', async () => {
-  const [rows, preview, finalImage, renderer, editorCss, editorHtml, editorJs, tablesCss] = await Promise.all([
+test('monitor editor owns one compact command bar, in-flow settings and one modular canonical renderer', async () => {
+  const [rows, preview, finalImage, facade, model, svg, editorCss, editorHtml, editorJs, tablesCss] = await Promise.all([
     read('js/editor/rows.js'), read('js/editor/preview.js'), read('js/editor/final-image.js'), read('js/editor/renderer.js'),
-    read('css/editor/editor.css'), read('screen-editor.html'), read('js/editor/editor.js'), read('css/tables.css')
+    read('js/editor/renderer-model.js'), read('js/editor/renderer-svg.js'), read('css/editor/editor.css'), read('screen-editor.html'),
+    read('js/editor/editor.js'), read('css/tables.css')
   ]);
   assert.match(rows, /editor-menu-editor-table/);
   assert.match(rows, /<th>Данные из базы<\/th>/);
@@ -92,31 +93,34 @@ test('monitor editor owns one left-aligned exclusive command bar and one canonic
   assert.match(rows, /<th>1,5 л<\/th>/);
   assert.match(preview, /buildTableSvg/);
   assert.match(finalImage, /buildTableSvg/);
-  assert.match(renderer, /formatProductMetadata/);
-  assert.match(renderer, /formatStrength\(product\?\.strength/);
-  assert.match(renderer, /tableX: 56/);
-  assert.match(renderer, /tableWidth: 1374/);
-  assert.match(renderer, /tableHeight: 925/);
-  assert.match(renderer, /tableFrame\(model\)/);
-  assert.match(renderer, /table_width_px/);
-  assert.match(renderer, /table_height_px/);
-  assert.match(renderer, /viewBox="0 0 \$\{model\.viewport\.width\} \$\{model\.viewport\.height\}"/);
-  assert.doesNotMatch(renderer, /verticalSeparatorsMarkup/);
+  assert.match(facade, /renderer-model\.js/);
+  assert.match(facade, /renderer-svg\.js/);
+  assert.match(model, /formatProductMetadata/);
+  assert.match(model, /formatStrength\(product\?\.strength/);
+  assert.match(model, /tableX: 56/);
+  assert.match(model, /tableWidth: 1374/);
+  assert.match(model, /tableHeight: 925/);
+  assert.match(model, /tableFrame\(model\)/);
+  assert.match(model, /table_width_px/);
+  assert.match(model, /table_height_px/);
+  assert.match(svg, /export function buildTableSvg/);
+  assert.match(svg, /viewBox="0 0 \$\{model\.viewport\.width\} \$\{model\.viewport\.height\}"/);
+  assert.doesNotMatch(svg, /verticalSeparatorsMarkup/);
   assert.match(editorCss, /\.editor-commandbar\{position:sticky/);
-  assert.match(editorCss, /\.editor-commandbar-tools\{[^}]*justify-content:flex-start/);
-  assert.match(editorCss, /\.editor-commandbar-menus\{display:flex/);
-  assert.match(editorCss, /\.editor-tool-popover\{[^}]*left:0/);
-  assert.match(editorCss, /\.editor-primary-actions\{[^}]*margin-left:auto/);
-  assert.match(editorCss, /\.editor-menu-editor-table tbody tr\{height:27px/);
-  assert.match(editorCss, /height:22px/);
+  assert.match(editorCss, /\.editor-workarea\{display:grid/);
+  assert.match(editorCss, /\.editor-settings-panel\{position:sticky/);
+  assert.match(editorCss, /\.editor-settings-section>summary/);
+  assert.match(editorCss, /:focus-visible/);
+  assert.match(editorCss, /@media\(pointer:coarse\)/);
+  assert.doesNotMatch(editorCss, /\.editor-tool-popover/);
   assert.doesNotMatch(editorCss, /!important|\.tv-board-table/);
   assert.match(editorHtml, /class="editor-commandbar"/);
-  assert.match(editorHtml, /class="editor-commandbar-menus"/);
+  assert.match(editorHtml, /class="settings-card editor-settings-panel"/);
+  assert.match(editorHtml, /<details class="editor-settings-section editor-tool-menu"/);
   assert.match(editorHtml, /id="editor-sftp-path"/);
+  assert.doesNotMatch(editorHtml, /editor-tool-popover|editor-commandbar-menus/);
   assert.doesNotMatch(editorHtml, />Доставка<\/summary>|editor-source-file|editor-upload|JPEG вручную/);
   assert.match(editorHtml, /id="editor-save"[^>]*>Сохранить<\/button>\s*<button[^>]*id="editor-publish"[^>]*>Опубликовать<\/button>/);
-  assert.match(editorJs, /bindExclusiveToolMenus/);
-  assert.match(editorJs, /other\.open = false/);
   assert.match(editorJs, /canLeave\(\)/);
   assert.match(editorJs, /dispose\(\)/);
   assert.match(editorJs, /removeEventListener\('beforeunload'/);
@@ -132,6 +136,15 @@ test('monitor editor owns one left-aligned exclusive command bar and one canonic
   assert.doesNotMatch(editorHtml, /editor-template|Использовать шаблон|ШАБЛОН/);
   assert.doesNotMatch(editorJs, /20 МБ/);
   assert.doesNotMatch(tablesCss, /menu-preview|editor-menu-table/);
+});
+
+test('catalog page delegates CSV import workflow to a dedicated module', async () => {
+  const [catalog, importer] = await Promise.all([read('js/pages/catalog.js'), read('js/catalog/import-preview.js')]);
+  assert.match(catalog, /initialiseProductImport/);
+  assert.doesNotMatch(catalog, /function importRowMarkup|function scheduleImportValidation/);
+  assert.match(importer, /function importRowMarkup/);
+  assert.match(importer, /Цена 1,5 л, расчётная/);
+  assert.match(importer, /function scheduleImportValidation/);
 });
 
 test('login uses the TV Menu 1 composition and seven logo sizes without a wrong first frame', async () => {
