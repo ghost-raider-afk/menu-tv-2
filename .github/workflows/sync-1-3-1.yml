@@ -17,10 +17,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: agent/adversarial-hardening-1.4
-      - name: Synchronize patch release metadata
+          fetch-depth: 0
+      - name: Restore verified dependency lock and synchronize release metadata
         shell: bash
         run: |
-          # Deterministically synchronizes all release version owners and env migration contracts.
+          git fetch origin main
+          git show origin/main:package-lock.json > package-lock.json
           node <<'NODE'
           const fs = require('node:fs');
           for (const file of ['package.json', 'package-lock.json']) {
@@ -42,9 +44,12 @@ jobs:
           text = installer.read_text()
           text = text.replace('SCRIPT_VERSION="1.4.0"', 'SCRIPT_VERSION="1.3.1"', 1)
           anchor = '  delete_env_value "$env_file" TEMPLATE_BACKGROUND_MAX_BYTES\n'
-          replacement = anchor + '  delete_env_value "$env_file" FRONTEND_ERROR_RETENTION_DAYS\n  delete_env_value "$env_file" FRONTEND_ERROR_MAX_ENTRIES\n'
+          additions = (
+              '  delete_env_value "$env_file" FRONTEND_ERROR_RETENTION_DAYS\n'
+              '  delete_env_value "$env_file" FRONTEND_ERROR_MAX_ENTRIES\n'
+          )
           if 'delete_env_value "$env_file" FRONTEND_ERROR_RETENTION_DAYS' not in text:
-              text = text.replace(anchor, replacement, 1)
+              text = text.replace(anchor, anchor + additions, 1)
           installer.write_text(text)
 
           workflow = Path('.github/workflows/check.yml')
@@ -56,6 +61,8 @@ jobs:
           canonical = "          ! grep -q 'TEMPLATE_BACKGROUND_MAX_BYTES' .env.example\n"
           if "! grep -q 'FRONTEND_ERROR_RETENTION_DAYS' .env.example" not in text:
               text = text.replace(canonical, canonical + "          ! grep -q 'FRONTEND_ERROR_RETENTION_DAYS' .env.example\n          ! grep -q 'FRONTEND_ERROR_MAX_ENTRIES' .env.example\n")
+          text = text.replace("!css.includes('./pages/error-log.css')", "!css.includes('./pages/events.css')")
+          text = text.replace("const journalResponse = await fetch(`${base}/api/diagnostics/frontend-errors?limit=5`, { headers: { Cookie: cookie } });\n          if (!journalResponse.ok || !(await journalResponse.json()).items.some((item) => item.message === 'CI frontend journal probe')) throw new Error('frontend journal read failed');", "const journalResponse = await fetch(`${base}/api/notifications/events?limit=5&severity=error&category=interface`, { headers: { Cookie: cookie } });\n          const journalBody = await journalResponse.json();\n          if (!journalResponse.ok || !journalBody.items.some((item) => item.message === 'CI frontend journal probe' && item.severity === 'error' && item.category === 'interface')) throw new Error('event journal read failed');")
           workflow.write_text(text)
           PY
       - name: Commit synchronized release metadata
@@ -65,5 +72,5 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add package.json package-lock.json CHANGELOG.md menu-tv-2.sh .github/workflows/check.yml
           git diff --cached --quiet && exit 0
-          git commit -m 'Prepare TV Menu 2 v1.3.1'
+          git commit -m 'Prepare TV Menu 2 v1.3.1 release gate'
           git push origin HEAD:agent/adversarial-hardening-1.4
