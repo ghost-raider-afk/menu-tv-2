@@ -75,6 +75,21 @@ export function createNotificationsRouter({ store, config }) {
     response.status(201).json(event);
   });
 
+  router.delete('/events', async (request, response) => {
+    const deletedCount = await store.clearEvents();
+    const auditEvent = await store.recordActivity({
+      actor_username: request.session.sub,
+      action: 'events.cleared',
+      entity_type: 'event_journal',
+      entity_id: null,
+      message: 'Журнал событий очищен',
+      severity: 'info',
+      category: 'system',
+      metadata: { deleted_count: deletedCount }
+    });
+    response.json({ deleted_count: deletedCount, audit_event: auditEvent });
+  });
+
   router.post('/read', async (_request, response) => response.json({ marked_read: await store.markNotificationsRead() }));
 
   return router;
