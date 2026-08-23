@@ -3,14 +3,26 @@ import { isoNow, normaliseActivityEvent } from './helpers.js';
 const SEVERITIES = new Set(['success', 'warning', 'error', 'info']);
 const CATEGORY_PATTERN = /^[a-z][a-z0-9_-]{0,39}$/;
 
-function severity(value) {
-  const normalized = String(value || 'info').toLowerCase();
-  return SEVERITIES.has(normalized) ? normalized : 'info';
+function severity(value, fallback = 'info') {
+  const normalized = String(value || fallback).toLowerCase();
+  return SEVERITIES.has(normalized) ? normalized : fallback;
 }
 
-function category(value) {
-  const normalized = String(value || 'system').toLowerCase();
-  return CATEGORY_PATTERN.test(normalized) ? normalized : 'system';
+function category(value, fallback = 'system') {
+  const normalized = String(value || fallback).toLowerCase();
+  return CATEGORY_PATTERN.test(normalized) ? normalized : fallback;
+}
+
+function categoryFromAction(action) {
+  const source = String(action || '').toLowerCase();
+  if (source.startsWith('auth.')) return 'auth';
+  if (source.startsWith('catalog.')) return 'catalog';
+  if (source.startsWith('sftp.')) return 'sftp';
+  if (source.startsWith('screen.') || source.startsWith('location.')) return 'monitors';
+  if (source.startsWith('device.')) return 'tv';
+  if (source.startsWith('settings.') || source.startsWith('profile.')) return 'settings';
+  if (source.startsWith('frontend.') || source.startsWith('ui.')) return 'interface';
+  return 'system';
 }
 
 function safeLimit(value, fallback = 20) {
@@ -26,10 +38,12 @@ export function createNotificationsRepository(pool) {
       entity_id = null,
       message,
       metadata = {},
-      severity: eventSeverity = 'info',
-      category: eventCategory = 'system',
+      severity: eventSeverity = null,
+      category: eventCategory = null,
       details = ''
     }) {
+      const resolvedSeverity = eventSeverity === null || eventSeverity === undefined ? 'success' : severity(eventSeverity);
+      const resolvedCategory = eventCategory === null || eventCategory === undefined ? categoryFromAction(action) : category(eventCategory);
       const { rows } = await pool.query(
         `INSERT INTO activity_events (
           actor_username, action, entity_type, entity_id, message, metadata, created_at, severity, category, details
@@ -42,8 +56,8 @@ export function createNotificationsRepository(pool) {
           message,
           JSON.stringify(metadata),
           isoNow(),
-          severity(eventSeverity),
-          category(eventCategory),
+          resolvedSeverity,
+          resolvedCategory,
           String(details || '').slice(0, 12000)
         ]
       );
