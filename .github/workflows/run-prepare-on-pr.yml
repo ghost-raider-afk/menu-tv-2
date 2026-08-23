@@ -45,6 +45,12 @@ jobs:
           PY
           python3 /tmp/prepare_single_main.py
           rm -f .github/workflows/run-prepare-on-pr.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in ['README.md', '.github/workflows/check.yml']:
+              path = Path(name)
+              path.write_text(path.read_text().rstrip() + '\n')
+          PY
           bash -n menu-tv-2.sh
           git diff --check
           npm ci
