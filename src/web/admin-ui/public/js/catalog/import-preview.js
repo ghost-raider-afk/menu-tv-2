@@ -1,6 +1,7 @@
 import { API } from '../core/config.js';
 import { api } from '../core/api.js';
 import { element, setMessage, clearMessage, setPending } from '../core/dom.js';
+import { decodeCsvFile } from './csv-decoder.js';
 
 const IMPORT_STATUS_LABELS = Object.freeze({ new: 'Новая', changed: 'Изменена', unchanged: 'Без изменений', error: 'Ошибка', excluded: 'Исключена' });
 const IMPORT_FIELDS = Object.freeze(['id', 'name', 'producer', 'characteristics', 'strength', 'price_primary', 'alcoholic', 'beverage_color', 'filtration', 'active']);
@@ -195,7 +196,7 @@ async function previewProductsFile(file) {
   setPending(button, true, 'Читаем файл…');
   clearMessage('product-message');
   try {
-    const csv = await file.text();
+    const csv = await decodeCsvFile(file);
     importPreview = await api.post(API.productsImportPreview, { csv });
     importEditRevision += 1;
     renderImportPreview();
