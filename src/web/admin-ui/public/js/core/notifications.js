@@ -4,15 +4,20 @@ import { state } from './state.js';
 import { element } from './dom.js';
 import { formatDate } from './presentation.js';
 
+const SEVERITY_LABELS = Object.freeze({ success: 'Успешно', warning: 'Предупреждение', error: 'Ошибка', info: 'Информация' });
+const CATEGORY_LABELS = Object.freeze({ interface: 'Интерфейс', catalog: 'Каталог', monitors: 'Мониторы', tv: 'ТВ', sftp: 'SFTP', auth: 'Авторизация', settings: 'Настройки', system: 'Система' });
+
 function eventRow(event) {
   const row = document.createElement('article');
-  row.className = 'event-row';
+  row.className = `event-row is-${event.severity || 'info'}`;
   const message = document.createElement('p');
   message.className = 'event-message';
   message.textContent = event.message;
   const details = document.createElement('p');
   details.className = 'event-details';
-  details.textContent = `${event.actor_username} · ${formatDate(event.created_at)}`;
+  const category = CATEGORY_LABELS[event.category] || event.category || 'Система';
+  const severity = SEVERITY_LABELS[event.severity] || event.severity || 'Информация';
+  details.textContent = `${severity} · ${category} · ${event.actor_username} · ${formatDate(event.created_at)}`;
   row.append(message, details);
   return row;
 }
@@ -38,13 +43,6 @@ export async function loadNotifications(limit = 20) {
   return result;
 }
 
-export async function loadActivity() {
-  const result = await api.get(`${API.notifications}?limit=100`);
-  renderEvents(document.querySelector('[data-activity-list]'), document.querySelector('[data-activity-empty]'), result.items);
-  updateBadge(result.unread_count);
-  return result;
-}
-
 export function startNotificationPolling() {
   if (state.notificationTimer) window.clearInterval(state.notificationTimer);
   const seconds = Number(state.site?.dashboard_refresh_seconds) || 45;
@@ -59,6 +57,12 @@ export function initialiseNotifications() {
   if (!(button instanceof HTMLButtonElement) || !panel) return;
   void loadNotifications().catch(() => undefined);
   startNotificationPolling();
+
+  const refreshFromEvent = () => {
+    if (state.user?.notifications_enabled !== false) void loadNotifications().catch(() => undefined);
+  };
+  window.addEventListener('menu-tv:event-recorded', refreshFromEvent);
+
   button.addEventListener('click', () => {
     const opens = panel.classList.contains('is-hidden');
     panel.classList.toggle('is-hidden', !opens);
@@ -74,7 +78,6 @@ export function initialiseNotifications() {
     try {
       await api.post(`${API.notifications}/read`);
       await loadNotifications();
-      if (document.querySelector('[data-activity-list]')) await loadActivity();
     } catch {
       // Scheduled refresh retries later.
     }

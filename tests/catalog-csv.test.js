@@ -16,9 +16,10 @@ const PRODUCT = Object.freeze({
   active: true
 });
 
-test('product CSV export is Excel-friendly UTF-8 and round-trips all editable fields', () => {
+test('product CSV export marks 1.5 l price as calculated and round-trips editable fields', () => {
   const csv = productsToCsv([PRODUCT]);
   assert.ok(csv.startsWith('\uFEFFID;Название;Производитель;'));
+  assert.match(csv, /Цена 1,5 л \(расчётная\)/);
   assert.match(csv, /"СНЕЖНЫЙ ЭЛЬ; особый"/);
   assert.match(csv, /"ООО ""Пивоварня"""/);
   assert.match(csv, /;240;360;да;светлый;фильтрованное;да/);
@@ -37,6 +38,15 @@ test('product CSV export is Excel-friendly UTF-8 and round-trips all editable fi
     filtration: 'filtered',
     active: true
   });
+});
+
+test('secondary CSV price is display-only and cannot override the calculated value', () => {
+  const [entry] = productsFromCsv('Название;Цена 1 л;Цена 1,5 л (расчётная)\r\nТест;200;999999\r\n');
+  assert.equal(entry.product.price_primary, '200');
+  assert.equal(entry.product.price_secondary, '300');
+
+  const [legacy] = productsFromCsv('Название;Цена 1 л;Цена 1,5 л\r\nТест;100;1\r\n');
+  assert.equal(legacy.product.price_secondary, '150');
 });
 
 test('product CSV import accepts new rows without ID and validates required columns', () => {

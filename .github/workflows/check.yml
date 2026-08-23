@@ -16,9 +16,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: npm
@@ -32,7 +32,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:17-bookworm
+        image: postgres:17-bookworm@sha256:84560e3b9c6874893fc4e2854f5dc3e7c1a37bc9d1dfd7a8c641310ae22ba5ad
         env:
           POSTGRES_DB: menu_tv_2_e2e
           POSTGRES_USER: menu_tv_2_e2e
@@ -67,9 +67,16 @@ jobs:
       SECURE_COOKIES: 'false'
       DEVICE_ACTIVATION_TTL_MINUTES: '10'
       DEVICE_ACTIVATION_POLL_SECONDS: '2'
+      DEVICE_ACTIVATION_MAX_ATTEMPTS: '20'
+      DEVICE_ACTIVATION_WINDOW_MINUTES: '10'
+      DEVICE_ACTIVATION_LIMITER_MAX_ENTRIES: '10000'
+      DEVICE_ACTIVATION_CLEANUP_MINUTES: '15'
+      DEVICE_ACTIVATION_RETENTION_HOURS: '24'
       DEVICE_SESSION_TTL_DAYS: '365'
       DEVICE_HEARTBEAT_WRITE_SECONDS: '30'
       PLAYER_REFRESH_SECONDS: '5'
+      EVENT_JOURNAL_RETENTION_DAYS: '30'
+      EVENT_JOURNAL_MAX_ENTRIES: '5000'
       LOGIN_MAX_ATTEMPTS: '8'
       LOGIN_IP_MAX_ATTEMPTS: '32'
       LOGIN_WINDOW_MINUTES: '15'
@@ -101,9 +108,9 @@ jobs:
       E2E_ADMIN_PASSWORD: Browser-CI-Password1!
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: npm
@@ -125,7 +132,7 @@ jobs:
         run: npm run test:browser
       - name: Upload browser report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-report
           path: |
@@ -144,12 +151,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Check installer syntax
         run: bash -n menu-tv-2.sh
       - name: Check stable release installer
         run: |
           bash menu-tv-2.sh help | grep -F 'Канал обновлений: стабильные GitHub Releases'
+          bash menu-tv-2.sh help | grep -F 'Канал обновлений скрипта: теги installer-vX.Y.Z'
           SCRIPT_VERSION="$(sed -nE 's/^SCRIPT_VERSION="([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' menu-tv-2.sh | head -n 1)"
           test -n "$SCRIPT_VERSION"
           bash menu-tv-2.sh help | grep -F "Версия скрипта: $SCRIPT_VERSION"
@@ -158,7 +166,24 @@ jobs:
       - name: Check canonical environment
         run: |
           grep -Fx 'SCREEN_BACKGROUND_MAX_BYTES=20971520' .env.example
+          grep -Fx 'EVENT_JOURNAL_RETENTION_DAYS=30' .env.example
+          grep -Fx 'EVENT_JOURNAL_MAX_ENTRIES=5000' .env.example
+          ! grep -q 'FRONTEND_ERROR_RETENTION_DAYS' .env.example
+          ! grep -q 'FRONTEND_ERROR_MAX_ENTRIES' .env.example
           ! grep -q 'TEMPLATE_BACKGROUND_MAX_BYTES' .env.example
+      - name: Check proxy socket isolation
+        run: |
+          grep -F 'tcp://docker-socket-proxy:2375' infra/traefik-compose.yaml
+          test "$(grep -c '/var/run/docker.sock:/var/run/docker.sock:ro' infra/traefik-compose.yaml)" -eq 1
+          TRAEFIK_ACME_EMAIL=ci@example.test docker compose -f infra/traefik-compose.yaml config -q
+      - name: Check immutable external images
+        run: |
+          grep -Eq '^FROM node:[^ ]+@sha256:[0-9a-f]{64} AS runtime$' Dockerfile
+          grep -Eq 'image: postgres:[^ ]+@sha256:[0-9a-f]{64}$' compose.yaml
+          test "$(grep -Ec 'image: busybox:[^ ]+@sha256:[0-9a-f]{64}$' compose.yaml)" -eq 2
+          grep -Eq 'image: drakkan/sftpgo:[^ ]+@sha256:[0-9a-f]{64}$' compose.yaml
+          grep -Eq 'image: ghcr.io/tecnativa/docker-socket-proxy:[^ ]+@sha256:[0-9a-f]{64}$' infra/traefik-compose.yaml
+          grep -Eq 'image: traefik:[^ ]+@sha256:[0-9a-f]{64}$' infra/traefik-compose.yaml
       - name: Prepare clean-install environment
         run: |
           cp .env.example .env
@@ -192,7 +217,7 @@ jobs:
 
           const cssResponse = await fetch(`${base}/css/index.css`);
           const css = await cssResponse.text();
-          if (!cssResponse.ok || !css.includes('./shell.css') || !css.includes('./editor/editor.css') || /templates\.css|tv1/i.test(css)) throw new Error('final CSS entrypoint invalid');
+          if (!cssResponse.ok || !css.includes('./shell.css') || !css.includes('./editor/editor.css') || !css.includes('./pages/events.css') || /templates\.css|tv1/i.test(css)) throw new Error('final CSS entrypoint invalid');
           const legacyCss = await fetch(`${base}/style.css`);
           if (legacyCss.ok) throw new Error('legacy style.css is still served');
 
@@ -214,6 +239,16 @@ jobs:
 
           const templatesGone = await fetch(`${base}/api/templates`, { headers: { Cookie: cookie } });
           if (templatesGone.status !== 404) throw new Error(`legacy templates API still exists: ${templatesGone.status}`);
+
+          const journalPost = await fetch(`${base}/api/diagnostics/frontend-errors`, {
+            method: 'POST',
+            headers: jsonHeaders,
+            body: JSON.stringify({ error_type: 'error', message: 'CI frontend journal probe', page: '/ci' })
+          });
+          if (journalPost.status !== 204) throw new Error(`frontend journal write failed: ${journalPost.status}`);
+          const journalResponse = await fetch(`${base}/api/notifications/events?limit=5&severity=error&category=interface`, { headers: { Cookie: cookie } });
+          const journalBody = await journalResponse.json();
+          if (!journalResponse.ok || !journalBody.items.some((item) => item.message === 'CI frontend journal probe' && item.severity === 'error' && item.category === 'interface')) throw new Error('event journal read failed');
 
           const siteResponse = await fetch(`${base}/api/settings/site`, { headers: { Cookie: cookie } });
           if (!siteResponse.ok) throw new Error('site settings load failed');
@@ -292,9 +327,16 @@ jobs:
           const allScreens = await (await fetch(`${base}/api/screens`, { headers: { Cookie: cookie } })).json();
           if (allScreens.filter((item) => item.location_id === locationClone.id).length !== 2) throw new Error('location monitor cloning failed');
 
-          const rendererResponse = await fetch(`${base}/js/editor/renderer.js`);
-          const rendererSource = await rendererResponse.text();
-          if (!rendererResponse.ok || !rendererSource.includes('MENU_REFERENCE') || !rendererSource.includes('buildTableSvg') || !rendererSource.includes('table_width_px') || !rendererSource.includes('autoReduced')) throw new Error('canonical monitor renderer contract missing');
+          const [facadeResponse, modelResponse, svgResponse] = await Promise.all([
+            fetch(`${base}/js/editor/renderer.js`),
+            fetch(`${base}/js/editor/renderer-model.js`),
+            fetch(`${base}/js/editor/renderer-svg.js`)
+          ]);
+          const [facadeSource, modelSource, svgSource] = await Promise.all([facadeResponse.text(), modelResponse.text(), svgResponse.text()]);
+          if (!facadeResponse.ok || !modelResponse.ok || !svgResponse.ok) throw new Error('canonical renderer modules not served');
+          if (!facadeSource.includes('renderer-model.js') || !facadeSource.includes('renderer-svg.js')) throw new Error('renderer facade contract missing');
+          if (!modelSource.includes('MENU_REFERENCE') || !modelSource.includes('table_width_px') || !modelSource.includes('autoReduced')) throw new Error('renderer model contract missing');
+          if (!svgSource.includes('buildTableSvg')) throw new Error('renderer SVG contract missing');
           NODE
       - name: Smoke test SFTP service
         run: docker compose --project-name menu-tv-2-ci --env-file .env exec -T sftp sftpgo ping
@@ -322,32 +364,64 @@ jobs:
       contents: write
     steps:
       - name: Checkout verified main
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - name: Resolve canonical version
+      - name: Resolve canonical versions
         id: version
         shell: bash
         run: |
           VERSION="$(node -p "require('./package.json').version")"
           LOCK_VERSION="$(node -p "require('./package-lock.json').version")"
           ROOT_LOCK_VERSION="$(node -p "require('./package-lock.json').packages[''].version")"
+          SCRIPT_VERSION="$(sed -nE 's/^SCRIPT_VERSION="([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' menu-tv-2.sh | head -n 1)"
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$SCRIPT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           [[ "$LOCK_VERSION" == "$VERSION" ]]
           [[ "$ROOT_LOCK_VERSION" == "$VERSION" ]]
           grep -F "## [$VERSION]" CHANGELOG.md
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-      - name: Publish immutable GitHub Release
+          echo "script_version=$SCRIPT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "installer_tag=installer-v$SCRIPT_VERSION" >> "$GITHUB_OUTPUT"
+      - name: Verify and publish immutable application release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
         shell: bash
         run: |
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "Release tag $TAG already exists; no new release is created."
+            git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+            TAG_SHA="$(git rev-list -n 1 "$TAG")"
+            if [[ "$TAG_SHA" != "$GITHUB_SHA" ]]; then
+              if ! git diff --quiet "$TAG_SHA" "$GITHUB_SHA" -- .env.example Dockerfile compose.yaml package.json package-lock.json src infra; then
+                echo "Application tag $TAG already points to $TAG_SHA while verified runtime content changed at $GITHUB_SHA." >&2
+                echo "Increase package.json version before merging application/runtime changes." >&2
+                exit 1
+              fi
+              echo "Application runtime is identical to existing $TAG; only installer/docs/CI changed."
+            else
+              echo "Application tag $TAG already points to verified main."
+            fi
           else
             gh release create "$TAG" --target "$GITHUB_SHA" --title "TV Menu 2 $TAG" --generate-notes
+          fi
+      - name: Verify and publish independent installer tag
+        env:
+          INSTALLER_TAG: ${{ steps.version.outputs.installer_tag }}
+        shell: bash
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$INSTALLER_TAG" >/dev/null 2>&1; then
+            git fetch --force origin "refs/tags/$INSTALLER_TAG:refs/tags/$INSTALLER_TAG"
+            if ! cmp -s menu-tv-2.sh <(git show "$INSTALLER_TAG:menu-tv-2.sh"); then
+              echo "Installer tag $INSTALLER_TAG already exists with different menu-tv-2.sh content." >&2
+              echo "Increase SCRIPT_VERSION before changing the installer again." >&2
+              exit 1
+            fi
+            echo "Installer tag $INSTALLER_TAG already contains the verified script."
+          else
+            git tag "$INSTALLER_TAG" "$GITHUB_SHA"
+            git push origin "refs/tags/$INSTALLER_TAG"
           fi
       - name: Remove every branch except main
         shell: bash

@@ -56,6 +56,14 @@ async function createReferenceDensityFixture(page) {
   return { screen };
 }
 
+async function openSettings(page, name) {
+  const details = page.locator('.editor-settings-section').filter({ has: page.getByText(name, { exact: true }) });
+  await expect(details).toBeVisible();
+  if ((await details.getAttribute('open')) === null) await details.locator('summary').click();
+  await expect(details).toHaveAttribute('open', '');
+  return details;
+}
+
 for (const viewport of [{ width: 1920, height: 1080 }, { width: 1366, height: 768 }]) {
   test(`compact editor remains usable at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
@@ -65,26 +73,22 @@ for (const viewport of [{ width: 1920, height: 1080 }, { width: 1366, height: 76
 
     const commandbar = page.locator('.editor-commandbar');
     await expect(commandbar).toBeVisible();
-    expect((await commandbar.boundingBox())?.height).toBeLessThanOrEqual(viewport.width < 1500 ? 82 : 56);
+    expect((await commandbar.boundingBox())?.height).toBeLessThanOrEqual(60);
     expect(await commandbar.evaluate((node) => getComputedStyle(node).position)).toBe('sticky');
     await expect(page.getByText('Шаблоны', { exact: true })).toHaveCount(0);
+    await expect(page.locator('.editor-tool-popover')).toHaveCount(0);
 
-    const menus = page.locator('.editor-commandbar-menus');
-    const addActions = page.locator('.editor-add-actions');
-    await expect(menus).toBeVisible();
-    if (viewport.width >= 1500) {
-      const menuBox = await menus.boundingBox();
-      const addBox = await addActions.boundingBox();
-      expect(menuBox.x).toBeLessThan(addBox.x);
-    }
-
-    const monitorMenu = page.locator('.editor-tool-menu').filter({ has: page.getByText('Монитор', { exact: true }) });
-    const tableMenu = page.locator('.editor-tool-menu').filter({ has: page.getByText('Таблица', { exact: true }) });
-    await monitorMenu.locator('summary').click();
-    await expect(monitorMenu).toHaveAttribute('open', '');
-    await tableMenu.locator('summary').click();
-    await expect(tableMenu).toHaveAttribute('open', '');
-    await expect(monitorMenu).not.toHaveAttribute('open', '');
+    const settings = page.locator('.editor-settings-panel');
+    const mainColumn = page.locator('.editor-main-column');
+    await expect(settings).toBeVisible();
+    await expect(mainColumn).toBeVisible();
+    const settingsBox = await settings.boundingBox();
+    const mainColumnBox = await mainColumn.boundingBox();
+    expect(settingsBox).not.toBeNull();
+    expect(mainColumnBox).not.toBeNull();
+    expect(settingsBox.x + settingsBox.width).toBeLessThanOrEqual(mainColumnBox.x + 2);
+    await openSettings(page, 'Монитор');
+    await openSettings(page, 'Таблица');
 
     const table = page.locator('.editor-menu-editor-table');
     const scroll = page.locator('.editor-menu-table-scroll');
@@ -93,7 +97,8 @@ for (const viewport of [{ width: 1920, height: 1080 }, { width: 1366, height: 76
     await expect(table.locator('tbody tr')).toHaveCount(5);
     const itemBox = await table.locator('tbody tr').nth(1).boundingBox();
     expect(itemBox).not.toBeNull();
-    expect(itemBox.height).toBeLessThanOrEqual(34);
+    expect(itemBox.height).toBeGreaterThanOrEqual(32);
+    expect(itemBox.height).toBeLessThanOrEqual(36);
     expect(await table.locator('tbody tr').nth(1).locator('select').evaluate((node) => getComputedStyle(node).fontSize)).toBe('11px');
     const dimensions = await scroll.evaluate((node) => ({ clientWidth: node.clientWidth, scrollWidth: node.scrollWidth }));
     expect(dimensions.clientWidth).toBeGreaterThan(500);
@@ -116,6 +121,36 @@ for (const viewport of [{ width: 1920, height: 1080 }, { width: 1366, height: 76
   });
 }
 
+test('editor reflows at a 200% equivalent viewport without page-level horizontal overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 960, height: 540 });
+  await login(page);
+  const { screen } = await createEditorFixture(page, { rows: 3 });
+  await page.goto(`/screen-editor.html?id=${screen.id}`);
+
+  const overflow = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+  expect(overflow.scroll).toBeLessThanOrEqual(overflow.client + 1);
+
+  const settings = page.locator('.editor-settings-panel');
+  await expect(settings).toBeVisible();
+  expect(await settings.evaluate((node) => getComputedStyle(node).position)).toBe('static');
+  const summary = page.locator('.editor-settings-section summary').first();
+  expect((await summary.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  expect(Number.parseFloat(await page.locator('#editor-sftp-path').evaluate((node) => getComputedStyle(node).fontSize))).toBeGreaterThanOrEqual(11);
+
+  await summary.focus();
+  await expect(summary).toBeFocused();
+  const wasOpen = (await summary.locator('..').getAttribute('open')) !== null;
+  await summary.press('Enter');
+  const isOpen = (await summary.locator('..').getAttribute('open')) !== null;
+  expect(isOpen).toBe(!wasOpen);
+  const outline = await summary.evaluate((node) => getComputedStyle(node).outlineStyle);
+  expect(outline).not.toBe('none');
+
+  const tableScroll = page.locator('.editor-menu-table-scroll');
+  const tableDimensions = await tableScroll.evaluate((node) => ({ client: node.clientWidth, scroll: node.scrollWidth }));
+  expect(tableDimensions.scroll).toBeGreaterThanOrEqual(tableDimensions.client);
+});
+
 test('reference density keeps TV Menu 1 two-line typography without overlap', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await login(page);
@@ -136,12 +171,12 @@ test('reference density keeps TV Menu 1 two-line typography without overlap', as
   expect(overlaps.some(Boolean)).toBe(false);
 });
 
-test('table dropdown moves and resizes the same canonical preview SVG', async ({ page }) => {
+test('table settings move and resize the same canonical preview SVG', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 900 });
   await login(page);
   const { screen } = await createEditorFixture(page, { rows: 3 });
   await page.goto(`/screen-editor.html?id=${screen.id}`);
-  await page.getByText('Таблица', { exact: true }).click();
+  await openSettings(page, 'Таблица');
   const x = page.locator('#editor-table-x');
   const width = page.locator('#editor-table-width');
   await expect(x).toHaveValue('56');
@@ -159,7 +194,7 @@ test('font selector changes preview through canonical renderer', async ({ page }
   await login(page);
   const { screen } = await createEditorFixture(page, { rows: 3 });
   await page.goto(`/screen-editor.html?id=${screen.id}`);
-  await page.getByText('Таблица', { exact: true }).click();
+  await openSettings(page, 'Таблица');
   const font = page.locator('#editor-font-family');
   await expect(font).toHaveValue('arial-narrow');
   await font.selectOption('tahoma-bold');
@@ -172,7 +207,7 @@ test('screen properties update preview and keep publication locked while dirty',
   await login(page);
   const { screen } = await createEditorFixture(page, { rows: 3 });
   await page.goto(`/screen-editor.html?id=${screen.id}`);
-  await page.getByText('Монитор', { exact: true }).click();
+  await openSettings(page, 'Монитор');
   const resolution = page.locator('#editor-resolution');
   await resolution.fill('1024×768');
   await expect(page.locator('#editor-dirty-state')).toHaveText('Не сохранено');

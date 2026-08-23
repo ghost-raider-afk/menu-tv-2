@@ -51,6 +51,11 @@ export function createDevicesRepository(pool) {
       return activationRecord(rows[0]);
     },
 
+    async deleteExpiredDeviceActivations(before) {
+      const { rowCount } = await pool.query('DELETE FROM tv_device_activations WHERE expires_at < $1', [before]);
+      return rowCount;
+    },
+
     async getDeviceActivation(id, { lock = false } = {}) {
       const { rows } = await pool.query(
         `SELECT * FROM tv_device_activations WHERE id = $1 LIMIT 1${lock ? ' FOR UPDATE' : ''}`,

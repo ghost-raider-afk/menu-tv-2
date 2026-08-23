@@ -6,6 +6,7 @@ import { loadConfig } from './config/index.js';
 import { MenuTvStore } from './db/index.js';
 import { logger } from './logger/index.js';
 import { errorHandler } from './middleware/errors.js';
+import { protectStateChangingRequest } from './middleware/request-origin.js';
 import { createSessionMiddleware } from './middleware/session.js';
 import { hashPassword } from './services/password-service.js';
 import { createPublishService } from './services/publish-service.js';
@@ -18,6 +19,7 @@ import { createSessionRouter } from './api/session/routes.js';
 import { createOverviewRouter } from './api/overview/routes.js';
 import { createSettingsRouter } from './api/settings/routes.js';
 import { createNotificationsRouter } from './api/notifications/routes.js';
+import { createDiagnosticsRouter } from './api/diagnostics/routes.js';
 import { createCatalogRouter } from './api/catalog/routes.js';
 import { createLocationsRouter } from './api/locations/routes.js';
 import { createScreensRouter } from './api/screens/routes.js';
@@ -30,7 +32,7 @@ const publicDir = path.join(__dirname, 'web', 'admin-ui', 'public');
 const protectedPages = [
   '/', '/index.html', '/locations.html', '/screens.html', '/catalog.html',
   '/screen-editor.html', '/profile.html', '/settings.html', '/sftp-settings.html',
-  '/animation.html', '/connect-tv.html'
+  '/animation.html', '/events.html', '/connect-tv.html'
 ];
 
 async function initialiseStore(store, config) {
@@ -45,7 +47,38 @@ async function initialiseStore(store, config) {
   await store.setInitialSiteName(config.appName);
 }
 
+async function cleanupDeviceActivations(store, config) {
+  const retentionHours = Number(config?.deviceActivationRetentionHours);
+  if (typeof store?.deleteExpiredDeviceActivations !== 'function' || !Number.isFinite(retentionHours) || retentionHours < 1) return 0;
+  const cutoff = new Date(Date.now() - retentionHours * 60 * 60 * 1000).toISOString();
+  try {
+    const removed = await store.deleteExpiredDeviceActivations(cutoff);
+    if (removed) logger.info('Expired TV activation records removed', { removed });
+    return removed;
+  } catch (error) {
+    logger.warn('Expired TV activation records could not be removed', { error });
+    return 0;
+  }
+}
+
+async function cleanupEvents(store, config) {
+  if (typeof store?.pruneEvents !== 'function') return 0;
+  try {
+    const removed = await store.pruneEvents({
+      retentionDays: config.eventJournalRetentionDays,
+      maxEntries: config.eventJournalMaxEntries
+    });
+    if (removed) logger.info('Expired event journal records removed', { removed });
+    return removed;
+  } catch (error) {
+    logger.warn('Event journal retention cleanup could not complete', { error });
+    return 0;
+  }
+}
+
 async function recoverRuntimeState(store, sftp, config) {
+  await cleanupDeviceActivations(store, config);
+  await cleanupEvents(store, config);
   const requiredMethods = ['publishedInfo', 'removeStaged', 'cleanupStaging'];
   if (!requiredMethods.every((method) => typeof sftp?.[method] === 'function')) return;
   const publish = createPublishService({ store, sftp, config });
@@ -113,10 +146,12 @@ function mountPublicRoutes(app, { store, config }) {
 
 function mountProtectedApi(app, dependencies, requireApiSession) {
   app.use('/api', requireApiSession);
+  app.use('/api', protectStateChangingRequest);
   app.use('/api', createSessionRouter(dependencies));
   app.use('/api', createOverviewRouter(dependencies));
   app.use('/api/settings', createSettingsRouter(dependencies));
   app.use('/api/notifications', createNotificationsRouter(dependencies));
+  app.use('/api/diagnostics', createDiagnosticsRouter(dependencies));
   app.use('/api/catalog', createCatalogRouter(dependencies));
   app.use('/api/locations', createLocationsRouter(dependencies));
   app.use('/api/device-admin', createDeviceAdminRouter(dependencies));
@@ -155,7 +190,7 @@ export async function createApp(config = loadConfig(), { store: suppliedStore, s
   const app = express();
   configureSecurity(app, config);
   mountPublicRoutes(app, { store, config });
-  app.use('/api/auth', createAuthRouter({ store, config }));
+  app.use('/api/auth', protectStateChangingRequest, createAuthRouter({ store, config }));
 
   const resolveSession = createSessionResolver(store, config);
   const { requireApiSession, requirePageSession } = createSessionMiddleware(resolveSession);
@@ -176,8 +211,17 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       port: service.config.port
     });
   });
+  const maintenanceTimer = setInterval(
+    () => {
+      void cleanupDeviceActivations(service.store, service.config);
+      void cleanupEvents(service.store, service.config);
+    },
+    service.config.deviceActivationCleanupMinutes * 60 * 1000
+  );
+  maintenanceTimer.unref();
   for (const signal of ['SIGINT', 'SIGTERM']) {
     process.once(signal, () => {
+      clearInterval(maintenanceTimer);
       logger.info('Menu TV server stopping', { signal });
       server.close(() => void service.store.close());
     });

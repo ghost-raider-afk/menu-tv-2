@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const root = new URL('../src/web/admin-ui/public/', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
-const htmlPages = ['index.html','locations.html','screens.html','screen-editor.html','catalog.html','settings.html','sftp-settings.html','animation.html','profile.html','signin.html'];
+const htmlPages = ['index.html','locations.html','screens.html','screen-editor.html','catalog.html','settings.html','sftp-settings.html','animation.html','events.html','profile.html','signin.html'];
 
 test('all current pages use the single final CSS entrypoint', async () => {
   for (const page of htmlPages) {
@@ -26,10 +26,10 @@ test('templates frontend is physically absent', async () => {
 
 test('CSS architecture is compact and has one permanent entrypoint', async () => {
   const [entry, tokens] = await Promise.all([read('css/index.css'), read('css/tokens.css')]);
-  for (const required of ['./tokens.css','./base.css','./shell.css','./components.css','./forms.css','./tables.css','./editor/editor.css','./auth/signin.css']) {
+  for (const required of ['./tokens.css','./base.css','./shell.css','./components.css','./forms.css','./tables.css','./pages/events.css','./editor/editor.css','./auth/signin.css']) {
     assert.ok(entry.includes(required), required);
   }
-  assert.doesNotMatch(entry, /tv1|templates\.css/i);
+  assert.doesNotMatch(entry, /tv1|templates\.css|error-log\.css/i);
   assert.match(tokens, /--brand-accent:#f4c915/i);
   assert.match(tokens, /--ui-rail-width:64px/);
   assert.match(tokens, /--ui-context-width:250px/);
@@ -38,15 +38,38 @@ test('CSS architecture is compact and has one permanent entrypoint', async () =>
   assert.match(tokens, /--ui-accent-on-chrome:/);
 });
 
-test('shell remains modular and catalog submenu has one product entry', async () => {
-  const [shell, navigation] = await Promise.all([read('js/components/shell.js'), read('js/core/navigation.js')]);
+test('shell remains modular and settings expose one event journal', async () => {
+  const [shell, navigation, settings, bell] = await Promise.all([
+    read('js/components/shell.js'), read('js/core/navigation.js'), read('settings.html'), read('js/components/notifications.js')
+  ]);
   assert.match(shell, /createSidebar/);
   assert.match(shell, /createContextPanel/);
   assert.match(shell, /createHeader/);
   assert.doesNotMatch(shell, /legacy|\.sidebar|\.topbar/i);
   assert.match(navigation, /catalog:\s*Object\.freeze\(\[\['Продукция', '\/catalog\.html'\]\]\)/);
-  assert.doesNotMatch(navigation, /#packaging|\['Тара'/);
-  assert.doesNotMatch(navigation, /Шаблоны/);
+  assert.match(navigation, /\['Журнал событий', '\/events\.html'\]/);
+  assert.doesNotMatch(navigation, /Журнал ошибок|error-log\.html|Журнал действий/);
+  assert.match(settings, /Журнал событий/);
+  assert.match(settings, /href="\/events\.html"/);
+  assert.doesNotMatch(settings, /Журнал действий|data-activity-list/);
+  assert.match(bell, /href="\/events\.html"/);
+  assert.match(bell, /Открыть журнал событий/);
+});
+
+test('global messages use one top toast and one persisted event source', async () => {
+  const [dom, toasts, notifications, events] = await Promise.all([
+    read('js/core/dom.js'), read('js/core/toasts.js'), read('js/core/notifications.js'), read('js/pages/events.js')
+  ]);
+  assert.match(dom, /import \{ showToast \} from '\.\/toasts\.js'/);
+  assert.match(dom, /showToast\(message/);
+  assert.match(dom, /target\.className = 'form-message is-hidden'/);
+  assert.match(toasts, /TOAST_LIFETIME_MS = 5000/);
+  assert.match(toasts, /\/api\/notifications\/events/);
+  assert.match(toasts, /mouseenter/);
+  assert.match(toasts, /focusin/);
+  assert.match(toasts, /menu-tv:event-recorded/);
+  assert.match(notifications, /menu-tv:event-recorded/);
+  assert.match(events, /API\.notifications\}\/events/);
 });
 
 test('authenticated page bootstrap uses one context API request', async () => {
@@ -63,8 +86,9 @@ test('authenticated navigation uses one persistent client-side shell', async () 
     read('js/components/context-panel.js'), read('js/components/header.js'), read('js/pages/screens.js'), read('js/core/navigation.js')
   ]);
   assert.match(application, /createAppRouter/);
+  assert.match(application, /case 'events'/);
   assert.match(application, /router\.start\(\)/);
-  assert.doesNotMatch(application, /await initialisePage\(current\)/);
+  assert.doesNotMatch(application, /case 'error-log'|pages\/error-log/);
   assert.match(router, /history\.pushState/);
   assert.match(router, /addEventListener\('popstate'/);
   assert.match(router, /main\.innerHTML = view\.mainHtml/);
@@ -81,10 +105,11 @@ test('authenticated navigation uses one persistent client-side shell', async () 
   assert.doesNotMatch(screens, /window\.location\.assign/);
 });
 
-test('monitor editor owns one left-aligned exclusive command bar and one canonical renderer', async () => {
-  const [rows, preview, finalImage, renderer, editorCss, editorHtml, editorJs, tablesCss] = await Promise.all([
+test('monitor editor owns one compact command bar, in-flow settings and one modular canonical renderer', async () => {
+  const [rows, preview, finalImage, facade, model, svg, editorCss, editorHtml, editorJs, tablesCss] = await Promise.all([
     read('js/editor/rows.js'), read('js/editor/preview.js'), read('js/editor/final-image.js'), read('js/editor/renderer.js'),
-    read('css/editor/editor.css'), read('screen-editor.html'), read('js/editor/editor.js'), read('css/tables.css')
+    read('js/editor/renderer-model.js'), read('js/editor/renderer-svg.js'), read('css/editor/editor.css'), read('screen-editor.html'),
+    read('js/editor/editor.js'), read('css/tables.css')
   ]);
   assert.match(rows, /editor-menu-editor-table/);
   assert.match(rows, /<th>Данные из базы<\/th>/);
@@ -92,31 +117,34 @@ test('monitor editor owns one left-aligned exclusive command bar and one canonic
   assert.match(rows, /<th>1,5 л<\/th>/);
   assert.match(preview, /buildTableSvg/);
   assert.match(finalImage, /buildTableSvg/);
-  assert.match(renderer, /formatProductMetadata/);
-  assert.match(renderer, /formatStrength\(product\?\.strength/);
-  assert.match(renderer, /tableX: 56/);
-  assert.match(renderer, /tableWidth: 1374/);
-  assert.match(renderer, /tableHeight: 925/);
-  assert.match(renderer, /tableFrame\(model\)/);
-  assert.match(renderer, /table_width_px/);
-  assert.match(renderer, /table_height_px/);
-  assert.match(renderer, /viewBox="0 0 \$\{model\.viewport\.width\} \$\{model\.viewport\.height\}"/);
-  assert.doesNotMatch(renderer, /verticalSeparatorsMarkup/);
+  assert.match(facade, /renderer-model\.js/);
+  assert.match(facade, /renderer-svg\.js/);
+  assert.match(model, /formatProductMetadata/);
+  assert.match(model, /formatStrength\(product\?\.strength/);
+  assert.match(model, /tableX: 56/);
+  assert.match(model, /tableWidth: 1374/);
+  assert.match(model, /tableHeight: 925/);
+  assert.match(model, /tableFrame\(model\)/);
+  assert.match(model, /table_width_px/);
+  assert.match(model, /table_height_px/);
+  assert.match(svg, /export function buildTableSvg/);
+  assert.match(svg, /viewBox="0 0 \$\{model\.viewport\.width\} \$\{model\.viewport\.height\}"/);
+  assert.doesNotMatch(svg, /verticalSeparatorsMarkup/);
   assert.match(editorCss, /\.editor-commandbar\{position:sticky/);
-  assert.match(editorCss, /\.editor-commandbar-tools\{[^}]*justify-content:flex-start/);
-  assert.match(editorCss, /\.editor-commandbar-menus\{display:flex/);
-  assert.match(editorCss, /\.editor-tool-popover\{[^}]*left:0/);
-  assert.match(editorCss, /\.editor-primary-actions\{[^}]*margin-left:auto/);
-  assert.match(editorCss, /\.editor-menu-editor-table tbody tr\{height:27px/);
-  assert.match(editorCss, /height:22px/);
-  assert.doesNotMatch(editorCss, /!important|\.tv-board-table/);
+  assert.match(editorCss, /\.editor-workarea\{display:grid/);
+  assert.match(editorCss, /\.editor-settings-panel\{position:sticky/);
+  assert.match(editorCss, /\.editor-settings-section>summary/);
+  assert.match(editorCss, /:focus-visible/);
+  assert.match(editorCss, /@media\(pointer:coarse\)/);
+  assert.match(editorCss, /@media\(prefers-reduced-motion:reduce\)/);
+  assert.doesNotMatch(editorCss, /\.editor-tool-popover|\.tv-board-table/);
   assert.match(editorHtml, /class="editor-commandbar"/);
-  assert.match(editorHtml, /class="editor-commandbar-menus"/);
+  assert.match(editorHtml, /class="settings-card editor-settings-panel"/);
+  assert.match(editorHtml, /<details class="editor-settings-section editor-tool-menu"/);
   assert.match(editorHtml, /id="editor-sftp-path"/);
+  assert.doesNotMatch(editorHtml, /editor-tool-popover|editor-commandbar-menus/);
   assert.doesNotMatch(editorHtml, />Доставка<\/summary>|editor-source-file|editor-upload|JPEG вручную/);
   assert.match(editorHtml, /id="editor-save"[^>]*>Сохранить<\/button>\s*<button[^>]*id="editor-publish"[^>]*>Опубликовать<\/button>/);
-  assert.match(editorJs, /bindExclusiveToolMenus/);
-  assert.match(editorJs, /other\.open = false/);
   assert.match(editorJs, /canLeave\(\)/);
   assert.match(editorJs, /dispose\(\)/);
   assert.match(editorJs, /removeEventListener\('beforeunload'/);
@@ -132,6 +160,20 @@ test('monitor editor owns one left-aligned exclusive command bar and one canonic
   assert.doesNotMatch(editorHtml, /editor-template|Использовать шаблон|ШАБЛОН/);
   assert.doesNotMatch(editorJs, /20 МБ/);
   assert.doesNotMatch(tablesCss, /menu-preview|editor-menu-table/);
+});
+
+test('catalog page delegates CSV import and decodes Excel encodings before preview', async () => {
+  const [catalog, importer, decoder] = await Promise.all([read('js/pages/catalog.js'), read('js/catalog/import-preview.js'), read('js/catalog/csv-decoder.js')]);
+  assert.match(catalog, /initialiseProductImport/);
+  assert.doesNotMatch(catalog, /function importRowMarkup|function scheduleImportValidation/);
+  assert.match(importer, /function importRowMarkup/);
+  assert.match(importer, /Цена 1,5 л, расчётная/);
+  assert.match(importer, /decodeCsvFile\(file\)/);
+  assert.doesNotMatch(importer, /file\.text\(\)/);
+  assert.match(decoder, /windows-1251/);
+  assert.match(decoder, /utf-16le/);
+  assert.match(decoder, /utf-16be/);
+  assert.match(decoder, /fatal:\s*true/);
 });
 
 test('login uses the TV Menu 1 composition and seven logo sizes without a wrong first frame', async () => {
@@ -154,8 +196,8 @@ test('login uses the TV Menu 1 composition and seven logo sizes without a wrong 
   assert.match(presentation, /dataset\.signinLogoSize/);
 });
 
-test('legacy frontend files are physically absent', async () => {
-  for (const path of ['style.css','css/tv1.css','css/tv1/tokens.css','css/tv1/base.css','css/tv1/shell.css','css/tv1/pages.css','css/tv1/editor.css','css/tv1/auth.css','js/components/chrome.js']) {
+test('legacy frontend files and duplicate diagnostic journals are physically absent', async () => {
+  for (const path of ['style.css','css/tv1.css','css/tv1/tokens.css','css/tv1/base.css','css/tv1/shell.css','css/tv1/pages.css','css/tv1/editor.css','css/tv1/auth.css','js/components/chrome.js','error-log.html','js/pages/error-log.js','css/pages/error-log.css']) {
     await assert.rejects(access(new URL(path, root)), undefined, path);
   }
 });

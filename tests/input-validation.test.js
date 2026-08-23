@@ -13,7 +13,10 @@ function runtimeEnv(overrides = {}) {
   return {
     APP_NAME: 'ТВ МЕНЮ', NODE_ENV: 'test', HOST: '127.0.0.1', PORT: '8080', MENU_TV_2_DOMAIN: 'menu.example.test',
     SESSION_SECRET: 's'.repeat(48), SESSION_TTL_HOURS: '12', SECURE_COOKIES: 'false',
-    DEVICE_ACTIVATION_TTL_MINUTES: '10', DEVICE_ACTIVATION_POLL_SECONDS: '2', DEVICE_SESSION_TTL_DAYS: '365', DEVICE_HEARTBEAT_WRITE_SECONDS: '30', PLAYER_REFRESH_SECONDS: '5',
+    DEVICE_ACTIVATION_TTL_MINUTES: '10', DEVICE_ACTIVATION_POLL_SECONDS: '2', DEVICE_ACTIVATION_MAX_ATTEMPTS: '20',
+    DEVICE_ACTIVATION_WINDOW_MINUTES: '10', DEVICE_ACTIVATION_LIMITER_MAX_ENTRIES: '10000', DEVICE_ACTIVATION_CLEANUP_MINUTES: '15', DEVICE_ACTIVATION_RETENTION_HOURS: '24',
+    DEVICE_SESSION_TTL_DAYS: '365', DEVICE_HEARTBEAT_WRITE_SECONDS: '30', PLAYER_REFRESH_SECONDS: '5',
+    EVENT_JOURNAL_RETENTION_DAYS: '30', EVENT_JOURNAL_MAX_ENTRIES: '5000',
     PASSWORD_MIN_LENGTH: '10', PASSWORD_MAX_LENGTH: '32', GENERATED_PASSWORD_LENGTH: '10',
     LOGIN_MAX_ATTEMPTS: '8', LOGIN_IP_MAX_ATTEMPTS: '32', LOGIN_WINDOW_MINUTES: '15', LOGIN_LIMITER_MAX_ENTRIES: '500', JSON_BODY_MAX_BYTES: '65536', MENU_DRAFT_MAX_BYTES: '49152', SCREEN_SOURCE_MAX_BYTES: '12582912',
     DASHBOARD_REFRESH_MIN_SECONDS: '15', DASHBOARD_REFRESH_MAX_SECONDS: '300', SCREEN_MAX_WIDTH: '1920', SCREEN_MAX_HEIGHT: '1080', IMAGE_MAX_PIXELS: '40000000',
@@ -43,7 +46,7 @@ test('site settings validate refresh interval and seven login logo sizes', () =>
 test('table font uses a closed allowlist and includes Tahoma Bold', () => {
   assert.equal(menuSettingsInput({ font_family: 'tahoma-bold' }).font_family, 'tahoma-bold');
   assert.equal(menuSettingsInput({}).font_family, 'arial-narrow');
-  assert.throws(() => menuSettingsInput({ font_family: 'Comic Sans MS' }), /Шрифт таблицы/);
+  assert.throws(() => menuSettingsInput({ font_family: 'Comic Sans MS' }).font_family, /Шрифт таблицы/);
 });
 
 test('current password is verified as entered while complexity applies only to the new password', () => {

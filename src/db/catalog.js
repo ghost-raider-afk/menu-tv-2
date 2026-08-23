@@ -1,5 +1,17 @@
 import { isoNow, normaliseRow } from './helpers.js';
 
+function normaliseIds(ids) {
+  return [...new Set((ids || []).map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))];
+}
+
+async function listByIds(pool, table, ids) {
+  const normalized = normaliseIds(ids);
+  if (!normalized.length) return [];
+  const placeholders = normalized.map((_id, index) => `$${index + 1}`).join(', ');
+  const { rows } = await pool.query(`SELECT * FROM ${table} WHERE id IN (${placeholders}) ORDER BY name`, normalized);
+  return rows.map(normaliseRow);
+}
+
 export function createCatalogRepository(pool) {
   async function getProduct(id) {
     const { rows } = await pool.query('SELECT * FROM catalog_products WHERE id = $1', [id]);
@@ -14,6 +26,9 @@ export function createCatalogRepository(pool) {
     async listProducts() {
       const { rows } = await pool.query('SELECT * FROM catalog_products ORDER BY name');
       return rows.map(normaliseRow);
+    },
+    listProductsByIds(ids) {
+      return listByIds(pool, 'catalog_products', ids);
     },
     getProduct,
     async createProduct(product) {
@@ -45,6 +60,9 @@ export function createCatalogRepository(pool) {
     async listPackaging() {
       const { rows } = await pool.query('SELECT * FROM catalog_packaging ORDER BY name');
       return rows.map(normaliseRow);
+    },
+    listPackagingByIds(ids) {
+      return listByIds(pool, 'catalog_packaging', ids);
     },
     getPackaging,
     async createPackaging(packaging) {

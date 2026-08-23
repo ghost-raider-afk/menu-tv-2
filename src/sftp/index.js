@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { SftpGoClient } from './client.js';
+import { listPublishedFilesStreaming } from './metadata.js';
 import { SftpStorage } from './storage.js';
 import { SftpPublisher } from './publisher.js';
 
@@ -36,7 +37,7 @@ export class SftpService {
   }
 
   listPublishedFiles(name) {
-    return this.storage.listPublishedFiles(name);
+    return listPublishedFilesStreaming(this.storage, name);
   }
 
   readPublishedFile(directoryName, filename) {

@@ -24,24 +24,38 @@ function migrateBackgroundUrl(settings) {
   return next;
 }
 
+async function tableExists(pool, tableName) {
+  const { rows } = await pool.query(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name = $1
+     ) AS present`,
+    [tableName]
+  );
+  return rows[0]?.present === true;
+}
+
+async function columnExists(pool, tableName, columnName) {
+  const { rows } = await pool.query(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2
+     ) AS present`,
+    [tableName, columnName]
+  );
+  return rows[0]?.present === true;
+}
+
 async function legacyTemplates(pool) {
-  try {
-    const { rows } = await pool.query('SELECT id, rows_json, settings_json FROM templates');
-    return rows;
-  } catch (error) {
-    if (error?.code === '42P01' || /templates.*does not exist/i.test(String(error?.message || ''))) return [];
-    throw error;
-  }
+  if (!await tableExists(pool, 'templates')) return [];
+  const { rows } = await pool.query('SELECT id, rows_json, settings_json FROM templates');
+  return rows;
 }
 
 async function legacyAssignments(pool) {
-  try {
-    const { rows } = await pool.query('SELECT id, template_id FROM screens WHERE template_id IS NOT NULL');
-    return rows;
-  } catch (error) {
-    if (error?.code === '42703' || /template_id.*does not exist/i.test(String(error?.message || ''))) return [];
-    throw error;
-  }
+  if (!await columnExists(pool, 'screens', 'template_id')) return [];
+  const { rows } = await pool.query('SELECT id, template_id FROM screens WHERE template_id IS NOT NULL');
+  return rows;
 }
 
 export async function retireLegacyTemplates(pool) {

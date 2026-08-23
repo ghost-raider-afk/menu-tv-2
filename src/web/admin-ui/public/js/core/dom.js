@@ -1,12 +1,38 @@
+import { showToast } from './toasts.js';
+
 export function element(id) {
   return document.getElementById(id);
 }
 
+function messageCategory(id) {
+  const source = String(id || '');
+  if (/product|packaging|catalog/i.test(source)) return 'catalog';
+  if (/sftp/i.test(source)) return 'sftp';
+  if (/screen|editor|monitor/i.test(source)) return 'monitors';
+  if (/device|connect-tv/i.test(source)) return 'tv';
+  if (/site|settings|profile|password/i.test(source)) return 'settings';
+  if (/auth|signin|login/i.test(source)) return 'auth';
+  return 'interface';
+}
+
+function messageSeverity(kind) {
+  if (kind === 'success') return 'success';
+  if (kind === 'warning') return 'warning';
+  if (kind === 'info') return 'info';
+  return 'error';
+}
+
 export function setMessage(id, message, kind = 'error') {
   const target = element(id);
-  if (!target) return;
-  target.textContent = message;
-  target.className = `form-message ${kind === 'success' ? 'is-success' : 'is-error'}`;
+  if (target) {
+    target.textContent = message;
+    target.className = 'form-message is-hidden';
+  }
+  showToast(message, {
+    severity: messageSeverity(kind),
+    category: messageCategory(id),
+    persist: true
+  });
 }
 
 export function clearMessage(id) {
