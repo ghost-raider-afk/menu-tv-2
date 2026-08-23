@@ -150,7 +150,9 @@ jobs:
       - name: Check stable release installer
         run: |
           bash menu-tv-2.sh help | grep -F 'Канал обновлений: стабильные GitHub Releases'
-          bash menu-tv-2.sh help | grep -F 'Версия скрипта: 1.3.0'
+          SCRIPT_VERSION="$(sed -nE 's/^SCRIPT_VERSION="([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' menu-tv-2.sh | head -n 1)"
+          test -n "$SCRIPT_VERSION"
+          bash menu-tv-2.sh help | grep -F "Версия скрипта: $SCRIPT_VERSION"
           ! grep -q 'MENU_TV_REF' menu-tv-2.sh
           ! grep -q '^BRANCH=' menu-tv-2.sh
       - name: Check canonical environment
