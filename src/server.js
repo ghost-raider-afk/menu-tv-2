@@ -19,6 +19,7 @@ import { createSessionRouter } from './api/session/routes.js';
 import { createOverviewRouter } from './api/overview/routes.js';
 import { createSettingsRouter } from './api/settings/routes.js';
 import { createNotificationsRouter } from './api/notifications/routes.js';
+import { createDiagnosticsRouter } from './api/diagnostics/routes.js';
 import { createCatalogRouter } from './api/catalog/routes.js';
 import { createLocationsRouter } from './api/locations/routes.js';
 import { createScreensRouter } from './api/screens/routes.js';
@@ -31,7 +32,7 @@ const publicDir = path.join(__dirname, 'web', 'admin-ui', 'public');
 const protectedPages = [
   '/', '/index.html', '/locations.html', '/screens.html', '/catalog.html',
   '/screen-editor.html', '/profile.html', '/settings.html', '/sftp-settings.html',
-  '/animation.html', '/connect-tv.html'
+  '/animation.html', '/error-log.html', '/connect-tv.html'
 ];
 
 async function initialiseStore(store, config) {
@@ -134,6 +135,7 @@ function mountProtectedApi(app, dependencies, requireApiSession) {
   app.use('/api', createOverviewRouter(dependencies));
   app.use('/api/settings', createSettingsRouter(dependencies));
   app.use('/api/notifications', createNotificationsRouter(dependencies));
+  app.use('/api/diagnostics', createDiagnosticsRouter(dependencies));
   app.use('/api/catalog', createCatalogRouter(dependencies));
   app.use('/api/locations', createLocationsRouter(dependencies));
   app.use('/api/device-admin', createDeviceAdminRouter(dependencies));
