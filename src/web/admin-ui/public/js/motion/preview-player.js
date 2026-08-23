@@ -87,6 +87,15 @@ function targetDelay(profile, index, count, cycleMs) {
   return cycleMs ? phase % cycleMs : 0;
 }
 
+function sequenceFor(element, fallbackIndex, fallbackCount) {
+  const order = Number(element?.dataset?.motionOrder);
+  const count = Number(element?.dataset?.motionCount);
+  return {
+    index: Number.isInteger(order) && order >= 0 ? order : fallbackIndex,
+    count: Number.isInteger(count) && count > 0 ? count : fallbackCount
+  };
+}
+
 function backgroundFrames(profile) {
   const intensity = clamp(Number(profile.intensity) || 0, 0, 100) / 100;
   const travel = (Number(profile.travel_px) || 0) * intensity;
@@ -166,6 +175,7 @@ export class AnimationPreviewPlayer {
     const byKind = {
       section: [...this.stage.querySelectorAll('[data-motion="section"]')],
       item: [...this.stage.querySelectorAll('[data-motion="item"]')],
+      promotion: [...this.stage.querySelectorAll('[data-motion="promotion"]')],
       price: [...this.stage.querySelectorAll('[data-motion="price"]')]
     };
 
@@ -173,9 +183,11 @@ export class AnimationPreviewPlayer {
       const effect = effectFor(profile, kind);
       if (!effect || effect === 'none') continue;
       targets.forEach((element, index) => {
-        const animation = element.animate(elementFrames(profile, kind, effect, index), {
+        const sequence = sequenceFor(element, index, targets.length);
+        const frameKind = kind === 'promotion' ? 'item' : kind;
+        const animation = element.animate(elementFrames(profile, frameKind, effect, sequence.index), {
           duration: this.total,
-          delay: targetDelay(profile, index, targets.length, this.total),
+          delay: targetDelay(profile, sequence.index, sequence.count, this.total),
           easing: EASING[profile.easing] || EASING.smooth,
           iterations: Infinity,
           fill: 'both'
