@@ -10,6 +10,7 @@ export const ROUTE_DEFINITIONS = Object.freeze([
   Object.freeze({ path: '/settings.html', page: 'settings', section: 'settings', title: 'Настройки сайта', prefetch: true }),
   Object.freeze({ path: '/sftp-settings.html', page: 'sftp-settings', section: 'settings', title: 'SFTP', prefetch: true }),
   Object.freeze({ path: '/animation.html', page: 'animation', section: 'settings', title: 'Анимация', prefetch: true }),
+  Object.freeze({ path: '/error-log.html', page: 'error-log', section: 'settings', title: 'Журнал ошибок', prefetch: true }),
   Object.freeze({ path: '/profile.html', page: 'profile', section: 'settings', title: 'Профиль', prefetch: true })
 ]);
 
@@ -30,7 +31,7 @@ const CONTEXT_LINKS = Object.freeze({
   overview: Object.freeze([['Обзор', '/']]),
   monitors: Object.freeze([['Торговые точки', '/locations.html'], ['Мониторы', '/screens.html'], ['Подключить ТВ', '/connect-tv.html']]),
   catalog: Object.freeze([['Продукция', '/catalog.html']]),
-  settings: Object.freeze([['Настройки сайта', '/settings.html'], ['SFTP', '/sftp-settings.html'], ['Анимация', '/animation.html'], ['Профиль', '/profile.html']])
+  settings: Object.freeze([['Настройки сайта', '/settings.html'], ['SFTP', '/sftp-settings.html'], ['Анимация', '/animation.html'], ['Журнал ошибок', '/error-log.html'], ['Профиль', '/profile.html']])
 });
 
 export const PRIMARY_ROUTES = Object.freeze([
