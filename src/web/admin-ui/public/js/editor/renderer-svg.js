@@ -25,12 +25,12 @@ function separatorMarkup(box, horizontal, scale) {
   return `<line x1="${horizontal.left + MENU_REFERENCE.separatorInset * horizontal.scaleX}" y1="${y}" x2="${horizontal.right}" y2="${y}" class="separator" stroke="${MENU_TABLE_STYLE.separator}" stroke-width="${Math.max(1, scale)}" stroke-dasharray="${6 * scale} ${7 * scale}" opacity="0.65"/>`;
 }
 
-function priceMarkup(value, x, baseline, scale, toneColor, typography) {
+function priceMarkup(value, x, baseline, scale, toneColor, typography, className = 'price') {
   const parts = priceParts(value);
   const fontScale = TV1_REFERENCE_SCALE * scale;
   const attributes = textAttributes({ size: 27 * fontScale, weight: 700, fill: toneColor, anchor: 'end' }, typography);
-  if (!parts) return `<text x="${x}" y="${baseline}" class="price" ${attributes}>—</text>`;
-  return `<text x="${x}" y="${baseline}" class="price" ${attributes}>${escapeXml(parts.whole)}<tspan class="cents" dy="${-16 * fontScale}" font-size="${14 * fontScale}" font-weight="700" fill="${toneColor}">${escapeXml(parts.cents)}</tspan></text>`;
+  if (!parts) return `<text x="${x}" y="${baseline}" class="${className}" ${attributes}>—</text>`;
+  return `<text x="${x}" y="${baseline}" class="${className}" ${attributes}>${escapeXml(parts.whole)}<tspan class="cents" dy="${-16 * fontScale}" font-size="${14 * fontScale}" font-weight="700" fill="${toneColor}">${escapeXml(parts.cents)}</tspan></text>`;
 }
 
 function promotionMarkup(line, x, box, scale, typography) {
@@ -86,28 +86,28 @@ function itemMarkup(line, box, horizontal, palette, scale, typography) {
   return `<g class="table-item tone-${line.tone === 'accent' ? 'accent' : 'light'}">
     ${separatorMarkup(box, horizontal, scale)}
     ${promotion.markup}
-    <text x="${itemNameX}" y="${nameBaseline}" class="item-name" ${textAttributes({ size: 25 * fontScale, weight: 700, fill: toneColor }, typography)}>${escapeXml(truncateText(line.name, nameCharacters))}</text>
-    ${line.metadata ? `<text x="${nameX}" y="${metaBaseline}" class="item-meta" ${textAttributes({ size: 14 * fontScale, weight: 400, fill: metaColor }, typography)}>${escapeXml(truncateText(line.metadata, metaCharacters))}</text>` : ''}
-    ${priceMarkup(line.pricePrimary, horizontal.primaryPriceX, priceBaseline, scale, toneColor, typography)}
-    ${priceMarkup(line.priceSecondary, horizontal.secondaryPriceX, priceBaseline, scale, toneColor, typography)}
+    <g class="table-item-content">
+      <text x="${itemNameX}" y="${nameBaseline}" class="item-name" ${textAttributes({ size: 25 * fontScale, weight: 700, fill: toneColor }, typography)}>${escapeXml(truncateText(line.name, nameCharacters))}</text>
+      ${line.metadata ? `<text x="${nameX}" y="${metaBaseline}" class="item-meta" ${textAttributes({ size: 14 * fontScale, weight: 400, fill: metaColor }, typography)}>${escapeXml(truncateText(line.metadata, metaCharacters))}</text>` : ''}
+      ${priceMarkup(line.pricePrimary, horizontal.primaryPriceX, priceBaseline, scale, toneColor, typography)}
+      ${priceMarkup(line.priceSecondary, horizontal.secondaryPriceX, priceBaseline, scale, toneColor, typography)}
+    </g>
   </g>`;
 }
 
 function packagingMarkup(line, box, horizontal, palette, scale, typography) {
   const fontScale = TV1_REFERENCE_SCALE * scale;
-  const gap = 12 * horizontal.scaleX;
+  const gap = 34 * horizontal.scaleX;
   const cellWidth = (horizontal.tableWidth - gap) / 2;
-  const baseline = box.top + 34 * fontScale;
+  const baseline = box.top + 35 * fontScale;
   const cells = line.items.map((item, index) => {
     const x = horizontal.left + index * (cellWidth + gap);
+    const right = x + cellWidth;
     const toneColor = item.tone === 'accent' ? palette.accentText : palette.primaryText;
-    const maximumCharacters = Math.max(8, Math.floor((cellWidth - 180 * horizontal.scaleX) / (11 * fontScale)));
-    const parts = priceParts(item.unitPrice);
-    const price = parts ? `${parts.whole},${parts.cents}` : '—';
+    const maximumCharacters = Math.max(8, Math.floor((cellWidth - 175 * horizontal.scaleX) / (13 * fontScale)));
     return `<g class="packaging-cell tone-${item.tone === 'accent' ? 'accent' : 'light'}">
-      <rect x="${x}" y="${box.top + 2}" width="${cellWidth}" height="${Math.max(1, box.height - 6)}" rx="7" fill="${MENU_TABLE_STYLE.packagingBackground}" stroke="${toneColor}" stroke-width="1.5" opacity="0.96"/>
-      <text x="${x + 16 * horizontal.scaleX}" y="${baseline}" class="packaging-name" ${textAttributes({ size: 21 * fontScale, weight: 700, fill: toneColor }, typography)}>${escapeXml(truncateText(item.name, maximumCharacters))}</text>
-      <text x="${x + cellWidth - 15 * horizontal.scaleX}" y="${baseline}" class="packaging-price" ${textAttributes({ size: 21 * fontScale, weight: 700, fill: toneColor, anchor: 'end' }, typography)}>${escapeXml(price)}</text>
+      <text x="${x + 22 * horizontal.scaleX}" y="${baseline}" class="packaging-name" ${textAttributes({ size: 25 * fontScale, weight: 700, fill: toneColor }, typography)}>${escapeXml(truncateText(item.name, maximumCharacters))}</text>
+      ${priceMarkup(item.unitPrice, right - 22 * horizontal.scaleX, baseline, scale, toneColor, typography, 'packaging-price')}
     </g>`;
   }).join('\n');
   return `<g class="table-packaging">${separatorMarkup(box, horizontal, scale)}${cells}</g>`;
