@@ -3,13 +3,14 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.3.0"
+SCRIPT_VERSION="1.4.0"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 LEGACY_PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
 GITHUB_REPO="ghost-raider-afk/menu-tv-2"
 GITHUB_API_URL="https://api.github.com/repos/$GITHUB_REPO"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/$GITHUB_REPO"
+INSTALLER_TAG_PREFIX="installer-v"
 COMPOSE_PROJECT="menu-tv-2"
 APP_SERVICE="app"
 DB_SERVICE="db"
@@ -64,6 +65,7 @@ Menu TV 2.0 — управление независимым приложение
 
 Версия скрипта: $SCRIPT_VERSION
 Канал обновлений: стабильные GitHub Releases
+Канал обновлений скрипта: теги ${INSTALLER_TAG_PREFIX}X.Y.Z
 Проект устанавливается только в: $INSTALL_DIR
 Контейнеры: $APP_CONTAINER, $DB_CONTAINER, $SFTP_CONTAINER
 USAGE
@@ -74,7 +76,6 @@ require_root() {
 }
 
 command_exists() { command -v "$1" >/dev/null 2>&1; }
-
 
 project_version_from_file() {
   local file="$1" version
@@ -93,6 +94,12 @@ release_tag_version() {
   printf '%s\n' "${BASH_REMATCH[1]}"
 }
 
+installer_tag_version() {
+  local tag="$1"
+  [[ "$tag" =~ ^${INSTALLER_TAG_PREFIX}([0-9]+\.[0-9]+\.[0-9]+)$ ]] || return 1
+  printf '%s\n' "${BASH_REMATCH[1]}"
+}
+
 version_is_newer() {
   local current="$1" candidate="$2"
   [[ "$current" != "$candidate" ]] || return 1
@@ -108,6 +115,15 @@ latest_release_tag() {
   printf '%s\n' "$tag"
 }
 
+latest_installer_tag() {
+  local payload tag
+  command_exists curl || return 1
+  payload="$(curl -fsSL --connect-timeout 10 --max-time 30 -H 'Accept: application/vnd.github+json' "$GITHUB_API_URL/git/matching-refs/tags/$INSTALLER_TAG_PREFIX")" || return 1
+  tag="$(printf '%s' "$payload" | tr ',' '\n' | sed -nE 's#.*"ref"[[:space:]]*:[[:space:]]*"refs/tags/(installer-v[0-9]+\.[0-9]+\.[0-9]+)".*#\1#p' | sort -V | tail -n 1)"
+  installer_tag_version "$tag" >/dev/null || return 1
+  printf '%s\n' "$tag"
+}
+
 script_version_from_file() {
   local file="$1" version
   version="$(sed -nE 's/^SCRIPT_VERSION="([0-9]+(\.[0-9]+){2})"$/\1/p' "$file" | head -n 1)"
@@ -115,14 +131,16 @@ script_version_from_file() {
   printf '%s\n' "$version"
 }
 
-
 fetch_latest_script() {
-  local destination="$1" release_tag raw_url
+  local destination="$1" installer_tag raw_url tag_version file_version
   command_exists curl || { warn "Для проверки обновлений нужен curl."; return 1; }
-  release_tag="$(latest_release_tag)" || return 1
-  raw_url="$GITHUB_RAW_URL/$release_tag/menu-tv-2.sh"
+  installer_tag="$(latest_installer_tag)" || return 1
+  raw_url="$GITHUB_RAW_URL/$installer_tag/menu-tv-2.sh"
   curl -fsSL --connect-timeout 10 --max-time 60 "$raw_url" -o "$destination" || return 1
-  bash -n "$destination" && script_version_from_file "$destination" >/dev/null
+  bash -n "$destination" || return 1
+  file_version="$(script_version_from_file "$destination")" || return 1
+  tag_version="$(installer_tag_version "$installer_tag")" || return 1
+  [[ "$file_version" == "$tag_version" ]] || return 1
 }
 
 script_version_is_newer() {
@@ -136,19 +154,19 @@ check_script_update() {
   latest_file="$(mktemp -t "${PROGRAM_NAME}.script.XXXXXX")"
   if ! fetch_latest_script "$latest_file"; then
     rm -f -- "$latest_file"
-    die "Не удалось загрузить или проверить основной скрипт из GitHub."
+    die "Не удалось загрузить или проверить стабильную версию скрипта из GitHub."
   fi
   latest_version="$(script_version_from_file "$latest_file")"
   rm -f -- "$latest_file"
 
   printf 'Текущая версия скрипта: %s\n' "$SCRIPT_VERSION"
-  printf 'Версия в GitHub:        %s\n' "$latest_version"
+  printf 'Стабильная версия:      %s\n' "$latest_version"
   if script_version_is_newer "$SCRIPT_VERSION" "$latest_version"; then
     info "Доступно обновление скрипта."
   elif [[ "$SCRIPT_VERSION" == "$latest_version" ]]; then
     info "Установлена актуальная версия скрипта."
   else
-    info "Локальная версия скрипта новее версии в GitHub."
+    info "Локальная версия скрипта новее стабильной версии."
   fi
 }
 
@@ -158,18 +176,18 @@ update_script() {
   latest_file="$(mktemp -t "${PROGRAM_NAME}.script.XXXXXX")"
   if ! fetch_latest_script "$latest_file"; then
     rm -f -- "$latest_file"
-    die "Не удалось загрузить или проверить основной скрипт из GitHub."
+    die "Не удалось загрузить или проверить стабильную версию скрипта из GitHub."
   fi
   latest_version="$(script_version_from_file "$latest_file")"
 
   printf 'Текущая версия скрипта: %s\n' "$SCRIPT_VERSION"
-  printf 'Версия в GitHub:        %s\n' "$latest_version"
+  printf 'Стабильная версия:      %s\n' "$latest_version"
   if ! script_version_is_newer "$SCRIPT_VERSION" "$latest_version"; then
     rm -f -- "$latest_file"
     if [[ "$SCRIPT_VERSION" == "$latest_version" ]]; then
       info "Установлена актуальная версия скрипта."
     else
-      info "Локальная версия скрипта новее версии в GitHub."
+      info "Локальная версия скрипта новее стабильной версии."
     fi
     return
   fi
@@ -249,6 +267,10 @@ compose() {
   docker compose --project-name "$COMPOSE_PROJECT" --project-directory "$INSTALL_DIR" --env-file "$INSTALL_DIR/.env" "$@"
 }
 
+proxy_compose() {
+  docker compose --project-name menu-tv-2-proxy --project-directory "$PROXY_DIR" --env-file "$PROXY_ENV_FILE" "$@"
+}
+
 check_dependencies() {
   local tool
   for tool in docker git tar openssl awk sed find install mktemp runuser od tr fold shuf dig cmp sort; do
@@ -280,9 +302,17 @@ setup_proxy() {
   printf 'TRAEFIK_ACME_EMAIL=%s\n' "$acme_email" > "$PROXY_ENV_FILE"
   chown root:root "$PROXY_ENV_FILE"
   chmod 600 "$PROXY_ENV_FILE"
-  install -o root -g root -m 0600 /dev/null "$PROXY_DIR/acme.json"
+  [[ -f "$PROXY_DIR/acme.json" ]] || install -o root -g root -m 0600 /dev/null "$PROXY_DIR/acme.json"
   log "Запуск собственного HTTPS-прокси Menu TV 2.0"
-  docker compose --project-name menu-tv-2-proxy --project-directory "$PROXY_DIR" --env-file "$PROXY_ENV_FILE" up -d --wait
+  proxy_compose up -d --wait
+}
+
+refresh_proxy() {
+  [[ -f "$PROXY_ENV_FILE" ]] || { warn "Конфигурация HTTPS-прокси не найдена: $PROXY_ENV_FILE"; return 1; }
+  [[ -f "$INSTALL_DIR/infra/traefik-compose.yaml" ]] || { warn "В релизе отсутствует infra/traefik-compose.yaml"; return 1; }
+  install -o root -g root -m 0640 "$INSTALL_DIR/infra/traefik-compose.yaml" "$PROXY_COMPOSE_FILE"
+  log "Обновление защищённой конфигурации HTTPS-прокси"
+  proxy_compose up -d --wait
 }
 
 env_value() {
@@ -366,22 +396,37 @@ random_character() {
   printf '%s' "${character_set:byte % character_count:1}"
 }
 
+admin_password_length_from_env() {
+  local env_file="$1" minimum maximum preferred target
+  minimum="$(env_value PASSWORD_MIN_LENGTH "$env_file")"
+  maximum="$(env_value PASSWORD_MAX_LENGTH "$env_file")"
+  preferred="$(env_value GENERATED_PASSWORD_LENGTH "$env_file")"
+  [[ "$minimum" =~ ^[0-9]+$ && "$maximum" =~ ^[0-9]+$ && "$preferred" =~ ^[0-9]+$ ]] || die "PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH и GENERATED_PASSWORD_LENGTH должны быть целыми числами."
+  (( minimum >= 10 && maximum >= minimum && maximum <= 128 )) || die "Некорректный диапазон PASSWORD_MIN_LENGTH/PASSWORD_MAX_LENGTH."
+  target=$preferred
+  (( target < minimum )) && target=$minimum
+  (( target > maximum )) && target=$maximum
+  (( target >= 10 && target <= 128 )) || die "Некорректный GENERATED_PASSWORD_LENGTH."
+  printf '%s\n' "$target"
+}
+
 random_admin_password() {
-  local upper="ABCDEFGHJKLMNPQRSTUVWXYZ" lower="abcdefghjkmnpqrstuvwxyz"
-  local digits="23456789" special="!%+,.:@^_~-" alphabet password
+  local target_length="$1" upper="ABCDEFGHJKLMNPQRSTUVWXYZ" lower="abcdefghjkmnpqrstuvwxyz"
+  local digits="23456789" special="!%+,.:@^_~-" alphabet password index
+  [[ "$target_length" =~ ^[0-9]+$ ]] && (( target_length >= 4 && target_length <= 128 )) || die "Некорректная длина создаваемого пароля администратора."
   alphabet="${upper}${lower}${digits}${special}"
   password="$(random_character "$upper")"
   password+="$(random_character "$lower")"
   password+="$(random_character "$digits")"
   password+="$(random_character "$special")"
-  for _ in $(seq 1 6); do
+  for (( index=4; index<target_length; index+=1 )); do
     password+="$(random_character "$alphabet")"
   done
   printf '%s' "$password" | fold -w1 | shuf | tr -d '\n'
 }
 
 write_new_env() {
-  local domain="$1" env_file="$INSTALL_DIR/.env"
+  local domain="$1" env_file="$INSTALL_DIR/.env" password_length
   [[ -f "$INSTALL_DIR/.env.example" ]] || die "В репозитории отсутствует .env.example"
   [[ ! -e "$env_file" ]] || die "Уже существует $env_file — создание остановлено для защиты настроек."
   cp "$INSTALL_DIR/.env.example" "$env_file"
@@ -390,19 +435,15 @@ write_new_env() {
   set_env_value "$env_file" POSTGRES_USER "menu_tv_2"
   set_env_value "$env_file" POSTGRES_PASSWORD "$(random_secret 24)"
   INITIAL_ADMIN_USERNAME="admin"
-  INITIAL_ADMIN_PASSWORD="$(random_admin_password)"
+  password_length="$(admin_password_length_from_env "$env_file")"
+  INITIAL_ADMIN_PASSWORD="$(random_admin_password "$password_length")"
   set_env_value "$env_file" BOOTSTRAP_ADMIN_USERNAME "$INITIAL_ADMIN_USERNAME"
   set_env_value "$env_file" BOOTSTRAP_ADMIN_PASSWORD "$INITIAL_ADMIN_PASSWORD"
   set_env_value "$env_file" SESSION_SECRET "$(random_secret 48)"
   set_env_value "$env_file" SFTP_PUBLIC_HOST "$domain"
-  set_env_value "$env_file" SFTP_PORT "2022"
-  set_env_value "$env_file" SFTP_API_URL "http://sftp:8080"
-  set_env_value "$env_file" SFTP_STORAGE_ROOT "/srv/menu-tv-sftp"
-  set_env_value "$env_file" SFTP_ADMIN_USERNAME "menu_tv_2_service"
   set_env_value "$env_file" SFTP_ADMIN_PASSWORD "$(random_secret 32)"
   chmod 600 "$env_file"
 }
-
 
 merge_missing_env_from_example() {
   local env_file="$INSTALL_DIR/.env" example_file="$INSTALL_DIR/.env.example" line key value
@@ -418,7 +459,6 @@ merge_missing_env_from_example() {
     fi
   done < "$example_file"
 }
-
 
 ensure_sftp_env() {
   local env_file="$INSTALL_DIR/.env" domain app_name
@@ -451,20 +491,25 @@ ensure_sftp_env() {
 }
 
 validate_env() {
-  local key value
+  local key value minimum maximum bootstrap_password legacy_password
   [[ -f "$INSTALL_DIR/.env" ]] || die "Отсутствует $INSTALL_DIR/.env"
-  for key in MENU_TV_2_DOMAIN POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD SESSION_SECRET SFTP_PUBLIC_HOST SFTP_PORT SFTP_ADMIN_USERNAME SFTP_ADMIN_PASSWORD SCREEN_BACKGROUND_MAX_BYTES; do
+  for key in MENU_TV_2_DOMAIN POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD SESSION_SECRET SFTP_PUBLIC_HOST SFTP_PORT SFTP_ADMIN_USERNAME SFTP_ADMIN_PASSWORD SCREEN_BACKGROUND_MAX_BYTES PASSWORD_MIN_LENGTH PASSWORD_MAX_LENGTH GENERATED_PASSWORD_LENGTH; do
     value="$(env_value "$key")"
     [[ -n "$value" && "$value" != replace-with-* ]] || die "$key в .env не настроен."
   done
+  admin_password_length_from_env "$INSTALL_DIR/.env" >/dev/null
+  minimum="$(env_value PASSWORD_MIN_LENGTH)"
+  maximum="$(env_value PASSWORD_MAX_LENGTH)"
   [[ $(env_value POSTGRES_PASSWORD | wc -c) -ge 17 ]] || die "POSTGRES_PASSWORD должен содержать не менее 16 символов."
   if [[ -n "$(env_value BOOTSTRAP_ADMIN_USERNAME)" || -n "$(env_value BOOTSTRAP_ADMIN_PASSWORD)" ]]; then
     [[ -n "$(env_value BOOTSTRAP_ADMIN_USERNAME)" && -n "$(env_value BOOTSTRAP_ADMIN_PASSWORD)" ]] || die "Для начального администратора нужны BOOTSTRAP_ADMIN_USERNAME и BOOTSTRAP_ADMIN_PASSWORD."
-    [[ $(env_value BOOTSTRAP_ADMIN_PASSWORD | wc -c) -ge 11 ]] || die "BOOTSTRAP_ADMIN_PASSWORD должен содержать не менее 10 символов."
+    bootstrap_password="$(env_value BOOTSTRAP_ADMIN_PASSWORD)"
+    (( ${#bootstrap_password} >= minimum && ${#bootstrap_password} <= maximum )) || die "BOOTSTRAP_ADMIN_PASSWORD должен соответствовать PASSWORD_MIN_LENGTH/PASSWORD_MAX_LENGTH."
   fi
   if [[ -n "$(env_value ADMIN_USERNAME)" || -n "$(env_value ADMIN_PASSWORD)" ]]; then
     [[ -n "$(env_value ADMIN_USERNAME)" && -n "$(env_value ADMIN_PASSWORD)" ]] || die "Для переноса старого администратора нужны ADMIN_USERNAME и ADMIN_PASSWORD."
-    [[ $(env_value ADMIN_PASSWORD | wc -c) -ge 11 ]] || die "ADMIN_PASSWORD должен содержать не менее 10 символов."
+    legacy_password="$(env_value ADMIN_PASSWORD)"
+    (( ${#legacy_password} >= minimum && ${#legacy_password} <= maximum )) || die "ADMIN_PASSWORD должен соответствовать PASSWORD_MIN_LENGTH/PASSWORD_MAX_LENGTH."
   fi
   [[ $(env_value SESSION_SECRET | wc -c) -ge 33 ]] || die "SESSION_SECRET должен содержать не менее 32 символов."
   [[ $(env_value SFTP_ADMIN_PASSWORD | wc -c) -ge 33 ]] || die "SFTP_ADMIN_PASSWORD должен содержать не менее 32 символов."
@@ -630,6 +675,15 @@ source_requires_database_backup() {
   return 1
 }
 
+source_requires_proxy_update() {
+  local files="$1" file
+  while IFS= read -r file; do
+    case "$file" in
+      infra/traefik-compose.yaml) return 0 ;;
+    esac
+  done <<< "$files"
+  return 1
+}
 
 fetch_release_revision() {
   local release_tag="$1"
@@ -640,18 +694,41 @@ fetch_release_revision() {
 create_temporary_backup() {
   local with_database="${1:-false}"
   [[ -d "$INSTALL_DIR/.git" ]] || die "Каталог исходников не является Git-репозиторием: $INSTALL_DIR"
+  [[ -f "$INSTALL_DIR/.env" ]] || die "Отсутствует $INSTALL_DIR/.env"
   TEMP_BACKUP_DIR="$(mktemp -d -t "${PROGRAM_NAME}.update.XXXXXX")"
   chmod 700 "$TEMP_BACKUP_DIR"
-  log "Создание временной резервной копии исходников"
+  log "Создание временной резервной копии исходников и .env"
   tar --exclude='./.git' --exclude='./.env' --exclude='./node_modules' -C "$INSTALL_DIR" -czf "$TEMP_BACKUP_DIR/source.tar.gz" .
   cp "$INSTALL_DIR/.env" "$TEMP_BACKUP_DIR/.env"
   chmod 600 "$TEMP_BACKUP_DIR/.env"
   git -C "$INSTALL_DIR" rev-parse HEAD > "$TEMP_BACKUP_DIR/git-revision"
+  if [[ -f "$PROXY_COMPOSE_FILE" ]]; then
+    cp "$PROXY_COMPOSE_FILE" "$TEMP_BACKUP_DIR/proxy-compose.yaml"
+  fi
   if [[ "$with_database" == true ]]; then
     log "Создание резервной копии базы данных"
     compose exec -T "$DB_SERVICE" sh -ec 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom --no-owner --no-privileges' > "$TEMP_BACKUP_DIR/database.dump"
+    [[ -s "$TEMP_BACKUP_DIR/database.dump" ]] || die "Резервная копия PostgreSQL пуста; обновление остановлено."
   fi
-  info "Временный бэкап создан и будет удалён после завершения операции."
+  info "Временный бэкап создан до изменения конфигурации и будет удалён после успешной операции."
+}
+
+restore_database_exact() {
+  local dump_file="$1"
+  compose up -d "$DB_SERVICE"
+  wait_for_database
+  compose exec -T "$DB_SERVICE" sh -ec '
+    export PGPASSWORD="$POSTGRES_PASSWORD"
+    dropdb --if-exists --force -U "$POSTGRES_USER" "$POSTGRES_DB"
+    createdb -U "$POSTGRES_USER" -O "$POSTGRES_USER" "$POSTGRES_DB"
+  '
+  compose exec -T "$DB_SERVICE" sh -ec 'PGPASSWORD="$POSTGRES_PASSWORD" pg_restore --exit-on-error -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --no-privileges' < "$dump_file"
+}
+
+restore_proxy_backup() {
+  [[ -f "$TEMP_BACKUP_DIR/proxy-compose.yaml" && -f "$PROXY_ENV_FILE" ]] || return 0
+  install -o root -g root -m 0640 "$TEMP_BACKUP_DIR/proxy-compose.yaml" "$PROXY_COMPOSE_FILE"
+  proxy_compose up -d --wait
 }
 
 restore_temporary_backup() {
@@ -666,12 +743,12 @@ restore_temporary_backup() {
   repair_permissions full
   install_launcher
   if [[ -f "$TEMP_BACKUP_DIR/database.dump" ]]; then
-    compose up -d "$DB_SERVICE"
-    wait_for_database
-    compose exec -T "$DB_SERVICE" sh -ec 'PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner --no-privileges' < "$TEMP_BACKUP_DIR/database.dump"
+    restore_database_exact "$TEMP_BACKUP_DIR/database.dump"
   fi
+  restore_proxy_backup
   compose up -d --build --wait
   verify_application
+  verify_sftp
 }
 
 recover_failed_update() {
@@ -679,7 +756,7 @@ recover_failed_update() {
     die "Обновление не прошло проверку. Контейнеры не удалялись; проверьте конфигурацию и повторите попытку."
   fi
   if restore_temporary_backup; then
-    die "Обновление отменено: предыдущая версия и данные автоматически восстановлены."
+    die "Обновление отменено: предыдущая версия, .env и данные автоматически восстановлены."
   fi
   KEEP_TEMP_BACKUP=true
   die "Автоматическое восстановление не завершилось. Временная копия сохранена: $TEMP_BACKUP_DIR"
@@ -764,13 +841,12 @@ cleanup_failed_install() {
   docker volume rm "$SITE_ASSETS_VOLUME" >/dev/null 2>&1 || true
   rm -rf -- "$INSTALL_DIR"
   if [[ -d "$PROXY_DIR" ]]; then
-    docker compose --project-name menu-tv-2-proxy --project-directory "$PROXY_DIR" --env-file "$PROXY_ENV_FILE" down --volumes --remove-orphans || true
+    proxy_compose down --volumes --remove-orphans || true
     docker network rm "$PROXY_NETWORK" >/dev/null 2>&1 || true
     rm -rf -- "$PROXY_DIR"
   fi
   info "Ресурсы неудачной установки удалены."
 }
-
 
 install_app() {
   require_root
@@ -788,13 +864,13 @@ install_app() {
   stage_dir="$(mktemp -d -t "${PROGRAM_NAME}.install.XXXXXX")"
   chown "$owner:$owner" "$stage_dir"
   git_as_project_owner clone --depth 1 --branch "$release_tag" --single-branch "$REPO_URL" "$stage_dir/source"
-  printf '%s
-' "$owner" > "$stage_dir/source/.installer-owner"
+  printf '%s\n' "$owner" > "$stage_dir/source/.installer-owner"
   rm -f -- "$stage_dir/source/.installer-ref"
   mv "$stage_dir/source" "$INSTALL_DIR"
   rmdir "$stage_dir"
   [[ "$(installed_project_version)" == "$release_version" ]] || die "Версия package.json не соответствует тегу $release_tag."
   write_new_env "$domain"
+  validate_env
   repair_permissions full
   install_launcher
   if ! setup_proxy "$acme_email" || ! build_and_start; then
@@ -804,20 +880,18 @@ install_app() {
   show_credentials
 }
 
-
 update_app() {
   local env_before current_version latest_tag latest_version remote_revision changed_files input
-  local source_changed=false env_changed=false needs_runtime=false needs_build=false needs_database_backup=false
+  local source_changed=false env_changed=false needs_runtime=false needs_build=false needs_database_backup=false needs_proxy=false
   require_root
   [[ -d "$INSTALL_DIR/.git" ]] || die "Menu TV 2.0 не установлен: $INSTALL_DIR"
+  [[ -f "$INSTALL_DIR/.env" ]] || die "Отсутствует $INSTALL_DIR/.env"
   current_version="$(installed_project_version)" || die "Не удалось определить установленную версию из package.json."
   latest_tag="$(latest_release_tag)" || die "Не удалось определить последний стабильный GitHub Release."
   latest_version="$(release_tag_version "$latest_tag")"
 
-  printf 'Установленная версия: %s
-' "$current_version"
-  printf 'Доступная версия:     %s
-' "$latest_version"
+  printf 'Установленная версия: %s\n' "$current_version"
+  printf 'Доступная версия:     %s\n' "$latest_version"
   if version_is_newer "$current_version" "$latest_version"; then
     read -r -p "Обновить ТВ МЕНЮ 2 до версии $latest_version? [y/N]: " input
     if [[ "${input,,}" != y ]]; then
@@ -831,15 +905,6 @@ update_app() {
 
   prepare_host
   check_dependencies
-  env_before="$(mktemp -t "${PROGRAM_NAME}.env.XXXXXX")"
-  cp "$INSTALL_DIR/.env" "$env_before"
-  ensure_sftp_env
-  validate_env
-  if ! cmp -s "$env_before" "$INSTALL_DIR/.env"; then
-    env_changed=true
-  fi
-  rm -f -- "$env_before"
-
   log "Проверка стабильного релиза $latest_tag"
   remote_revision="$(fetch_release_revision "$latest_tag")"
   if ! git_as_project_owner -C "$INSTALL_DIR" diff --quiet HEAD "$remote_revision"; then
@@ -855,6 +920,15 @@ update_app() {
     source_requires_runtime_update "$changed_files" && needs_runtime=true
     source_requires_image_rebuild "$changed_files" && needs_build=true
     source_requires_database_backup "$changed_files" && needs_database_backup=true
+    source_requires_proxy_update "$changed_files" && needs_proxy=true
+  fi
+
+  create_temporary_backup "$needs_database_backup"
+  env_before="$TEMP_BACKUP_DIR/.env"
+  ensure_sftp_env
+  validate_env
+  if ! cmp -s "$env_before" "$INSTALL_DIR/.env"; then
+    env_changed=true
   fi
 
   if [[ "$source_changed" == false && "$env_changed" == false ]]; then
@@ -864,13 +938,14 @@ update_app() {
   fi
 
   if [[ "$source_changed" == true ]]; then
-    if [[ "$needs_runtime" == true ]]; then
-      create_temporary_backup "$needs_database_backup"
-    fi
     if ! sync_existing_source "$remote_revision"; then
-      die "Не удалось применить релиз $latest_tag."
+      recover_failed_update
     fi
     [[ "$(installed_project_version)" == "$latest_version" ]] || recover_failed_update
+  fi
+
+  if [[ "$needs_proxy" == true ]]; then
+    refresh_proxy || recover_failed_update
   fi
 
   if bootstrap_administrator_is_configured && administrator_is_persisted; then
@@ -944,7 +1019,7 @@ purge_project() {
   fi
   rm -f -- "$LAUNCHER_PATH"
   if [[ -d "$PROXY_DIR" ]]; then
-    docker compose --project-name menu-tv-2-proxy --project-directory "$PROXY_DIR" --env-file "$PROXY_ENV_FILE" down --volumes --remove-orphans || true
+    proxy_compose down --volumes --remove-orphans || true
     docker network rm "$PROXY_NETWORK" >/dev/null 2>&1 || true
     rm -rf -- "$PROXY_DIR"
   fi
@@ -961,38 +1036,34 @@ remove_script() {
   info "Системный скрипт удалён. Проект, данные и другие Docker-контейнеры не затронуты."
 }
 
-
 status_app() {
-  local current_version latest_tag latest_version
+  local current_version latest_tag latest_version installer_tag installer_version
   require_root
   [[ -d "$INSTALL_DIR" ]] || die "Menu TV 2.0 не установлен."
   current_version="$(installed_project_version 2>/dev/null || printf 'unknown')"
-  printf 'Installation: %s
-' "$INSTALL_DIR"
-  printf 'Version: %s
-' "$current_version"
+  printf 'Installation: %s\n' "$INSTALL_DIR"
+  printf 'Version: %s\n' "$current_version"
   if latest_tag="$(latest_release_tag 2>/dev/null)"; then
     latest_version="$(release_tag_version "$latest_tag")"
-    printf 'Latest release: %s
-' "$latest_version"
+    printf 'Latest release: %s\n' "$latest_version"
   else
-    printf 'Latest release: unavailable
-'
+    printf 'Latest release: unavailable\n'
+  fi
+  printf 'Script version: %s\n' "$SCRIPT_VERSION"
+  if installer_tag="$(latest_installer_tag 2>/dev/null)"; then
+    installer_version="$(installer_tag_version "$installer_tag")"
+    printf 'Latest script: %s\n' "$installer_version"
+  else
+    printf 'Latest script: unavailable\n'
   fi
   printf 'Revision: '
   git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || printf 'unknown'
-  printf '
-Containers:
-'
+  printf '\nContainers:\n'
   docker ps --filter "name=^/${APP_CONTAINER}$" --filter "name=^/${DB_CONTAINER}$" --filter "name=^/${SFTP_CONTAINER}$" --format '  {{.Names}}  {{.Status}}  {{.Image}}'
   printf 'Health: '
-  verify_application >/dev/null 2>&1 && printf 'OK
-' || printf 'FAILED
-'
+  verify_application >/dev/null 2>&1 && printf 'OK\n' || printf 'FAILED\n'
   printf 'SFTP: '
-  verify_sftp >/dev/null 2>&1 && printf 'OK
-' || printf 'FAILED
-'
+  verify_sftp >/dev/null 2>&1 && printf 'OK\n' || printf 'FAILED\n'
 }
 
 menu() {
