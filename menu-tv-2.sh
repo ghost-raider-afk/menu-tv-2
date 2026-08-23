@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.3.1"
+SCRIPT_VERSION="1.3.2"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 LEGACY_PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
@@ -334,6 +334,22 @@ delete_env_value() {
   sed -i "/^${key}=/d" "$file"
 }
 
+cleanup_obsolete_env() {
+  local env_file="$1" key
+  for key in \
+    TEMPLATE_BACKGROUND_MAX_BYTES \
+    FRONTEND_ERROR_RETENTION_DAYS \
+    FRONTEND_ERROR_MAX_ENTRIES \
+    APP_CPU_LIMIT \
+    DB_CPU_LIMIT \
+    SFTP_CPU_LIMIT; do
+    if grep -q "^${key}=" "$env_file"; then
+      delete_env_value "$env_file" "$key"
+      info "Удалён устаревший параметр .env: $key"
+    fi
+  done
+}
+
 validate_domain() {
   local domain="${1,,}"
   [[ "$domain" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]] || return 1
@@ -471,9 +487,7 @@ ensure_sftp_env() {
   if [[ -z "$app_name" || "$app_name" == "Menu TV 2.0" ]]; then
     set_env_value "$env_file" APP_NAME "ТВ МЕНЮ"
   fi
-  delete_env_value "$env_file" TEMPLATE_BACKGROUND_MAX_BYTES
-  delete_env_value "$env_file" FRONTEND_ERROR_RETENTION_DAYS
-  delete_env_value "$env_file" FRONTEND_ERROR_MAX_ENTRIES
+  cleanup_obsolete_env "$env_file"
 
   [[ -n "$(env_value SFTP_PUBLIC_HOST "$env_file")" ]] || set_env_value "$env_file" SFTP_PUBLIC_HOST "$domain"
   if [[ -z "$(env_value POSTGRES_PASSWORD "$env_file")" || "$(env_value POSTGRES_PASSWORD "$env_file")" == replace-with-* ]]; then
@@ -1151,4 +1165,6 @@ main() {
   esac
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi
