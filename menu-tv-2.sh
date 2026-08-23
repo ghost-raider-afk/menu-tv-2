@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.4.0"
+SCRIPT_VERSION="1.3.1"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 LEGACY_PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
@@ -472,6 +472,8 @@ ensure_sftp_env() {
     set_env_value "$env_file" APP_NAME "ТВ МЕНЮ"
   fi
   delete_env_value "$env_file" TEMPLATE_BACKGROUND_MAX_BYTES
+  delete_env_value "$env_file" FRONTEND_ERROR_RETENTION_DAYS
+  delete_env_value "$env_file" FRONTEND_ERROR_MAX_ENTRIES
 
   [[ -n "$(env_value SFTP_PUBLIC_HOST "$env_file")" ]] || set_env_value "$env_file" SFTP_PUBLIC_HOST "$domain"
   if [[ -z "$(env_value POSTGRES_PASSWORD "$env_file")" || "$(env_value POSTGRES_PASSWORD "$env_file")" == replace-with-* ]]; then
