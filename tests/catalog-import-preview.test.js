@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applyProductsImport, previewProductsImport } from '../src/services/catalog-csv-service.js';
+import { ConflictError } from '../src/shared/errors.js';
 
 const EXISTING = Object.freeze({
   id: 7,
@@ -87,4 +88,26 @@ test('catalog import apply validates again inside one transaction and skips unch
   assert.equal(transactions, 1);
   assert.deepEqual(result, { created: 1, updated: 1, unchanged: 1, excluded: 1, total: 2 });
   assert.deepEqual(calls, [['update', 7, 'Обновлено'], ['create', 'Новая']]);
+});
+
+test('catalog import duplicate identifies the exact row and product name', async () => {
+  const duplicate = Object.assign(new Error('duplicate key'), { code: '23505' });
+  const store = {
+    async transaction(work) {
+      return work({
+        async listProducts() { return []; },
+        async createProduct() { throw duplicate; },
+        async updateProduct() { throw new Error('unexpected update'); }
+      });
+    }
+  };
+
+  await assert.rejects(
+    () => applyProductsImport(store, [{
+      key: 'duplicate', line: 7,
+      values: { id: '', name: 'Повтор из CSV', price_primary: '240', alcoholic: false, beverage_color: 'none', filtration: 'none', active: true }
+    }]),
+    (error) => error instanceof ConflictError
+      && error.message === 'Строка 7: продукция «Повтор из CSV» уже существует. Укажите ID существующей записи для обновления или измените название.'
+  );
 });

@@ -129,6 +129,46 @@ test('public liveness, compact overview and protected session work without templ
   assert.equal(Object.hasOwn(overviewBody, 'templates'), false);
 });
 
+test('catalog duplicate conflicts identify the exact entity and submitted name', async () => {
+  const cookie = await adminCookie();
+  const productPayload = {
+    name: 'Точный дубликат продукции', producer: '', characteristics: '', strength: '',
+    price_primary: '240', alcoholic: false, beverage_color: 'none', filtration: 'none', active: true
+  };
+  const createdProductResponse = await fetch(`${baseUrl}/api/catalog/products`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify(productPayload)
+  });
+  assert.equal(createdProductResponse.status, 201);
+
+  const duplicateProductResponse = await fetch(`${baseUrl}/api/catalog/products`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify(productPayload)
+  });
+  assert.equal(duplicateProductResponse.status, 409);
+  assert.deepEqual(await duplicateProductResponse.json(), { error: 'Продукция «Точный дубликат продукции» уже существует.' });
+
+  const secondProductResponse = await fetch(`${baseUrl}/api/catalog/products`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ ...productPayload, name: 'Продукция для переименования' })
+  });
+  const secondProduct = await secondProductResponse.json();
+  assert.equal(secondProductResponse.status, 201);
+  const duplicateRenameResponse = await fetch(`${baseUrl}/api/catalog/products/${secondProduct.id}`, {
+    method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify(productPayload)
+  });
+  assert.equal(duplicateRenameResponse.status, 409);
+  assert.deepEqual(await duplicateRenameResponse.json(), { error: 'Продукция «Точный дубликат продукции» уже существует.' });
+
+  const packagingPayload = { name: 'Точный дубликат тары', unit_price: '12', active: true };
+  const createdPackagingResponse = await fetch(`${baseUrl}/api/catalog/packaging`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify(packagingPayload)
+  });
+  assert.equal(createdPackagingResponse.status, 201);
+  const duplicatePackagingResponse = await fetch(`${baseUrl}/api/catalog/packaging`, {
+    method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify(packagingPayload)
+  });
+  assert.equal(duplicatePackagingResponse.status, 409);
+  assert.deepEqual(await duplicatePackagingResponse.json(), { error: 'Тара «Точный дубликат тары» уже существует.' });
+});
+
 test('monitor draft, background, geometry and clone are independent per monitor', async () => {
   const cookie = await adminCookie();
   const productResponse = await fetch(`${baseUrl}/api/catalog/products`, { method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({

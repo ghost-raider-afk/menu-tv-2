@@ -3,6 +3,15 @@ import { packagingInput, positiveId, productInput } from '../../contracts/input.
 import { applyProductsImport, importProductsCsv, previewProductsImport, productsToCsv } from '../../services/catalog-csv-service.js';
 import { activity, conflict, notFound } from '../helpers.js';
 
+async function catalogWrite(operation, entity, name) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error?.code !== '23505') throw error;
+    throw conflict(`${entity} «${name}» уже существует.`);
+  }
+}
+
 export function createCatalogRouter({ store }) {
   const router = express.Router();
 
@@ -30,12 +39,18 @@ export function createCatalogRouter({ store }) {
     response.json(result);
   });
   router.post('/products', async (request, response) => {
-    const product = await store.createProduct(productInput(request.body));
+    const input = productInput(request.body);
+    const product = await catalogWrite(() => store.createProduct(input), 'Продукция', input.name);
     await activity(store, request, { action: 'catalog.product.created', entity_type: 'catalog_product', entity_id: product.id, message: `Добавлена продукция «${product.name}».` });
     response.status(201).json(product);
   });
   router.put('/products/:id', async (request, response) => {
-    const product = await store.updateProduct(positiveId(request.params.id, 'id'), productInput(request.body));
+    const input = productInput(request.body);
+    const product = await catalogWrite(
+      () => store.updateProduct(positiveId(request.params.id, 'id'), input),
+      'Продукция',
+      input.name
+    );
     if (!product) throw notFound();
     await activity(store, request, { action: 'catalog.product.updated', entity_type: 'catalog_product', entity_id: product.id, message: `Обновлена продукция «${product.name}».` });
     response.json(product);
@@ -53,12 +68,18 @@ export function createCatalogRouter({ store }) {
 
   router.get('/packaging', async (_request, response) => response.json(await store.listPackaging()));
   router.post('/packaging', async (request, response) => {
-    const packaging = await store.createPackaging(packagingInput(request.body));
+    const input = packagingInput(request.body);
+    const packaging = await catalogWrite(() => store.createPackaging(input), 'Тара', input.name);
     await activity(store, request, { action: 'catalog.packaging.created', entity_type: 'catalog_packaging', entity_id: packaging.id, message: `Добавлена тара «${packaging.name}».` });
     response.status(201).json(packaging);
   });
   router.put('/packaging/:id', async (request, response) => {
-    const packaging = await store.updatePackaging(positiveId(request.params.id, 'id'), packagingInput(request.body));
+    const input = packagingInput(request.body);
+    const packaging = await catalogWrite(
+      () => store.updatePackaging(positiveId(request.params.id, 'id'), input),
+      'Тара',
+      input.name
+    );
     if (!packaging) throw notFound();
     await activity(store, request, { action: 'catalog.packaging.updated', entity_type: 'catalog_packaging', entity_id: packaging.id, message: `Обновлена тара «${packaging.name}».` });
     response.json(packaging);

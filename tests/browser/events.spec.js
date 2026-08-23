@@ -73,3 +73,28 @@ test('unhandled browser failure is persisted as an interface error in the same j
   await expect(entry.locator('.event-severity')).toHaveText('Ошибка');
   await expect(entry.locator('.event-category')).toHaveText('Интерфейс');
 });
+
+test('catalog duplicate event identifies the exact conflicting product', async ({ page }) => {
+  await login(page);
+  await page.goto('/catalog.html');
+  await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
+
+  const marker = `Дубликат-${Date.now()}`;
+  await page.locator('#product-name').fill(marker);
+  await page.locator('#product-price-primary').fill('240');
+  await page.locator('#product-submit').click();
+  await expect(page.locator('#product-name')).toHaveValue('');
+
+  await page.locator('#product-name').fill(marker);
+  await page.locator('#product-price-primary').fill('240');
+  await page.locator('#product-submit').click();
+
+  const expected = `Продукция «${marker}» уже существует.`;
+  await expect(page.locator('.system-toast').filter({ hasText: expected })).toBeVisible();
+  await expect.poll(async () => {
+    const response = await page.request.get(`/api/notifications/events?limit=50&severity=error&category=catalog&q=${encodeURIComponent(marker)}`);
+    if (!response.ok()) return false;
+    const body = await response.json();
+    return body.items.some((item) => item.message === expected);
+  }).toBe(true);
+});
