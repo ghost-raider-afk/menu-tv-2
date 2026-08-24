@@ -5,28 +5,14 @@ import { AnimationPreviewPlayer } from '../motion/preview-player.js';
 import { SceneEntityEditor, normaliseSceneEntity } from '../motion/entity-editor.js';
 import { normaliseAnnouncement, renderAnnouncementLayer } from '../motion/announcement.js';
 import { renderAnimationScreenEmpty, renderAnimationScreenPreview } from '../motion/screen-preview.js';
+import {
+  DEFAULT_LIVE_PROFILE,
+  bindMotionProfileControls,
+  readMotionProfile,
+  writeMotionProfile
+} from '../motion/profile-editor.js';
 
-const PROFILE_ID = 'single-promo-focus';
-const PROFILE_BASE = Object.freeze({
-  motion_version: 2,
-  pattern: 'ambient',
-  flow_direction: 'none',
-  easing: 'smooth',
-  cycle_seconds: 11,
-  event_duration_ms: 1500,
-  wave_stagger_ms: 0,
-  travel_px: 0,
-  scale_amount: 0.045,
-  brightness_amount: 0.18,
-  section_effect: 'none',
-  item_effect: 'none',
-  promotion_effect: 'pulse',
-  price_effect: 'none',
-  background_effect: 'none',
-  background_zoom_percent: 0,
-  intensity: 45
-});
-
+const PROFILE_ID = 'cinematic-live-menu';
 let currentEntity = normaliseSceneEntity();
 let currentAnnouncement = normaliseAnnouncement();
 let player = null;
@@ -39,18 +25,14 @@ function checked(id) { return element(id)?.checked === true; }
 function value(id) { return element(id)?.value || ''; }
 function setValue(id, next) { const node = element(id); if (node) node.value = String(next); }
 
-function collectProfile() {
-  return { ...PROFILE_BASE, intensity: Math.max(0, Math.min(100, Math.round(number('animation-intensity')))) };
-}
-
-function populateProfile(profile = {}) {
-  setValue('animation-intensity', Number.isFinite(Number(profile.intensity)) ? profile.intensity : PROFILE_BASE.intensity);
-  updateIntensityOutput();
-}
-
-function updateIntensityOutput() {
-  const output = element('animation-intensity-output');
-  if (output) output.textContent = `${Math.round(number('animation-intensity'))}%`;
+function restartPreview() {
+  cancelAnimationFrame(previewFrame);
+  previewFrame = requestAnimationFrame(() => {
+    entityEditor?.render();
+    renderAnnouncementPreview();
+    player?.restart(readMotionProfile(), currentEntity, checked('animation-enabled'));
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) player?.pause();
+  });
 }
 
 function announcementFromControls() {
@@ -90,23 +72,6 @@ function renderAnnouncementPreview() {
   if (layer) renderAnnouncementLayer(layer, currentAnnouncement);
 }
 
-function restartPreview() {
-  cancelAnimationFrame(previewFrame);
-  previewFrame = requestAnimationFrame(() => {
-    entityEditor?.render();
-    renderAnnouncementPreview();
-    player?.restart(collectProfile(), currentEntity);
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) player?.pause();
-  });
-}
-
-function bindProfileControls() {
-  element('animation-intensity')?.addEventListener('input', () => {
-    updateIntensityOutput();
-    restartPreview();
-  });
-}
-
 function bindAnnouncementControls() {
   const ids = [
     'animation-announcement-enabled', 'animation-announcement-text', 'animation-announcement-position',
@@ -116,7 +81,7 @@ function bindAnnouncementControls() {
   ids.forEach((id) => {
     const node = element(id);
     if (!node) return;
-    const eventName = node instanceof HTMLInputElement && (node.type === 'range' || node.type === 'color') ? 'input' : node instanceof HTMLTextAreaElement ? 'input' : 'change';
+    const eventName = node instanceof HTMLSelectElement || (node instanceof HTMLInputElement && node.type === 'checkbox') ? 'change' : 'input';
     node.addEventListener(eventName, () => {
       currentAnnouncement = announcementFromControls();
       syncAnnouncementControls(currentAnnouncement);
@@ -150,16 +115,15 @@ function syncEntityControls(entity = currentEntity) {
   if (opacity) opacity.textContent = `${Math.round(current.transform.opacity * 100)}%`;
 
   const thumbnail = element('animation-entity-thumbnail');
-  if (thumbnail) {
-    thumbnail.replaceChildren();
-    if (current.asset_url) {
-      const image = document.createElement('img');
-      image.src = current.asset_url;
-      image.alt = current.name;
-      thumbnail.append(image);
-    } else {
-      thumbnail.append(Object.assign(document.createElement('span'), { textContent: 'PNG / WebP' }));
-    }
+  if (!thumbnail) return;
+  thumbnail.replaceChildren();
+  if (current.asset_url) {
+    const image = document.createElement('img');
+    image.src = current.asset_url;
+    image.alt = current.name;
+    thumbnail.append(image);
+  } else {
+    thumbnail.append(Object.assign(document.createElement('span'), { textContent: 'PNG / WebP' }));
   }
 }
 
@@ -312,7 +276,7 @@ async function loadSettings() {
   const settings = await api.get(API.animationSettings);
   const enabled = element('animation-enabled');
   if (enabled) enabled.checked = settings?.enabled === true;
-  populateProfile(settings?.profile || PROFILE_BASE);
+  writeMotionProfile(settings?.profile || DEFAULT_LIVE_PROFILE);
   currentAnnouncement = normaliseAnnouncement(settings?.announcement);
   syncAnnouncementControls(currentAnnouncement);
   applyEntity(settings?.entity);
@@ -328,16 +292,16 @@ async function saveSettings() {
     const saved = await api.put(API.animationSettings, {
       enabled: checked('animation-enabled'),
       preset_id: PROFILE_ID,
-      profile: collectProfile(),
+      profile: readMotionProfile(),
       entity: currentEntity,
       announcement: currentAnnouncement
     });
-    populateProfile(saved.profile);
+    writeMotionProfile(saved.profile);
     currentAnnouncement = normaliseAnnouncement(saved.announcement);
     syncAnnouncementControls(currentAnnouncement);
     applyEntity(saved.entity);
     renderAnnouncementPreview();
-    setMessage('animation-message', 'Настройки анимации сохранены.', 'success');
+    setMessage('animation-message', 'Настройки живого меню сохранены.', 'success');
   } catch (error) {
     setMessage('animation-message', error.message);
   } finally {
@@ -368,9 +332,10 @@ export function initialiseAnimationStudio() {
       restartPreview();
     }
   });
-  bindProfileControls();
+  bindMotionProfileControls(() => restartPreview());
   bindAnnouncementControls();
   bindEntityControls();
+  element('animation-enabled')?.addEventListener('change', () => restartPreview());
   syncEntityControls();
   syncAnnouncementControls();
   element('animation-save')?.addEventListener('click', () => { void saveSettings(); });
