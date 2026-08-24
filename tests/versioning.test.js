@@ -18,6 +18,7 @@ test('project and installer versions are independently valid with release automa
   assert.equal(lock.version, pkg.version);
   assert.equal(lock.packages?.['']?.version, pkg.version);
   assert.ok(changelog.includes(`## [${pkg.version}]`));
+  assert.ok(changelog.includes('node/unit, Chromium browser/visual и clean-install smoke'));
   assert.ok(scriptVersion, 'SCRIPT_VERSION must be an independent semantic version');
   assert.doesNotMatch(installer, /MENU_TV_REF|\$BRANCH|^BRANCH=/m);
   assert.match(installer, /releases\/latest/);
