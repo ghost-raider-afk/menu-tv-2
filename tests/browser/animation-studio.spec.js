@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import sharp from 'sharp';
 
 async function login(page) {
   await page.goto('/signin.html');
@@ -25,6 +26,13 @@ async function restoreAnimationSettings(page, settings) {
     });
     if (!response.ok) throw new Error(`animation settings restore failed: ${response.status}`);
   }, { enabled: settings.enabled, preset_id: settings.preset_id, profile: settings.profile });
+}
+
+async function deleteEntityAsset(page) {
+  await page.evaluate(async () => {
+    const response = await fetch('/api/settings/animation/entity-asset', { method: 'DELETE', credentials: 'same-origin' });
+    if (!response.ok) throw new Error(`entity asset DELETE failed: ${response.status}`);
+  }).catch(() => undefined);
 }
 
 async function createPreviewFixture(page) {
@@ -62,6 +70,16 @@ async function removePreviewFixture(page, fixture) {
     await fetch(`/api/screens/${screenId}`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => undefined);
     await fetch(`/api/locations/${locationId}`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => undefined);
   }, fixture);
+}
+
+async function transparentEntityPng() {
+  return sharp({
+    create: { width: 160, height: 300, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }
+  }).composite([{
+    input: Buffer.from('<svg width="160" height="300"><rect x="35" y="35" width="90" height="230" rx="34" fill="#F6C90E" fill-opacity=".92"/><ellipse cx="80" cy="50" rx="45" ry="22" fill="#FFF4C2"/></svg>'),
+    top: 0,
+    left: 0
+  }]).png().toBuffer();
 }
 
 test('animation studio keeps the selected real menu visible while 20 continuous presets loop', async ({ page }) => {
@@ -103,7 +121,7 @@ test('animation studio keeps the selected real menu visible while 20 continuous 
     await page.locator('#animation-save').click();
     const response = await responsePromise;
     expect(response.ok()).toBeTruthy();
-    await expect(page.locator('#animation-message')).toContainText('Профиль постоянной анимации сохранён');
+    await expect(page.locator('#animation-message')).toContainText('Профиль постоянной анимации');
 
     const saved = await animationSettings(page);
     expect(saved.enabled).toBe(true);
@@ -113,6 +131,67 @@ test('animation studio keeps the selected real menu visible while 20 continuous 
     expect(saved.profile.flow_direction).toBe('left-to-right');
     expect(saved.profile.entrance).toBeUndefined();
   } finally {
+    await restoreAnimationSettings(page, original);
+    await removePreviewFixture(page, fixture);
+  }
+});
+
+test('live entity can be uploaded positioned and animated independently in Motion Studio', async ({ page }) => {
+  await login(page);
+  const fixture = await createPreviewFixture(page);
+  const original = await animationSettings(page);
+  const png = await transparentEntityPng();
+
+  try {
+    await page.goto(`/animation.html?screen=${fixture.screenId}`);
+    await expect(page.locator('#animation-stage')).toHaveAttribute('data-screen-id', String(fixture.screenId));
+    await expect(page.getByRole('heading', { name: 'Живой объект' })).toBeVisible();
+
+    const uploadResponse = page.waitForResponse((response) => response.url().endsWith('/api/settings/animation/entity-asset') && response.request().method() === 'PUT');
+    await page.locator('#animation-entity-file').setInputFiles({ name: 'beer-glass.png', mimeType: 'image/png', buffer: png });
+    expect((await uploadResponse).ok()).toBeTruthy();
+
+    const placement = page.locator('#animation-stage [data-entity-placement]');
+    const target = page.locator('#animation-stage [data-motion-entity]');
+    await expect(placement).toBeVisible();
+    await expect(target).toHaveAttribute('data-motion', 'entity');
+    await expect(page.locator('#animation-entity-thumb img')).toBeVisible();
+    await expect(page.locator('#animation-entity-status')).toContainText('160×300');
+    await expect.poll(() => target.evaluate((node) => node.getAnimations().length)).toBeGreaterThan(0);
+
+    await page.locator('#animation-entity-x').fill('76.5');
+    await page.locator('#animation-entity-y').fill('48.5');
+    await page.locator('#animation-entity-width').fill('21.5');
+    await page.locator('#animation-entity-opacity').fill('92');
+    await page.locator('#animation-entity-idle-effect').selectOption('float');
+    await page.locator('#animation-entity-idle-amount').fill('63');
+    await page.locator('#animation-entity-idle-cycle').fill('6.4');
+
+    await expect(placement).toHaveCSS('left', /.+/);
+    const placementStyle = await placement.evaluate((node) => ({ left: node.style.left, top: node.style.top, width: node.style.width, opacity: node.style.opacity }));
+    expect(placementStyle.left).toBe('76.5%');
+    expect(placementStyle.top).toBe('48.5%');
+    expect(placementStyle.width).toBe('21.5%');
+    expect(placementStyle.opacity).toBe('0.92');
+
+    const saveResponse = page.waitForResponse((response) => response.url().endsWith('/api/settings/animation') && response.request().method() === 'PUT');
+    await page.locator('#animation-enabled').check();
+    await page.locator('#animation-save').click();
+    expect((await saveResponse).ok()).toBeTruthy();
+
+    const saved = await animationSettings(page);
+    expect(saved.enabled).toBe(true);
+    expect(saved.profile.entity.enabled).toBe(true);
+    expect(saved.profile.entity.asset_url).toMatch(/^\/site-assets\/animation-entity-[0-9a-f-]{36}\.png$/i);
+    expect(saved.profile.entity.x_percent).toBe(76.5);
+    expect(saved.profile.entity.y_percent).toBe(48.5);
+    expect(saved.profile.entity.width_percent).toBe(21.5);
+    expect(saved.profile.entity.opacity).toBe(92);
+    expect(saved.profile.entity.idle_effect).toBe('float');
+    expect(saved.profile.entity.idle_amount).toBe(63);
+    expect(saved.profile.entity.idle_cycle_seconds).toBe(6.4);
+  } finally {
+    await deleteEntityAsset(page);
     await restoreAnimationSettings(page, original);
     await removePreviewFixture(page, fixture);
   }
