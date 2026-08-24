@@ -31,44 +31,31 @@ function collectMenuNodes(stage) {
     transformOwner: 'self'
   }));
 
-  const rows = [...stage.querySelectorAll('g.table-item, g.table-packaging')];
-  rows.forEach((row, index) => {
-    if (row.classList.contains('table-packaging')) {
-      append(nodes, {
-        id: `menu.packaging.${index}`,
-        kind: 'item',
-        layer: MOTION_LAYERS.MENU,
-        target: row,
-        order: index,
-        count: rows.length,
-        depth: 0,
-        transformOwner: 'self'
-      });
-      return;
-    }
-    append(nodes, {
-      id: `menu.item.${index}`,
-      kind: 'item',
-      layer: MOTION_LAYERS.MENU,
-      target: row.querySelector(':scope > g.table-item-content'),
-      order: index,
-      count: rows.length,
-      depth: 0,
-      transformOwner: 'self'
-    });
-    append(nodes, {
-      id: `menu.promotion.${index}`,
-      kind: 'promotion',
-      layer: MOTION_LAYERS.MENU,
-      target: row.querySelector(':scope > g.promotion-badge'),
-      order: index,
-      count: rows.length,
-      depth: 1,
-      transformOwner: 'self'
-    });
-  });
+  const content = [...stage.querySelectorAll('g.table-item-content, g.packaging-cell-content')];
+  content.forEach((target, index) => append(nodes, {
+    id: `menu.item.${index}`,
+    kind: 'item',
+    layer: MOTION_LAYERS.MENU,
+    target,
+    order: index,
+    count: content.length,
+    depth: 0,
+    transformOwner: 'self'
+  }));
 
-  const prices = [...stage.querySelectorAll('text.price, text.packaging-price')];
+  const promotions = [...stage.querySelectorAll('g.promotion-badge')];
+  promotions.forEach((target, index) => append(nodes, {
+    id: `menu.promotion.${index}`,
+    kind: 'promotion',
+    layer: MOTION_LAYERS.MENU,
+    target,
+    order: index,
+    count: promotions.length,
+    depth: 1,
+    transformOwner: 'promotion-motion'
+  }));
+
+  const prices = [...stage.querySelectorAll('g.table-item-prices, g.packaging-cell-price')];
   prices.forEach((target, index) => append(nodes, {
     id: `menu.price.${index}`,
     kind: 'price',
@@ -102,7 +89,7 @@ export function buildDomMotionScene(stage) {
   const scene = createMotionScene({
     root: stage,
     nodes: [...collectMenuNodes(stage), ...collectEntityNodes(stage)],
-    metadata: { adapter: 'dom', backgroundMotion: false }
+    metadata: { adapter: 'dom', backgroundMotion: false, nestedTransforms: false }
   });
   scene.nodes.forEach(markTarget);
   stage.dataset.motionSceneVersion = String(MOTION_SCENE_VERSION);
