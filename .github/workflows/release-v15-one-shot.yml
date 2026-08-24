@@ -24,7 +24,6 @@ jobs:
           sleep 3
           gh run list --repo "$GITHUB_REPOSITORY" --workflow check.yml --limit 30 --json databaseId,headSha,status,event --jq ".[] | select(.headSha == \"$HEAD_SHA\" and .event == \"pull_request\" and .status != \"completed\") | .databaseId" | while read -r run_id; do
             [[ -n "$run_id" ]] || continue
-            echo "Cancelling duplicate check run $run_id"
             gh run cancel "$run_id" --repo "$GITHUB_REPOSITORY" || true
           done
       - name: Checkout main
@@ -65,10 +64,55 @@ jobs:
           wf = wf.replace("DEVICE_ACTIVATION_TTL_MINUTES: '10'", "DEVICE_ACTIVATION_TTL_MINUTES: '2'")
           workflow.write_text(wf)
           PY
-          git rm .github/workflows/release-v15-one-shot.yml .release-v15-trigger
+          git rm .release-v15-trigger
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git checkout -b release-meta/v1.5.0
-          git add package.json package-lock.json CHANGELOG.md .github/workflows/check.yml
+          git add package.json package-lock.json CHANGELOG.md .github/workflows/check.yml .release-v15-trigger
           git commit -m 'Finalize TV Menu 2 v1.5.0 release metadata [skip ci]'
           git push origin HEAD:release-meta/v1.5.0
+      - name: Publish immutable v1.5.0 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEAD_SHA="$(git rev-parse HEAD)"
+          if ! git ls-remote --exit-code --tags origin refs/tags/v1.5.0 >/dev/null 2>&1; then
+            gh release create v1.5.0 --target "$HEAD_SHA" --title 'TV Menu 2 v1.5.0' --generate-notes
+          fi
+          SCRIPT_VERSION="$(sed -nE 's/^SCRIPT_VERSION="([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' menu-tv-2.sh | head -n 1)"
+          INSTALLER_TAG="installer-v${SCRIPT_VERSION}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$INSTALLER_TAG" >/dev/null 2>&1; then
+            git fetch --force origin "refs/tags/$INSTALLER_TAG:refs/tags/$INSTALLER_TAG"
+            cmp -s menu-tv-2.sh <(git show "$INSTALLER_TAG:menu-tv-2.sh")
+          else
+            git tag "$INSTALLER_TAG" "$HEAD_SHA"
+            git push origin "refs/tags/$INSTALLER_TAG"
+          fi
+
+  cleanup:
+    if: github.event.pull_request.head.ref == 'cleanup/v1.5.0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Cancel duplicate PR gate run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          sleep 3
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow check.yml --limit 30 --json databaseId,headSha,status,event --jq ".[] | select(.headSha == \"$HEAD_SHA\" and .event == \"pull_request\" and .status != \"completed\") | .databaseId" | while read -r run_id; do
+            [[ -n "$run_id" ]] || continue
+            gh run cancel "$run_id" --repo "$GITHUB_REPOSITORY" || true
+          done
+      - name: Keep only main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-remote --heads origin | while read -r _ ref; do
+            branch="${ref#refs/heads/}"
+            [[ "$branch" == main ]] && continue
+            git push origin --delete "$branch" || true
+          done
