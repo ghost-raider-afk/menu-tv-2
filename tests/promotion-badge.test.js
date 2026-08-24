@@ -38,22 +38,24 @@ test('promotion badge keeps shape and label inside one SVG group', () => {
 });
 
 test('Motion Engine v3 keeps promotion and row content as sibling scene nodes with shared phase', async () => {
-  const [sceneGraph, motionPlan, player] = await Promise.all([
+  const [domAdapter, sceneGraph, motionPlan, player] = await Promise.all([
+    readFile(new URL('js/motion/dom-scene-adapter.js', publicRoot), 'utf8'),
     readFile(new URL('js/motion/scene-graph.js', publicRoot), 'utf8'),
     readFile(new URL('js/motion/motion-plan.js', publicRoot), 'utf8'),
     readFile(new URL('js/motion/preview-player.js', publicRoot), 'utf8')
   ]);
 
-  assert.match(sceneGraph, /row\.classList\.contains\('table-packaging'\)/);
-  assert.match(sceneGraph, /:scope > g\.table-item-content/);
-  assert.match(sceneGraph, /:scope > g\.promotion-badge/);
-  assert.match(sceneGraph, /id: `menu\.item\.\$\{index\}`/);
-  assert.match(sceneGraph, /id: `menu\.promotion\.\$\{index\}`/);
-  assert.match(sceneGraph, /order: index,[\s\S]*count: rows\.length/);
-  assert.match(sceneGraph, /transformOwner: 'self'/);
+  assert.match(domAdapter, /row\.classList\.contains\('table-packaging'\)/);
+  assert.match(domAdapter, /:scope > g\.table-item-content/);
+  assert.match(domAdapter, /:scope > g\.promotion-badge/);
+  assert.match(domAdapter, /id: `menu\.item\.\$\{index\}`/);
+  assert.match(domAdapter, /id: `menu\.promotion\.\$\{index\}`/);
+  assert.match(domAdapter, /order: index,[\s\S]*count: rows\.length/);
+  assert.match(sceneGraph, /transformOwner/);
+  assert.doesNotMatch(sceneGraph, /querySelector|instanceof Element/);
   assert.match(motionPlan, /node\.kind === 'promotion' \? 'item' : node\.kind/);
   assert.match(motionPlan, /targetDelay\(profile, node\.order, node\.count, duration\)/);
-  assert.match(player, /buildMotionScene\(this\.stage\)/);
+  assert.match(player, /buildDomMotionScene\(this\.stage\)/);
   assert.match(player, /compileMotionPlan\(this\.scene, profile\)/);
   assert.doesNotMatch(player, /\.animate\(/);
 });
