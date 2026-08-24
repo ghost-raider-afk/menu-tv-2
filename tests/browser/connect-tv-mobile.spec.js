@@ -17,7 +17,7 @@ test('mobile TV pairing is styled after SPA navigation and keeps one active step
 
   await page.locator('.ui-rail-button[aria-label="Мониторы"]').click();
   await expect(page.locator('.ui-context')).not.toHaveClass(/is-collapsed/);
-  await page.getByRole('link', { name: 'Подключить ТВ' }).click();
+  await page.locator('.ui-context-body .app-route-link', { hasText: 'Подключить ТВ' }).click();
   await expect(page).toHaveURL(/\/connect-tv\.html$/);
   await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
 
