@@ -69,8 +69,8 @@ test('dragging Live Entity updates relative placement and persists it on Save', 
     );
     await page.mouse.up();
 
-    await expect.poll(() => Number(page.locator('#animation-entity-x').inputValue())).toBeCloseTo(targetXPercent, 0);
-    await expect.poll(() => Number(page.locator('#animation-entity-y').inputValue())).toBeCloseTo(targetYPercent, 0);
+    await expect.poll(async () => Number(await page.locator('#animation-entity-x').inputValue())).toBeCloseTo(targetXPercent, 0);
+    await expect.poll(async () => Number(await page.locator('#animation-entity-y').inputValue())).toBeCloseTo(targetYPercent, 0);
     const placementStyle = await placement.evaluate((node) => ({ left: node.style.left, top: node.style.top }));
     expect(Number.parseFloat(placementStyle.left)).toBeCloseTo(targetXPercent, 0);
     expect(Number.parseFloat(placementStyle.top)).toBeCloseTo(targetYPercent, 0);
