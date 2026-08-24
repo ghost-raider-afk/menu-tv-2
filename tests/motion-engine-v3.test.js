@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { toWaapiKeyframe, toWaapiTiming } from '../src/web/admin-ui/public/js/motion/drivers/waapi-driver.js';
 import { compileMotionPlan } from '../src/web/admin-ui/public/js/motion/motion-plan.js';
 import { profileForPreset } from '../src/web/admin-ui/public/js/motion/presets.js';
 import { createMotionScene, MOTION_LAYERS } from '../src/web/admin-ui/public/js/motion/scene-graph.js';
@@ -36,7 +37,7 @@ test('scene graph is renderer agnostic and already reserves the live entity laye
   }), /Duplicate motion scene node id/);
 });
 
-test('Motion Engine v3 compiles a driver-neutral plan with synchronized sibling scene nodes', () => {
+test('Motion Engine v3 compiles numeric driver-neutral state with synchronized sibling nodes', () => {
   const profile = {
     ...profileForPreset('accent-pulse'),
     pattern: 'wave',
@@ -52,6 +53,7 @@ test('Motion Engine v3 compiles a driver-neutral plan with synchronized sibling 
 
   assert.equal(plan.version, 3);
   assert.equal(plan.duration, 8000);
+  assert.equal(plan.clock.loop, true);
   assert.ok(Object.isFrozen(plan));
   assert.ok(Object.isFrozen(plan.tracks));
 
@@ -66,10 +68,35 @@ test('Motion Engine v3 compiles a driver-neutral plan with synchronized sibling 
   assert.ok(background);
   assert.equal(item.timing.delay, promotion.timing.delay, 'promotion must share its row phase');
   assert.equal(secondItem.timing.delay, 120);
+  assert.equal(item.timing.easing, 'smooth');
+  assert.equal(item.timing.loop, true);
   assert.equal(item.channel, 'motion');
   assert.equal(promotion.channel, 'motion');
   assert.equal(background.channel, 'transform');
+  assert.equal(typeof item.keyframes[1].transform.scale, 'number');
+  assert.equal(typeof item.keyframes[1].appearance.brightness, 'number');
   assert.deepEqual(item.keyframes, promotion.keyframes, 'promotion and row content use the same row motion frames');
+  assert.equal(JSON.stringify(plan).includes('translate3d('), false);
+  assert.equal(JSON.stringify(plan).includes('drop-shadow('), false);
+});
+
+test('WAAPI driver alone converts canonical state into browser CSS keyframes and timing', () => {
+  const keyframe = toWaapiKeyframe({
+    offset: 0.5,
+    opacity: 1,
+    transform: { x: 12.5, y: -4, z: 0, xPercent: null, scale: 1.04, skewXDeg: 0, order: 'translate-scale' },
+    appearance: { brightness: 1.12, glowRadius: 8.5, glowColor: 'rgba(1,2,3,.5)' }
+  });
+  assert.equal(keyframe.offset, 0.5);
+  assert.equal(keyframe.transform, 'translate3d(12.50px, -4.00px, 0.00px) scale(1.0400)');
+  assert.equal(keyframe.filter, 'brightness(1.120) drop-shadow(0 0 8.5px rgba(1,2,3,.5))');
+
+  const timing = toWaapiTiming({ duration: 8000, delay: 120, easing: 'smooth', loop: true });
+  assert.equal(timing.duration, 8000);
+  assert.equal(timing.delay, 120);
+  assert.equal(timing.easing, 'cubic-bezier(.16,1,.3,1)');
+  assert.equal(timing.iterations, Infinity);
+  assert.equal(timing.fill, 'both');
 });
 
 test('MotionTimeline owns playback independently from a concrete renderer and animation implementation', () => {
@@ -96,7 +123,7 @@ test('MotionTimeline owns playback independently from a concrete renderer and an
   const plan = {
     duration: 8000,
     tracks: [{ node: { id: 'x' }, keyframes: [], timing: {} }],
-    clock: { duration: 8000, iterations: Infinity, fill: 'both' }
+    clock: { duration: 8000, loop: true }
   };
   const opaqueRoot = { renderer: 'future-gpu-driver' };
   const timeline = new MotionTimeline({ root: opaqueRoot, driver }).load(plan);
