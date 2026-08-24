@@ -64,11 +64,16 @@ export function renderSceneEntity(stage, source, { editable = true } = {}) {
   object.style.zIndex = String(entity.transform.depth + 100);
   object.style.transform = `scale(${entity.transform.scale}) rotate(${entity.transform.rotation}deg)`;
 
+  const motion = document.createElement('div');
+  motion.className = 'animation-scene-entity-motion';
+  motion.dataset.entityMotion = entity.id;
+
   const image = document.createElement('img');
   image.src = entity.asset_url;
   image.alt = entity.name;
   image.draggable = false;
-  object.append(image);
+  motion.append(image);
+  object.append(motion);
 
   if (editable) {
     object.classList.add('is-editable');
@@ -85,9 +90,10 @@ export function renderSceneEntity(stage, source, { editable = true } = {}) {
 }
 
 export class SceneEntityEditor {
-  constructor({ stage, onChange }) {
+  constructor({ stage, onChange, onCommit }) {
     this.stage = stage;
     this.onChange = onChange;
+    this.onCommit = onCommit;
     this.entity = normaliseSceneEntity();
     this.pointer = null;
     this.handlePointerDown = this.handlePointerDown.bind(this);
@@ -164,6 +170,7 @@ export class SceneEntityEditor {
     window.removeEventListener('pointermove', this.handlePointerMove);
     window.removeEventListener('pointerup', this.handlePointerUp);
     window.removeEventListener('pointercancel', this.handlePointerUp);
+    this.onCommit?.(this.getEntity());
   }
 
   destroy() {
