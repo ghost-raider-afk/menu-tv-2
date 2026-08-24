@@ -1,7 +1,7 @@
 import { composeScenePrograms, createSceneProgram } from './scene-composer.js';
 
-const GOLD_SHADOW = 'rgba(244,201,21,.58)';
-const MENU_KINDS = new Set(['section', 'item', 'promotion', 'price', 'background']);
+const GOLD_SHADOW = 'rgba(244,201,21,.72)';
+const MAIN_KINDS = new Set(['section', 'item', 'price']);
 
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
@@ -10,76 +10,134 @@ function clamp(value, minimum, maximum) {
 function effectFor(profile, kind) {
   if (kind === 'section') return profile.section_effect;
   if (kind === 'item') return profile.item_effect;
-  if (kind === 'promotion') return profile.promotion_effect ?? profile.item_effect;
   if (kind === 'price') return profile.price_effect;
-  if (kind === 'background') return profile.background_effect;
   return null;
 }
 
 function vectorFor(profile, travel, index) {
   switch (profile.flow_direction) {
-    case 'right-to-left': return { x: -travel, y: 0 };
-    case 'top-to-bottom': return { x: 0, y: travel };
-    case 'bottom-to-top': return { x: 0, y: -travel };
-    case 'alternate': return index % 2 === 0 ? { x: travel, y: -travel * 0.35 } : { x: -travel, y: travel * 0.35 };
+    case 'right-to-left': return { x: -travel, y: travel * 0.08 };
+    case 'top-to-bottom': return { x: travel * 0.08, y: travel };
+    case 'bottom-to-top': return { x: -travel * 0.08, y: -travel };
+    case 'alternate': return index % 2 === 0
+      ? { x: travel, y: -travel * 0.28 }
+      : { x: -travel, y: travel * 0.28 };
     case 'none': return { x: 0, y: 0 };
-    default: return { x: travel, y: 0 };
+    default: return { x: travel, y: -travel * 0.08 };
   }
 }
 
-function frame({
-  offset,
-  opacity = 1,
-  x = 0,
-  y = 0,
-  z = 0,
-  xPercent = null,
-  scale = 1,
-  skewXDeg = 0,
-  transformOrder = 'translate-scale',
-  brightness = 1,
-  glowRadius = 0,
-  glowColor = null
-}) {
+function frame({ offset, x = 0, y = 0, z = 0, scale = 1, brightness = 1, glowRadius = 0, glowColor = null }) {
   return Object.freeze({
     offset,
-    opacity,
-    transform: Object.freeze({ x, y, z, xPercent, scale, skewXDeg, order: transformOrder }),
+    opacity: 1,
+    transform: Object.freeze({ x, y, z, xPercent: null, scale, skewXDeg: 0, order: 'translate-scale' }),
     appearance: Object.freeze({ brightness, glowRadius, glowColor })
   });
 }
 
-function baseFrame(offset) {
-  return frame({ offset });
-}
-
-function peakFrame(profile, kind, effect, index, offset) {
+function mainFrames(profile, kind, effect, index) {
   const gain = clamp(Number(profile.intensity) || 0, 0, 100) / 100;
   const travel = (Number(profile.travel_px) || 0) * gain;
   const scaleAmount = (Number(profile.scale_amount) || 0) * gain;
-  const brightness = 1 + (Number(profile.brightness_amount) || 0) * gain;
+  const light = (Number(profile.brightness_amount) || 0) * gain;
   const vector = vectorFor(profile, travel, index);
-  const state = { offset, brightness };
+  const priceGain = kind === 'price' ? 0.72 : 1;
+  const sectionGain = kind === 'section' ? 0.82 : 1;
+  const movementGain = priceGain * sectionGain;
+  const x = vector.x * movementGain;
+  const y = vector.y * movementGain;
+  const scale = scaleAmount * movementGain;
+  const brightness = light * (kind === 'price' ? 1.15 : 1);
 
-  if (effect === 'wave') Object.assign(state, vector, { scale: 1 + scaleAmount * 0.35 });
-  if (effect === 'lift') Object.assign(state, { x: vector.x * 0.45, y: vector.y || -travel, scale: 1 + scaleAmount * 0.45 });
-  if (effect === 'breathe') state.scale = 1 + scaleAmount * 0.6;
-  if (effect === 'focus') state.scale = 1 + scaleAmount;
-  if (effect === 'pulse') state.scale = 1 + scaleAmount * (kind === 'price' ? 1.5 : 1);
-  if (effect === 'pop') state.scale = 1 + scaleAmount * 1.8;
-  if (effect === 'shimmer') Object.assign(state, { x: vector.x * 0.25, y: vector.y * 0.25, scale: 1 + scaleAmount * 0.25 });
-  if (effect === 'glow' || effect === 'shimmer' || (kind === 'promotion' && effect === 'pulse')) {
-    state.glowRadius = 4 + 18 * gain;
-    state.glowColor = GOLD_SHADOW;
+  if (effect === 'breathe') {
+    return [
+      frame({ offset: 0, scale: 1 - scale * 0.18, brightness: 1 }),
+      frame({ offset: 0.32, scale: 1 + scale * 0.72, brightness: 1 + brightness * 0.5 }),
+      frame({ offset: 0.68, scale: 1 + scale * 0.18, brightness: 1 + brightness * 0.22 }),
+      frame({ offset: 1, scale: 1 - scale * 0.18, brightness: 1 })
+    ];
   }
-  return frame(state);
+
+  if (effect === 'focus' || effect === 'pulse' || effect === 'pop') {
+    const multiplier = effect === 'pop' ? 1.55 : effect === 'pulse' ? 1.2 : 1;
+    return [
+      frame({ offset: 0, scale: 1 - scale * 0.12, brightness: 1 }),
+      frame({ offset: 0.42, scale: 1 + scale * multiplier, brightness: 1 + brightness }),
+      frame({ offset: 0.72, scale: 1 + scale * 0.2, brightness: 1 + brightness * 0.3 }),
+      frame({ offset: 1, scale: 1 - scale * 0.12, brightness: 1 })
+    ];
+  }
+
+  if (effect === 'glow' || effect === 'shimmer') {
+    return [
+      frame({ offset: 0, x: -x * 0.2, y: -y * 0.2, brightness: 1 }),
+      frame({ offset: 0.38, x: x * 0.25, y: y * 0.25, scale: 1 + scale * 0.35, brightness: 1 + brightness, glowRadius: 4 + 10 * gain, glowColor: GOLD_SHADOW }),
+      frame({ offset: 0.72, x: -x * 0.08, y: -y * 0.08, scale: 1 + scale * 0.12, brightness: 1 + brightness * 0.28 }),
+      frame({ offset: 1, x: -x * 0.2, y: -y * 0.2, brightness: 1 })
+    ];
+  }
+
+  if (effect === 'lift') {
+    return [
+      frame({ offset: 0, x: -x * 0.34, y: Math.abs(y) * 0.16 + travel * 0.12, scale: 1 - scale * 0.12, brightness: 1 }),
+      frame({ offset: 0.36, x: x * 0.34, y: -Math.abs(y) * 0.36 - travel * 0.18, scale: 1 + scale * 0.58, brightness: 1 + brightness * 0.62 }),
+      frame({ offset: 0.7, x: x * 0.08, y: -travel * 0.05, scale: 1 + scale * 0.12, brightness: 1 + brightness * 0.2 }),
+      frame({ offset: 1, x: -x * 0.34, y: Math.abs(y) * 0.16 + travel * 0.12, scale: 1 - scale * 0.12, brightness: 1 })
+    ];
+  }
+
+  const cinematic = effect === 'cinematic';
+  const drift = cinematic ? 0.62 : 0.78;
+  const lightGain = cinematic ? 0.78 : 0.58;
+  return [
+    frame({ offset: 0, x: -x * 0.42, y: -y * 0.42, scale: 1 - scale * 0.16, brightness: 1 }),
+    frame({ offset: 0.24, x: x * 0.18, y: y * 0.18, scale: 1 + scale * 0.38, brightness: 1 + brightness * 0.32 }),
+    frame({ offset: 0.5, x: x * drift, y: y * drift, scale: 1 + scale, brightness: 1 + brightness * lightGain }),
+    frame({ offset: 0.76, x: -x * 0.06, y: -y * 0.06, scale: 1 + scale * 0.25, brightness: 1 + brightness * 0.22 }),
+    frame({ offset: 1, x: -x * 0.42, y: -y * 0.42, scale: 1 - scale * 0.16, brightness: 1 })
+  ];
 }
 
-function elementFrames(profile, kind, effect, index) {
-  const cycleMs = Math.max(4000, Number(profile.cycle_seconds) * 1000 || 12000);
-  const eventFraction = clamp((Number(profile.event_duration_ms) || 1800) / cycleMs, 0.05, 0.82);
-  const peakOffset = eventFraction * 0.5;
-  return [baseFrame(0), peakFrame(profile, kind, effect, index, peakOffset), baseFrame(eventFraction), baseFrame(1)];
+function promotionFrames(profile) {
+  const gain = clamp(Number(profile.promotion_intensity) || 0, 0, 100) / 100;
+  const travel = (Number(profile.promotion_travel_px) || 0) * gain;
+  const scale = (Number(profile.promotion_scale_amount) || 0) * gain;
+  const brightness = (Number(profile.promotion_brightness_amount) || 0) * gain;
+  const glow = (Number(profile.promotion_glow_radius) || 0) * gain;
+  const effect = profile.promotion_effect || 'cinematic';
+  const cycleMs = Math.max(2000, Number(profile.promotion_cycle_seconds) * 1000 || 5500);
+  const eventFraction = clamp((Number(profile.promotion_event_duration_ms) || 1700) / cycleMs, 0.12, 0.82);
+  const a = eventFraction * 0.16;
+  const b = eventFraction * 0.36;
+  const c = eventFraction * 0.56;
+  const d = eventFraction * 0.78;
+
+  if (effect === 'none') return null;
+  if (effect === 'glow' || effect === 'sweep') {
+    return [
+      frame({ offset: 0 }),
+      frame({ offset: a, brightness: 1 + brightness * 0.28, glowRadius: glow * 0.35, glowColor: GOLD_SHADOW }),
+      frame({ offset: b, x: effect === 'sweep' ? travel : 0, scale: 1 + scale * 0.36, brightness: 1 + brightness, glowRadius: glow, glowColor: GOLD_SHADOW }),
+      frame({ offset: d, x: effect === 'sweep' ? -travel * 0.2 : 0, scale: 1 + scale * 0.08, brightness: 1 + brightness * 0.25, glowRadius: glow * 0.28, glowColor: GOLD_SHADOW }),
+      frame({ offset: eventFraction }),
+      frame({ offset: 1 })
+    ];
+  }
+
+  const bounce = effect === 'bounce';
+  const pop = effect === 'pop';
+  const pulse = effect === 'pulse';
+  const punch = pop ? 1.28 : bounce ? 1.12 : pulse ? 0.82 : 1;
+  return [
+    frame({ offset: 0 }),
+    frame({ offset: a, y: travel * 0.18, scale: 1 - scale * 0.12, brightness: 1 + brightness * 0.12, glowRadius: glow * 0.12, glowColor: GOLD_SHADOW }),
+    frame({ offset: b, y: -travel, scale: 1 + scale * punch, brightness: 1 + brightness, glowRadius: glow, glowColor: GOLD_SHADOW }),
+    frame({ offset: c, y: bounce ? travel * 0.38 : -travel * 0.2, scale: 1 + scale * 0.42, brightness: 1 + brightness * 0.48, glowRadius: glow * 0.58, glowColor: GOLD_SHADOW }),
+    frame({ offset: d, y: -travel * 0.08, scale: 1 + scale * 0.12, brightness: 1 + brightness * 0.2, glowRadius: glow * 0.24, glowColor: GOLD_SHADOW }),
+    frame({ offset: eventFraction }),
+    frame({ offset: 1 })
+  ];
 }
 
 function orderedIndex(profile, index, count) {
@@ -89,42 +147,8 @@ function orderedIndex(profile, index, count) {
 }
 
 function targetDelay(profile, index, count, cycleMs) {
-  if (profile.pattern === 'ambient' || profile.pattern === 'pulse' || profile.pattern === 'parallax') return 0;
   const phase = orderedIndex(profile, index, count) * (Number(profile.wave_stagger_ms) || 0);
   return cycleMs ? phase % cycleMs : 0;
-}
-
-function backgroundFrames(profile) {
-  const intensity = clamp(Number(profile.intensity) || 0, 0, 100) / 100;
-  const travel = (Number(profile.travel_px) || 0) * intensity;
-  const depth = (Number(profile.background_zoom_percent) || 0) / 100;
-  const baseScale = 1;
-  const peakScale = baseScale + depth * Math.max(0.2, intensity);
-  if (profile.background_effect === 'breathe' || profile.background_effect === 'zoom') {
-    return [
-      frame({ offset: 0, scale: baseScale, transformOrder: 'scale-translate' }),
-      frame({ offset: 0.5, scale: peakScale, transformOrder: 'scale-translate' }),
-      frame({ offset: 1, scale: baseScale, transformOrder: 'scale-translate' })
-    ];
-  }
-  return [
-    frame({ offset: 0, x: -travel * 0.45, y: travel * 0.2, scale: baseScale, transformOrder: 'scale-translate' }),
-    frame({ offset: 0.5, x: travel, y: -travel * 0.45, scale: peakScale, transformOrder: 'scale-translate' }),
-    frame({ offset: 1, x: -travel * 0.45, y: travel * 0.2, scale: baseScale, transformOrder: 'scale-translate' })
-  ];
-}
-
-function shimmerFrames(profile) {
-  const cycleMs = Math.max(4000, Number(profile.cycle_seconds) * 1000 || 12000);
-  const eventFraction = clamp((Number(profile.event_duration_ms) || 1800) / cycleMs, 0.08, 0.72);
-  const gain = clamp(Number(profile.intensity) || 0, 0, 100) / 100;
-  return [
-    frame({ offset: 0, opacity: 0, xPercent: 0, skewXDeg: -18, transformOrder: 'translate-skew' }),
-    frame({ offset: eventFraction * 0.15, opacity: 0, xPercent: 0, skewXDeg: -18, transformOrder: 'translate-skew' }),
-    frame({ offset: eventFraction * 0.45, opacity: 0.28 * gain, xPercent: 320, skewXDeg: -18, transformOrder: 'translate-skew' }),
-    frame({ offset: eventFraction, opacity: 0, xPercent: 720, skewXDeg: -18, transformOrder: 'translate-skew' }),
-    frame({ offset: 1, opacity: 0, xPercent: 720, skewXDeg: -18, transformOrder: 'translate-skew' })
-  ];
 }
 
 function timing(duration, delay, easing) {
@@ -132,61 +156,53 @@ function timing(duration, delay, easing) {
 }
 
 function menuTrackFor(node, profile, duration) {
-  if (!MENU_KINDS.has(node.kind)) return null;
+  if (!MAIN_KINDS.has(node.kind)) return null;
   const effect = effectFor(profile, node.kind);
   if (!effect || effect === 'none') return null;
-  if (node.kind === 'background') {
-    return Object.freeze({
-      node,
-      claims: Object.freeze(['transform']),
-      keyframes: Object.freeze(backgroundFrames(profile)),
-      timing: timing(duration, 0, profile.easing || 'smooth')
-    });
-  }
   return Object.freeze({
     node,
-    claims: Object.freeze(['transform', 'opacity', 'appearance']),
-    keyframes: Object.freeze(elementFrames(profile, node.kind, effect, node.order)),
-    timing: timing(duration, targetDelay(profile, node.order, node.count, duration), profile.easing || 'smooth')
+    claims: Object.freeze(['transform', 'appearance']),
+    keyframes: Object.freeze(mainFrames(profile, node.kind, effect, node.order)),
+    timing: timing(duration, targetDelay(profile, node.order, node.count, duration), profile.easing || 'cinematic')
   });
 }
 
 export function compileMenuMotionProgram(scene, context = {}) {
   if (!scene || !Array.isArray(scene.nodes)) throw new TypeError('Menu motion compiler requires a scene graph.');
   const profile = context.profile || context;
-  const duration = Math.max(4000, Number(profile?.cycle_seconds) * 1000 || 12000);
+  const duration = Math.max(4000, Number(profile?.cycle_seconds) * 1000 || 9000);
   const tracks = scene.nodes.map((node) => menuTrackFor(node, profile || {}, duration)).filter(Boolean);
   return createSceneProgram({
     id: 'menu-motion',
     duration,
     tracks,
-    metadata: { layer: 'menu', profileVersion: Number(profile?.motion_version) || null }
+    metadata: { layer: 'menu', profileVersion: Number(profile?.motion_version) || null, backgroundStatic: true }
   });
 }
 
-export function compileAtmosphereProgram(scene, context = {}) {
-  if (!scene || !Array.isArray(scene.nodes)) throw new TypeError('Atmosphere compiler requires a scene graph.');
+export function compilePromotionMotionProgram(scene, context = {}) {
+  if (!scene || !Array.isArray(scene.nodes)) throw new TypeError('Promotion motion compiler requires a scene graph.');
   const profile = context.profile || context;
-  const duration = Math.max(4000, Number(profile?.cycle_seconds) * 1000 || 12000);
-  const shimmer = scene.nodes.find((node) => node.kind === 'shimmer');
-  const enabled = shimmer && profile?.section_effect === 'shimmer';
-  const tracks = enabled ? [Object.freeze({
-    node: shimmer,
-    claims: Object.freeze(['transform', 'opacity']),
-    keyframes: Object.freeze(shimmerFrames(profile)),
-    timing: timing(duration, 0, 'ease-in-out')
-  })] : [];
+  const duration = Math.max(2000, Number(profile?.promotion_cycle_seconds) * 1000 || 5500);
+  const keyframes = promotionFrames(profile || {});
+  const promotions = scene.nodes.filter((node) => node.kind === 'promotion');
+  const tracks = keyframes ? promotions.map((node) => Object.freeze({
+    node,
+    claims: Object.freeze(['transform', 'appearance']),
+    keyframes: Object.freeze(keyframes),
+    timing: timing(duration, (node.order % 3) * 120, profile?.promotion_easing || 'elastic')
+  })) : [];
   return createSceneProgram({
-    id: 'atmosphere',
+    id: 'promotion-motion',
     duration,
     tracks,
-    metadata: { layer: 'atmosphere' }
+    metadata: { layer: 'menu', role: 'promotion-attention' }
   });
 }
 
 export const DEFAULT_SCENE_COMPILERS = Object.freeze([
   compileMenuMotionProgram,
-  compileAtmosphereProgram
+  compilePromotionMotionProgram
 ]);
 
 export function compileMotionPlan(scene, profile) {
