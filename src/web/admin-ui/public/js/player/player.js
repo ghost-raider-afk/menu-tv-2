@@ -27,6 +27,7 @@ let refreshTimer = null;
 let wakeLock = null;
 let playerRefreshMs = 5000;
 let motionRuntime = null;
+let playerContextEtag = '';
 
 function setHidden(element, hidden) {
   element?.classList.toggle('is-hidden', hidden);
@@ -74,6 +75,7 @@ function savePlayerContext(context) {
 }
 
 function clearPlayerContext() {
+  playerContextEtag = '';
   try { localStorage.removeItem(PLAYER_CONTEXT_STORAGE_KEY); } catch {}
 }
 
@@ -273,19 +275,32 @@ function schedulePlayerRefresh() {
 async function fetchPlayerContext(timeoutMs = 5000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const previousEtag = playerContextEtag;
   try {
-    const response = await fetch('/api/device/player-context', { cache: 'no-store', signal: controller.signal });
+    const response = await fetch('/api/device/player-context', {
+      cache: 'no-store',
+      signal: controller.signal,
+      headers: previousEtag ? { 'If-None-Match': previousEtag } : {}
+    });
     if (response.status === 401) {
       clearPlayerContext();
       return { unauthorized: true };
     }
+    if (response.status === 304) {
+      const cached = cachedPlayerContext();
+      if (!cached?.context) throw new Error('HTTP 304 without cached player context');
+      return { context: cached.context, offline: false, unchanged: true };
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const context = await response.json();
+    const nextEtag = response.headers.get('etag') || '';
     savePlayerContext(context);
     void warmPlayerAssetCache(context);
+    playerContextEtag = nextEtag || previousEtag;
     return {
       context,
-      offline: response.headers.get('x-tv-menu-offline') === '1'
+      offline: response.headers.get('x-tv-menu-offline') === '1',
+      unchanged: Boolean(previousEtag && nextEtag && previousEtag === nextEtag)
     };
   } finally {
     clearTimeout(timer);
@@ -313,10 +328,15 @@ async function refreshPlayer() {
       showActivationButton.textContent = 'Показать QR-код';
       return;
     }
-    renderPlayerContext(result.context);
+    if (!result.unchanged) renderPlayerContext(result.context);
     showConnectionMessage(result.offline ? 'Нет связи с сервером. ТВ работает по последней сохранённой версии меню.' : '');
   } catch (error) {
     console.error('TV player refresh failed', error);
+    if (!player?.classList.contains('is-hidden')) {
+      showConnectionMessage('Нет связи с сервером. ТВ работает по последней сохранённой версии меню.');
+      schedulePlayerRefresh();
+      return;
+    }
     if (!showCachedPlayer(cachedPlayerContext())) {
       showConnectionMessage('Связь с сервером временно потеряна.');
     }
