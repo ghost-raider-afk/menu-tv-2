@@ -38,8 +38,6 @@ export async function writeAnimationEntityAsset({ bytes, config }) {
 
   const info = await validateImage(bytes, {
     allowedTypes: ['png', 'webp'],
-    maxWidth: config.screenMaxWidth,
-    maxHeight: config.screenMaxHeight,
     maxPixels: config.imageMaxPixels,
     label: 'Живой объект'
   });
