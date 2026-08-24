@@ -6,8 +6,10 @@ import {
 } from '../editor/renderer.js';
 import { renderSceneEntity } from '../motion/entity-editor.js';
 import { renderAnnouncementLayer } from '../motion/announcement.js';
+import { LiveMenuMotion } from '../motion/live-menu-motion.js';
 
 const ACTIVATION_STORAGE_KEY = 'tv-menu.device-activation';
+const DEVICE_KEY_STORAGE_KEY = 'tv-menu.device-key.v1';
 const PLAYER_CONTEXT_STORAGE_KEY = 'tv-menu.player-context.v1';
 const activationView = document.querySelector('[data-activation-view]');
 const showActivationButton = document.querySelector('[data-show-activation]');
@@ -19,6 +21,7 @@ const activationStatus = document.querySelector('[data-activation-status]');
 const player = document.querySelector('[data-tv-player]');
 const playerStage = document.querySelector('[data-player-stage]');
 const playerMessage = document.querySelector('[data-player-message]');
+const liveMotion = new LiveMenuMotion(playerStage);
 
 let pollTimer = null;
 let expiryTimer = null;
@@ -48,6 +51,21 @@ function saveActivation(record) {
 
 function clearActivation() {
   try { sessionStorage.removeItem(ACTIVATION_STORAGE_KEY); } catch {}
+}
+
+function currentDeviceKey() {
+  try {
+    const key = String(localStorage.getItem(DEVICE_KEY_STORAGE_KEY) || '').trim();
+    return /^[a-zA-Z0-9_-]{16,128}$/.test(key) ? key : '';
+  } catch {
+    return '';
+  }
+}
+
+function rememberDeviceKey(key) {
+  const value = String(key || '').trim();
+  if (!/^[a-zA-Z0-9_-]{16,128}$/.test(value)) return;
+  try { localStorage.setItem(DEVICE_KEY_STORAGE_KEY, value); } catch {}
 }
 
 function cachedPlayerContext() {
@@ -115,6 +133,7 @@ async function enterImmersiveMode() {
 function showActivationScreen() {
   if (refreshTimer) clearTimeout(refreshTimer);
   refreshTimer = null;
+  liveMotion.destroy();
   setHidden(player, true);
   setHidden(activationView, false);
   setHidden(playerMessage, true);
@@ -202,11 +221,12 @@ async function createActivation({ automatic = false } = {}) {
     const response = await fetch('/api/device/activations', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: '{}',
+      body: JSON.stringify({ device_key: currentDeviceKey() || undefined }),
       cache: 'no-store'
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const record = await response.json();
+    rememberDeviceKey(record.device_key);
     clearPairingTimers();
     saveActivation(record);
     showPairing(record);
@@ -265,6 +285,11 @@ function renderPlayerContext(context) {
   playerStage.style.backgroundImage = background ? `url(${JSON.stringify(background)})` : 'none';
   renderSceneEntity(playerStage, context.entity, { editable: false });
   renderAnnouncementLayer(playerStage.querySelector('[data-announcement-layer]'), context.announcement);
+  liveMotion.render({
+    enabled: context.animation?.enabled === true,
+    profile: context.animation?.profile,
+    entity: context.entity
+  });
   playerRefreshMs = Math.max(2000, Number(context.refresh_interval_ms) || 5000);
 }
 
@@ -377,6 +402,8 @@ async function initialisePlayer() {
   try {
     const response = await fetch('/api/device/session', { cache: 'no-store' });
     if (response.ok) {
+      const session = await response.json().catch(() => null);
+      rememberDeviceKey(session?.device_key);
       await loadPlayer();
       return;
     }
@@ -386,6 +413,7 @@ async function initialisePlayer() {
   }
   const pending = activationFromStorage();
   if (pending) {
+    rememberDeviceKey(pending.device_key);
     showPairing(pending);
     schedulePoll(pending);
   } else {
