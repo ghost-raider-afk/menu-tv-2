@@ -57,7 +57,7 @@ test.describe('mobile application shell', () => {
     await expectNoPageOverflow(page);
   });
 
-  test('keeps core pages inside the viewport and touch controls usable', async ({ page }) => {
+  test('keeps core pages inside the viewport and touch controls usable', async ({ page }, testInfo) => {
     await login(page);
     const routes = [
       '/screens.html',
@@ -73,6 +73,8 @@ test.describe('mobile application shell', () => {
       await expect(page.locator('.app-header')).toBeVisible();
       await expect(page.locator('.ui-rail')).toBeVisible();
       await expectNoPageOverflow(page);
+      const image = await page.screenshot({ fullPage: true });
+      await testInfo.attach(`mobile-${route.replace(/^\//, '').replace(/\.html$/, '') || 'overview'}`, { body: image, contentType: 'image/png' });
     }
 
     await page.goto('/settings.html');
