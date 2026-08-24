@@ -20,7 +20,7 @@
 
 ### Проверки
 - Добавлены и обновлены regression-тесты независимого motion ownership плашки, валидного catalog-backed Live Preview, route-aware title и мобильного подключения ТВ после SPA-навигации.
-- Релизный набор проверен через node/unit, Chromium browser/visual и clean-install smoke до фиксации финального номера версии.
+- Финальный набор изменений проверен через node/unit, Chromium browser/visual и clean-install smoke.
 
 ## [1.4.1] - 2026-08-24
 
