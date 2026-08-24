@@ -18,11 +18,11 @@ test('packaging keeps two positions per row without card-style containers', () =
   assert.equal(packagingLines[0].items.length, 2);
 
   const svg = buildTableSvg(model, lines);
-  assert.equal((svg.match(/class="packaging-cell/g) || []).length, 2);
+  assert.equal((svg.match(/class="packaging-cell tone-/g) || []).length, 2);
   assert.equal((svg.match(/class="packaging-name"/g) || []).length, 2);
   assert.equal((svg.match(/class="packaging-price"/g) || []).length, 2);
   assert.equal((svg.match(/class="cents"/g) || []).length, 2, 'packaging prices must use the same whole/cents typography as product prices');
-  assert.doesNotMatch(svg, /class="packaging-cell[^>]*>[\s\S]{0,220}<rect\b/, 'packaging must not render separate rounded cards');
+  assert.doesNotMatch(svg, /class="packaging-cell tone-[^"]*"[^>]*>[\s\S]{0,220}<rect\b/, 'packaging must not render separate rounded cards');
   assert.doesNotMatch(svg, /rx="7"/, 'legacy packaging card radius must not return');
   assert.doesNotMatch(svg, /fill="#121820"/, 'legacy packaging card background must not return');
 });
