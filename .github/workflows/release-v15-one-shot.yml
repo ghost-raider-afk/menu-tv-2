@@ -1,0 +1,101 @@
+name: release-v15-one-shot
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.event.issue.number == 43 && github.event.comment.body == '/finalize-v1.5.0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Finalize canonical metadata and release pipeline
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm version 1.5.0 --no-git-tag-version --allow-same-version
+          python - <<'PY'
+          from pathlib import Path
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text()
+          if '## [1.5.0] - 2026-08-24' not in text:
+              old = '## [1.4.2] - 2026-08-24\n'
+              if old not in text:
+                  raise SystemExit('expected unreleased 1.4.2 changelog header not found')
+              mobile = '''## [1.5.0] - 2026-08-24\n\n### Мобильный интерфейс\n- Мобильная версия переведена на отдельную архитектуру оболочки вместо набора локальных адаптивных патчей поверх desktop UI.\n- На телефоне основная навигация перенесена в нижнюю панель «Обзор / Мониторы / Каталог / Настройки», а подразделы открываются отдельной контекстной шторкой.\n- Добавлены safe-area отступы, мобильная шапка, touch-targets не меньше 44 px и 16 px для текстовых полей, чтобы Safari не включал нежелательный zoom.\n- Формы, карточки, уведомления, диалоги, Каталог, Мониторы, Настройки, Журнал, редактор меню, Анимация и подключение ТВ получили единые мобильные правила без общего горизонтального overflow.\n- Добавлены Chromium-regressions для 360×800 и 390×844, включая навигацию, шторку раздела, touch-размеры и отсутствие page-level overflow.\n\n'''
+              text = text.replace(old, mobile, 1)
+              changelog.write_text(text)
+
+          workflow = Path('.github/workflows/check.yml')
+          wf = workflow.read_text()
+          condition = "    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/agent/')\n"
+          for job in ('node-check', 'browser-visual', 'clean-install-smoke'):
+              marker = f'  {job}:\n'
+              replacement = marker + condition
+              if replacement not in wf:
+                  if marker not in wf:
+                      raise SystemExit(f'{job} marker not found')
+                  wf = wf.replace(marker, replacement, 1)
+          needs = '''    needs:\n      - node-check\n      - browser-visual\n      - clean-install-smoke\n'''
+          wf = wf.replace(needs, '', 1)
+          wf = wf.replace("DEVICE_ACTIVATION_TTL_MINUTES: '10'", "DEVICE_ACTIVATION_TTL_MINUTES: '2'")
+          workflow.write_text(wf)
+          PY
+          git rm .github/workflows/release-v15-one-shot.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add package.json package-lock.json CHANGELOG.md .github/workflows/check.yml
+          git commit -m 'Finalize TV Menu 2 v1.5.0 release metadata [skip ci]'
+          git push origin HEAD:main
+      - name: Verify canonical release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          LOCK_VERSION="$(node -p "require('./package-lock.json').version")"
+          ROOT_LOCK_VERSION="$(node -p "require('./package-lock.json').packages[''].version")"
+          test "$VERSION" = '1.5.0'
+          test "$LOCK_VERSION" = "$VERSION"
+          test "$ROOT_LOCK_VERSION" = "$VERSION"
+          grep -F '## [1.5.0]' CHANGELOG.md
+          ! test -e .github/workflows/release-v15-one-shot.yml
+      - name: Publish v1.5.0 and installer tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEAD_SHA="$(git rev-parse HEAD)"
+          if git ls-remote --exit-code --tags origin refs/tags/v1.5.0 >/dev/null 2>&1; then
+            echo 'v1.5.0 already exists; refusing to move immutable tag.' >&2
+            exit 1
+          fi
+          gh release create v1.5.0 --target "$HEAD_SHA" --title 'TV Menu 2 v1.5.0' --generate-notes
+          SCRIPT_VERSION="$(sed -nE 's/^SCRIPT_VERSION="([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' menu-tv-2.sh | head -n 1)"
+          INSTALLER_TAG="installer-v${SCRIPT_VERSION}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$INSTALLER_TAG" >/dev/null 2>&1; then
+            git fetch --force origin "refs/tags/$INSTALLER_TAG:refs/tags/$INSTALLER_TAG"
+            cmp -s menu-tv-2.sh <(git show "$INSTALLER_TAG:menu-tv-2.sh")
+          else
+            git tag "$INSTALLER_TAG" "$HEAD_SHA"
+            git push origin "refs/tags/$INSTALLER_TAG"
+          fi
+      - name: Keep only main branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-remote --heads origin | while read -r _ ref; do
+            branch="${ref#refs/heads/}"
+            [[ "$branch" == main ]] && continue
+            git push origin --delete "$branch"
+          done
