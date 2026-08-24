@@ -2,7 +2,7 @@
 
 ## Назначение
 
-Motion Engine v3 — внутренний runtime-контур анимации TV Menu 2. Он отделяет структуру сцены и сценарий движения от конкретного renderer/API. Формат сохранённых пользовательских animation settings пока остаётся `motion_version: 2`; это отдельная persistence boundary.
+Motion Engine v3 — внутренний runtime-контур анимации TV Menu 2. Он отделяет структуру сцены, поведение и сценарий движения от конкретного renderer/API. Формат сохранённых пользовательских animation settings пока остаётся `motion_version: 2`; это отдельная persistence boundary.
 
 ## Главный поток
 
@@ -13,7 +13,11 @@ Renderer Adapter
         ↓
 Scene Graph
         ↓
-Motion Plan Compiler
+Independent Scene Compilers
+        ↓
+Scene Composer
+        ↓
+Scene Runtime
         ↓
 Motion Timeline
         ↓
@@ -31,7 +35,11 @@ dom-scene-adapter.js
    ↓
 scene-graph.js
    ↓
-motion-plan.js
+menu-motion + atmosphere compilers
+   ↓
+scene-composer.js
+   ↓
+scene-runtime.js
    ↓
 timeline.js
    ↓
@@ -40,13 +48,19 @@ drivers/waapi-driver.js
 Web Animations API
 ```
 
-Будущие реализации не должны менять Scene Graph/Timeline ради подключения другого renderer:
+Будущие реализации не должны менять Scene Graph/Composer/Timeline ради подключения другого renderer:
 
 ```text
-Scene Graph + Motion Plan + Timeline
-            ├── WAAPI Driver → SVG/DOM
-            ├── Pixi Driver  → GPU 2.5D
-            └── Three Driver → GPU 3D / Live Entity
+Scene Graph
+   ↓
+Menu / Atmosphere / Entity / GPU compilers
+   ↓
+Scene Composer + Runtime
+   ↓
+Timeline
+   ├── WAAPI Driver → SVG/DOM
+   ├── Pixi Driver  → GPU 2.5D
+   └── Three Driver → GPU 3D / Live Entity
 ```
 
 ## Scene Graph
@@ -60,7 +74,7 @@ Scene node содержит:
 - `target` — opaque render target, смысл которого знает только соответствующий adapter/driver;
 - `order/count` — положение в последовательности;
 - `depth` — логическая глубина;
-- `transformOwner` — явный владелец transform;
+- `transformOwner` — явный владелец transform на уровне scene node;
 - `metadata` — расширяемые данные.
 
 Текущие layers:
@@ -81,21 +95,70 @@ Adapter связывает конкретное представление с re
 - сохраняет phase/order для связанных объектов;
 - размечает DOM диагностическими `data-motion-*` атрибутами.
 
+`screen-preview.js` не создаёт Scene Graph и не знает Motion Runtime. Он отвечает только за визуальный renderer. Binding выполняется после рендера через adapter.
+
 Будущий GPU adapter должен создавать те же scene node contracts, но `target` может быть, например, `Pixi.Container` или `Three.Object3D`.
+
+## Scene programs и compilers
+
+Каждая независимая подсистема компилирует свой `SceneProgram`.
+
+Сейчас существуют:
+- `menu-motion` — section/item/promotion/price/background;
+- `atmosphere` — отдельные атмосферные эффекты.
+
+В будущем таким же образом добавляются:
+- `entity-behavior`;
+- `gpu-atmosphere`;
+- cinematic scene program;
+- другие независимые behavior-компиляторы.
+
+Compiler получает общий Scene Graph и runtime context, но не управляет Timeline и не вызывает driver напрямую.
+
+## Channel ownership
+
+Каждый track обязан заранее объявить `claims` — каналы render target, которыми он пишет:
+- `transform`;
+- `opacity`;
+- `appearance`.
+
+`scene-composer.js` проверяет ownership до запуска анимации. Два track не могут одновременно владеть одним каналом одного scene node — даже если они принадлежат одному program.
+
+Пример допустимой композиции:
+
+```text
+node X
+├── program A → transform
+└── program B → appearance
+```
+
+Пример запрещённой композиции:
+
+```text
+node X
+├── program A → transform
+└── program B → transform   ← ownership conflict
+```
+
+Такой конфликт должен завершиться явной ошибкой до вызова renderer driver, а не проявляться случайным визуальным дёрганием.
+
+WAAPI driver сериализует только заявленные track claims. Если track владеет только `transform`, он не имеет права одновременно записывать `opacity` или `filter`.
 
 ## Transform ownership
 
 Один render target не должен получать конкурирующие transform writers в одном канале.
 
-Плашка «Акция» является отдельным sibling scene node относительно `table-item-content`, поэтому scale строки не применяется второй раз к `path + text` плашки. Price может иметь собственный node, потому что его дополнительный transform является намеренной дочерней анимацией.
+Плашка «Акция» является отдельным sibling scene node относительно `table-item-content`, поэтому scale строки не применяется второй раз к `path + text` плашки. Оба sibling node получают одинаковую row phase, но каждый владеет собственным transform.
 
-Новые слои/сущности обязаны явно объявлять `transformOwner`.
+Price может иметь собственный node, потому что его дополнительный transform является намеренной дочерней анимацией.
 
-## Motion Plan
+Новые слои/сущности обязаны явно объявлять ownership через scene node и track claims.
 
-`motion-plan.js` компилирует профиль в renderer-neutral tracks.
+## Motion Plan state
 
-В plan запрещены browser-specific CSS transform/filter strings. Keyframe state хранится числами:
+Motion compiler формирует renderer-neutral keyframe state.
+
+В state запрещены browser-specific CSS transform/filter strings. Keyframe state хранится числами:
 - `x/y/z`;
 - `xPercent`;
 - `scale`;
@@ -112,6 +175,31 @@ Timing также семантический:
 - `loop`.
 
 CSS `translate3d(...)`, `drop-shadow(...)`, `cubic-bezier(...)` формирует только WAAPI driver.
+
+## Scene Composer
+
+`scene-composer.js`:
+- принимает несколько независимых SceneProgram;
+- проверяет уникальность program id;
+- проверяет, что track ссылается на canonical scene node;
+- проверяет channel ownership;
+- объединяет tracks;
+- формирует один master scene plan и master clock.
+
+Composer не знает DOM, CSS и конкретный animation API.
+
+## Scene Runtime
+
+`scene-runtime.js` является orchestration boundary.
+
+Runtime:
+1. получает Scene Graph и context;
+2. вызывает подключённые compilers независимо;
+3. передаёт programs в Scene Composer;
+4. загружает итоговый plan в Motion Timeline;
+5. предоставляет единый lifecycle `play/pause/replay/seek/destroy`.
+
+Добавление нового behavior должно происходить через новый compiler в runtime, а не через новые условные ветки внутри UI-player.
 
 ## Motion Timeline
 
@@ -138,7 +226,7 @@ Driver обязан реализовать:
 - `currentTime(handle)`;
 - `playState(handle)`.
 
-Текущий `WaapiMotionDriver` является первым adapter/runtime driver и единственным местом, где вызывается `Element.animate()`.
+Текущий `WaapiMotionDriver` является первым runtime driver и единственным местом, где вызывается `Element.animate()` и выполняется CSS serialization.
 
 ## Live Entity boundary
 
@@ -148,11 +236,12 @@ Live Entity — отдельная runtime-система, а не новый it
 - собственный scene adapter;
 - собственный state machine;
 - собственный behavior/scene compiler;
-- возможность использовать общий timeline contract;
+- собственный SceneProgram;
+- возможность использовать общий Scene Composer/Timeline contract;
 - отдельный driver либо общий GPU driver;
 - независимый lifecycle от критичного menu renderer.
 
-Menu motion compiler игнорирует неизвестные `kind`, включая будущий `entity`, пока для него явно не подключён отдельный compiler.
+Default compilers игнорируют неизвестные `kind`, включая `entity`, пока для него явно не подключён отдельный compiler.
 
 ## Что намеренно НЕ делаем сейчас
 
@@ -170,9 +259,12 @@ Menu motion compiler игнорирует неизвестные `kind`, вкл�
 ## Неподвижные архитектурные правила
 
 1. Canonical menu renderer остаётся источником читаемого меню.
-2. Scene Graph не зависит от renderer.
-3. Motion Plan не содержит CSS/WebGL/Three/Pixi-specific serialization.
-4. Timeline не зависит от renderer.
-5. Concrete driver — единственное место сериализации состояния под конкретный runtime.
-6. Live Entity не наследует menu behavior неявно.
-7. GPU/Entity никогда не должны становиться обязательным условием отображения основного меню.
+2. Renderer не зависит от Motion Runtime.
+3. Scene Graph не зависит от renderer.
+4. Каждый behavior компилируется в независимый SceneProgram.
+5. Scene Composer запрещает конкурирующее владение каналами одного node.
+6. Motion state не содержит CSS/WebGL/Three/Pixi-specific serialization.
+7. Timeline не зависит от renderer.
+8. Concrete driver — единственное место сериализации состояния под конкретный runtime.
+9. Live Entity не наследует menu behavior неявно.
+10. GPU/Entity никогда не должны становиться обязательным условием отображения основного меню.
