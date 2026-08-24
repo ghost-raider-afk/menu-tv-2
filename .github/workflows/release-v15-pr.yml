@@ -9,8 +9,8 @@ permissions:
   actions: write
 
 jobs:
-  finalize:
-    if: github.event.pull_request.head.ref == 'release-trigger-pr/v1.5.0'
+  metadata:
+    if: github.event.pull_request.head.ref == 'metadata-trigger/v1.5.0'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -20,7 +20,6 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         shell: bash
         run: |
-          set -euo pipefail
           sleep 3
           gh run list --repo "$GITHUB_REPOSITORY" --workflow check.yml --limit 30 --json databaseId,headSha,status,event --jq ".[] | select(.headSha == \"$HEAD_SHA\" and .event == \"pull_request\" and .status != \"completed\") | .databaseId" | while read -r run_id; do
             [[ -n "$run_id" ]] || continue
@@ -31,62 +30,65 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-      - name: Build canonical v1.5.0 metadata
+      - name: Build canonical 1.5.0 metadata branch
         shell: bash
         run: |
           set -euo pipefail
           npm version 1.5.0 --no-git-tag-version --allow-same-version
           python - <<'PY'
           from pathlib import Path
-
-          changelog = Path('CHANGELOG.md')
-          text = changelog.read_text()
+          p = Path('CHANGELOG.md')
+          text = p.read_text()
           if '## [1.5.0] - 2026-08-24' not in text:
               old = '## [1.4.2] - 2026-08-24\n'
-              if old not in text:
-                  raise SystemExit('expected unreleased 1.4.2 changelog header not found')
               mobile = '''## [1.5.0] - 2026-08-24\n\n### Мобильный интерфейс\n- Мобильная версия переведена на отдельную архитектуру оболочки вместо набора локальных адаптивных патчей поверх desktop UI.\n- На телефоне основная навигация перенесена в нижнюю панель «Обзор / Мониторы / Каталог / Настройки», а подразделы открываются отдельной контекстной шторкой.\n- Добавлены safe-area отступы, мобильная шапка, touch-targets не меньше 44 px и 16 px для текстовых полей, чтобы Safari не включал нежелательный zoom.\n- Формы, карточки, уведомления, диалоги, Каталог, Мониторы, Настройки, Журнал, редактор меню, Анимация и подключение ТВ получили единые мобильные правила без общего горизонтального overflow.\n- Добавлены Chromium-regressions для 360×800 и 390×844, включая навигацию, шторку раздела, touch-размеры и отсутствие page-level overflow.\n\n'''
-              changelog.write_text(text.replace(old, mobile, 1))
-
-          workflow = Path('.github/workflows/check.yml')
-          wf = workflow.read_text()
-          condition = "    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/agent/')\n"
-          for job in ('node-check', 'browser-visual', 'clean-install-smoke'):
-              marker = f'  {job}:\n'
-              replacement = marker + condition
-              if replacement not in wf:
-                  if marker not in wf:
-                      raise SystemExit(f'{job} marker not found')
-                  wf = wf.replace(marker, replacement, 1)
-          needs = '''    needs:\n      - node-check\n      - browser-visual\n      - clean-install-smoke\n'''
-          if needs in wf:
-              wf = wf.replace(needs, '', 1)
-          wf = wf.replace("DEVICE_ACTIVATION_TTL_MINUTES: '10'", "DEVICE_ACTIVATION_TTL_MINUTES: '2'")
-          workflow.write_text(wf)
+              if old not in text:
+                  raise SystemExit('1.4.2 changelog header not found')
+              p.write_text(text.replace(old, mobile, 1))
           PY
-          git rm -f .release-v15-trigger .github/workflows/release-v15-one-shot.yml .github/workflows/release-v15-pr.yml || true
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git checkout -b release-meta/v1.5.0
-          git add -A
-          git commit -m 'Finalize TV Menu 2 v1.5.0 release metadata [skip ci]'
+          git checkout -B release-meta/v1.5.0
+          git add package.json package-lock.json CHANGELOG.md
+          git commit -m 'Finalize TV Menu 2 v1.5.0 metadata [skip ci]'
           git push --force origin HEAD:release-meta/v1.5.0
+
+  publish:
+    if: github.event.pull_request.head.ref == 'publish-final/v1.5.0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Cancel duplicate check workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          sleep 3
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow check.yml --limit 30 --json databaseId,headSha,status,event --jq ".[] | select(.headSha == \"$HEAD_SHA\" and .event == \"pull_request\" and .status != \"completed\") | .databaseId" | while read -r run_id; do
+            [[ -n "$run_id" ]] || continue
+            gh run cancel "$run_id" --repo "$GITHUB_REPOSITORY" || true
+          done
+      - name: Checkout final release commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
       - name: Publish immutable release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          HEAD_SHA="$(git rev-parse HEAD)"
+          test "$(node -p "require('./package.json').version")" = '1.5.0'
+          test "$(node -p "require('./package-lock.json').version")" = '1.5.0'
+          TARGET_SHA="$(git rev-parse HEAD)"
           if ! git ls-remote --exit-code --tags origin refs/tags/v1.5.0 >/dev/null 2>&1; then
-            gh release create v1.5.0 --target "$HEAD_SHA" --title 'TV Menu 2 v1.5.0' --generate-notes
+            gh release create v1.5.0 --target "$TARGET_SHA" --title 'TV Menu 2 v1.5.0' --generate-notes
           fi
           SCRIPT_VERSION="$(sed -nE 's/^SCRIPT_VERSION="([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' menu-tv-2.sh | head -n 1)"
           INSTALLER_TAG="installer-v${SCRIPT_VERSION}"
-          if git ls-remote --exit-code --tags origin "refs/tags/$INSTALLER_TAG" >/dev/null 2>&1; then
-            git fetch --force origin "refs/tags/$INSTALLER_TAG:refs/tags/$INSTALLER_TAG"
-            cmp -s menu-tv-2.sh <(git show "$INSTALLER_TAG:menu-tv-2.sh")
-          else
-            git tag "$INSTALLER_TAG" "$HEAD_SHA"
+          if ! git ls-remote --exit-code --tags origin "refs/tags/$INSTALLER_TAG" >/dev/null 2>&1; then
+            git tag "$INSTALLER_TAG" "$TARGET_SHA"
             git push origin "refs/tags/$INSTALLER_TAG"
           fi
