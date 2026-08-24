@@ -7,11 +7,10 @@ on:
 permissions:
   contents: write
   actions: write
-  pull-requests: write
 
 jobs:
   finalize:
-    if: github.event.pull_request.head.ref == 'release-trigger/v1.5.0'
+    if: github.event.pull_request.head.ref == 'release-trigger-meta/v1.5.0'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -33,7 +32,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-      - name: Finalize canonical metadata and release pipeline
+      - name: Build canonical v1.5.0 metadata commit
         shell: bash
         run: |
           set -euo pipefail
@@ -61,56 +60,15 @@ jobs:
                       raise SystemExit(f'{job} marker not found')
                   wf = wf.replace(marker, replacement, 1)
           needs = '''    needs:\n      - node-check\n      - browser-visual\n      - clean-install-smoke\n'''
-          wf = wf.replace(needs, '', 1)
+          if needs in wf:
+              wf = wf.replace(needs, '', 1)
           wf = wf.replace("DEVICE_ACTIVATION_TTL_MINUTES: '10'", "DEVICE_ACTIVATION_TTL_MINUTES: '2'")
           workflow.write_text(wf)
           PY
           git rm .github/workflows/release-v15-one-shot.yml .release-v15-trigger
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git checkout -b release-meta/v1.5.0
           git add package.json package-lock.json CHANGELOG.md .github/workflows/check.yml
           git commit -m 'Finalize TV Menu 2 v1.5.0 release metadata [skip ci]'
-          git push origin HEAD:main
-      - name: Verify canonical release metadata
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="$(node -p "require('./package.json').version")"
-          LOCK_VERSION="$(node -p "require('./package-lock.json').version")"
-          ROOT_LOCK_VERSION="$(node -p "require('./package-lock.json').packages[''].version")"
-          test "$VERSION" = '1.5.0'
-          test "$LOCK_VERSION" = "$VERSION"
-          test "$ROOT_LOCK_VERSION" = "$VERSION"
-          grep -F '## [1.5.0]' CHANGELOG.md
-          ! test -e .github/workflows/release-v15-one-shot.yml
-          ! test -e .release-v15-trigger
-      - name: Publish v1.5.0 and installer tag
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          HEAD_SHA="$(git rev-parse HEAD)"
-          if git ls-remote --exit-code --tags origin refs/tags/v1.5.0 >/dev/null 2>&1; then
-            echo 'v1.5.0 already exists; refusing to move immutable tag.' >&2
-            exit 1
-          fi
-          gh release create v1.5.0 --target "$HEAD_SHA" --title 'TV Menu 2 v1.5.0' --generate-notes
-          SCRIPT_VERSION="$(sed -nE 's/^SCRIPT_VERSION="([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' menu-tv-2.sh | head -n 1)"
-          INSTALLER_TAG="installer-v${SCRIPT_VERSION}"
-          if git ls-remote --exit-code --tags origin "refs/tags/$INSTALLER_TAG" >/dev/null 2>&1; then
-            git fetch --force origin "refs/tags/$INSTALLER_TAG:refs/tags/$INSTALLER_TAG"
-            cmp -s menu-tv-2.sh <(git show "$INSTALLER_TAG:menu-tv-2.sh")
-          else
-            git tag "$INSTALLER_TAG" "$HEAD_SHA"
-            git push origin "refs/tags/$INSTALLER_TAG"
-          fi
-      - name: Keep only main branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          git ls-remote --heads origin | while read -r _ ref; do
-            branch="${ref#refs/heads/}"
-            [[ "$branch" == main ]] && continue
-            git push origin --delete "$branch"
-          done
+          git push origin HEAD:release-meta/v1.5.0
