@@ -1,12 +1,13 @@
-const SHELL_CACHE = 'tv-menu-player-shell-v6';
-const DATA_CACHE = 'tv-menu-player-data-v6';
+const SHELL_CACHE = 'tv-menu-player-shell-v7';
+const DATA_CACHE = 'tv-menu-player-data-v7';
 const PLAYER_CONTEXT = '/api/device/player-context';
 const SHELL_ASSETS = [
   '/player.html',
   '/css/player.css',
   '/js/player/player.js',
-  '/js/player/entity-runtime.js',
   '/js/editor/renderer.js',
+  '/js/editor/renderer-model.js',
+  '/js/editor/renderer-svg.js',
   '/js/motion/entity-editor.js',
   '/js/motion/entity-behavior.js',
   '/js/motion/announcement.js',
