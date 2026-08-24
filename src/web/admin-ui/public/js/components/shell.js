@@ -5,7 +5,7 @@ import { createHeader, initialiseHeader, refreshHeaderRoute } from './header.js'
 
 const CONTEXT_COLLAPSED_KEY = 'tv-menu.context-collapsed';
 const CONTEXT_MOBILE_BREAKPOINT = 1180;
-const PHONE_BREAKPOINT = 760;
+const PHONE_BREAKPOINT = 960;
 
 function responsiveCollapsed() {
   return window.innerWidth <= CONTEXT_MOBILE_BREAKPOINT;
