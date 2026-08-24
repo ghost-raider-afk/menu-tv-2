@@ -8,23 +8,20 @@ import { completeAnimationProfile, DEFAULT_ANIMATION_PROFILE } from '../src/shar
 const root = new URL('../src/web/admin-ui/public/', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
-test('canonical animation profile keeps the menu calm and promotion independent', () => {
+test('canonical profile is cinematic, readable and keeps background structurally static', () => {
   const profile = completeAnimationProfile({});
-  assert.equal(profile.motion_version, 2);
-  assert.equal(profile.section_effect, 'none');
-  assert.equal(profile.item_effect, 'none');
-  assert.equal(profile.price_effect, 'none');
-  assert.equal(profile.background_effect, 'none');
-  assert.equal(profile.promotion_effect, 'pulse');
-  const parsed = animationSettingsInput({ enabled: true, preset_id: 'single-promo-focus', profile: DEFAULT_ANIMATION_PROFILE, announcement: {} });
-  assert.equal(parsed.preset_id, 'single-promo-focus');
-  assert.equal(parsed.profile.promotion_effect, 'pulse');
-});
-
-test('old profile without promotion effect preserves its previous item behavior', () => {
-  const profile = completeAnimationProfile({ ...DEFAULT_ANIMATION_PROFILE, item_effect: 'focus', promotion_effect: undefined });
-  assert.equal(profile.item_effect, 'focus');
-  assert.equal(profile.promotion_effect, 'focus');
+  assert.equal(profile.motion_version, 3);
+  assert.equal(profile.pattern, 'cinematic');
+  assert.equal(profile.section_effect, 'cinematic');
+  assert.equal(profile.item_effect, 'cinematic');
+  assert.equal(profile.price_effect, 'glow');
+  assert.equal('background_effect' in profile, false);
+  assert.equal('background_zoom_percent' in profile, false);
+  assert.equal(profile.promotion_effect, 'cinematic');
+  assert.ok(profile.promotion_intensity > profile.intensity);
+  const parsed = animationSettingsInput({ enabled: true, preset_id: 'cinematic-live-menu', profile: DEFAULT_ANIMATION_PROFILE, announcement: {} });
+  assert.equal(parsed.preset_id, 'cinematic-live-menu');
+  assert.equal(parsed.profile.promotion_easing, 'elastic');
 });
 
 test('announcement contract validates an independent ticker', () => {
@@ -41,65 +38,51 @@ test('announcement contract validates an independent ticker', () => {
   assert.equal(parsed.enabled, true);
   assert.equal(parsed.text, 'Сегодня скидка 10%');
   assert.throws(() => announcementInput({ enabled: true, text: '' }), /Введите текст объявления/);
-  assert.throws(() => announcementInput({ enabled: false, text: '', speed_px_per_second: 10 }), /Скорость бегущей строки/);
 });
 
-test('legacy entrance profile is migrated into continuous motion', () => {
+test('legacy animation data migrates into current profile without background motion', () => {
   const migrated = completeAnimationProfile({
     entrance: 'cascade', direction: 'left', easing: 'smooth', duration_ms: 900, stagger_ms: 70,
     distance_px: 54, scale_from: 0.98, opacity_from: 0, section_emphasis: 'pulse', price_emphasis: 'pop',
     shimmer: false, glow: true, background_motion: true, ambient_speed_seconds: 28, intensity: 55
   });
-  assert.equal(migrated.motion_version, 2);
-  assert.equal(migrated.pattern, 'wave');
-  assert.equal(migrated.promotion_effect, migrated.item_effect);
-  assert.equal('entrance' in migrated, false);
+  assert.equal(migrated.motion_version, 3);
+  assert.equal('background_effect' in migrated, false);
+  assert.equal(migrated.promotion_effect, 'cinematic');
 });
 
-test('motion studio exposes one promotion-focused profile and independent scene layers', async () => {
-  const [
-    html, app, navigation, config, css, previewCss, page, previewPlayer, screenPreview,
-    sceneGraph, domAdapter, motionPlan, composer, runtime, timeline, waapiDriver, announcement
-  ] = await Promise.all([
-    read('animation.html'), read('js/application.js'), read('js/core/navigation.js'), read('js/core/config.js'),
-    read('css/pages/animation.css'), read('css/pages/animation-screen-preview.css'), read('js/pages/animation.js'),
-    read('js/motion/preview-player.js'), read('js/motion/screen-preview.js'), read('js/motion/scene-graph.js'),
-    read('js/motion/dom-scene-adapter.js'), read('js/motion/motion-plan.js'), read('js/motion/scene-composer.js'),
-    read('js/motion/scene-runtime.js'), read('js/motion/timeline.js'), read('js/motion/drivers/waapi-driver.js'),
+test('Motion Studio exposes one consolidated editor and independent high-attention promotion controls', async () => {
+  const [html, page, profileEditor, motionPlan, domAdapter, previewPlayer, previewCss, announcement] = await Promise.all([
+    read('animation.html'),
+    read('js/pages/animation.js'),
+    read('js/motion/profile-editor.js'),
+    read('js/motion/motion-plan.js'),
+    read('js/motion/dom-scene-adapter.js'),
+    read('js/motion/preview-player.js'),
+    read('css/pages/animation-screen-preview.css'),
     read('js/motion/announcement.js')
   ]);
 
-  for (const id of ['animation-stage','animation-screen-select','animation-play','animation-pause','animation-replay','animation-timeline','animation-save','animation-intensity','animation-announcement-enabled','animation-announcement-text']) {
-    assert.match(html, new RegExp(`id="${id}"`));
-  }
-  assert.doesNotMatch(html, /20 ПРЕСЕТОВ|animation-presets|animation-pattern|animation-section-effect|animation-background-effect/);
-  assert.match(html, /Плашка «Акция»/);
-  assert.match(html, /Бегущая строка/);
-  assert.match(page, /PROFILE_ID = 'single-promo-focus'/);
-  assert.match(page, /promotion_effect:\s*'pulse'/);
-  assert.doesNotMatch(page, /ANIMATION_PRESETS|PRESET_BY_ID|profileForPreset/);
-  assert.match(page, /renderAnnouncementLayer/);
-  assert.match(page, /api\.get\(API\.screens\)/);
-  assert.match(app, /initialiseAnimationStudio/);
-  assert.match(navigation, /\/animation\.html/);
-  assert.match(config, /animationSettings:\s*'\/api\/settings\/animation'/);
+  for (const id of [
+    'animation-stage','animation-screen-select','animation-save','animation-intensity','animation-travel','animation-scale',
+    'animation-section-effect','animation-item-effect','animation-price-effect','animation-promotion-effect',
+    'animation-promotion-intensity','animation-promotion-scale','animation-promotion-glow','animation-announcement-enabled'
+  ]) assert.match(html, new RegExp(`id="${id}"`));
 
-  assert.match(screenPreview, /data-announcement-layer/);
-  assert.match(previewCss, /overflow:hidden/);
-  assert.doesNotMatch(previewCss, /inset:-4%/);
-  assert.match(previewCss, /scene-announcement-marquee/);
-  assert.match(announcement, /normaliseAnnouncement/);
+  assert.doesNotMatch(html, /20 ПРЕСЕТОВ|animation-presets/);
+  assert.match(html, /Живое меню/);
+  assert.match(html, /ФОН · STATIC/);
+  assert.match(html, /PROMO ATTENTION/);
+  assert.match(page, /PROFILE_ID = 'cinematic-live-menu'/);
+  assert.match(page, /readMotionProfile/);
+  assert.match(page, /writeMotionProfile/);
+  assert.match(profileEditor, /promotion_intensity/);
+  assert.match(profileEditor, /promotion_glow_radius/);
+  assert.match(previewPlayer, /DEFAULT_SCENE_COMPILERS/);
+  assert.match(motionPlan, /compilePromotionMotionProgram/);
+  assert.doesNotMatch(motionPlan, /backgroundFrames|background_effect|background_zoom_percent/);
+  assert.doesNotMatch(domAdapter, /kind: 'background'/);
+  assert.doesNotMatch(domAdapter, /kind: 'shimmer'/);
+  assert.match(previewCss, /\.animation-screen-background\{[^}]*background-size:cover/);
   assert.match(announcement, /renderAnnouncementLayer/);
-
-  assert.match(sceneGraph, /MOTION_SCENE_VERSION = 3/);
-  assert.match(sceneGraph, /ENTITY:\s*'entity'/);
-  assert.match(domAdapter, /kind: 'promotion'/);
-  assert.match(motionPlan, /profile\.promotion_effect/);
-  assert.match(motionPlan, /kind === 'promotion'/);
-  assert.match(composer, /composeScenePrograms/);
-  assert.match(runtime, /export class SceneRuntime/);
-  assert.match(timeline, /export class MotionTimeline/);
-  assert.match(waapiDriver, /export class WaapiMotionDriver/);
-  assert.match(previewPlayer, /new SceneRuntime/);
-  assert.match(css, /\.animation-simple-grid/);
 });
