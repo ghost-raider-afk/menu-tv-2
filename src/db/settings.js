@@ -1,17 +1,22 @@
 import { isoNow, normaliseRow } from './helpers.js';
 import { completeAnimationProfile } from '../shared/animation-profile.js';
+import { completeSceneEntity } from '../contracts/scene-entity.js';
 
 function normaliseAnimationSettings(row) {
   const value = normaliseRow(row);
   if (!value) return null;
   let profile = {};
+  let entity = {};
   try { profile = JSON.parse(value.profile_json || '{}'); }
   catch { profile = {}; }
+  try { entity = JSON.parse(value.entity_json || '{}'); }
+  catch { entity = {}; }
   return {
     id: value.id,
     enabled: value.enabled === true,
     preset_id: value.preset_id || 'cascade-soft',
     profile: completeAnimationProfile(profile),
+    entity: completeSceneEntity(entity),
     updated_by: value.updated_by || '',
     created_at: value.created_at,
     updated_at: value.updated_at
@@ -47,11 +52,20 @@ export function createSettingsRepository(pool) {
       return normaliseAnimationSettings(rows[0]);
     },
 
-    async updateAnimationSettings({ enabled, preset_id, profile, updated_by }) {
+    async updateAnimationSettings({ enabled, preset_id, profile, entity, updated_by }) {
       const { rows } = await pool.query(
-        `UPDATE animation_settings SET enabled = $1, preset_id = $2, profile_json = $3,
-         updated_by = $4, updated_at = $5 WHERE id = 1 RETURNING *`,
-        [enabled, preset_id, JSON.stringify(profile), updated_by, isoNow()]
+        `UPDATE animation_settings SET enabled = $1, preset_id = $2, profile_json = $3, entity_json = $4,
+         updated_by = $5, updated_at = $6 WHERE id = 1 RETURNING *`,
+        [enabled, preset_id, JSON.stringify(profile), JSON.stringify(entity), updated_by, isoNow()]
+      );
+      return normaliseAnimationSettings(rows[0]);
+    },
+
+    async updateAnimationEntity(entity, updated_by) {
+      const { rows } = await pool.query(
+        `UPDATE animation_settings SET entity_json = $1, updated_by = $2, updated_at = $3
+         WHERE id = 1 RETURNING *`,
+        [JSON.stringify(entity), updated_by, isoNow()]
       );
       return normaliseAnimationSettings(rows[0]);
     },
