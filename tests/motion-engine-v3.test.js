@@ -15,7 +15,8 @@ function fakeScene() {
       { id: 'menu.promotion.0', kind: 'promotion', layer: 'menu', target: target('promotion'), order: 0, count: 2, depth: 1, transformOwner: 'self' },
       { id: 'menu.item.1', kind: 'item', layer: 'menu', target: target('item2'), order: 1, count: 2, depth: 0, transformOwner: 'self' },
       { id: 'background.primary', kind: 'background', layer: 'background', target: target('background'), order: 0, count: 1, depth: -10, transformOwner: 'self' },
-      { id: 'atmosphere.shimmer', kind: 'shimmer', layer: 'atmosphere', target: target('shimmer'), order: 0, count: 1, depth: 10, transformOwner: 'self' }
+      { id: 'atmosphere.shimmer', kind: 'shimmer', layer: 'atmosphere', target: target('shimmer'), order: 0, count: 1, depth: 10, transformOwner: 'self' },
+      { id: 'entity.future.0', kind: 'entity', layer: 'entity', target: target('future-entity'), order: 0, count: 1, depth: 20, transformOwner: 'entity-runtime' }
     ]
   });
 }
@@ -27,7 +28,9 @@ test('scene graph is renderer agnostic and already reserves the live entity laye
   assert.equal(scene.node('menu.promotion.0').depth, 1);
   assert.equal(scene.node('menu.promotion.0').target.name, 'promotion');
   assert.equal(scene.node('menu.promotion.0').transformOwner, 'self');
+  assert.equal(scene.node('entity.future.0').transformOwner, 'entity-runtime');
   assert.equal(scene.find('item').length, 2);
+  assert.equal(scene.find('entity').length, 1);
   assert.throws(() => createMotionScene({
     root: {},
     nodes: [
@@ -66,6 +69,7 @@ test('Motion Engine v3 compiles numeric driver-neutral state with synchronized s
   assert.ok(promotion);
   assert.ok(secondItem);
   assert.ok(background);
+  assert.equal(plan.tracks.some((track) => track.node.kind === 'entity'), false, 'menu motion compiler must not own future entity behavior');
   assert.equal(item.timing.delay, promotion.timing.delay, 'promotion must share its row phase');
   assert.equal(secondItem.timing.delay, 120);
   assert.equal(item.timing.easing, 'smooth');
