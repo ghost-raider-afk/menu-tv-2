@@ -1,20 +1,34 @@
 import { API } from '../core/config.js';
 import { api } from '../core/api.js';
 import { element, setMessage, setPending } from '../core/dom.js';
-import { ANIMATION_PRESETS, DEFAULT_PRESET_ID, PRESET_BY_ID, profileForPreset } from '../motion/presets.js';
 import { AnimationPreviewPlayer } from '../motion/preview-player.js';
 import { SceneEntityEditor, normaliseSceneEntity } from '../motion/entity-editor.js';
+import { normaliseAnnouncement, renderAnnouncementLayer } from '../motion/announcement.js';
 import { renderAnimationScreenEmpty, renderAnimationScreenPreview } from '../motion/screen-preview.js';
 
-const CONTROL_IDS = Object.freeze([
-  'animation-pattern', 'animation-flow-direction', 'animation-easing', 'animation-cycle',
-  'animation-event-duration', 'animation-wave-stagger', 'animation-travel', 'animation-scale-amount',
-  'animation-brightness', 'animation-section-effect', 'animation-item-effect', 'animation-price-effect',
-  'animation-background-effect', 'animation-background-zoom', 'animation-intensity'
-]);
+const PROFILE_ID = 'single-promo-focus';
+const PROFILE_BASE = Object.freeze({
+  motion_version: 2,
+  pattern: 'ambient',
+  flow_direction: 'none',
+  easing: 'smooth',
+  cycle_seconds: 11,
+  event_duration_ms: 1500,
+  wave_stagger_ms: 0,
+  travel_px: 0,
+  scale_amount: 0.045,
+  brightness_amount: 0.18,
+  section_effect: 'none',
+  item_effect: 'none',
+  promotion_effect: 'pulse',
+  price_effect: 'none',
+  background_effect: 'none',
+  background_zoom_percent: 0,
+  intensity: 45
+});
 
-let currentPresetId = DEFAULT_PRESET_ID;
 let currentEntity = normaliseSceneEntity();
+let currentAnnouncement = normaliseAnnouncement();
 let player = null;
 let entityEditor = null;
 let previewFrame = null;
@@ -23,62 +37,15 @@ let screenLoadSequence = 0;
 function number(id) { return Number(element(id)?.value ?? 0); }
 function checked(id) { return element(id)?.checked === true; }
 function value(id) { return element(id)?.value || ''; }
+function setValue(id, next) { const node = element(id); if (node) node.value = String(next); }
 
 function collectProfile() {
-  return {
-    motion_version: 2,
-    pattern: value('animation-pattern'),
-    flow_direction: value('animation-flow-direction'),
-    easing: value('animation-easing'),
-    cycle_seconds: number('animation-cycle'),
-    event_duration_ms: number('animation-event-duration'),
-    wave_stagger_ms: number('animation-wave-stagger'),
-    travel_px: number('animation-travel'),
-    scale_amount: number('animation-scale-amount'),
-    brightness_amount: number('animation-brightness'),
-    section_effect: value('animation-section-effect'),
-    item_effect: value('animation-item-effect'),
-    price_effect: value('animation-price-effect'),
-    background_effect: value('animation-background-effect'),
-    background_zoom_percent: number('animation-background-zoom'),
-    intensity: number('animation-intensity')
-  };
+  return { ...PROFILE_BASE, intensity: Math.max(0, Math.min(100, Math.round(number('animation-intensity')))) };
 }
 
-function setValue(id, value) {
-  const node = element(id);
-  if (node) node.value = String(value);
-}
-
-function populateProfile(profile) {
-  setValue('animation-pattern', profile.pattern);
-  setValue('animation-flow-direction', profile.flow_direction);
-  setValue('animation-easing', profile.easing);
-  setValue('animation-cycle', profile.cycle_seconds);
-  setValue('animation-event-duration', profile.event_duration_ms);
-  setValue('animation-wave-stagger', profile.wave_stagger_ms);
-  setValue('animation-travel', profile.travel_px);
-  setValue('animation-scale-amount', profile.scale_amount);
-  setValue('animation-brightness', profile.brightness_amount);
-  setValue('animation-section-effect', profile.section_effect);
-  setValue('animation-item-effect', profile.item_effect);
-  setValue('animation-price-effect', profile.price_effect);
-  setValue('animation-background-effect', profile.background_effect);
-  setValue('animation-background-zoom', profile.background_zoom_percent);
-  setValue('animation-intensity', profile.intensity);
+function populateProfile(profile = {}) {
+  setValue('animation-intensity', Number.isFinite(Number(profile.intensity)) ? profile.intensity : PROFILE_BASE.intensity);
   updateIntensityOutput();
-}
-
-function presetName(id) { return PRESET_BY_ID.get(id)?.name || 'Пользовательский профиль'; }
-
-function updatePresetSelection() {
-  document.querySelectorAll('[data-animation-preset]').forEach((node) => {
-    const active = node.dataset.animationPreset === currentPresetId;
-    node.classList.toggle('active', active);
-    node.setAttribute('aria-pressed', active ? 'true' : 'false');
-  });
-  const label = element('animation-current-preset');
-  if (label) label.textContent = presetName(currentPresetId);
 }
 
 function updateIntensityOutput() {
@@ -86,49 +53,75 @@ function updateIntensityOutput() {
   if (output) output.textContent = `${Math.round(number('animation-intensity'))}%`;
 }
 
+function announcementFromControls() {
+  return normaliseAnnouncement({
+    enabled: checked('animation-announcement-enabled'),
+    text: value('animation-announcement-text'),
+    position: value('animation-announcement-position'),
+    speed_px_per_second: number('animation-announcement-speed'),
+    font_size: number('animation-announcement-font-size'),
+    text_color: value('animation-announcement-text-color'),
+    background_color: value('animation-announcement-background-color'),
+    background_opacity: number('animation-announcement-opacity')
+  });
+}
+
+function syncAnnouncementControls(announcement = currentAnnouncement) {
+  const current = normaliseAnnouncement(announcement);
+  const enabled = element('animation-announcement-enabled');
+  if (enabled) enabled.checked = current.enabled;
+  setValue('animation-announcement-text', current.text);
+  setValue('animation-announcement-position', current.position);
+  setValue('animation-announcement-speed', current.speed_px_per_second);
+  setValue('animation-announcement-font-size', current.font_size);
+  setValue('animation-announcement-text-color', current.text_color);
+  setValue('animation-announcement-background-color', current.background_color);
+  setValue('animation-announcement-opacity', current.background_opacity);
+  const speed = element('animation-announcement-speed-output');
+  const font = element('animation-announcement-font-output');
+  const opacity = element('animation-announcement-opacity-output');
+  if (speed) speed.textContent = `${Math.round(current.speed_px_per_second)} px/с`;
+  if (font) font.textContent = `${Math.round(current.font_size)} px`;
+  if (opacity) opacity.textContent = `${Math.round(current.background_opacity * 100)}%`;
+}
+
+function renderAnnouncementPreview() {
+  const layer = element('animation-stage')?.querySelector('[data-announcement-layer]');
+  if (layer) renderAnnouncementLayer(layer, currentAnnouncement);
+}
+
 function restartPreview() {
   cancelAnimationFrame(previewFrame);
   previewFrame = requestAnimationFrame(() => {
     entityEditor?.render();
+    renderAnnouncementPreview();
     player?.restart(collectProfile(), currentEntity);
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) player?.pause();
   });
 }
 
-function markCustom() {
-  currentPresetId = 'custom';
-  updatePresetSelection();
-  updateIntensityOutput();
-  restartPreview();
-}
-
-function renderPresets() {
-  const root = element('animation-presets');
-  if (!root) return;
-  root.innerHTML = ANIMATION_PRESETS.map((preset, index) => `
-    <button class="animation-preset-button" type="button" data-animation-preset="${preset.id}" aria-pressed="false">
-      <span class="animation-preset-index">${String(index + 1).padStart(2, '0')}</span>
-      <span class="animation-preset-copy"><small>${preset.category}</small><strong>${preset.name}</strong><span>${preset.description}</span></span>
-      <span class="animation-preset-arrow" aria-hidden="true">›</span>
-    </button>`).join('');
-  root.querySelectorAll('[data-animation-preset]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const id = button.dataset.animationPreset;
-      if (!PRESET_BY_ID.has(id)) return;
-      currentPresetId = id;
-      populateProfile(profileForPreset(id));
-      updatePresetSelection();
-      restartPreview();
-    });
+function bindProfileControls() {
+  element('animation-intensity')?.addEventListener('input', () => {
+    updateIntensityOutput();
+    restartPreview();
   });
 }
 
-function bindProfileControls() {
-  CONTROL_IDS.forEach((id) => {
+function bindAnnouncementControls() {
+  const ids = [
+    'animation-announcement-enabled', 'animation-announcement-text', 'animation-announcement-position',
+    'animation-announcement-speed', 'animation-announcement-font-size', 'animation-announcement-text-color',
+    'animation-announcement-background-color', 'animation-announcement-opacity'
+  ];
+  ids.forEach((id) => {
     const node = element(id);
     if (!node) return;
-    const eventName = node instanceof HTMLInputElement && (node.type === 'range' || node.type === 'number') ? 'input' : 'change';
-    node.addEventListener(eventName, markCustom);
+    const eventName = node instanceof HTMLInputElement && (node.type === 'range' || node.type === 'color') ? 'input' : node instanceof HTMLTextAreaElement ? 'input' : 'change';
+    node.addEventListener(eventName, () => {
+      currentAnnouncement = announcementFromControls();
+      syncAnnouncementControls(currentAnnouncement);
+      renderAnnouncementPreview();
+    });
   });
 }
 
@@ -198,7 +191,7 @@ async function uploadEntityAsset(file) {
   try {
     const saved = await api.put(API.animationEntityAsset, file, { headers: { 'Content-Type': file.type } });
     applyEntity(saved.entity);
-    setMessage('animation-message', 'Изображение объекта загружено. Разместите его и сохраните профиль.', 'success');
+    setMessage('animation-message', 'Изображение объекта загружено. Разместите его и сохраните настройки.', 'success');
   } catch (error) {
     setMessage('animation-message', error.message);
   } finally {
@@ -231,15 +224,15 @@ function bindEntityControls() {
   element('animation-entity-name')?.addEventListener('input', () => patchEntity({ name: value('animation-entity-name') || 'Бокал пива' }));
   element('animation-entity-visible')?.addEventListener('change', () => patchEntity({ visible: checked('animation-entity-visible') }));
   const transformControls = {
-    'animation-entity-x': ['x', 1],
-    'animation-entity-y': ['y', 1],
-    'animation-entity-width': ['width', 1],
-    'animation-entity-rotation': ['rotation', 1],
-    'animation-entity-scale': ['scale', 1],
-    'animation-entity-depth': ['depth', 1],
-    'animation-entity-opacity': ['opacity', 1]
+    'animation-entity-x': 'x',
+    'animation-entity-y': 'y',
+    'animation-entity-width': 'width',
+    'animation-entity-rotation': 'rotation',
+    'animation-entity-scale': 'scale',
+    'animation-entity-depth': 'depth',
+    'animation-entity-opacity': 'opacity'
   };
-  Object.entries(transformControls).forEach(([id, [key]]) => {
+  Object.entries(transformControls).forEach(([id, key]) => {
     element(id)?.addEventListener('input', () => patchEntity({ transform: { [key]: number(id) } }));
   });
   document.querySelectorAll('[data-entity-align]').forEach((button) => button.addEventListener('click', () => alignEntity(button.dataset.entityAlign)));
@@ -247,8 +240,7 @@ function bindEntityControls() {
 }
 
 function screenLabel(screen) {
-  const location = screen.location_name || 'Без точки';
-  return `${location} — ${screen.name}`;
+  return `${screen.location_name || 'Без точки'} — ${screen.name}`;
 }
 
 function setScreenStatus(text) {
@@ -279,6 +271,7 @@ async function loadScreenPreview(screenId) {
     if (sequence !== screenLoadSequence) return;
     renderAnimationScreenPreview(stage, bundle);
     entityEditor?.render();
+    renderAnnouncementPreview();
     setScreenStatus(`${bundle.screen.location_name || 'Без точки'} · ${bundle.screen.name} · ${bundle.screen.resolution}`);
     restartPreview();
   } catch (error) {
@@ -303,7 +296,6 @@ async function loadScreenOptions() {
     player?.destroy();
     return;
   }
-
   select.innerHTML = screens.map((screen) => `<option value="${screen.id}">${screenLabel(screen)}</option>`).join('');
   const selected = screenFromUrl(screens);
   select.value = String(selected.id);
@@ -318,14 +310,13 @@ async function loadScreenOptions() {
 
 async function loadSettings() {
   const settings = await api.get(API.animationSettings);
-  currentPresetId = settings?.preset_id || DEFAULT_PRESET_ID;
-  const base = PRESET_BY_ID.has(currentPresetId) ? profileForPreset(currentPresetId) : profileForPreset(DEFAULT_PRESET_ID);
-  const profile = { ...base, ...(settings?.profile || {}), motion_version: 2 };
   const enabled = element('animation-enabled');
   if (enabled) enabled.checked = settings?.enabled === true;
-  populateProfile(profile);
+  populateProfile(settings?.profile || PROFILE_BASE);
+  currentAnnouncement = normaliseAnnouncement(settings?.announcement);
+  syncAnnouncementControls(currentAnnouncement);
   applyEntity(settings?.entity);
-  updatePresetSelection();
+  renderAnnouncementPreview();
   restartPreview();
 }
 
@@ -333,17 +324,20 @@ async function saveSettings() {
   const button = element('animation-save');
   setPending(button, true, 'Сохраняем…');
   try {
+    currentAnnouncement = announcementFromControls();
     const saved = await api.put(API.animationSettings, {
       enabled: checked('animation-enabled'),
-      preset_id: currentPresetId,
+      preset_id: PROFILE_ID,
       profile: collectProfile(),
-      entity: currentEntity
+      entity: currentEntity,
+      announcement: currentAnnouncement
     });
-    currentPresetId = saved.preset_id;
     populateProfile(saved.profile);
+    currentAnnouncement = normaliseAnnouncement(saved.announcement);
+    syncAnnouncementControls(currentAnnouncement);
     applyEntity(saved.entity);
-    updatePresetSelection();
-    setMessage('animation-message', 'Профиль постоянной анимации сохранён.', 'success');
+    renderAnnouncementPreview();
+    setMessage('animation-message', 'Настройки анимации сохранены.', 'success');
   } catch (error) {
     setMessage('animation-message', error.message);
   } finally {
@@ -374,10 +368,11 @@ export function initialiseAnimationStudio() {
       restartPreview();
     }
   });
-  renderPresets();
   bindProfileControls();
+  bindAnnouncementControls();
   bindEntityControls();
   syncEntityControls();
+  syncAnnouncementControls();
   element('animation-save')?.addEventListener('click', () => { void saveSettings(); });
   void Promise.all([loadSettings(), loadScreenOptions()]).catch((error) => setMessage('animation-message', error.message));
 }
