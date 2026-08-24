@@ -7,52 +7,9 @@ on:
 permissions:
   contents: write
   actions: write
+  pull-requests: write
 
 jobs:
-  metadata:
-    if: github.event.pull_request.head.ref == 'metadata-trigger/v1.5.0'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Cancel duplicate check workflow
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        shell: bash
-        run: |
-          sleep 3
-          gh run list --repo "$GITHUB_REPOSITORY" --workflow check.yml --limit 30 --json databaseId,headSha,status,event --jq ".[] | select(.headSha == \"$HEAD_SHA\" and .event == \"pull_request\" and .status != \"completed\") | .databaseId" | while read -r run_id; do
-            [[ -n "$run_id" ]] || continue
-            gh run cancel "$run_id" --repo "$GITHUB_REPOSITORY" || true
-          done
-      - name: Checkout main
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: main
-          fetch-depth: 0
-      - name: Build canonical 1.5.0 metadata branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm version 1.5.0 --no-git-tag-version --allow-same-version
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('CHANGELOG.md')
-          text = p.read_text()
-          if '## [1.5.0] - 2026-08-24' not in text:
-              old = '## [1.4.2] - 2026-08-24\n'
-              mobile = '''## [1.5.0] - 2026-08-24\n\n### Мобильный интерфейс\n- Мобильная версия переведена на отдельную архитектуру оболочки вместо набора локальных адаптивных патчей поверх desktop UI.\n- На телефоне основная навигация перенесена в нижнюю панель «Обзор / Мониторы / Каталог / Настройки», а подразделы открываются отдельной контекстной шторкой.\n- Добавлены safe-area отступы, мобильная шапка, touch-targets не меньше 44 px и 16 px для текстовых полей, чтобы Safari не включал нежелательный zoom.\n- Формы, карточки, уведомления, диалоги, Каталог, Мониторы, Настройки, Журнал, редактор меню, Анимация и подключение ТВ получили единые мобильные правила без общего горизонтального overflow.\n- Добавлены Chromium-regressions для 360×800 и 390×844, включая навигацию, шторку раздела, touch-размеры и отсутствие page-level overflow.\n\n'''
-              if old not in text:
-                  raise SystemExit('1.4.2 changelog header not found')
-              p.write_text(text.replace(old, mobile, 1))
-          PY
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git checkout -B release-meta/v1.5.0
-          git add package.json package-lock.json CHANGELOG.md
-          git commit -m 'Finalize TV Menu 2 v1.5.0 metadata [skip ci]'
-          git push --force origin HEAD:release-meta/v1.5.0
-
   publish:
     if: github.event.pull_request.head.ref == 'publish-final/v1.5.0'
     runs-on: ubuntu-latest
@@ -64,17 +21,18 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         shell: bash
         run: |
+          set -euo pipefail
           sleep 3
           gh run list --repo "$GITHUB_REPOSITORY" --workflow check.yml --limit 30 --json databaseId,headSha,status,event --jq ".[] | select(.headSha == \"$HEAD_SHA\" and .event == \"pull_request\" and .status != \"completed\") | .databaseId" | while read -r run_id; do
             [[ -n "$run_id" ]] || continue
             gh run cancel "$run_id" --repo "$GITHUB_REPOSITORY" || true
           done
-      - name: Checkout final release commit
+      - name: Checkout canonical main
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: main
           fetch-depth: 0
-      - name: Publish immutable release
+      - name: Publish immutable v1.5.0 release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -82,13 +40,27 @@ jobs:
           set -euo pipefail
           test "$(node -p "require('./package.json').version")" = '1.5.0'
           test "$(node -p "require('./package-lock.json').version")" = '1.5.0'
+          grep -F '## [1.5.0] - 2026-08-24' CHANGELOG.md
           TARGET_SHA="$(git rev-parse HEAD)"
-          if ! git ls-remote --exit-code --tags origin refs/tags/v1.5.0 >/dev/null 2>&1; then
+          if git ls-remote --exit-code --tags origin refs/tags/v1.5.0 >/dev/null 2>&1; then
+            git fetch --force origin refs/tags/v1.5.0:refs/tags/v1.5.0
+            test "$(git rev-list -n 1 v1.5.0)" = "$TARGET_SHA"
+          else
             gh release create v1.5.0 --target "$TARGET_SHA" --title 'TV Menu 2 v1.5.0' --generate-notes
           fi
           SCRIPT_VERSION="$(sed -nE 's/^SCRIPT_VERSION="([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' menu-tv-2.sh | head -n 1)"
           INSTALLER_TAG="installer-v${SCRIPT_VERSION}"
-          if ! git ls-remote --exit-code --tags origin "refs/tags/$INSTALLER_TAG" >/dev/null 2>&1; then
+          if git ls-remote --exit-code --tags origin "refs/tags/$INSTALLER_TAG" >/dev/null 2>&1; then
+            git fetch --force origin "refs/tags/$INSTALLER_TAG:refs/tags/$INSTALLER_TAG"
+            cmp -s menu-tv-2.sh <(git show "$INSTALLER_TAG:menu-tv-2.sh")
+          else
             git tag "$INSTALLER_TAG" "$TARGET_SHA"
             git push origin "refs/tags/$INSTALLER_TAG"
           fi
+      - name: Close and remove trigger branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: gh pr close "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --delete-branch || true
