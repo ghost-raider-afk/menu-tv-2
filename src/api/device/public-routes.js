@@ -22,6 +22,11 @@ function activationSecret(request) {
   return typeof value === 'string' && value.length >= 32 && value.length <= 128 ? value : null;
 }
 
+function persistentDeviceKey(value) {
+  const key = String(value || '').trim();
+  return /^[a-zA-Z0-9_-]{16,128}$/.test(key) ? key : null;
+}
+
 function publicScreen(session) {
   return {
     id: session.screen_id,
@@ -53,12 +58,14 @@ function contextEtag(context) {
 
 async function createPendingActivation(store, config, request) {
   const expiresAt = new Date(Date.now() + config.deviceActivationTtlMinutes * 60_000).toISOString();
+  const deviceKey = persistentDeviceKey(request.body?.device_key) || crypto.randomUUID();
   let lastError;
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const credentials = createActivationCredentials();
     try {
       await store.createDeviceActivation({
         id: credentials.id,
+        deviceKey,
         scanTokenHash: tokenHash(credentials.scanToken),
         pollSecretHash: tokenHash(credentials.pollSecret),
         reserveCodeHash: tokenHash(credentials.reserveCode),
@@ -66,7 +73,7 @@ async function createPendingActivation(store, config, request) {
         userAgent: userAgent(request),
         remoteAddress: remoteAddress(request)
       });
-      return { credentials, expiresAt };
+      return { credentials, expiresAt, deviceKey };
     } catch (error) {
       lastError = error;
       if (error?.code !== '23505') throw error;
@@ -113,9 +120,10 @@ export function createDevicePublicRouter({ store, config }) {
   });
 
   router.post('/activations', activationLimiter, async (request, response) => {
-    const { credentials, expiresAt } = await createPendingActivation(store, config, request);
+    const { credentials, expiresAt, deviceKey } = await createPendingActivation(store, config, request);
     response.status(201).json({
       activation_id: credentials.id,
+      device_key: deviceKey,
       qr_svg: createActivationQrSvg(credentials.scanToken),
       reserve_code: credentials.reserveCode,
       poll_secret: credentials.pollSecret,
@@ -148,8 +156,8 @@ export function createDevicePublicRouter({ store, config }) {
       const screen = await tx.getScreen(activation.approved_screen_id);
       if (!screen || screen.active === false) return { status: 'expired' };
 
-      await tx.deactivateDevicesForScreen(screen.id);
-      const device = await tx.createDevice({
+      const device = await tx.bindDevice({
+        deviceKey: persistentDeviceKey(activation.device_key) || activation.id,
         screenId: screen.id,
         label: screen.name,
         userAgent: activation.user_agent,
@@ -180,6 +188,7 @@ export function createDevicePublicRouter({ store, config }) {
     return response.json({
       authorized: true,
       device_id: session.device_id,
+      device_key: session.device_key,
       session_expires_at: session.expires_at,
       screen: publicScreen(session)
     });
@@ -217,6 +226,10 @@ export function createDevicePublicRouter({ store, config }) {
       draft: { rows: draft.rows || [], settings: draft.settings || {}, revision: draft.revision },
       products,
       packaging,
+      animation: {
+        enabled: animationSettings?.enabled === true,
+        profile: animationSettings?.profile || null
+      },
       entity: animationSettings?.entity || null,
       announcement: animationSettings?.announcement || null,
       refresh_interval_ms: config.playerRefreshSeconds * 1000
