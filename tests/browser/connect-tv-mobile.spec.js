@@ -11,10 +11,14 @@ async function login(page) {
   await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
 }
 
-test('mobile TV pairing keeps one clear active step and a fullscreen scanner', async ({ page }) => {
+test('mobile TV pairing is styled after SPA navigation and keeps one active step', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
-  await page.goto('/connect-tv.html');
+
+  await page.locator('.ui-rail-button[aria-label="Мониторы"]').click();
+  await expect(page.locator('.ui-context')).not.toHaveClass(/is-collapsed/);
+  await page.getByRole('link', { name: 'Подключить ТВ' }).click();
+  await expect(page).toHaveURL(/\/connect-tv\.html$/);
   await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
 
   const scanStep = page.locator('[data-connect-step="scan"]');
@@ -24,6 +28,9 @@ test('mobile TV pairing keeps one clear active step and a fullscreen scanner', a
   await expect(locationStep).toBeHidden();
   await expect(screenStep).toBeHidden();
   await expect(page.getByRole('button', { name: 'Сканировать QR-код' })).toBeVisible();
+  await expect(scanStep).toHaveCSS('background-color', /rgb\(/);
+  expect(await scanStep.evaluate((node) => getComputedStyle(node).borderRadius)).not.toBe('0px');
+  expect(await page.locator('.connect-tv-progress').evaluate((node) => getComputedStyle(node).display)).toBe('grid');
 
   await page.getByRole('button', { name: /ввести код/i }).first().click();
   await expect(page.getByLabel('6-значный резервный код')).toBeVisible();
