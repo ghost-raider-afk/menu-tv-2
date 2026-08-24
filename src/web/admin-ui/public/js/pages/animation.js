@@ -3,6 +3,7 @@ import { api } from '../core/api.js';
 import { element, setMessage, setPending } from '../core/dom.js';
 import { ANIMATION_PRESETS, DEFAULT_PRESET_ID, PRESET_BY_ID, profileForPreset } from '../motion/presets.js';
 import { AnimationPreviewPlayer } from '../motion/preview-player.js';
+import { SceneEntityEditor, normaliseSceneEntity } from '../motion/entity-editor.js';
 import { renderAnimationScreenEmpty, renderAnimationScreenPreview } from '../motion/screen-preview.js';
 
 const CONTROL_IDS = Object.freeze([
@@ -13,21 +14,15 @@ const CONTROL_IDS = Object.freeze([
 ]);
 
 let currentPresetId = DEFAULT_PRESET_ID;
+let currentEntity = normaliseSceneEntity();
 let player = null;
+let entityEditor = null;
 let previewFrame = null;
 let screenLoadSequence = 0;
 
-function number(id) {
-  return Number(element(id)?.value ?? 0);
-}
-
-function checked(id) {
-  return element(id)?.checked === true;
-}
-
-function value(id) {
-  return element(id)?.value || '';
-}
+function number(id) { return Number(element(id)?.value ?? 0); }
+function checked(id) { return element(id)?.checked === true; }
+function value(id) { return element(id)?.value || ''; }
 
 function collectProfile() {
   return {
@@ -52,8 +47,7 @@ function collectProfile() {
 
 function setValue(id, value) {
   const node = element(id);
-  if (!node) return;
-  node.value = String(value);
+  if (node) node.value = String(value);
 }
 
 function populateProfile(profile) {
@@ -75,9 +69,7 @@ function populateProfile(profile) {
   updateIntensityOutput();
 }
 
-function presetName(id) {
-  return PRESET_BY_ID.get(id)?.name || 'Пользовательский профиль';
-}
+function presetName(id) { return PRESET_BY_ID.get(id)?.name || 'Пользовательский профиль'; }
 
 function updatePresetSelection() {
   document.querySelectorAll('[data-animation-preset]').forEach((node) => {
@@ -98,6 +90,7 @@ function restartPreview() {
   cancelAnimationFrame(previewFrame);
   previewFrame = requestAnimationFrame(() => {
     player?.restart(collectProfile());
+    entityEditor?.render();
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) player?.pause();
   });
 }
@@ -139,6 +132,118 @@ function bindProfileControls() {
   });
 }
 
+function entityHeight(entity) {
+  const ratio = entity.asset_width > 0 && entity.asset_height > 0 ? entity.asset_height / entity.asset_width : 1;
+  return entity.transform.width * ratio * entity.transform.scale;
+}
+
+function syncEntityControls(entity = currentEntity) {
+  const current = normaliseSceneEntity(entity);
+  setValue('animation-entity-name', current.name);
+  const visible = element('animation-entity-visible');
+  if (visible) visible.checked = current.visible;
+  setValue('animation-entity-x', Math.round(current.transform.x));
+  setValue('animation-entity-y', Math.round(current.transform.y));
+  setValue('animation-entity-width', Math.round(current.transform.width));
+  setValue('animation-entity-rotation', current.transform.rotation);
+  setValue('animation-entity-scale', current.transform.scale);
+  setValue('animation-entity-depth', current.transform.depth);
+  setValue('animation-entity-opacity', current.transform.opacity);
+  const scale = element('animation-entity-scale-output');
+  const depth = element('animation-entity-depth-output');
+  const opacity = element('animation-entity-opacity-output');
+  if (scale) scale.textContent = `${current.transform.scale.toFixed(2)}×`;
+  if (depth) depth.textContent = String(current.transform.depth);
+  if (opacity) opacity.textContent = `${Math.round(current.transform.opacity * 100)}%`;
+
+  const thumbnail = element('animation-entity-thumbnail');
+  if (thumbnail) {
+    thumbnail.replaceChildren();
+    if (current.asset_url) {
+      const image = document.createElement('img');
+      image.src = current.asset_url;
+      image.alt = current.name;
+      thumbnail.append(image);
+    } else {
+      thumbnail.append(Object.assign(document.createElement('span'), { textContent: 'PNG / WebP' }));
+    }
+  }
+}
+
+function applyEntity(entity) {
+  currentEntity = normaliseSceneEntity(entity);
+  syncEntityControls(currentEntity);
+  entityEditor?.setEntity(currentEntity);
+}
+
+function patchEntity(patch) {
+  currentEntity = normaliseSceneEntity({
+    ...currentEntity,
+    ...patch,
+    transform: { ...currentEntity.transform, ...(patch.transform || {}) }
+  });
+  syncEntityControls(currentEntity);
+  entityEditor?.setEntity(currentEntity);
+}
+
+async function uploadEntityAsset(file) {
+  if (!(file instanceof Blob) || !['image/png', 'image/webp'].includes(file.type)) {
+    setMessage('animation-message', 'Для объекта поддерживаются только PNG и WebP.', 'error');
+    return;
+  }
+  const button = element('animation-entity-upload');
+  setPending(button, true, 'Загружаем…');
+  try {
+    const saved = await api.put(API.animationEntityAsset, file, { headers: { 'Content-Type': file.type } });
+    applyEntity(saved.entity);
+    setMessage('animation-message', 'Изображение объекта загружено. Разместите его и сохраните профиль.', 'success');
+  } catch (error) {
+    setMessage('animation-message', error.message);
+  } finally {
+    setPending(button, false, 'Загружаем…');
+  }
+}
+
+function alignEntity(mode) {
+  const entity = normaliseSceneEntity(currentEntity);
+  const width = entity.transform.width * entity.transform.scale;
+  const height = entityHeight(entity);
+  const margin = 48;
+  const transform = {};
+  if (mode === 'left') transform.x = margin;
+  if (mode === 'center') transform.x = (1920 - width) / 2;
+  if (mode === 'right') transform.x = 1920 - width - margin;
+  if (mode === 'top') transform.y = margin;
+  if (mode === 'middle') transform.y = (1080 - height) / 2;
+  if (mode === 'bottom') transform.y = 1080 - height - margin;
+  patchEntity({ transform });
+}
+
+function bindEntityControls() {
+  element('animation-entity-upload')?.addEventListener('click', () => element('animation-entity-file')?.click());
+  element('animation-entity-file')?.addEventListener('change', (event) => {
+    const file = event.target.files?.[0];
+    if (file) void uploadEntityAsset(file);
+    event.target.value = '';
+  });
+  element('animation-entity-name')?.addEventListener('input', () => patchEntity({ name: value('animation-entity-name') || 'Бокал пива' }));
+  element('animation-entity-visible')?.addEventListener('change', () => patchEntity({ visible: checked('animation-entity-visible') }));
+  const transformControls = {
+    'animation-entity-x': ['x', 1],
+    'animation-entity-y': ['y', 1],
+    'animation-entity-width': ['width', 1],
+    'animation-entity-rotation': ['rotation', 1],
+    'animation-entity-scale': ['scale', 1],
+    'animation-entity-depth': ['depth', 1],
+    'animation-entity-opacity': ['opacity', 1]
+  };
+  Object.entries(transformControls).forEach(([id, [key]]) => {
+    element(id)?.addEventListener('input', () => patchEntity({ transform: { [key]: number(id) } }));
+  });
+  document.querySelectorAll('[data-entity-align]').forEach((button) => button.addEventListener('click', () => alignEntity(button.dataset.entityAlign)));
+  element('animation-entity-reset')?.addEventListener('click', () => patchEntity({ transform: { x: 1580, y: 420, width: 280, scale: 1, rotation: 0, depth: 10, opacity: 1 } }));
+}
+
 function screenLabel(screen) {
   const location = screen.location_name || 'Без точки';
   return `${location} — ${screen.name}`;
@@ -171,6 +276,7 @@ async function loadScreenPreview(screenId) {
     const bundle = await api.get(`${API.screens}/${screenId}/editor`);
     if (sequence !== screenLoadSequence) return;
     renderAnimationScreenPreview(stage, bundle);
+    entityEditor?.render();
     setScreenStatus(`${bundle.screen.location_name || 'Без точки'} · ${bundle.screen.name} · ${bundle.screen.resolution}`);
     restartPreview();
   } catch (error) {
@@ -216,6 +322,7 @@ async function loadSettings() {
   const enabled = element('animation-enabled');
   if (enabled) enabled.checked = settings?.enabled === true;
   populateProfile(profile);
+  applyEntity(settings?.entity);
   updatePresetSelection();
   restartPreview();
 }
@@ -227,12 +334,14 @@ async function saveSettings() {
     const saved = await api.put(API.animationSettings, {
       enabled: checked('animation-enabled'),
       preset_id: currentPresetId,
-      profile: collectProfile()
+      profile: collectProfile(),
+      entity: currentEntity
     });
     currentPresetId = saved.preset_id;
     populateProfile(saved.profile);
+    applyEntity(saved.entity);
     updatePresetSelection();
-    setMessage('animation-message', 'Профиль постоянной анимации сохранён.', 'success');
+    setMessage('animation-message', 'Профиль анимации и объект сцены сохранены.', 'success');
   } catch (error) {
     setMessage('animation-message', error.message);
   } finally {
@@ -244,6 +353,7 @@ export function initialiseAnimationStudio() {
   const stage = element('animation-stage');
   if (!stage) return;
   player?.destroy();
+  entityEditor?.destroy();
   player = new AnimationPreviewPlayer({
     stage,
     timeline: element('animation-timeline'),
@@ -252,8 +362,17 @@ export function initialiseAnimationStudio() {
     pauseButton: element('animation-pause'),
     replayButton: element('animation-replay')
   });
+  entityEditor = new SceneEntityEditor({
+    stage,
+    onChange(entity) {
+      currentEntity = entity;
+      syncEntityControls(entity);
+    }
+  });
   renderPresets();
   bindProfileControls();
+  bindEntityControls();
+  syncEntityControls();
   element('animation-save')?.addEventListener('click', () => { void saveSettings(); });
   void Promise.all([loadSettings(), loadScreenOptions()]).catch((error) => setMessage('animation-message', error.message));
 }
