@@ -53,7 +53,7 @@ export function renderAnnouncementLayer(layer, value) {
 
   const bar = document.createElement('div');
   bar.className = 'scene-announcement';
-  bar.style.setProperty('--announcement-font-size', `${announcement.font_size}px`);
+  bar.style.setProperty('--announcement-font-size', `${announcement.font_size / 19.2}cqw`);
   bar.style.setProperty('--announcement-text-color', announcement.text_color);
   bar.style.setProperty('--announcement-background', rgba(announcement.background_color, announcement.background_opacity));
   bar.style.setProperty('--announcement-duration', `${durationSeconds(announcement)}s`);
