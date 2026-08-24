@@ -13,9 +13,9 @@
       <div class="app-content">
         <main class="main-content animation-content">
           <div class="page-heading animation-heading">
-            <div><p class="eyebrow">MOTION STUDIO</p><h1>Анимация экранов</h1><p>Меню всегда остаётся открытым и читаемым. Анимация работает как постоянное живое оформление: фон, световые волны, микро‑движение разделов, строк и цен.</p></div>
+            <div><p class="eyebrow">MOTION STUDIO</p><h1>Анимация экранов</h1><p>Меню всегда остаётся открытым и читаемым. Анимация работает как постоянное живое оформление: фон, световые волны, микро‑движение разделов, строк, цен и отдельного живого объекта.</p></div>
             <div class="animation-heading-actions">
-              <label class="animation-master-toggle"><input id="animation-enabled" type="checkbox" /><span><strong>Анимация включена</strong><small>Ни один пресет не скрывает меню целиком.</small></span></label>
+              <label class="animation-master-toggle"><input id="animation-enabled" type="checkbox" /><span><strong>Анимация включена</strong><small>Меню и живой объект остаются частью одной сцены.</small></span></label>
               <button class="button button-primary" id="animation-save" type="button">Сохранить профиль</button>
             </div>
           </div>
@@ -48,6 +48,35 @@
                 </div>
               </div>
             </div>
+          </section>
+
+          <section class="settings-card animation-entity-card" aria-labelledby="animation-entity-title">
+            <div class="card-heading animation-entity-heading">
+              <div><p class="eyebrow">LIVE ENTITY</p><h2 id="animation-entity-title">Живой объект</h2><p>Загрузите отдельный PNG/WebP с прозрачностью. Объект живёт независимо от фона и меню: его можно перетаскивать прямо в мини‑плеере, менять размер, глубину и собственное постоянное движение.</p></div>
+              <label class="animation-master-toggle"><input id="animation-entity-enabled" type="checkbox" /><span><strong>Объект включён</strong><small>Показывать в preview и TV Player.</small></span></label>
+            </div>
+            <div class="animation-entity-layout">
+              <div class="animation-entity-upload-panel">
+                <div class="animation-entity-thumb" id="animation-entity-thumb"><span>PNG / WebP<br />с прозрачностью</span></div>
+                <input id="animation-entity-file" type="file" accept="image/png,image/webp" hidden />
+                <div class="animation-entity-upload-actions">
+                  <button class="button button-secondary" id="animation-entity-choose" type="button">Загрузить / заменить</button>
+                  <button class="button button-secondary" id="animation-entity-remove" type="button">Удалить объект</button>
+                </div>
+                <p class="animation-entity-status" id="animation-entity-status">Объект ещё не загружен.</p>
+              </div>
+              <div class="animation-entity-controls form-grid">
+                <label class="field"><span>Позиция X, %</span><input id="animation-entity-x" type="range" min="0" max="100" step="0.1" /><output id="animation-entity-x-output">82%</output></label>
+                <label class="field"><span>Позиция Y, %</span><input id="animation-entity-y" type="range" min="0" max="100" step="0.1" /><output id="animation-entity-y-output">53%</output></label>
+                <label class="field"><span>Размер по ширине экрана, %</span><input id="animation-entity-width" type="range" min="1" max="100" step="0.1" /><output id="animation-entity-width-output">18%</output></label>
+                <label class="field"><span>Глубина Z</span><input id="animation-entity-depth" type="number" min="-20" max="40" step="1" /></label>
+                <label class="field"><span>Непрозрачность, %</span><input id="animation-entity-opacity" type="range" min="0" max="100" step="1" /><output id="animation-entity-opacity-output">100%</output></label>
+                <label class="field"><span>Постоянное движение</span><select id="animation-entity-idle-effect"><option value="alive">Живой — естественное микродвижение</option><option value="float">Парение</option><option value="breathe">Дыхание</option><option value="drift">Мягкий дрейф</option><option value="none">Без движения</option></select></label>
+                <label class="field"><span>Живость, %</span><input id="animation-entity-idle-amount" type="range" min="0" max="100" step="1" /><output id="animation-entity-idle-amount-output">38%</output></label>
+                <label class="field"><span>Цикл объекта, сек</span><input id="animation-entity-idle-cycle" type="number" min="2" max="60" step="0.1" /></label>
+              </div>
+            </div>
+            <p class="animation-entity-hint">Для точного размещения включите объект и перетащите его мышью или пальцем прямо в мини‑плеере. Положение хранится относительно размеров экрана, а не в фиксированных пикселях.</p>
           </section>
 
           <section class="animation-controls-grid" aria-label="Детальные параметры постоянной анимации">
