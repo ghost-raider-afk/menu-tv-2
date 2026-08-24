@@ -2,6 +2,7 @@ import { navigationState } from '../core/navigation.js';
 import { createSidebar, refreshSidebarActive } from './sidebar.js';
 import { createContextPanel, refreshContextActive, refreshContextPanel } from './context-panel.js';
 import { createHeader, initialiseHeader, refreshHeaderRoute } from './header.js';
+import { createNotificationsLayer } from './notifications.js';
 
 const CONTEXT_COLLAPSED_KEY = 'tv-menu.context-collapsed';
 const CONTEXT_MOBILE_BREAKPOINT = 1180;
@@ -126,6 +127,7 @@ export function initialiseShell() {
   const rail = createSidebar();
   const context = createContextPanel();
   const header = createHeader();
+  const notifications = createNotificationsLayer();
   const backdrop = document.createElement('button');
   backdrop.className = 'ui-context-backdrop';
   backdrop.type = 'button';
@@ -135,6 +137,7 @@ export function initialiseShell() {
   shell.prepend(backdrop);
   shell.prepend(context);
   shell.prepend(rail);
+  document.body.append(notifications);
 
   wireContext(shell, rail, context, header);
   refreshShellRoute();
