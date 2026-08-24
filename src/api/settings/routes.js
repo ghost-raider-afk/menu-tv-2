@@ -44,7 +44,7 @@ export function createSettingsRouter({ store, config }) {
     await activity(store, request, { action: 'settings.animation.updated', entity_type: 'animation_settings', entity_id: settings.id, message: 'Обновлены настройки анимации экранов.' });
     response.json(settings);
   });
-  router.put('/animation/entity-asset', express.raw({ type: '*/*', limit: config.screenBackgroundMaxBytes }), async (request, response) => {
+  router.put('/animation/entity-asset', express.raw({ type: '*/*', limit: config.animationEntityMaxBytes }), async (request, response) => {
     const previous = await store.getAnimationSettings();
     const previousUrl = previous?.profile?.entity?.asset_url || '';
     const asset = await writeAnimationEntityAsset({ bytes: request.body, config });
