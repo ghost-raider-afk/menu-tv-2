@@ -1,0 +1,38 @@
+name: fix-lock-integrity
+
+on:
+  push:
+    branches:
+      - release/v1.4.2
+
+permissions:
+  contents: write
+
+jobs:
+  fix-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: release/v1.4.2
+      - name: Restore exact lockfile integrity
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('package-lock.json')
+          text = path.read_text()
+          broken = 'sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqew=='
+          correct = 'sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ=='
+          if text.count(broken) != 1:
+              raise SystemExit('unexpected lockfile state')
+          path.write_text(text.replace(broken, correct))
+      - name: Commit repaired lockfile
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add package-lock.json
+          git diff --cached --quiet && exit 0
+          git commit -m 'Restore package-lock integrity'
+          git push origin HEAD:release/v1.4.2
