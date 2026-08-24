@@ -29,6 +29,7 @@ function accountControl() {
 
 export function refreshHeaderRoute(root = document) {
   const { title } = navigationState();
+  document.title = `${appName()} — ${title}`;
   const header = root.querySelector('.app-header');
   if (!header) return;
   const titleNode = header.querySelector('.app-header-title span');
@@ -39,6 +40,7 @@ export function refreshHeaderRoute(root = document) {
 
 export function createHeader() {
   const { title } = navigationState();
+  document.title = `${appName()} — ${title}`;
   const header = document.createElement('header');
   header.className = 'app-header';
   header.innerHTML = `<div class="app-header-title"><strong data-app-name></strong><span></span></div><div class="app-header-actions"></div>`;
@@ -88,6 +90,7 @@ async function logout() {
 
 export function initialiseHeader() {
   updateHeaderAccount(state.user);
+  refreshHeaderRoute();
   const account = document.querySelector('.header-account');
   const trigger = account?.querySelector('.header-account-trigger');
   const menu = account?.querySelector('.header-account-menu');
