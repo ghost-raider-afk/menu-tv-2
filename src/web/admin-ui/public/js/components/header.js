@@ -36,6 +36,8 @@ export function refreshHeaderRoute(root = document) {
   if (titleNode) titleNode.textContent = title;
   const nameNode = header.querySelector('[data-app-name]');
   if (nameNode) nameNode.textContent = appName();
+  const sectionTrigger = header.querySelector('[data-mobile-context-trigger]');
+  if (sectionTrigger) sectionTrigger.setAttribute('aria-label', `Открыть меню раздела: ${title}`);
 }
 
 export function createHeader() {
@@ -43,7 +45,8 @@ export function createHeader() {
   document.title = `${appName()} — ${title}`;
   const header = document.createElement('header');
   header.className = 'app-header';
-  header.innerHTML = `<div class="app-header-title"><strong data-app-name></strong><span></span></div><div class="app-header-actions"></div>`;
+  header.innerHTML = `<button class="mobile-context-trigger" data-mobile-context-trigger type="button" aria-expanded="false" aria-label="Открыть меню раздела: ${title}"></button><div class="app-header-title"><strong data-app-name></strong><span></span></div><div class="app-header-actions"></div>`;
+  setIcon(header.querySelector('[data-mobile-context-trigger]'), 'menu');
   header.querySelector('[data-app-name]').textContent = appName();
   header.querySelector('.app-header-title span').textContent = title;
   const actions = header.querySelector('.app-header-actions');
