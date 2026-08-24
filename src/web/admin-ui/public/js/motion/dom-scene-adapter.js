@@ -82,18 +82,8 @@ function collectMenuNodes(stage) {
   return nodes;
 }
 
-function collectAuxiliaryNodes(stage) {
+function collectEntityNodes(stage) {
   const nodes = [];
-  append(nodes, {
-    id: 'background.primary',
-    kind: 'background',
-    layer: MOTION_LAYERS.BACKGROUND,
-    target: stage.querySelector('[data-motion-background]'),
-    order: 0,
-    count: 1,
-    depth: -10,
-    transformOwner: 'self'
-  });
   append(nodes, {
     id: 'entity.beer-glass',
     kind: 'entity',
@@ -104,16 +94,6 @@ function collectAuxiliaryNodes(stage) {
     depth: 10,
     transformOwner: 'entity-behavior'
   });
-  append(nodes, {
-    id: 'atmosphere.shimmer',
-    kind: 'shimmer',
-    layer: MOTION_LAYERS.ATMOSPHERE,
-    target: stage.querySelector('.animation-screen-shimmer'),
-    order: 0,
-    count: 1,
-    depth: 10,
-    transformOwner: 'self'
-  });
   return nodes;
 }
 
@@ -121,8 +101,8 @@ export function buildDomMotionScene(stage) {
   if (!(stage instanceof Element)) throw new TypeError('DOM motion scene requires a stage element.');
   const scene = createMotionScene({
     root: stage,
-    nodes: [...collectMenuNodes(stage), ...collectAuxiliaryNodes(stage)],
-    metadata: { adapter: 'dom' }
+    nodes: [...collectMenuNodes(stage), ...collectEntityNodes(stage)],
+    metadata: { adapter: 'dom', backgroundMotion: false }
   });
   scene.nodes.forEach(markTarget);
   stage.dataset.motionSceneVersion = String(MOTION_SCENE_VERSION);
