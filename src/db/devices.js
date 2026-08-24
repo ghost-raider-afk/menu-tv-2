@@ -50,8 +50,8 @@ export function createDevicesRepository(pool) {
     const now = isoNow();
     const { rows } = await pool.query(
       `INSERT INTO tv_devices
-        (device_key, screen_id, label, user_agent, remote_address, authorized_by, active, created_at, updated_at)
-       VALUES ($1, NULL, $2, $3, $4, $5, TRUE, $6, $6)
+        (device_key, label, user_agent, remote_address, authorized_by, active, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, TRUE, $6, $6)
        ON CONFLICT (device_key) DO UPDATE SET
          label = EXCLUDED.label,
          user_agent = EXCLUDED.user_agent,
@@ -63,6 +63,52 @@ export function createDevicesRepository(pool) {
       [key, label, userAgent, remoteAddress, authorizedBy, now]
     );
     return deviceRecord(rows[0]);
+  }
+
+  async function activeBindingByScreen(screenId, { lock = false } = {}) {
+    const { rows } = await pool.query(
+      `SELECT b.id AS binding_id, b.device_id, b.screen_id, b.active, b.bound_by, b.bound_at,
+              d.device_key, d.label, d.last_seen_at AS device_last_seen_at,
+              (SELECT MAX(ds.last_seen_at) FROM tv_device_sessions ds
+                WHERE ds.device_id = d.id AND ds.revoked_at IS NULL) AS session_last_seen_at
+         FROM tv_device_bindings b
+         JOIN tv_devices d ON d.id = b.device_id
+        WHERE b.screen_id = $1 AND b.active = TRUE
+        LIMIT 1${lock ? ' FOR UPDATE' : ''}`,
+      [screenId]
+    );
+    return bindingRecord(rows[0]);
+  }
+
+  async function activeBindingByKey(deviceKey, { lock = false } = {}) {
+    const { rows } = await pool.query(
+      `SELECT b.id AS binding_id, b.device_id, b.screen_id, b.active, b.bound_by, b.bound_at,
+              d.device_key, d.label, d.last_seen_at AS device_last_seen_at
+         FROM tv_device_bindings b
+         JOIN tv_devices d ON d.id = b.device_id
+        WHERE d.device_key = $1 AND b.active = TRUE
+        LIMIT 1${lock ? ' FOR UPDATE' : ''}`,
+      [deviceKey]
+    );
+    return bindingRecord(rows[0]);
+  }
+
+  async function revokeBindingForScreen(screenId) {
+    const now = isoNow();
+    const binding = await activeBindingByScreen(screenId);
+    if (!binding) return null;
+    await pool.query(
+      `UPDATE tv_device_sessions SET revoked_at = $1
+       WHERE revoked_at IS NULL AND device_id = $2`,
+      [now, binding.device_id]
+    );
+    await pool.query(
+      `UPDATE tv_device_bindings
+          SET active = FALSE, revoked_at = $1, updated_at = $1
+        WHERE id = $2 AND active = TRUE`,
+      [now, binding.binding_id]
+    );
+    return binding;
   }
 
   async function bindDevice({ deviceKey, screenId, label = '', userAgent = '', remoteAddress = '', authorizedBy = '' }) {
@@ -185,32 +231,8 @@ export function createDevicesRepository(pool) {
       return activationRecord(rows[0]);
     },
 
-    async getActiveDeviceBindingByScreen(screenId, { lock = false } = {}) {
-      const { rows } = await pool.query(
-        `SELECT b.id AS binding_id, b.device_id, b.screen_id, b.active, b.bound_by, b.bound_at,
-                d.device_key, d.label, d.last_seen_at AS device_last_seen_at
-           FROM tv_device_bindings b
-           JOIN tv_devices d ON d.id = b.device_id
-          WHERE b.screen_id = $1 AND b.active = TRUE
-          LIMIT 1${lock ? ' FOR UPDATE' : ''}`,
-        [screenId]
-      );
-      return bindingRecord(rows[0]);
-    },
-
-    async getActiveDeviceBindingByKey(deviceKey, { lock = false } = {}) {
-      const { rows } = await pool.query(
-        `SELECT b.id AS binding_id, b.device_id, b.screen_id, b.active, b.bound_by, b.bound_at,
-                d.device_key, d.label, d.last_seen_at AS device_last_seen_at
-           FROM tv_device_bindings b
-           JOIN tv_devices d ON d.id = b.device_id
-          WHERE d.device_key = $1 AND b.active = TRUE
-          LIMIT 1${lock ? ' FOR UPDATE' : ''}`,
-        [deviceKey]
-      );
-      return bindingRecord(rows[0]);
-    },
-
+    getActiveDeviceBindingByScreen: activeBindingByScreen,
+    getActiveDeviceBindingByKey: activeBindingByKey,
     bindDevice,
 
     async createDevice({ deviceKey = crypto.randomUUID(), screenId, label = '', userAgent = '', remoteAddress = '', authorizedBy = '' }) {
@@ -218,9 +240,8 @@ export function createDevicesRepository(pool) {
     },
 
     async deactivateDevicesForScreen(screenId) {
-      const binding = await this.getActiveDeviceBindingByScreen?.(screenId);
+      const binding = await revokeBindingForScreen(screenId);
       if (!binding) return [];
-      await this.revokeDeviceByScreen?.(screenId);
       const { rows } = await pool.query('SELECT * FROM tv_devices WHERE id = $1', [binding.device_id]);
       return rows.map(deviceRecord);
     },
@@ -291,25 +312,7 @@ export function createDevicesRepository(pool) {
     },
 
     async revokeDeviceByScreen(screenId) {
-      const now = isoNow();
-      const binding = await pool.query(
-        `SELECT device_id FROM tv_device_bindings WHERE screen_id = $1 AND active = TRUE LIMIT 1`,
-        [screenId]
-      );
-      if (!binding.rowCount) return false;
-      const deviceId = Number(binding.rows[0].device_id);
-      await pool.query(
-        `UPDATE tv_device_sessions SET revoked_at = $1
-         WHERE revoked_at IS NULL AND device_id = $2`,
-        [now, deviceId]
-      );
-      const { rowCount } = await pool.query(
-        `UPDATE tv_device_bindings
-            SET active = FALSE, revoked_at = $1, updated_at = $1
-          WHERE screen_id = $2 AND active = TRUE`,
-        [now, screenId]
-      );
-      return rowCount > 0;
+      return Boolean(await revokeBindingForScreen(screenId));
     }
   });
 }
