@@ -110,14 +110,22 @@ async function decodeImage(bytes, { maxPixels, label }) {
   }
 }
 
-export async function validateImage(bytes, { allowedTypes, maxWidth, maxHeight, maxPixels, label = 'Изображение' }) {
+function dimensionLimit(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+export async function validateImage(bytes, { allowedTypes, maxWidth = null, maxHeight = null, maxPixels, label = 'Изображение' }) {
   const structural = inspectImage(bytes);
   if (!structural || !allowedTypes.includes(structural.type)) {
     throw new ValidationError(`${label}: формат или структура файла не поддерживается.`);
   }
+  const widthLimit = dimensionLimit(maxWidth);
+  const heightLimit = dimensionLimit(maxHeight);
   const structuralPixels = structural.width * structural.height;
-  if (structural.width > maxWidth || structural.height > maxHeight || structuralPixels > maxPixels) {
-    throw new ValidationError(`${label}: максимальный размер — ${maxWidth}×${maxHeight}, не более ${maxPixels} пикселей.`);
+  if ((widthLimit && structural.width > widthLimit) || (heightLimit && structural.height > heightLimit) || structuralPixels > maxPixels) {
+    const geometry = widthLimit && heightLimit ? `${widthLimit}×${heightLimit}, ` : '';
+    throw new ValidationError(`${label}: максимальный размер — ${geometry}не более ${maxPixels} пикселей.`);
   }
 
   const decoded = await decodeImage(bytes, { maxPixels, label });
