@@ -1,0 +1,33 @@
+name: sync-app-version-once
+
+on:
+  push:
+    branches:
+      - agent/motion-engine-v3-foundation
+    paths:
+      - .github/workflows/sync-app-version-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/motion-engine-v3-foundation
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Synchronize application version
+        run: npm version 1.3.5 --no-git-tag-version --allow-same-version
+      - name: Commit synchronized lock and remove one-shot workflow
+        run: |
+          rm .github/workflows/sync-app-version-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json .github/workflows/sync-app-version-once.yml
+          git commit -m 'Sync package lock for 1.3.5'
+          git push origin HEAD:agent/motion-engine-v3-foundation
