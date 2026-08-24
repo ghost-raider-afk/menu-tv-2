@@ -1,5 +1,26 @@
 # История версий ТВ МЕНЮ 2
 
+## [1.3.5] - 2026-08-24
+
+### Архитектура анимации
+- Motion Engine переработан в renderer-agnostic v3 без изменения сохранённого пользовательского `motion_version: 2`.
+- Scene Graph отделён от DOM/SVG и использует opaque render targets, логические layers, depth и явный transform ownership.
+- DOM/SVG binding вынесен в отдельный `dom-scene-adapter`; canonical menu renderer больше не зависит от Motion Runtime.
+- Текущая анимация разделена на независимые SceneProgram `menu-motion` и `atmosphere`.
+- Добавлен `Scene Composer`, который до запуска driver проверяет уникальность программ и запрещает конкурирующее владение `transform`, `opacity` и `appearance` одного scene node.
+- Добавлен `Scene Runtime`, объединяющий независимые compilers в один master timeline и единый lifecycle `play/pause/replay/seek/destroy`.
+- Motion state хранит числовые `x/y/z`, scale, opacity, brightness/glow и семантический timing без CSS-строк; CSS serialization выполняется только WAAPI driver.
+- WAAPI driver записывает только явно заявленные track claims, поэтому программа не может незаметно менять чужой канал.
+
+### Будущая 2.5D / 3D сцена
+- Scene Graph уже содержит независимый слой `entity`, но default menu/atmosphere compilers намеренно не управляют будущей Live Entity.
+- Архитектура допускает будущие Pixi/Three/WebGPU drivers и отдельный entity behavior compiler без переделки SVG renderer, Scene Graph и Timeline.
+- Performance/quality ограничения, device tiers, asset budgets и GPU-зависимости в этой версии намеренно не вводятся.
+
+### Проверки
+- Добавлены regression-тесты Scene Composer ownership, независимого вызова compilers, Scene Runtime и выборочной WAAPI serialization по claims.
+- Сохранены Chromium-проверки существующей анимации и единой плашки «Акция» после архитектурной переработки.
+
 ## [1.3.4] - 2026-08-24
 
 ### Анимация
