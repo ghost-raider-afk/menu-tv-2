@@ -1,28 +1,29 @@
 name: release-v15-one-shot
 
 on:
-  push:
-    branches:
-      - main
+  pull_request_target:
+    types: [opened]
 
 permissions:
   contents: write
   actions: write
+  pull-requests: write
 
 jobs:
   finalize:
-    if: contains(github.event.head_commit.message, '[release-v15-trigger]')
+    if: github.event.pull_request.head.ref == 'release-trigger/v1.5.0'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Cancel duplicate main gate run
+      - name: Cancel duplicate PR gate run
         env:
           GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         shell: bash
         run: |
           set -euo pipefail
           sleep 3
-          gh run list --repo "$GITHUB_REPOSITORY" --workflow check.yml --branch main --limit 20 --json databaseId,headSha,status --jq ".[] | select(.headSha == \"$GITHUB_SHA\" and .status != \"completed\") | .databaseId" | while read -r run_id; do
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow check.yml --limit 30 --json databaseId,headSha,status,event --jq ".[] | select(.headSha == \"$HEAD_SHA\" and .event == \"pull_request\" and .status != \"completed\") | .databaseId" | while read -r run_id; do
             [[ -n "$run_id" ]] || continue
             echo "Cancelling duplicate check run $run_id"
             gh run cancel "$run_id" --repo "$GITHUB_REPOSITORY" || true
