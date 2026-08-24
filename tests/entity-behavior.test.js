@@ -53,7 +53,7 @@ test('preview and TV player bind independent entity runtime and cache it offline
     read('js/motion/entity-editor.js')
   ]);
   assert.match(entityEditor, /animation-scene-entity-motion/);
-  assert.match(entityEditor, /data\.entityMotion/);
+  assert.match(entityEditor, /motion\.dataset\.entityMotion/);
   assert.match(adapter, /entity\.beer-glass/);
   assert.match(adapter, /data-entity-motion="beer-glass"/);
   assert.match(preview, /compileEntityBehaviorProgram/);
@@ -65,5 +65,5 @@ test('preview and TV player bind independent entity runtime and cache it offline
     '/js/player/entity-runtime.js', '/js/motion/entity-behavior.js', '/js/motion/dom-scene-adapter.js',
     '/js/motion/scene-graph.js', '/js/motion/scene-composer.js', '/js/motion/scene-runtime.js',
     '/js/motion/timeline.js', '/js/motion/drivers/waapi-driver.js'
-  ]) assert.match(worker, new RegExp(asset.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  ]) assert.ok(worker.includes(asset), `offline shell is missing ${asset}`);
 });
