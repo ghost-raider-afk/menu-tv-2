@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
+import sharp from 'sharp';
 import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { ValidationError } from '../shared/errors.js';
 import { validateImage } from './image-validation.js';
@@ -16,6 +17,14 @@ export function isAnimationEntityAssetUrl(assetUrl) {
   return Boolean(animationEntityFilename(assetUrl));
 }
 
+async function hasVisibleTransparency(bytes, maxPixels) {
+  const alpha = await sharp(bytes, { failOn: 'error', limitInputPixels: maxPixels, sequentialRead: true })
+    .ensureAlpha()
+    .extractChannel(3)
+    .stats();
+  return Number(alpha?.channels?.[0]?.min) < 255;
+}
+
 export async function writeAnimationEntityAsset({ bytes, config }) {
   const maxBytes = config.screenBackgroundMaxBytes;
   if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > maxBytes) {
@@ -29,8 +38,8 @@ export async function writeAnimationEntityAsset({ bytes, config }) {
     maxPixels: config.imageMaxPixels,
     label: 'Живой объект'
   });
-  if (!info.hasAlpha) {
-    throw new ValidationError('Живой объект должен быть PNG/WebP с прозрачным alpha-каналом.');
+  if (!info.hasAlpha || !await hasVisibleTransparency(bytes, config.imageMaxPixels)) {
+    throw new ValidationError('Живой объект должен быть PNG/WebP с реальным прозрачным фоном.');
   }
 
   const filename = `animation-entity-${crypto.randomUUID()}.${info.type}`;
