@@ -1,6 +1,7 @@
 import { API } from '../core/config.js';
 import { api } from '../core/api.js';
 import { clearMessage, element, setMessage, setPending } from '../core/dom.js';
+import { showToast } from '../core/toasts.js';
 import { formatDate } from '../core/presentation.js';
 
 const SEVERITY_LABELS = Object.freeze({ success: 'Успешно', warning: 'Предупреждение', error: 'Ошибка', info: 'Информация' });
@@ -104,6 +105,27 @@ async function loadJournal() {
   }
 }
 
+async function clearJournal() {
+  const button = element('event-clear');
+  if (!window.confirm('Очистить весь журнал событий? Это действие нельзя отменить.')) return;
+  setPending(button, true, 'Очищаем…');
+  clearMessage('event-message');
+  try {
+    const result = await api.delete(`${API.notifications}/events`);
+    showToast(`Журнал событий очищен. Удалено записей: ${Number(result?.deleted_count || 0)}.`, {
+      severity: 'success',
+      category: 'system',
+      persist: false
+    });
+    window.dispatchEvent(new CustomEvent('menu-tv:event-recorded'));
+    await loadJournal();
+  } catch (error) {
+    setMessage('event-message', error.message);
+  } finally {
+    setPending(button, false, 'Очищаем…');
+  }
+}
+
 function scheduleLoad(delay = 250) {
   window.clearTimeout(filterTimer);
   filterTimer = window.setTimeout(() => void loadJournal(), delay);
@@ -114,5 +136,6 @@ export function initialiseEvents() {
   element('event-filter-severity')?.addEventListener('change', () => scheduleLoad(0));
   element('event-filter-category')?.addEventListener('change', () => scheduleLoad(0));
   element('event-refresh')?.addEventListener('click', () => void loadJournal());
+  element('event-clear')?.addEventListener('click', () => void clearJournal());
   void loadJournal();
 }

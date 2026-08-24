@@ -98,3 +98,37 @@ test('catalog duplicate event identifies the exact conflicting product', async (
     return body.items.some((item) => item.message === expected);
   }).toBe(true);
 });
+
+test('event journal can be cleared with confirmation and keeps one audit record', async ({ page }) => {
+  await login(page);
+  const marker = `clear-${Date.now()}`;
+  const created = await page.request.post('/api/notifications/events', {
+    data: { message: marker, severity: 'warning', category: 'system' }
+  });
+  expect(created.ok()).toBeTruthy();
+
+  await page.goto('/events.html');
+  await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
+  await expect(page.getByRole('button', { name: 'Очистить журнал' })).toBeVisible();
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Очистить журнал' }).click();
+  await expect(page.locator('.system-toast').filter({ hasText: 'Журнал событий очищен' })).toBeVisible();
+
+  await expect.poll(async () => {
+    const response = await page.request.get('/api/notifications/events?limit=20');
+    if (!response.ok()) return null;
+    const body = await response.json();
+    return {
+      total: Number(body.stats?.total || 0),
+      actions: body.items.map((item) => item.action),
+      markerPresent: body.items.some((item) => item.message === marker),
+      deletedCount: Number(body.items.find((item) => item.action === 'events.cleared')?.metadata?.deleted_count || 0)
+    };
+  }).toEqual({ total: 1, actions: ['events.cleared'], markerPresent: false, deletedCount: expect.any(Number) });
+
+  const journal = await page.request.get('/api/notifications/events?limit=20');
+  const body = await journal.json();
+  expect(Number(body.items[0]?.metadata?.deleted_count || 0)).toBeGreaterThanOrEqual(1);
+  await expect(page.locator('.event-journal-entry-message')).toHaveText('Журнал событий очищен');
+});
