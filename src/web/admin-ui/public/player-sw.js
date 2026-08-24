@@ -1,11 +1,21 @@
-const SHELL_CACHE = 'tv-menu-player-shell-v2';
-const DATA_CACHE = 'tv-menu-player-data-v2';
+const SHELL_CACHE = 'tv-menu-player-shell-v3';
+const DATA_CACHE = 'tv-menu-player-data-v3';
 const PLAYER_CONTEXT = '/api/device/player-context';
 const SHELL_ASSETS = [
   '/player.html',
   '/css/player.css',
   '/js/player/player.js',
-  '/js/editor/renderer.js'
+  '/js/editor/renderer.js',
+  '/js/editor/renderer-model.js',
+  '/js/editor/renderer-svg.js',
+  '/js/motion/entity-dom.js',
+  '/js/motion/dom-scene-adapter.js',
+  '/js/motion/scene-graph.js',
+  '/js/motion/motion-plan.js',
+  '/js/motion/scene-composer.js',
+  '/js/motion/scene-runtime.js',
+  '/js/motion/timeline.js',
+  '/js/motion/drivers/waapi-driver.js'
 ];
 
 self.addEventListener('install', (event) => {
