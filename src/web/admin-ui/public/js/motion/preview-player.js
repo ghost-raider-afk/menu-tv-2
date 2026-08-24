@@ -45,14 +45,6 @@ export class AnimationPreviewPlayer {
     this.scene = scene || null;
   }
 
-  sceneIsCurrent() {
-    if (!this.scene || this.scene.root !== this.stage || !this.scene.nodes.length) return false;
-    return this.scene.nodes.every((node) => {
-      const target = node?.target;
-      return target && typeof target === 'object' && 'nodeType' in target && this.stage.contains(target);
-    });
-  }
-
   destroy() {
     cancelAnimationFrame(this.raf);
     this.runtime.destroy();
@@ -65,7 +57,7 @@ export class AnimationPreviewPlayer {
     const intensity = clamp(Number(profile.intensity) || 0, 0, 100);
     this.stage.style.setProperty('--motion-intensity', String(intensity / 100));
     this.stage.dataset.motionMode = 'continuous';
-    if (!this.sceneIsCurrent()) this.scene = buildDomMotionScene(this.stage);
+    this.scene = buildDomMotionScene(this.stage);
     this.plan = this.runtime.load({
       scene: this.scene,
       context: { profile: this.profile }

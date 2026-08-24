@@ -1,6 +1,7 @@
 import { composeScenePrograms, createSceneProgram } from './scene-composer.js';
 
 const GOLD_SHADOW = 'rgba(244,201,21,.58)';
+const ENTITY_GLOW = 'rgba(255,238,182,.28)';
 const MENU_KINDS = new Set(['section', 'item', 'promotion', 'price', 'background']);
 
 function clamp(value, minimum, maximum) {
@@ -126,6 +127,46 @@ function shimmerFrames(profile) {
   ];
 }
 
+function entityFrames(entity) {
+  const gain = clamp(Number(entity?.idle_amount) || 0, 0, 100) / 100;
+  const travel = 10 * gain;
+  const scale = 0.016 * gain;
+  const brightness = 0.055 * gain;
+  const effect = entity?.idle_effect || 'alive';
+
+  if (effect === 'breathe') {
+    return [
+      frame({ offset: 0, scale: 1 }),
+      frame({ offset: 0.5, scale: 1 + scale, brightness: 1 + brightness }),
+      frame({ offset: 1, scale: 1 })
+    ];
+  }
+  if (effect === 'float') {
+    return [
+      frame({ offset: 0, x: 0, y: 0 }),
+      frame({ offset: 0.36, x: travel * 0.18, y: -travel }),
+      frame({ offset: 0.72, x: -travel * 0.14, y: -travel * 0.25 }),
+      frame({ offset: 1, x: 0, y: 0 })
+    ];
+  }
+  if (effect === 'drift') {
+    return [
+      frame({ offset: 0, x: -travel * 0.35, y: travel * 0.12 }),
+      frame({ offset: 0.32, x: travel * 0.42, y: -travel * 0.28 }),
+      frame({ offset: 0.67, x: travel * 0.12, y: travel * 0.3 }),
+      frame({ offset: 1, x: -travel * 0.35, y: travel * 0.12 })
+    ];
+  }
+  return [
+    frame({ offset: 0, x: 0, y: 0, scale: 1, brightness: 1 }),
+    frame({ offset: 0.19, x: travel * 0.08, y: -travel * 0.48, scale: 1 + scale * 0.35, brightness: 1 + brightness * 0.35 }),
+    frame({ offset: 0.43, x: -travel * 0.11, y: -travel, scale: 1 + scale, brightness: 1 + brightness, glowRadius: 8 * gain, glowColor: ENTITY_GLOW }),
+    frame({ offset: 0.69, x: travel * 0.14, y: -travel * 0.32, scale: 1 + scale * 0.25, brightness: 1 + brightness * 0.25 }),
+    frame({ offset: 0.86, x: -travel * 0.05, y: travel * 0.08, scale: 1 + scale * 0.08, brightness: 1 + brightness * 0.12 }),
+    frame({ offset: 1, x: 0, y: 0, scale: 1, brightness: 1 })
+  ];
+}
+
 function timing(duration, delay, easing) {
   return Object.freeze({ duration, delay, easing, loop: true });
 }
@@ -184,9 +225,34 @@ export function compileAtmosphereProgram(scene, context = {}) {
   });
 }
 
+export function compileEntityProgram(scene, context = {}) {
+  if (!scene || !Array.isArray(scene.nodes)) throw new TypeError('Entity compiler requires a scene graph.');
+  const profile = context.profile || context;
+  const entity = profile?.entity || {};
+  const duration = Math.max(2000, Number(entity.idle_cycle_seconds) * 1000 || 8500);
+  const node = scene.nodes.find((candidate) => candidate.kind === 'entity');
+  const active = node && entity.enabled === true && Boolean(entity.asset_url) && entity.idle_effect !== 'none';
+  const claims = entity.idle_effect === 'alive' || entity.idle_effect === 'breathe'
+    ? ['transform', 'appearance']
+    : ['transform'];
+  const tracks = active ? [Object.freeze({
+    node,
+    claims: Object.freeze(claims),
+    keyframes: Object.freeze(entityFrames(entity)),
+    timing: timing(duration, 0, 'smooth')
+  })] : [];
+  return createSceneProgram({
+    id: 'entity-idle',
+    duration,
+    tracks,
+    metadata: { layer: 'entity', effect: entity.idle_effect || 'none' }
+  });
+}
+
 export const DEFAULT_SCENE_COMPILERS = Object.freeze([
   compileMenuMotionProgram,
-  compileAtmosphereProgram
+  compileAtmosphereProgram,
+  compileEntityProgram
 ]);
 
 export function compileMotionPlan(scene, profile) {

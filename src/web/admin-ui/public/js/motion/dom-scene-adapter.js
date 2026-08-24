@@ -98,11 +98,24 @@ function collectAuxiliaryNodes(stage) {
     id: 'atmosphere.shimmer',
     kind: 'shimmer',
     layer: MOTION_LAYERS.ATMOSPHERE,
-    target: stage.querySelector('.animation-screen-shimmer'),
+    target: stage.querySelector('.animation-screen-shimmer, .tv-player-shimmer'),
     order: 0,
     count: 1,
     depth: 10,
     transformOwner: 'self'
+  });
+  const entityTarget = stage.querySelector('[data-motion-entity]');
+  const placement = entityTarget?.closest?.('[data-entity-placement]');
+  append(nodes, {
+    id: 'entity.primary',
+    kind: 'entity',
+    layer: MOTION_LAYERS.ENTITY,
+    target: entityTarget,
+    order: 0,
+    count: 1,
+    depth: Number(placement?.dataset?.entityDepth) || 0,
+    transformOwner: 'self',
+    metadata: { role: 'live-object' }
   });
   return nodes;
 }

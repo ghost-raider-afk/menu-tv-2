@@ -4,6 +4,11 @@ import {
   buildRenderModel,
   buildTableSvg
 } from '../editor/renderer.js';
+import { renderDomEntity } from '../motion/entity-dom.js';
+import { buildDomMotionScene } from '../motion/dom-scene-adapter.js';
+import { DEFAULT_SCENE_COMPILERS } from '../motion/motion-plan.js';
+import { SceneRuntime } from '../motion/scene-runtime.js';
+import { WaapiMotionDriver } from '../motion/drivers/waapi-driver.js';
 
 const ACTIVATION_STORAGE_KEY = 'tv-menu.device-activation';
 const PLAYER_CONTEXT_STORAGE_KEY = 'tv-menu.player-context.v1';
@@ -21,9 +26,16 @@ let pollTimer = null;
 let refreshTimer = null;
 let wakeLock = null;
 let playerRefreshMs = 5000;
+let motionRuntime = null;
+let playerContextEtag = '';
 
 function setHidden(element, hidden) {
   element?.classList.toggle('is-hidden', hidden);
+}
+
+function destroyMotionRuntime() {
+  motionRuntime?.destroy?.();
+  motionRuntime = null;
 }
 
 function activationFromStorage() {
@@ -63,6 +75,7 @@ function savePlayerContext(context) {
 }
 
 function clearPlayerContext() {
+  playerContextEtag = '';
   try { localStorage.removeItem(PLAYER_CONTEXT_STORAGE_KEY); } catch {}
 }
 
@@ -89,6 +102,7 @@ async function enterImmersiveMode() {
 function showActivationScreen() {
   if (refreshTimer) clearTimeout(refreshTimer);
   refreshTimer = null;
+  destroyMotionRuntime();
   setHidden(player, true);
   setHidden(activationView, false);
   setHidden(playerMessage, true);
@@ -190,13 +204,40 @@ function sameOriginAsset(value) {
   }
 }
 
+function playerAssets(context) {
+  return [
+    context?.draft?.settings?.background_image_url,
+    context?.animation?.profile?.entity?.asset_url
+  ].map(sameOriginAsset).filter(Boolean);
+}
+
 async function warmPlayerAssetCache(context) {
-  const background = sameOriginAsset(context?.draft?.settings?.background_image_url);
-  if (!background) return;
-  await fetch(background, { cache: 'reload' }).catch(() => undefined);
+  await Promise.all(playerAssets(context).map((asset) => fetch(asset, { cache: 'reload' }).catch(() => undefined)));
+}
+
+function applyPlayerBackground(layer, model) {
+  if (!(layer instanceof HTMLElement)) return;
+  layer.style.backgroundColor = model.settings.background_color || '#101828';
+  const background = sameOriginAsset(model.settings.background_image_url);
+  layer.style.backgroundImage = background ? `url(${JSON.stringify(background)})` : 'none';
+}
+
+function startMotionRuntime(context) {
+  destroyMotionRuntime();
+  if (context?.animation?.enabled !== true) return;
+  const profile = context.animation.profile || {};
+  const scene = buildDomMotionScene(playerStage);
+  motionRuntime = new SceneRuntime({
+    root: playerStage,
+    driver: new WaapiMotionDriver(),
+    compilers: DEFAULT_SCENE_COMPILERS
+  });
+  motionRuntime.load({ scene, context: { profile } });
+  motionRuntime.play();
 }
 
 function renderPlayerContext(context) {
+  destroyMotionRuntime();
   const viewport = resolutionOf(context.screen);
   const model = buildRenderModel(context.draft, viewport);
   const lines = buildDisplayLines(model, {
@@ -205,10 +246,14 @@ function renderPlayerContext(context) {
     fallbackTitle: context.screen?.name || 'Меню'
   });
   const layout = buildRenderLayout(model, lines);
-  playerStage.innerHTML = buildTableSvg(model, lines, layout);
-  playerStage.style.backgroundColor = model.settings.background_color || '#101828';
-  const background = sameOriginAsset(model.settings.background_image_url);
-  playerStage.style.backgroundImage = background ? `url(${JSON.stringify(background)})` : 'none';
+  playerStage.innerHTML = `
+    <div class="tv-player-background" data-motion-background></div>
+    <div class="tv-player-canvas">${buildTableSvg(model, lines, layout)}</div>
+    <div class="tv-player-entity-layer" data-entity-layer></div>
+    <div class="tv-player-shimmer" aria-hidden="true"></div>`;
+  applyPlayerBackground(playerStage.querySelector('.tv-player-background'), model);
+  renderDomEntity(playerStage, context?.animation?.profile?.entity || {}, { draggable: false });
+  startMotionRuntime(context);
   playerRefreshMs = Math.max(2000, Number(context.refresh_interval_ms) || 5000);
 }
 
@@ -230,19 +275,32 @@ function schedulePlayerRefresh() {
 async function fetchPlayerContext(timeoutMs = 5000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const previousEtag = playerContextEtag;
   try {
-    const response = await fetch('/api/device/player-context', { cache: 'no-store', signal: controller.signal });
+    const response = await fetch('/api/device/player-context', {
+      cache: 'no-store',
+      signal: controller.signal,
+      headers: previousEtag ? { 'If-None-Match': previousEtag } : {}
+    });
     if (response.status === 401) {
       clearPlayerContext();
       return { unauthorized: true };
     }
+    if (response.status === 304) {
+      const cached = cachedPlayerContext();
+      if (!cached?.context) throw new Error('HTTP 304 without cached player context');
+      return { context: cached.context, offline: false, unchanged: true };
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const context = await response.json();
+    const nextEtag = response.headers.get('etag') || '';
     savePlayerContext(context);
     void warmPlayerAssetCache(context);
+    playerContextEtag = nextEtag || previousEtag;
     return {
       context,
-      offline: response.headers.get('x-tv-menu-offline') === '1'
+      offline: response.headers.get('x-tv-menu-offline') === '1',
+      unchanged: Boolean(previousEtag && nextEtag && previousEtag === nextEtag)
     };
   } finally {
     clearTimeout(timer);
@@ -270,10 +328,15 @@ async function refreshPlayer() {
       showActivationButton.textContent = 'Показать QR-код';
       return;
     }
-    renderPlayerContext(result.context);
+    if (!result.unchanged) renderPlayerContext(result.context);
     showConnectionMessage(result.offline ? 'Нет связи с сервером. ТВ работает по последней сохранённой версии меню.' : '');
   } catch (error) {
     console.error('TV player refresh failed', error);
+    if (!player?.classList.contains('is-hidden')) {
+      showConnectionMessage('Нет связи с сервером. ТВ работает по последней сохранённой версии меню.');
+      schedulePlayerRefresh();
+      return;
+    }
     if (!showCachedPlayer(cachedPlayerContext())) {
       showConnectionMessage('Связь с сервером временно потеряна.');
     }

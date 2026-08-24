@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   createActivationCredentials,
@@ -15,6 +16,9 @@ const config = {
   deviceSessionTtlDays: 365,
   secureCookies: true
 };
+
+const publicRoot = new URL('../src/web/admin-ui/public/', import.meta.url);
+const readPublic = (path) => readFile(new URL(path, publicRoot), 'utf8');
 
 test('TV activation credentials separate QR claim, polling secret and fallback code', () => {
   const credentials = createActivationCredentials();
@@ -63,4 +67,39 @@ test('device cookie is HttpOnly, strict and secure independently from admin sess
   assert.match(cookie, /SameSite=Strict/);
   assert.match(cookie, /Secure/);
   assert.match(cookie, /Max-Age=31536000/);
+});
+
+test('TV Player runs the same Motion Engine runtime and caches live entity modules/assets for offline use', async () => {
+  const [player, css, serviceWorker, publicRoutes] = await Promise.all([
+    readPublic('js/player/player.js'),
+    readPublic('css/player.css'),
+    readPublic('player-sw.js'),
+    readFile(new URL('../src/api/device/public-routes.js', import.meta.url), 'utf8')
+  ]);
+
+  assert.match(publicRoutes, /store\.getAnimationSettings\(\)/);
+  assert.match(publicRoutes, /animation:\s*animation \?/);
+  assert.match(publicRoutes, /profile:\s*animation\.profile/);
+
+  assert.match(player, /renderDomEntity/);
+  assert.match(player, /buildDomMotionScene/);
+  assert.match(player, /DEFAULT_SCENE_COMPILERS/);
+  assert.match(player, /new SceneRuntime/);
+  assert.match(player, /new WaapiMotionDriver/);
+  assert.match(player, /context\?\.animation\?\.profile\?\.entity\?\.asset_url/);
+  assert.match(player, /If-None-Match/);
+  assert.match(player, /if \(!result\.unchanged\) renderPlayerContext/);
+  assert.match(player, /tv-player-entity-layer/);
+  assert.match(player, /data-entity-layer/);
+  assert.doesNotMatch(player, /\.animate\(/, 'TV Player must use the driver instead of owning WAAPI calls');
+
+  assert.match(css, /\.tv-player-entity-layer/);
+  assert.match(css, /\.motion-entity-placement/);
+  assert.match(css, /\.motion-entity-target/);
+
+  assert.match(serviceWorker, /tv-menu-player-shell-v3/);
+  assert.match(serviceWorker, /\/js\/motion\/entity-dom\.js/);
+  assert.match(serviceWorker, /\/js\/motion\/scene-runtime\.js/);
+  assert.match(serviceWorker, /\/js\/motion\/drivers\/waapi-driver\.js/);
+  assert.match(serviceWorker, /url\.pathname\.startsWith\('\/site-assets\/'\)/);
 });

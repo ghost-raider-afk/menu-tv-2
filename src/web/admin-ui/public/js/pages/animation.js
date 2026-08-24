@@ -4,6 +4,7 @@ import { element, setMessage, setPending } from '../core/dom.js';
 import { ANIMATION_PRESETS, DEFAULT_PRESET_ID, PRESET_BY_ID, profileForPreset } from '../motion/presets.js';
 import { AnimationPreviewPlayer } from '../motion/preview-player.js';
 import { renderAnimationScreenEmpty, renderAnimationScreenPreview } from '../motion/screen-preview.js';
+import { normaliseEntityView, renderDomEntity, updateDomEntityPlacement } from '../motion/entity-dom.js';
 
 const CONTROL_IDS = Object.freeze([
   'animation-pattern', 'animation-flow-direction', 'animation-easing', 'animation-cycle',
@@ -11,11 +12,18 @@ const CONTROL_IDS = Object.freeze([
   'animation-brightness', 'animation-section-effect', 'animation-item-effect', 'animation-price-effect',
   'animation-background-effect', 'animation-background-zoom', 'animation-intensity'
 ]);
+const ENTITY_PLACEMENT_IDS = Object.freeze([
+  'animation-entity-x', 'animation-entity-y', 'animation-entity-width', 'animation-entity-depth', 'animation-entity-opacity'
+]);
+const ENTITY_MOTION_IDS = Object.freeze([
+  'animation-entity-enabled', 'animation-entity-idle-effect', 'animation-entity-idle-amount', 'animation-entity-idle-cycle'
+]);
 
 let currentPresetId = DEFAULT_PRESET_ID;
 let player = null;
 let previewFrame = null;
 let screenLoadSequence = 0;
+let entityAssetUrl = '';
 
 function number(id) {
   return Number(element(id)?.value ?? 0);
@@ -27,6 +35,21 @@ function checked(id) {
 
 function value(id) {
   return element(id)?.value || '';
+}
+
+function collectEntityProfile() {
+  return normaliseEntityView({
+    enabled: checked('animation-entity-enabled'),
+    asset_url: entityAssetUrl,
+    x_percent: number('animation-entity-x'),
+    y_percent: number('animation-entity-y'),
+    width_percent: number('animation-entity-width'),
+    depth: number('animation-entity-depth'),
+    opacity: number('animation-entity-opacity'),
+    idle_effect: value('animation-entity-idle-effect'),
+    idle_amount: number('animation-entity-idle-amount'),
+    idle_cycle_seconds: number('animation-entity-idle-cycle')
+  });
 }
 
 function collectProfile() {
@@ -46,14 +69,15 @@ function collectProfile() {
     price_effect: value('animation-price-effect'),
     background_effect: value('animation-background-effect'),
     background_zoom_percent: number('animation-background-zoom'),
-    intensity: number('animation-intensity')
+    intensity: number('animation-intensity'),
+    entity: collectEntityProfile()
   };
 }
 
-function setValue(id, value) {
+function setValue(id, nextValue) {
   const node = element(id);
   if (!node) return;
-  node.value = String(value);
+  node.value = String(nextValue);
 }
 
 function populateProfile(profile) {
@@ -73,6 +97,56 @@ function populateProfile(profile) {
   setValue('animation-background-zoom', profile.background_zoom_percent);
   setValue('animation-intensity', profile.intensity);
   updateIntensityOutput();
+}
+
+function updateEntityOutputs() {
+  const pairs = [
+    ['animation-entity-x-output', number('animation-entity-x')],
+    ['animation-entity-y-output', number('animation-entity-y')],
+    ['animation-entity-width-output', number('animation-entity-width')],
+    ['animation-entity-opacity-output', number('animation-entity-opacity')],
+    ['animation-entity-idle-amount-output', number('animation-entity-idle-amount')]
+  ];
+  for (const [id, nextValue] of pairs) {
+    const output = element(id);
+    if (output) output.textContent = `${Math.round(nextValue * 10) / 10}%`;
+  }
+}
+
+function updateEntityAssetUi(entity, assetInfo = null) {
+  const thumb = element('animation-entity-thumb');
+  const status = element('animation-entity-status');
+  const remove = element('animation-entity-remove');
+  if (thumb) {
+    if (entity.asset_url) {
+      thumb.innerHTML = `<img src="${entity.asset_url}" alt="Предпросмотр живого объекта" />`;
+    } else {
+      thumb.innerHTML = '<span>PNG / WebP<br />с прозрачностью</span>';
+    }
+  }
+  if (status) {
+    status.textContent = entity.asset_url
+      ? (assetInfo ? `Загружено: ${assetInfo.width}×${assetInfo.height} · ${String(assetInfo.type || '').toUpperCase()}` : 'Изображение объекта загружено.')
+      : 'Объект ещё не загружен.';
+  }
+  if (remove instanceof HTMLButtonElement) remove.disabled = !entity.asset_url;
+}
+
+function populateEntityProfile(source, assetInfo = null) {
+  const entity = normaliseEntityView(source);
+  entityAssetUrl = entity.asset_url;
+  const enabled = element('animation-entity-enabled');
+  if (enabled instanceof HTMLInputElement) enabled.checked = entity.enabled;
+  setValue('animation-entity-x', entity.x_percent);
+  setValue('animation-entity-y', entity.y_percent);
+  setValue('animation-entity-width', entity.width_percent);
+  setValue('animation-entity-depth', entity.depth);
+  setValue('animation-entity-opacity', entity.opacity);
+  setValue('animation-entity-idle-effect', entity.idle_effect);
+  setValue('animation-entity-idle-amount', entity.idle_amount);
+  setValue('animation-entity-idle-cycle', entity.idle_cycle_seconds);
+  updateEntityOutputs();
+  updateEntityAssetUi(entity, assetInfo);
 }
 
 function presetName(id) {
@@ -100,6 +174,13 @@ function restartPreview() {
     player?.restart(collectProfile());
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) player?.pause();
   });
+}
+
+function syncEntityPreview({ restartWhenTargetChanges = true } = {}) {
+  const stage = element('animation-stage');
+  if (!stage) return;
+  const result = renderDomEntity(stage, collectEntityProfile(), { draggable: true });
+  if (result.targetChanged && restartWhenTargetChanges) restartPreview();
 }
 
 function markCustom() {
@@ -139,6 +220,112 @@ function bindProfileControls() {
   });
 }
 
+function bindEntityPlacementControls() {
+  ENTITY_PLACEMENT_IDS.forEach((id) => {
+    const node = element(id);
+    if (!node) return;
+    node.addEventListener('input', () => {
+      updateEntityOutputs();
+      const stage = element('animation-stage');
+      if (!updateDomEntityPlacement(stage, collectEntityProfile())) syncEntityPreview();
+    });
+  });
+}
+
+function bindEntityMotionControls() {
+  ENTITY_MOTION_IDS.forEach((id) => {
+    const node = element(id);
+    if (!node) return;
+    const eventName = node instanceof HTMLInputElement && node.type === 'range' ? 'input' : 'change';
+    node.addEventListener(eventName, () => {
+      updateEntityOutputs();
+      syncEntityPreview({ restartWhenTargetChanges: false });
+      restartPreview();
+    });
+  });
+}
+
+function bindEntityDragging() {
+  const stage = element('animation-stage');
+  if (!(stage instanceof HTMLElement)) return;
+  let pointerId = null;
+  const move = (event) => {
+    if (event.pointerId !== pointerId) return;
+    const rect = stage.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const x = Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100));
+    setValue('animation-entity-x', x.toFixed(1));
+    setValue('animation-entity-y', y.toFixed(1));
+    updateEntityOutputs();
+    updateDomEntityPlacement(stage, collectEntityProfile());
+  };
+  const finish = (event) => {
+    if (event.pointerId !== pointerId) return;
+    pointerId = null;
+    stage.releasePointerCapture?.(event.pointerId);
+  };
+  stage.addEventListener('pointerdown', (event) => {
+    const placement = event.target instanceof Element ? event.target.closest('[data-entity-placement][data-entity-draggable="true"]') : null;
+    if (!placement) return;
+    pointerId = event.pointerId;
+    stage.setPointerCapture?.(pointerId);
+    move(event);
+    event.preventDefault();
+  });
+  stage.addEventListener('pointermove', move);
+  stage.addEventListener('pointerup', finish);
+  stage.addEventListener('pointercancel', finish);
+}
+
+async function uploadEntityAsset(file) {
+  if (!(file instanceof File)) return;
+  if (!['image/png', 'image/webp'].includes(file.type)) {
+    setMessage('animation-message', 'Живой объект должен быть PNG или WebP с прозрачностью.');
+    return;
+  }
+  const button = element('animation-entity-choose');
+  setPending(button, true, 'Загружаем…');
+  try {
+    const saved = await api.put(API.animationEntityAsset, file, { headers: { 'Content-Type': file.type } });
+    populateEntityProfile(saved.profile.entity, saved.entity_asset);
+    syncEntityPreview({ restartWhenTargetChanges: false });
+    restartPreview();
+    setMessage('animation-message', 'Изображение живого объекта загружено. Теперь разместите его в мини‑плеере и сохраните профиль.', 'success');
+  } catch (error) {
+    setMessage('animation-message', error.message);
+  } finally {
+    setPending(button, false, 'Загружаем…');
+    const input = element('animation-entity-file');
+    if (input instanceof HTMLInputElement) input.value = '';
+  }
+}
+
+async function removeEntityAsset() {
+  if (!entityAssetUrl) return;
+  if (!window.confirm('Удалить изображение живого объекта из анимации?')) return;
+  const button = element('animation-entity-remove');
+  setPending(button, true, 'Удаляем…');
+  try {
+    const saved = await api.delete(API.animationEntityAsset);
+    populateEntityProfile(saved.profile.entity);
+    syncEntityPreview({ restartWhenTargetChanges: false });
+    restartPreview();
+    setMessage('animation-message', 'Живой объект удалён.', 'success');
+  } catch (error) {
+    setMessage('animation-message', error.message);
+  } finally {
+    setPending(button, false, 'Удаляем…');
+  }
+}
+
+function bindEntityAssetControls() {
+  const input = element('animation-entity-file');
+  element('animation-entity-choose')?.addEventListener('click', () => input?.click());
+  input?.addEventListener('change', () => { void uploadEntityAsset(input.files?.[0]); });
+  element('animation-entity-remove')?.addEventListener('click', () => { void removeEntityAsset(); });
+}
+
 function screenLabel(screen) {
   const location = screen.location_name || 'Без точки';
   return `${location} — ${screen.name}`;
@@ -171,6 +358,7 @@ async function loadScreenPreview(screenId) {
     const bundle = await api.get(`${API.screens}/${screenId}/editor`);
     if (sequence !== screenLoadSequence) return;
     renderAnimationScreenPreview(stage, bundle);
+    syncEntityPreview({ restartWhenTargetChanges: false });
     setScreenStatus(`${bundle.screen.location_name || 'Без точки'} · ${bundle.screen.name} · ${bundle.screen.resolution}`);
     restartPreview();
   } catch (error) {
@@ -216,7 +404,9 @@ async function loadSettings() {
   const enabled = element('animation-enabled');
   if (enabled) enabled.checked = settings?.enabled === true;
   populateProfile(profile);
+  populateEntityProfile(settings?.profile?.entity || profile.entity || {});
   updatePresetSelection();
+  syncEntityPreview({ restartWhenTargetChanges: false });
   restartPreview();
 }
 
@@ -231,8 +421,11 @@ async function saveSettings() {
     });
     currentPresetId = saved.preset_id;
     populateProfile(saved.profile);
+    populateEntityProfile(saved.profile.entity);
     updatePresetSelection();
-    setMessage('animation-message', 'Профиль постоянной анимации сохранён.', 'success');
+    syncEntityPreview({ restartWhenTargetChanges: false });
+    restartPreview();
+    setMessage('animation-message', 'Профиль постоянной анимации и живого объекта сохранён.', 'success');
   } catch (error) {
     setMessage('animation-message', error.message);
   } finally {
@@ -254,6 +447,10 @@ export function initialiseAnimationStudio() {
   });
   renderPresets();
   bindProfileControls();
+  bindEntityPlacementControls();
+  bindEntityMotionControls();
+  bindEntityAssetControls();
+  bindEntityDragging();
   element('animation-save')?.addEventListener('click', () => { void saveSettings(); });
   void Promise.all([loadSettings(), loadScreenOptions()]).catch((error) => setMessage('animation-message', error.message));
 }

@@ -7,7 +7,7 @@ Motion Engine v3 — внутренний runtime-контур анимации 
 ## Главный поток
 
 ```text
-Canonical Menu Renderer
+Canonical Menu Renderer / Entity Renderer
         ↓
 Renderer Adapter
         ↓
@@ -29,13 +29,13 @@ Concrete Renderer Runtime
 Текущая реализация:
 
 ```text
-SVG/DOM menu
+SVG/DOM menu + DOM Live Entity
    ↓
 dom-scene-adapter.js
    ↓
 scene-graph.js
    ↓
-menu-motion + atmosphere compilers
+menu-motion + atmosphere + entity-idle compilers
    ↓
 scene-composer.js
    ↓
@@ -83,21 +83,31 @@ Scene node содержит:
 - `atmosphere`;
 - `entity`.
 
-`entity` резервируется уже сейчас, но обычный menu motion compiler не имеет права автоматически применять к нему `item_effect`.
+Первый production Entity регистрируется как canonical node `entity.primary`. Обычный menu compiler по-прежнему не имеет права применять к нему `item_effect`: объект обслуживается только отдельным entity compiler.
 
 ## Renderer adapters
 
-Adapter связывает конкретное представление с renderer-neutral scene graph.
+Adapter связывает конкретное представление с renderer-neutral Scene Graph.
 
-`dom-scene-adapter.js` — единственное место Motion Engine core, которое знает selectors готового SVG/DOM меню. Он:
-- находит section/item/promotion/price/background/atmosphere targets;
-- создаёт scene nodes;
-- сохраняет phase/order для связанных объектов;
+`dom-scene-adapter.js` знает selectors готового SVG/DOM меню и DOM Entity. Он:
+- находит section/item/promotion/price/background/atmosphere/entity targets;
+- создаёт canonical scene nodes;
+- сохраняет phase/order/depth;
 - размечает DOM диагностическими `data-motion-*` атрибутами.
 
-`screen-preview.js` не создаёт Scene Graph и не знает Motion Runtime. Он отвечает только за визуальный renderer. Binding выполняется после рендера через adapter.
+`screen-preview.js` и canonical menu renderer не создают Scene Graph и не знают Motion Runtime. Preview renderer только предоставляет слои сцены, включая пустой `data-entity-layer`. Binding выполняется после рендера через adapter.
 
-Будущий GPU adapter должен создавать те же scene node contracts, но `target` может быть, например, `Pixi.Container` или `Three.Object3D`.
+`entity-dom.js` является DOM renderer первого Live Entity. Он намеренно разделяет геометрию размещения и анимируемый target:
+
+```text
+entity-placement
+  └── entity-motion target
+       └── image
+```
+
+`entity-placement` владеет только статическими X/Y/width/depth/opacity. `entity-motion target` владеет только runtime transform/appearance. Благодаря этому idle-анимация не может затереть пользовательское размещение объекта.
+
+Будущий GPU adapter должен создавать те же scene node contracts, но `target` может быть `Pixi.Container` или `Three.Object3D`.
 
 ## Scene programs и compilers
 
@@ -105,13 +115,16 @@ Adapter связывает конкретное представление с re
 
 Сейчас существуют:
 - `menu-motion` — section/item/promotion/price/background;
-- `atmosphere` — отдельные атмосферные эффекты.
+- `atmosphere` — отдельные атмосферные эффекты;
+- `entity-idle` — постоянная жизнь первого отдельного Live Entity.
 
-В будущем таким же образом добавляются:
-- `entity-behavior`;
+`entity-idle` поддерживает начальные состояния `alive`, `float`, `breathe`, `drift`, `none`. Это не конечная cinematic state machine, а первый production behavior на общей архитектуре.
+
+В будущем независимо добавляются:
+- entity state machine / cinematic scene program;
+- внутренние части составной Entity;
 - `gpu-atmosphere`;
-- cinematic scene program;
-- другие независимые behavior-компиляторы.
+- другие behavior-компиляторы.
 
 Compiler получает общий Scene Graph и runtime context, но не управляет Timeline и не вызывает driver напрямую.
 
@@ -122,7 +135,7 @@ Compiler получает общий Scene Graph и runtime context, но не �
 - `opacity`;
 - `appearance`.
 
-`scene-composer.js` проверяет ownership до запуска анимации. Два track не могут одновременно владеть одним каналом одного scene node — даже если они принадлежат одному program.
+`scene-composer.js` проверяет ownership до запуска анимации. Два track не могут одновременно владеть одним каналом одного scene node.
 
 Пример допустимой композиции:
 
@@ -140,7 +153,7 @@ node X
 └── program B → transform   ← ownership conflict
 ```
 
-Такой конфликт должен завершиться явной ошибкой до вызова renderer driver, а не проявляться случайным визуальным дёрганием.
+Такой конфликт завершается явной ошибкой до вызова renderer driver, а не случайным визуальным дёрганием.
 
 WAAPI driver сериализует только заявленные track claims. Если track владеет только `transform`, он не имеет права одновременно записывать `opacity` или `filter`.
 
@@ -150,9 +163,7 @@ WAAPI driver сериализует только заявленные track clai
 
 Плашка «Акция» является отдельным sibling scene node относительно `table-item-content`, поэтому scale строки не применяется второй раз к `path + text` плашки. Оба sibling node получают одинаковую row phase, но каждый владеет собственным transform.
 
-Price может иметь собственный node, потому что его дополнительный transform является намеренной дочерней анимацией.
-
-Новые слои/сущности обязаны явно объявлять ownership через scene node и track claims.
+Live Entity использует тот же принцип ещё жёстче: placement transform физически находится на родительском DOM-слое, а motion transform — на дочернем canonical Entity target. Компенсирующие/inverse transforms запрещены.
 
 ## Motion Plan state
 
@@ -181,7 +192,7 @@ CSS `translate3d(...)`, `drop-shadow(...)`, `cubic-bezier(...)` формируе
 `scene-composer.js`:
 - принимает несколько независимых SceneProgram;
 - проверяет уникальность program id;
-- проверяет, что track ссылается на canonical scene node;
+- проверяет canonical scene node;
 - проверяет channel ownership;
 - объединяет tracks;
 - формирует один master scene plan и master clock.
@@ -197,9 +208,11 @@ Runtime:
 2. вызывает подключённые compilers независимо;
 3. передаёт programs в Scene Composer;
 4. загружает итоговый plan в Motion Timeline;
-5. предоставляет единый lifecycle `play/pause/replay/seek/destroy`.
+5. предоставляет lifecycle `play/pause/replay/seek/destroy`.
 
-Добавление нового behavior должно происходить через новый compiler в runtime, а не через новые условные ветки внутри UI-player.
+Добавление нового behavior происходит через новый compiler, а не через условные ветки внутри UI-player или TV Player.
+
+Motion Studio и реальный `/player` используют один и тот же Scene Graph / Composer / Runtime / WAAPI Driver. Preview больше не является отдельной реализацией анимации.
 
 ## Motion Timeline
 
@@ -226,35 +239,54 @@ Driver обязан реализовать:
 - `currentTime(handle)`;
 - `playState(handle)`.
 
-Текущий `WaapiMotionDriver` является первым runtime driver и единственным местом, где вызывается `Element.animate()` и выполняется CSS serialization.
+`WaapiMotionDriver` является текущим runtime driver и единственным местом, где вызывается `Element.animate()` и выполняется CSS serialization.
 
-## Live Entity boundary
+## Live Entity v1
 
-Live Entity — отдельная runtime-система, а не новый item preset.
+Первый Live Entity — отдельное изображение PNG/WebP с реальным прозрачным фоном. Asset хранится в `SITE_ASSETS_ROOT`; PostgreSQL хранит только безопасный same-origin URL и параметры Entity внутри animation profile.
 
-Будущий entity runtime должен иметь:
-- собственный scene adapter;
-- собственный state machine;
-- собственный behavior/scene compiler;
-- собственный SceneProgram;
-- возможность использовать общий Scene Composer/Timeline contract;
-- отдельный driver либо общий GPU driver;
-- независимый lifecycle от критичного menu renderer.
+Persisted Entity contract:
+- `enabled`;
+- `asset_url`;
+- `x_percent`, `y_percent`;
+- `width_percent`;
+- `depth`;
+- `opacity`;
+- `idle_effect`;
+- `idle_amount`;
+- `idle_cycle_seconds`.
 
-Default compilers игнорируют неизвестные `kind`, включая `entity`, пока для него явно не подключён отдельный compiler.
+Координаты и размер хранятся относительно экрана, а не в пикселях. Поэтому один профиль не привязан к конкретному Full HD viewport.
+
+Motion Studio позволяет загружать/заменять asset, перетаскивать объект непосредственно по preview и редактировать параметры. TV Player получает тот же animation profile через `player-context`, строит тот же Entity node и запускает тот же `entity-idle` SceneProgram.
+
+Offline-контур кэширует Entity asset и все Motion Engine modules. Потеря сети не должна удалять объект или останавливать уже загруженную сцену.
+
+Context refresh не должен перезапускать timeline, если ETag сцены не изменился.
+
+## Будущая Entity
+
+Live Entity v1 является первым renderer/behavior, но не заменяет запланированную сущность со state machine. Следующие уровни могут добавить:
+- `idle`, `attention`, `promo`, `transition`, `sleep`;
+- составные части объекта (например стекло/пиво/пена/пузырьки/конденсат/блик);
+- cinematic scenes;
+- Pixi/Three renderer;
+- GPU particles/light/depth.
+
+Эти уровни должны подключаться через отдельные SceneProgram/driver contracts, не меняя menu renderer и базовый Scene Graph.
 
 ## Что намеренно НЕ делаем сейчас
 
 На этом этапе не вводятся:
 - FPS limits;
-- asset budgets;
+- asset budgets как performance policy;
 - device tiers;
 - automatic quality degradation;
 - PixiJS/Three.js dependencies;
 - WebGL/WebGPU runtime;
 - новые persistence migrations.
 
-Эти решения будут приниматься отдельными этапами после появления реальных GPU-сцен и измерений.
+Существующие security/HTTP/image validation limits из `.env` продолжают действовать и не являются политикой качества GPU-сцены.
 
 ## Неподвижные архитектурные правила
 
@@ -267,4 +299,6 @@ Default compilers игнорируют неизвестные `kind`, включ
 7. Timeline не зависит от renderer.
 8. Concrete driver — единственное место сериализации состояния под конкретный runtime.
 9. Live Entity не наследует menu behavior неявно.
-10. GPU/Entity никогда не должны становиться обязательным условием отображения основного меню.
+10. Placement transform и motion transform Entity принадлежат разным физическим слоям.
+11. Motion Studio и TV Player не имеют отдельных реализаций движка.
+12. GPU/Entity никогда не должны становиться обязательным условием отображения основного меню.

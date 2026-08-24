@@ -6,6 +6,20 @@ export const SECTION_EFFECTS = Object.freeze(['none', 'glow', 'pulse', 'shimmer'
 export const ITEM_EFFECTS = Object.freeze(['none', 'breathe', 'wave', 'focus', 'lift']);
 export const PRICE_EFFECTS = Object.freeze(['none', 'pulse', 'glow', 'wave', 'pop']);
 export const BACKGROUND_EFFECTS = Object.freeze(['none', 'drift', 'breathe', 'zoom']);
+export const ENTITY_IDLE_EFFECTS = Object.freeze(['none', 'alive', 'float', 'breathe', 'drift']);
+
+export const DEFAULT_ENTITY_PROFILE = Object.freeze({
+  enabled: false,
+  asset_url: '',
+  x_percent: 82,
+  y_percent: 53,
+  width_percent: 18,
+  depth: 6,
+  opacity: 100,
+  idle_effect: 'alive',
+  idle_amount: 38,
+  idle_cycle_seconds: 8.5
+});
 
 export const DEFAULT_ANIMATION_PROFILE = Object.freeze({
   motion_version: ANIMATION_PROFILE_VERSION,
@@ -23,7 +37,8 @@ export const DEFAULT_ANIMATION_PROFILE = Object.freeze({
   price_effect: 'glow',
   background_effect: 'drift',
   background_zoom_percent: 2,
-  intensity: 42
+  intensity: 42,
+  entity: DEFAULT_ENTITY_PROFILE
 });
 
 function sourceObject(profile) {
@@ -47,6 +62,22 @@ function present(value, fallback) {
   return value === undefined ? fallback : value;
 }
 
+function canonicalEntity(value) {
+  const source = sourceObject(value);
+  return {
+    enabled: source.enabled === true,
+    asset_url: typeof source.asset_url === 'string' ? source.asset_url.trim() : DEFAULT_ENTITY_PROFILE.asset_url,
+    x_percent: present(source.x_percent, DEFAULT_ENTITY_PROFILE.x_percent),
+    y_percent: present(source.y_percent, DEFAULT_ENTITY_PROFILE.y_percent),
+    width_percent: present(source.width_percent, DEFAULT_ENTITY_PROFILE.width_percent),
+    depth: present(source.depth, DEFAULT_ENTITY_PROFILE.depth),
+    opacity: present(source.opacity, DEFAULT_ENTITY_PROFILE.opacity),
+    idle_effect: present(source.idle_effect, DEFAULT_ENTITY_PROFILE.idle_effect),
+    idle_amount: present(source.idle_amount, DEFAULT_ENTITY_PROFILE.idle_amount),
+    idle_cycle_seconds: present(source.idle_cycle_seconds, DEFAULT_ENTITY_PROFILE.idle_cycle_seconds)
+  };
+}
+
 function canonicalCurrent(source) {
   return {
     motion_version: ANIMATION_PROFILE_VERSION,
@@ -64,7 +95,8 @@ function canonicalCurrent(source) {
     price_effect: present(source.price_effect, DEFAULT_ANIMATION_PROFILE.price_effect),
     background_effect: present(source.background_effect, DEFAULT_ANIMATION_PROFILE.background_effect),
     background_zoom_percent: present(source.background_zoom_percent, DEFAULT_ANIMATION_PROFILE.background_zoom_percent),
-    intensity: present(source.intensity, DEFAULT_ANIMATION_PROFILE.intensity)
+    intensity: present(source.intensity, DEFAULT_ANIMATION_PROFILE.intensity),
+    entity: canonicalEntity(source.entity)
   };
 }
 
@@ -123,7 +155,8 @@ function migrateLegacyProfile(source) {
     price_effect: legacyPriceEffect(source),
     background_effect: source.background_motion === false ? 'none' : 'drift',
     background_zoom_percent: source.background_motion === false ? 0 : 2,
-    intensity
+    intensity,
+    entity: canonicalEntity(source.entity)
   };
 }
 
