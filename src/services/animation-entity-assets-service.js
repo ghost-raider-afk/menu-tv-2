@@ -18,11 +18,16 @@ export function isAnimationEntityAssetUrl(assetUrl) {
 }
 
 async function hasVisibleTransparency(bytes, maxPixels) {
-  const alpha = await sharp(bytes, { failOn: 'error', limitInputPixels: maxPixels, sequentialRead: true })
+  const { data, info } = await sharp(bytes, { failOn: 'error', limitInputPixels: maxPixels, sequentialRead: true })
     .ensureAlpha()
-    .extractChannel(3)
-    .stats();
-  return Number(alpha?.channels?.[0]?.min) < 255;
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const channels = Number(info.channels) || 4;
+  if (channels < 4) return false;
+  for (let offset = 3; offset < data.length; offset += channels) {
+    if (data[offset] < 255) return true;
+  }
+  return false;
 }
 
 export async function writeAnimationEntityAsset({ bytes, config }) {
