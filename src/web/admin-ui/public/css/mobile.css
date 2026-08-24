@@ -1,6 +1,6 @@
 .ui-mobile-primary,.mobile-context-trigger,.ui-context-backdrop{display:none}
 
-@media(max-width:760px){
+@media(max-width:960px){
   :root{--ui-control-height:44px;--ui-page-pad-x:12px;--ui-page-pad-y:14px;--ui-page-pad-bottom:22px;--ui-radius-sm:8px;--ui-radius-md:11px;--ui-radius-lg:14px}
   html{scroll-padding-top:72px}
   body{font-size:14px;line-height:1.42;-webkit-text-size-adjust:100%;text-size-adjust:100%}
@@ -9,7 +9,6 @@
   .app-content{display:block;width:100%;min-width:0}
   .main-content{width:100%;min-width:0;padding:14px 12px calc(24px + env(safe-area-inset-bottom))}
 
-  /* Mobile chrome: top app bar + four-item bottom navigation. */
   .app-header{position:sticky;z-index:50;top:0;min-height:calc(58px + env(safe-area-inset-top));gap:8px;padding:env(safe-area-inset-top) 10px 0;border-bottom:1px solid var(--ui-border);background:color-mix(in srgb,var(--ui-bg) 94%,transparent);backdrop-filter:blur(18px);box-shadow:0 5px 18px color-mix(in srgb,var(--ui-shadow-color) 8%,transparent)}
   .mobile-context-trigger{display:inline-grid;width:40px;height:40px;flex:0 0 40px;place-items:center;padding:0;border:1px solid var(--ui-border);border-radius:11px;background:var(--ui-panel-raised);color:var(--ui-text);cursor:pointer}
   body[data-ui-section="overview"] .mobile-context-trigger{display:none}
@@ -40,7 +39,6 @@
   .ui-rail-icon svg{width:22px;height:22px;stroke-width:1.8}
   .ui-rail-label{display:block;max-width:none;overflow:visible;font-size:10px;font-weight:850;line-height:1.1;text-overflow:clip;white-space:nowrap}
 
-  /* Section navigation becomes a deliberate bottom sheet instead of a permanent side panel. */
   .ui-context-backdrop{position:fixed;z-index:55;inset:0;display:block;padding:0;border:0;background:color-mix(in srgb,var(--ui-overlay) 48%,transparent);opacity:0;pointer-events:none;transition:opacity .18s ease}
   .ui-context-backdrop.is-visible{opacity:1;pointer-events:auto}
   .ui-context{position:fixed;z-index:70;top:auto;right:10px;bottom:calc(76px + env(safe-area-inset-bottom));left:10px;width:auto;height:auto;max-height:min(72dvh,620px);overflow:hidden;border:1px solid var(--ui-chrome-border-strong);border-radius:18px;background:var(--ui-sidebar);box-shadow:0 24px 70px color-mix(in srgb,var(--ui-shadow-color) 36%,transparent);opacity:1;transform:translateY(0);transition:transform .18s ease,opacity .16s ease}
@@ -59,7 +57,6 @@
   .ui-account-role{font-size:10px}
   .ui-account-card [data-logout]{min-height:38px;padding:0 11px;border-radius:9px;font-size:12px}
 
-  /* Page hierarchy: fewer tiny labels, stronger titles, consistent breathing room. */
   .page-heading{display:grid!important;gap:5px;margin:0 0 14px;padding:0}
   .page-heading h1{margin:1px 0 0;font-size:27px;line-height:1.05;letter-spacing:-.04em}
   .page-heading>p,.compact-heading>p{max-width:none!important;margin:0!important;color:var(--ui-text-muted);font-size:13px;line-height:1.45;text-align:left!important}
@@ -68,7 +65,6 @@
   .compact-heading-actions{width:100%;align-items:stretch;flex-direction:column;gap:8px}
   .compact-heading-actions .button{width:100%}
 
-  /* Touch system. 44px is the floor; text inputs use 16px to prevent iOS zoom. */
   .button{min-height:44px;padding:0 14px;border-radius:10px;font-size:13px}
   .text-button{min-height:40px;font-size:13px}
   .small-button,.row-action{min-height:40px;padding:0 11px;border-radius:9px;font-size:12px}
@@ -91,7 +87,6 @@
   .toggle-row i::after{width:18px;height:18px}
   .toggle-row input:checked+i::after{transform:translateX(18px)}
 
-  /* Cards are full-width content surfaces; nested desktop cards no longer create visual clutter. */
   .panel,.settings-card,.activity-card,.screen-location-group,.record-row,.metric-card{border-radius:14px;box-shadow:0 8px 22px color-mix(in srgb,var(--ui-shadow-color) 8%,transparent)}
   .settings-card,.activity-card{padding:14px}
   .card-heading,.panel-heading{gap:8px}
@@ -104,7 +99,6 @@
   .record-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));justify-content:stretch;gap:7px}
   .record-actions>*{width:100%}
 
-  /* Settings/assets. */
   .asset-settings{gap:10px;margin-top:14px;padding-top:14px}
   .asset-row{display:grid;gap:10px;padding:11px;border-radius:11px}
   .asset-row strong{font-size:13px}
@@ -117,7 +111,6 @@
   .system-summary span{font-size:11px}
   .system-summary strong{font-size:14px}
 
-  /* Notifications, dialogs and toasts are sized for a thumb, not a mouse. */
   .notification-panel{position:fixed;top:calc(64px + env(safe-area-inset-top));right:10px;bottom:calc(78px + env(safe-area-inset-bottom));left:10px;width:auto;max-height:none;border-radius:15px}
   .notification-panel .event-row{padding:12px}
   .event-message{font-size:13px}
@@ -135,7 +128,6 @@
   .system-toast-message{font-size:13px}
   .system-toast-close{width:40px;height:40px}
 
-  /* Overview stays compact instead of becoming a very long column. */
   body[data-page="overview"] .welcome-card{padding:15px;border-radius:15px}
   body[data-page="overview"] .welcome-card h1{font-size:28px}
   body[data-page="overview"] .welcome-card p:not(.eyebrow){font-size:12px;line-height:1.45}
@@ -144,7 +136,6 @@
   body[data-page="overview"] .metric-card span{font-size:10px}
   body[data-page="overview"] .metric-card strong{font-size:23px}
 
-  /* Locations and screens become stacked task cards. */
   body[data-page="locations"] .workspace-grid{grid-template-columns:1fr;gap:10px}
   body[data-page="screens"] .screen-hierarchy{gap:10px}
   body[data-page="screens"] .screen-location-group{border-radius:14px}
@@ -159,7 +150,6 @@
   body[data-page="screens"] .screen-location-item span{font-size:11px;white-space:normal}
   body[data-page="screens"] .screen-location-item .small-button,body[data-page="screens"] .screen-location-item .button{width:100%;min-height:42px;font-size:12px}
 
-  /* Catalog: one task at a time, full-width search/actions, horizontal import table only where unavoidable. */
   body[data-page="catalog"] .catalog-grid{grid-template-columns:1fr;gap:10px}
   body[data-page="catalog"] .card-heading{align-items:stretch;flex-direction:column}
   body[data-page="catalog"] .list-tools{display:grid;width:100%;grid-template-columns:1fr;justify-content:stretch;gap:8px}
@@ -176,7 +166,6 @@
   body[data-page="catalog"] .catalog-import-actions .button{width:100%}
   body[data-page="catalog"] .catalog-import-hint{margin:0;font-size:11px;line-height:1.4}
 
-  /* Event journal and settings use the same mobile rhythm. */
   body[data-page="settings"] .settings-grid,body[data-page="profile"] .settings-grid{grid-template-columns:1fr;gap:10px}
   body[data-page="events"] .event-journal-toolbar{grid-template-columns:1fr;gap:10px}
   body[data-page="events"] .event-journal-search{grid-column:auto}
@@ -191,7 +180,6 @@
   body[data-page="events"] .event-severity,body[data-page="events"] .event-category{min-height:28px;font-size:10px}
   body[data-page="events"] .event-journal-entry summary{min-height:44px;font-size:12px}
 
-  /* Monitor editor: command bar is compact, settings flow vertically, wide data table remains intentionally swipeable. */
   body[data-page="screen-editor"] .editor-content{padding:8px 10px calc(20px + env(safe-area-inset-bottom))}
   body[data-page="screen-editor"] .editor-workspace{gap:10px}
   body[data-page="screen-editor"] .editor-commandbar{position:sticky;top:calc(58px + env(safe-area-inset-top));display:grid;grid-template-columns:1fr;gap:9px;padding:10px;border-radius:13px}
@@ -218,17 +206,16 @@
   body[data-page="screen-editor"] .editor-row-action{width:44px;height:44px;min-height:44px}
   body[data-page="screen-editor"] .editor-menu-preview{border-radius:10px}
 
-  /* Animation studio remains dense by nature but no control is allowed to shrink below touch size. */
   body[data-page="animation"] .animation-content{padding-inline:10px}
   body[data-page="animation"] :where(button,input,select,textarea){min-height:44px}
   body[data-page="animation"] input,body[data-page="animation"] select,body[data-page="animation"] textarea{font-size:16px}
 
-  /* TV pairing gets a clean full-width wizard inside the same shell. */
   body[data-page="connect-tv"] .connect-tv-page{padding-inline:12px}
   body[data-page="connect-tv"] .connect-tv-heading{margin-bottom:12px}
   body[data-page="connect-tv"] .connect-tv-heading-copy{font-size:13px!important}
   body[data-page="connect-tv"] .connect-tv-progress{top:calc(58px + env(safe-area-inset-top));gap:5px;margin:0 -2px 10px;padding:8px 2px;background:linear-gradient(var(--ui-bg) 78%,transparent)}
   body[data-page="connect-tv"] .connect-tv-progress span{min-height:40px;padding:6px 4px;border-radius:11px}
+  body[data-page="connect-tv"] .connect-tv-card.is-disabled{display:none}
   body[data-page="connect-tv"] .connect-tv-card{border-radius:15px}
   body[data-page="connect-tv"] .connect-tv-card h2{font-size:18px}
   body[data-page="connect-tv"] .connect-tv-card p{font-size:12px;line-height:1.45}
@@ -238,7 +225,6 @@
   body[data-page="connect-tv"] .connect-tv-code{min-height:48px;font-size:20px;letter-spacing:.08em;text-align:center}
   body[data-page="connect-tv"] .connect-tv-code-row .button{width:100%}
 
-  /* Small-device guardrails. */
   img,svg,canvas,video{max-width:100%}
   .main-content>*{min-width:0}
 }
