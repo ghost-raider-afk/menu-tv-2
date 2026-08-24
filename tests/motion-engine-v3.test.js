@@ -3,6 +3,7 @@ import test from 'node:test';
 import { toWaapiKeyframe, toWaapiTiming } from '../src/web/admin-ui/public/js/motion/drivers/waapi-driver.js';
 import {
   compileAtmosphereProgram,
+  compileEntityProgram,
   compileMenuMotionProgram,
   compileMotionPlan,
   DEFAULT_SCENE_COMPILERS
@@ -12,6 +13,8 @@ import { composeScenePrograms, createSceneProgram } from '../src/web/admin-ui/pu
 import { createMotionScene, MOTION_LAYERS } from '../src/web/admin-ui/public/js/motion/scene-graph.js';
 import { SceneRuntime } from '../src/web/admin-ui/public/js/motion/scene-runtime.js';
 import { MotionTimeline } from '../src/web/admin-ui/public/js/motion/timeline.js';
+
+const ENTITY_URL = '/site-assets/animation-entity-11111111-1111-4111-8111-111111111111.png';
 
 function fakeScene() {
   const target = (name) => ({ name });
@@ -23,7 +26,7 @@ function fakeScene() {
       { id: 'menu.item.1', kind: 'item', layer: 'menu', target: target('item2'), order: 1, count: 2, depth: 0, transformOwner: 'self' },
       { id: 'background.primary', kind: 'background', layer: 'background', target: target('background'), order: 0, count: 1, depth: -10, transformOwner: 'self' },
       { id: 'atmosphere.shimmer', kind: 'shimmer', layer: 'atmosphere', target: target('shimmer'), order: 0, count: 1, depth: 10, transformOwner: 'self' },
-      { id: 'entity.future.0', kind: 'entity', layer: 'entity', target: target('future-entity'), order: 0, count: 1, depth: 20, transformOwner: 'entity-runtime' }
+      { id: 'entity.primary', kind: 'entity', layer: 'entity', target: target('live-entity'), order: 0, count: 1, depth: 6, transformOwner: 'self' }
     ]
   });
 }
@@ -38,7 +41,19 @@ function activeProfile() {
     price_effect: 'none',
     background_effect: 'drift',
     cycle_seconds: 8,
-    wave_stagger_ms: 120
+    wave_stagger_ms: 120,
+    entity: {
+      enabled: true,
+      asset_url: ENTITY_URL,
+      x_percent: 82,
+      y_percent: 53,
+      width_percent: 18,
+      depth: 6,
+      opacity: 100,
+      idle_effect: 'alive',
+      idle_amount: 40,
+      idle_cycle_seconds: 6
+    }
   };
 }
 
@@ -67,14 +82,15 @@ function fakeDriver() {
   };
 }
 
-test('scene graph is renderer agnostic and already reserves the live entity layer', () => {
+test('scene graph is renderer agnostic and exposes a canonical live entity layer', () => {
   const scene = fakeScene();
   assert.equal(scene.version, 3);
   assert.ok(scene.layers.includes(MOTION_LAYERS.ENTITY));
   assert.equal(scene.node('menu.promotion.0').depth, 1);
   assert.equal(scene.node('menu.promotion.0').target.name, 'promotion');
   assert.equal(scene.node('menu.promotion.0').transformOwner, 'self');
-  assert.equal(scene.node('entity.future.0').transformOwner, 'entity-runtime');
+  assert.equal(scene.node('entity.primary').transformOwner, 'self');
+  assert.equal(scene.node('entity.primary').target.name, 'live-entity');
   assert.equal(scene.find('item').length, 2);
   assert.equal(scene.find('entity').length, 1);
   assert.throws(() => createMotionScene({
@@ -86,7 +102,7 @@ test('scene graph is renderer agnostic and already reserves the live entity laye
   }), /Duplicate motion scene node id/);
 });
 
-test('Motion Engine v3 composes independent menu and atmosphere programs into one driver-neutral plan', () => {
+test('Motion Engine v3 composes menu atmosphere and live entity programs without shared transform ownership', () => {
   const scene = fakeScene();
   const profile = activeProfile();
   const plan = compileMotionPlan(scene, profile);
@@ -94,7 +110,7 @@ test('Motion Engine v3 composes independent menu and atmosphere programs into on
   assert.equal(plan.version, 3);
   assert.equal(plan.duration, 8000);
   assert.equal(plan.clock.loop, true);
-  assert.deepEqual(plan.programs.map((program) => program.id), ['menu-motion', 'atmosphere']);
+  assert.deepEqual(plan.programs.map((program) => program.id), ['menu-motion', 'atmosphere', 'entity-idle']);
   assert.ok(Object.isFrozen(plan));
   assert.ok(Object.isFrozen(plan.tracks));
 
@@ -103,13 +119,20 @@ test('Motion Engine v3 composes independent menu and atmosphere programs into on
   const secondItem = plan.tracks.find((track) => track.node.id === 'menu.item.1');
   const background = plan.tracks.find((track) => track.node.id === 'background.primary');
   const shimmer = plan.tracks.find((track) => track.node.id === 'atmosphere.shimmer');
+  const entity = plan.tracks.find((track) => track.node.id === 'entity.primary');
 
   assert.ok(item);
   assert.ok(promotion);
   assert.ok(secondItem);
   assert.ok(background);
   assert.ok(shimmer);
-  assert.equal(plan.tracks.some((track) => track.node.kind === 'entity'), false, 'default compilers must not own future entity behavior');
+  assert.ok(entity);
+  assert.equal(entity.programId, 'entity-idle');
+  assert.equal(entity.timing.duration, 6000);
+  assert.deepEqual(entity.claims, ['transform', 'appearance']);
+  assert.equal(plan.ownership['entity.primary:transform'], 'entity-idle');
+  assert.equal(plan.ownership['entity.primary:appearance'], 'entity-idle');
+  assert.equal('entity.primary:opacity' in plan.ownership, false, 'placement opacity must remain outside the animated entity target');
   assert.equal(item.timing.delay, promotion.timing.delay, 'promotion must share its row phase');
   assert.equal(secondItem.timing.delay, 120);
   assert.deepEqual(item.claims, ['transform', 'opacity', 'appearance']);
@@ -118,10 +141,28 @@ test('Motion Engine v3 composes independent menu and atmosphere programs into on
   assert.equal(plan.ownership['menu.item.0:transform'], 'menu-motion');
   assert.equal(plan.ownership['atmosphere.shimmer:opacity'], 'atmosphere');
   assert.equal(typeof item.keyframes[1].transform.scale, 'number');
-  assert.equal(typeof item.keyframes[1].appearance.brightness, 'number');
+  assert.equal(typeof entity.keyframes[2].transform.y, 'number');
   assert.deepEqual(item.keyframes, promotion.keyframes, 'promotion and row content use the same row motion frames');
   assert.equal(JSON.stringify(plan).includes('translate3d('), false);
   assert.equal(JSON.stringify(plan).includes('drop-shadow('), false);
+});
+
+test('entity compiler is independent and does nothing until an enabled asset exists', () => {
+  const scene = fakeScene();
+  const active = compileEntityProgram(scene, { profile: activeProfile() });
+  assert.equal(active.id, 'entity-idle');
+  assert.equal(active.tracks.length, 1);
+  assert.equal(active.tracks[0].node.layer, MOTION_LAYERS.ENTITY);
+
+  const disabled = compileEntityProgram(scene, {
+    profile: { ...activeProfile(), entity: { ...activeProfile().entity, enabled: false } }
+  });
+  assert.equal(disabled.tracks.length, 0);
+
+  const noAsset = compileEntityProgram(scene, {
+    profile: { ...activeProfile(), entity: { ...activeProfile().entity, asset_url: '' } }
+  });
+  assert.equal(noAsset.tracks.length, 0);
 });
 
 test('scene composer rejects competing ownership and allows independent channels on one node', () => {
@@ -152,16 +193,19 @@ test('scene composer rejects competing ownership and allows independent channels
   );
 });
 
-test('menu and atmosphere compilers remain independently callable for future runtime composition', () => {
+test('menu atmosphere and entity compilers remain independently callable', () => {
   const scene = fakeScene();
   const context = { profile: activeProfile() };
   const menu = compileMenuMotionProgram(scene, context);
   const atmosphere = compileAtmosphereProgram(scene, context);
+  const entity = compileEntityProgram(scene, context);
   assert.equal(menu.id, 'menu-motion');
   assert.equal(atmosphere.id, 'atmosphere');
-  assert.equal(menu.tracks.some((track) => track.node.layer === 'atmosphere'), false);
+  assert.equal(entity.id, 'entity-idle');
+  assert.equal(menu.tracks.some((track) => track.node.layer === 'entity'), false);
   assert.equal(atmosphere.tracks.every((track) => track.node.layer === 'atmosphere'), true);
-  assert.equal(DEFAULT_SCENE_COMPILERS.length, 2);
+  assert.equal(entity.tracks.every((track) => track.node.layer === 'entity'), true);
+  assert.equal(DEFAULT_SCENE_COMPILERS.length, 3);
 });
 
 test('WAAPI driver alone converts only claimed canonical channels into browser CSS', () => {
@@ -188,7 +232,7 @@ test('WAAPI driver alone converts only claimed canonical channels into browser C
   assert.equal(timing.fill, 'both');
 });
 
-test('SceneRuntime compiles multiple programs and owns one master timeline independently from renderer', () => {
+test('SceneRuntime compiles all active programs and owns one master timeline independently from renderer', () => {
   const scene = fakeScene();
   const driver = fakeDriver();
   const runtime = new SceneRuntime({
@@ -198,7 +242,7 @@ test('SceneRuntime compiles multiple programs and owns one master timeline indep
   });
   const plan = runtime.load({ scene, context: { profile: activeProfile() } });
 
-  assert.equal(plan.programs.length, 2);
+  assert.equal(plan.programs.length, 3);
   assert.equal(runtime.timeline.allHandles().length, plan.tracks.length + 1);
   assert.equal(runtime.seek(9000), 8000);
   assert.equal(runtime.currentTime(), 8000);
