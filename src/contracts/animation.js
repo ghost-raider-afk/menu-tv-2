@@ -10,7 +10,6 @@ import {
   ITEM_EFFECTS,
   PRICE_EFFECTS,
   SECTION_EFFECTS,
-  TICKER_DIRECTIONS,
   completeAnimationProfile
 } from '../shared/animation-profile.js';
 
@@ -30,12 +29,6 @@ function numberValue(value, field, { min, max, integer = false }) {
 function booleanValue(value, field) {
   if (typeof value !== 'boolean') throw new ValidationError(`Поле «${field}» должно быть логическим значением.`);
   return value;
-}
-
-function colorValue(value, field) {
-  const color = typeof value === 'string' ? value.trim().toUpperCase() : '';
-  if (!/^#[0-9A-F]{6}$/.test(color)) throw new ValidationError(`Поле «${field}» должно содержать цвет в формате #RRGGBB.`);
-  return color;
 }
 
 function entityAssetUrl(value) {
@@ -62,25 +55,6 @@ function animationEntityInput(source = {}) {
   };
 }
 
-function animationTickerInput(source = {}) {
-  const text = typeof source.text === 'string' ? source.text.trim() : '';
-  if (text.length > 220) throw new ValidationError('Текст бегущей строки не должен превышать 220 символов.');
-  if (source.enabled === true && !text) throw new ValidationError('Для включённой бегущей строки нужно указать текст.');
-  return {
-    enabled: booleanValue(source.enabled, 'Бегущая строка включена'),
-    text,
-    y_percent: numberValue(source.y_percent, 'Позиция бегущей строки Y', { min: 0, max: 100 }),
-    height_percent: numberValue(source.height_percent, 'Высота бегущей строки', { min: 2, max: 25 }),
-    font_size_percent: numberValue(source.font_size_percent, 'Размер текста бегущей строки', { min: 1, max: 12 }),
-    depth: numberValue(source.depth, 'Глубина бегущей строки', { min: -20, max: 40, integer: true }),
-    direction: enumValue(source.direction, 'Направление бегущей строки', TICKER_DIRECTIONS),
-    cycle_seconds: numberValue(source.cycle_seconds, 'Скорость бегущей строки', { min: 3, max: 90 }),
-    text_color: colorValue(source.text_color, 'Цвет текста бегущей строки'),
-    background_color: colorValue(source.background_color, 'Цвет фона бегущей строки'),
-    background_opacity: numberValue(source.background_opacity, 'Прозрачность фона бегущей строки', { min: 0, max: 100, integer: true })
-  };
-}
-
 export function animationProfileInput(source) {
   if (!source || typeof source !== 'object' || Array.isArray(source)) throw new ValidationError('Профиль анимации должен быть объектом.');
   const profile = completeAnimationProfile(source);
@@ -101,8 +75,7 @@ export function animationProfileInput(source) {
     background_effect: enumValue(profile.background_effect, 'Эффект фона', BACKGROUND_EFFECTS),
     background_zoom_percent: numberValue(profile.background_zoom_percent, 'Глубина фона', { min: 0, max: 8 }),
     intensity: numberValue(profile.intensity, 'Интенсивность', { min: 0, max: 100, integer: true }),
-    entity: animationEntityInput(profile.entity),
-    ticker: animationTickerInput(profile.ticker)
+    entity: animationEntityInput(profile.entity)
   };
 }
 
