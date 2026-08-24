@@ -1,4 +1,7 @@
+import { composeScenePrograms, createSceneProgram } from './scene-composer.js';
+
 const GOLD_SHADOW = 'rgba(244,201,21,.58)';
+const MENU_KINDS = new Set(['section', 'item', 'promotion', 'price', 'background']);
 
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
@@ -9,7 +12,6 @@ function effectFor(profile, kind) {
   if (kind === 'item' || kind === 'promotion') return profile.item_effect;
   if (kind === 'price') return profile.price_effect;
   if (kind === 'background') return profile.background_effect;
-  if (kind === 'shimmer') return profile.section_effect === 'shimmer' ? 'shimmer' : 'none';
   return null;
 }
 
@@ -128,49 +130,67 @@ function timing(duration, delay, easing) {
   return Object.freeze({ duration, delay, easing, loop: true });
 }
 
-function trackFor(node, profile, duration) {
+function menuTrackFor(node, profile, duration) {
+  if (!MENU_KINDS.has(node.kind)) return null;
   const effect = effectFor(profile, node.kind);
   if (!effect || effect === 'none') return null;
   if (node.kind === 'background') {
     return Object.freeze({
       node,
-      channel: 'transform',
+      claims: Object.freeze(['transform']),
       keyframes: Object.freeze(backgroundFrames(profile)),
       timing: timing(duration, 0, profile.easing || 'smooth')
-    });
-  }
-  if (node.kind === 'shimmer') {
-    return Object.freeze({
-      node,
-      channel: 'atmosphere',
-      keyframes: Object.freeze(shimmerFrames(profile)),
-      timing: timing(duration, 0, 'ease-in-out')
     });
   }
   const frameKind = node.kind === 'promotion' ? 'item' : node.kind;
   return Object.freeze({
     node,
-    channel: 'motion',
+    claims: Object.freeze(['transform', 'opacity', 'appearance']),
     keyframes: Object.freeze(elementFrames(profile, frameKind, effect, node.order)),
     timing: timing(duration, targetDelay(profile, node.order, node.count, duration), profile.easing || 'smooth')
   });
 }
 
-export function compileMotionPlan(scene, profile) {
-  if (!scene || !Array.isArray(scene.nodes)) throw new TypeError('Motion plan requires a scene graph.');
+export function compileMenuMotionProgram(scene, context = {}) {
+  if (!scene || !Array.isArray(scene.nodes)) throw new TypeError('Menu motion compiler requires a scene graph.');
+  const profile = context.profile || context;
   const duration = Math.max(4000, Number(profile?.cycle_seconds) * 1000 || 12000);
-  const tracks = scene.nodes.map((node) => trackFor(node, profile || {}, duration)).filter(Boolean);
-  const owners = new Map();
-  for (const track of tracks) {
-    const key = `${track.node.id}:${track.channel}`;
-    if (owners.has(key)) throw new Error(`Motion channel has multiple owners: ${key}`);
-    owners.set(key, track.node.transformOwner);
-  }
-  return Object.freeze({
-    version: 3,
+  const tracks = scene.nodes.map((node) => menuTrackFor(node, profile || {}, duration)).filter(Boolean);
+  return createSceneProgram({
+    id: 'menu-motion',
     duration,
-    profile: Object.freeze({ ...(profile || {}) }),
-    tracks: Object.freeze(tracks),
-    clock: Object.freeze({ duration, loop: true })
+    tracks,
+    metadata: { layer: 'menu', profileVersion: Number(profile?.motion_version) || null }
   });
+}
+
+export function compileAtmosphereProgram(scene, context = {}) {
+  if (!scene || !Array.isArray(scene.nodes)) throw new TypeError('Atmosphere compiler requires a scene graph.');
+  const profile = context.profile || context;
+  const duration = Math.max(4000, Number(profile?.cycle_seconds) * 1000 || 12000);
+  const shimmer = scene.nodes.find((node) => node.kind === 'shimmer');
+  const enabled = shimmer && profile?.section_effect === 'shimmer';
+  const tracks = enabled ? [Object.freeze({
+    node: shimmer,
+    claims: Object.freeze(['transform', 'opacity']),
+    keyframes: Object.freeze(shimmerFrames(profile)),
+    timing: timing(duration, 0, 'ease-in-out')
+  })] : [];
+  return createSceneProgram({
+    id: 'atmosphere',
+    duration,
+    tracks,
+    metadata: { layer: 'atmosphere' }
+  });
+}
+
+export const DEFAULT_SCENE_COMPILERS = Object.freeze([
+  compileMenuMotionProgram,
+  compileAtmosphereProgram
+]);
+
+export function compileMotionPlan(scene, profile) {
+  const context = Object.freeze({ profile: Object.freeze({ ...(profile || {}) }) });
+  const programs = DEFAULT_SCENE_COMPILERS.map((compiler) => compiler(scene, context));
+  return composeScenePrograms(scene, programs);
 }
