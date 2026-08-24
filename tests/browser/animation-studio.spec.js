@@ -46,6 +46,20 @@ async function createPreviewFixture(page) {
       return response.status === 204 ? null : response.json();
     }
     const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const product = await request('/api/catalog/products', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: `Animation product ${suffix}`,
+        producer: '',
+        characteristics: '',
+        strength: '',
+        price_primary: '240',
+        alcoholic: false,
+        beverage_color: 'none',
+        filtration: 'none',
+        active: true
+      })
+    });
     const location = await request('/api/locations', { method: 'POST', body: JSON.stringify({ name: `Animation ${suffix}`, address: '', active: true }) });
     const screen = await request(`/api/locations/${location.id}/screens`, { method: 'POST', body: '{}' });
     const editor = await request(`/api/screens/${screen.id}/editor`);
@@ -55,19 +69,20 @@ async function createPreviewFixture(page) {
         revision: editor.draft.revision,
         rows: [
           { id: 'real-preview-section', kind: 'section', name: 'НАСТОЯЩИЙ ЭКРАН MOTION STUDIO', enabled: true },
-          { id: 'real-preview-item', kind: 'item', name: 'Позиция', price_primary: '240', price_secondary: '360', promotion: true, promotion_text: 'АКЦИЯ', enabled: true }
+          { id: 'real-preview-item', kind: 'item', product_id: product.id, promotion: true, promotion_text: 'АКЦИЯ', enabled: true }
         ],
         settings: { background_color: '#123456', accent_color: '#F4C915', text_color: '#F8FAFC' }
       })
     });
-    return { locationId: location.id, screenId: screen.id, screenName: screen.name };
+    return { locationId: location.id, screenId: screen.id, screenName: screen.name, productId: product.id };
   });
 }
 
 async function removePreviewFixture(page, fixture) {
-  await page.evaluate(async ({ screenId, locationId }) => {
+  await page.evaluate(async ({ screenId, locationId, productId }) => {
     await fetch(`/api/screens/${screenId}`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => undefined);
     await fetch(`/api/locations/${locationId}`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => undefined);
+    await fetch(`/api/catalog/products/${productId}`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => undefined);
   }, fixture);
 }
 
