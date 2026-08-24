@@ -94,6 +94,7 @@ jobs:
       SITE_LOGO_MAX_BYTES: '2097152'
       SITE_FAVICON_MAX_BYTES: '524288'
       SCREEN_BACKGROUND_MAX_BYTES: '20971520'
+      ANIMATION_ENTITY_MAX_BYTES: '20971520'
       HEALTH_READINESS_CACHE_MS: '0'
       SFTP_PUBLIC_HOST: localhost
       SFTP_PORT: '2022'
@@ -189,6 +190,7 @@ jobs:
       - name: Check canonical environment
         run: |
           grep -Fx 'SCREEN_BACKGROUND_MAX_BYTES=20971520' .env.example
+          grep -Fx 'ANIMATION_ENTITY_MAX_BYTES=20971520' .env.example
           grep -Fx 'EVENT_JOURNAL_RETENTION_DAYS=30' .env.example
           grep -Fx 'EVENT_JOURNAL_MAX_ENTRIES=5000' .env.example
           ! grep -q 'FRONTEND_ERROR_RETENTION_DAYS' .env.example
