@@ -4,7 +4,7 @@ import test from 'node:test';
 import { newDb } from 'pg-mem';
 import { initialiseSchema } from '../src/db/migrations/schema.js';
 import { migrateDevicePlayer } from '../src/db/migrations/device-player.js';
-import { migrateDeviceIdentity } from '../src/db/migrations/device-identity.js';
+import { migrateDeviceBindings } from '../src/db/migrations/device-bindings.js';
 import { createDevicesRepository } from '../src/db/devices.js';
 
 const memoryDb = newDb({ autoCreateForeignKeyIndices: true });
@@ -30,14 +30,14 @@ async function seedScreen() {
 test.before(async () => {
   await initialiseSchema(pool);
   await migrateDevicePlayer(pool);
-  await migrateDeviceIdentity(pool);
+  await migrateDeviceBindings(pool);
 });
 
 test.after(async () => {
   await pool.end();
 });
 
-test('TV activation carries persistent identity into an active device session', async () => {
+test('TV activation carries persistent identity through a first-class monitor binding', async () => {
   const repository = createDevicesRepository(pool);
   const { screenId, screenName } = await seedScreen();
   const activationId = crypto.randomUUID();
@@ -81,9 +81,12 @@ test('TV activation carries persistent identity into an active device session', 
   assert.equal(session.device_key, deviceKey);
   assert.equal(session.screen_id, screenId);
   assert.equal(session.screen_name, screenName);
+  const binding = await repository.getActiveDeviceBindingByScreen(screenId);
+  assert.equal(binding.device_id, device.id);
+  assert.equal(binding.device_key, deviceKey);
 });
 
-test('same physical TV is moved between monitors instead of creating parallel devices', async () => {
+test('same physical TV moves between monitors without creating a parallel device', async () => {
   const repository = createDevicesRepository(pool);
   const first = await seedScreen();
   const second = await seedScreen();
@@ -103,16 +106,50 @@ test('same physical TV is moved between monitors instead of creating parallel de
   assert.equal(moved.id, original.id, 'physical TV keeps one database identity');
   assert.equal(moved.screen_id, second.screenId);
   assert.equal(await repository.getActiveDeviceSessionByHash(oldTokenHash), null, 'old session is revoked atomically on rebind');
+  assert.equal(await repository.getActiveDeviceBindingByScreen(first.screenId), null);
+  assert.equal((await repository.getActiveDeviceBindingByKey(deviceKey)).screen_id, second.screenId);
 });
 
-test('one monitor can have only one active physical TV', async () => {
+test('one monitor exposes exactly one active TV binding and replacement revokes the old session', async () => {
   const repository = createDevicesRepository(pool);
   const { screenId } = await seedScreen();
   const first = await repository.bindDevice({ deviceKey: crypto.randomUUID(), screenId, label: 'Первый ТВ', authorizedBy: 'admin' });
+  const firstToken = crypto.randomBytes(32).toString('hex');
+  await repository.createDeviceSession({
+    id: crypto.randomUUID(),
+    deviceId: first.id,
+    tokenHash: firstToken,
+    expiresAt: new Date(Date.now() + 86_400_000).toISOString()
+  });
+
   const replacement = await repository.bindDevice({ deviceKey: crypto.randomUUID(), screenId, label: 'Второй ТВ', authorizedBy: 'admin' });
   assert.notEqual(replacement.id, first.id);
+  assert.equal(await repository.getActiveDeviceSessionByHash(firstToken), null);
   const bindings = await repository.listDeviceBindings();
   const screenBindings = bindings.filter((binding) => binding.screen_id === screenId);
   assert.equal(screenBindings.length, 1);
-  assert.equal(screenBindings[0].id, replacement.id);
+  assert.equal(screenBindings[0].device_id, replacement.id);
+});
+
+test('unbinding revokes the session but preserves physical TV identity for later rebind', async () => {
+  const repository = createDevicesRepository(pool);
+  const first = await seedScreen();
+  const second = await seedScreen();
+  const deviceKey = crypto.randomUUID();
+  const device = await repository.bindDevice({ deviceKey, screenId: first.screenId, label: 'ТВ', authorizedBy: 'admin' });
+  const tokenHash = crypto.randomBytes(32).toString('hex');
+  await repository.createDeviceSession({
+    id: crypto.randomUUID(),
+    deviceId: device.id,
+    tokenHash,
+    expiresAt: new Date(Date.now() + 86_400_000).toISOString()
+  });
+
+  assert.equal(await repository.revokeDeviceByScreen(first.screenId), true);
+  assert.equal(await repository.getActiveDeviceBindingByScreen(first.screenId), null);
+  assert.equal(await repository.getActiveDeviceSessionByHash(tokenHash), null);
+
+  const rebound = await repository.bindDevice({ deviceKey, screenId: second.screenId, label: 'ТВ', authorizedBy: 'admin' });
+  assert.equal(rebound.id, device.id);
+  assert.equal(rebound.screen_id, second.screenId);
 });
