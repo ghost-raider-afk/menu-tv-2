@@ -1,6 +1,6 @@
 import { buildDisplayLines, buildRenderLayout, buildRenderModel, buildTableSvg } from '../editor/renderer.js';
 import { parseResolution } from '../editor/settings.js';
-import { buildMotionScene } from './scene-graph.js';
+import { buildDomMotionScene } from './dom-scene-adapter.js';
 
 function applyTypography(stage, layout) {
   const svg = stage.querySelector('svg.menu-table-svg');
@@ -55,7 +55,7 @@ export function renderAnimationScreenPreview(stage, bundle) {
 
   backgroundStyle(stage.querySelector('.animation-screen-background'), model, layout.palette);
   applyTypography(stage, layout);
-  const scene = buildMotionScene(stage);
+  const scene = buildDomMotionScene(stage);
 
   return { model, lines, layout, scene };
 }
