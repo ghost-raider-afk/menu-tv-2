@@ -6,10 +6,11 @@ function clamp(value, minimum, maximum) {
 
 function effectFor(profile, kind) {
   if (kind === 'section') return profile.section_effect;
+  if (kind === 'item' || kind === 'promotion') return profile.item_effect;
   if (kind === 'price') return profile.price_effect;
   if (kind === 'background') return profile.background_effect;
   if (kind === 'shimmer') return profile.section_effect === 'shimmer' ? 'shimmer' : 'none';
-  return profile.item_effect;
+  return null;
 }
 
 function vectorFor(profile, travel, index) {
