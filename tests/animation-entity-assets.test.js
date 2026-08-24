@@ -11,13 +11,14 @@ import {
   writeAnimationEntityAsset
 } from '../src/services/animation-entity-assets-service.js';
 
-function config(root) {
+function config(root, overrides = {}) {
   return {
     siteAssetsRoot: root,
-    screenBackgroundMaxBytes: 20 * 1024 * 1024,
+    animationEntityMaxBytes: 20 * 1024 * 1024,
     screenMaxWidth: 1920,
     screenMaxHeight: 1080,
-    imageMaxPixels: 40_000_000
+    imageMaxPixels: 40_000_000,
+    ...overrides
   };
 }
 
@@ -56,6 +57,21 @@ test('opaque images and unsafe entity paths are rejected', async () => {
     assert.equal(isAnimationEntityAssetUrl('/site-assets/../../etc/passwd'), false);
     assert.equal(animationEntityFilename('https://evil.test/entity.png'), '');
     assert.equal(await removeAnimationEntityAsset({ assetUrl: '/site-assets/../../etc/passwd', config: config(root) }), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('Entity asset byte limit is controlled independently from screen background settings', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'menu-tv-entity-'));
+  try {
+    const bytes = await sharp({
+      create: { width: 64, height: 64, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }
+    }).composite([{ input: Buffer.from('<svg width="64" height="64"><circle cx="32" cy="32" r="20" fill="#f6c90e"/></svg>') }]).png().toBuffer();
+    await assert.rejects(
+      () => writeAnimationEntityAsset({ bytes, config: config(root, { animationEntityMaxBytes: Math.max(1, bytes.length - 1) }) }),
+      /Размер изображения живого объекта недопустим/
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
