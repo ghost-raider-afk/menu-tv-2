@@ -15,7 +15,7 @@ function savedCollapsedState() {
 }
 
 function wireContext(shell, rail, context, header) {
-  if (savedCollapsedState()) setCollapsed(shell, context, true);
+  if (savedCollapsedState() || window.innerWidth <= 1180) setCollapsed(shell, context, true);
   context.querySelector('.ui-context-close')?.addEventListener('click', () => setCollapsed(shell, context, true));
   context.addEventListener('click', (event) => {
     const routeLink = event.target instanceof Element ? event.target.closest('.app-route-link') : null;
