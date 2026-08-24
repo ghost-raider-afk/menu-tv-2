@@ -101,7 +101,8 @@ async function decodeImage(bytes, { maxPixels, label }) {
       type: metadata.format === 'jpg' ? 'jpeg' : metadata.format,
       width: metadata.width,
       height: metadata.height,
-      orientation: metadata.orientation || 1
+      orientation: metadata.orientation || 1,
+      hasAlpha: metadata.hasAlpha === true
     };
   } catch (error) {
     if (error instanceof ValidationError) throw error;
