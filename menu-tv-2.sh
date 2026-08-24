@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.3.2"
+SCRIPT_VERSION="1.3.3"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 LEGACY_PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
@@ -488,6 +488,12 @@ ensure_sftp_env() {
     set_env_value "$env_file" APP_NAME "ТВ МЕНЮ"
   fi
   cleanup_obsolete_env "$env_file"
+
+  # v1.3.3: migrate only the previous canonical QR lifetime; preserve deliberate custom values.
+  if [[ "$(env_value DEVICE_ACTIVATION_TTL_MINUTES "$env_file")" == "10" ]]; then
+    set_env_value "$env_file" DEVICE_ACTIVATION_TTL_MINUTES "2"
+    info "Срок действия QR подключения сокращён с 10 до 2 минут."
+  fi
 
   [[ -n "$(env_value SFTP_PUBLIC_HOST "$env_file")" ]] || set_env_value "$env_file" SFTP_PUBLIC_HOST "$domain"
   if [[ -z "$(env_value POSTGRES_PASSWORD "$env_file")" || "$(env_value POSTGRES_PASSWORD "$env_file")" == replace-with-* ]]; then
