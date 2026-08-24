@@ -6,6 +6,7 @@ import {
   ANIMATION_PROFILE_VERSION,
   BACKGROUND_EFFECTS,
   DEFAULT_ANIMATION_PROFILE,
+  ENTITY_IDLE_EFFECTS,
   ITEM_EFFECTS,
   PRICE_EFFECTS,
   SECTION_EFFECTS,
@@ -23,6 +24,35 @@ function numberValue(value, field, { min, max, integer = false }) {
     throw new ValidationError(`Поле «${field}» должно быть числом от ${min} до ${max}.`);
   }
   return number;
+}
+
+function booleanValue(value, field) {
+  if (typeof value !== 'boolean') throw new ValidationError(`Поле «${field}» должно быть логическим значением.`);
+  return value;
+}
+
+function entityAssetUrl(value) {
+  const url = typeof value === 'string' ? value.trim() : '';
+  if (!url) return '';
+  if (!/^\/site-assets\/animation-entity-[0-9a-f-]{36}\.(?:png|webp)$/i.test(url)) {
+    throw new ValidationError('Файл живого объекта должен быть загружен через студию анимации.');
+  }
+  return url;
+}
+
+function animationEntityInput(source = {}) {
+  return {
+    enabled: booleanValue(source.enabled, 'Живой объект включён'),
+    asset_url: entityAssetUrl(source.asset_url),
+    x_percent: numberValue(source.x_percent, 'Позиция объекта X', { min: 0, max: 100 }),
+    y_percent: numberValue(source.y_percent, 'Позиция объекта Y', { min: 0, max: 100 }),
+    width_percent: numberValue(source.width_percent, 'Размер объекта', { min: 1, max: 100 }),
+    depth: numberValue(source.depth, 'Глубина объекта', { min: -20, max: 40, integer: true }),
+    opacity: numberValue(source.opacity, 'Прозрачность объекта', { min: 0, max: 100, integer: true }),
+    idle_effect: enumValue(source.idle_effect, 'Idle-анимация объекта', ENTITY_IDLE_EFFECTS),
+    idle_amount: numberValue(source.idle_amount, 'Живость объекта', { min: 0, max: 100, integer: true }),
+    idle_cycle_seconds: numberValue(source.idle_cycle_seconds, 'Цикл живого объекта', { min: 2, max: 60 })
+  };
 }
 
 export function animationProfileInput(source) {
@@ -44,7 +74,8 @@ export function animationProfileInput(source) {
     price_effect: enumValue(profile.price_effect, 'Эффект цен', PRICE_EFFECTS),
     background_effect: enumValue(profile.background_effect, 'Эффект фона', BACKGROUND_EFFECTS),
     background_zoom_percent: numberValue(profile.background_zoom_percent, 'Глубина фона', { min: 0, max: 8 }),
-    intensity: numberValue(profile.intensity, 'Интенсивность', { min: 0, max: 100, integer: true })
+    intensity: numberValue(profile.intensity, 'Интенсивность', { min: 0, max: 100, integer: true }),
+    entity: animationEntityInput(profile.entity)
   };
 }
 
