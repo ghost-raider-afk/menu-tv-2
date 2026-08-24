@@ -31,7 +31,7 @@ async function hasVisibleTransparency(bytes, maxPixels) {
 }
 
 export async function writeAnimationEntityAsset({ bytes, config }) {
-  const maxBytes = config.screenBackgroundMaxBytes;
+  const maxBytes = config.animationEntityMaxBytes;
   if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > maxBytes) {
     throw new ValidationError('Размер изображения живого объекта недопустим.');
   }
