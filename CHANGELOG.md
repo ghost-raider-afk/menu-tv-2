@@ -1,5 +1,22 @@
 # История версий ТВ МЕНЮ 2
 
+## [1.4.0] - 2026-08-24
+
+### Scene Entity
+- Добавлен независимый Scene Entity contract и persistence (`entity_json`) вне Motion profile.
+- Добавлен Entity Editor v1: PNG/WebP asset, visibility, X/Y, width, scale, rotation, depth, opacity, выравнивание, drag/resize в каноническом пространстве 1920×1080.
+- Entity рендерится отдельным слоем в Live Preview и `/player`, передаётся через player context и кэшируется для offline playback.
+
+### Анимация бокала
+- Для `beer-glass` добавлен независимый `beer-glass-behavior` SceneProgram со схемой `IDLE → SOFT_EVENT → IDLE → SPECIAL_SCENE → IDLE`.
+- Динамическая анимация применяется только к внутреннему motion-wrapper, поэтому сохранённые пользовательские position/scale/rotation остаются владельцем внешнего Entity transform и не конфликтуют с runtime.
+- WAAPI serializer поддерживает renderer-neutral rotation; Entity runtime автоматически перепривязывается после замены DOM.
+
+### Миграция и проверки
+- Добавлена миграция `009-scene-entity` для существующих установок.
+- Добавлены regression-тесты Scene Entity, Beer Glass behavior, TV Player binding и offline cache.
+- Финальный набор изменений прошёл node/unit, Chromium browser/visual и clean-install smoke.
+
 ## [1.3.5] - 2026-08-24
 
 ### Архитектура анимации
