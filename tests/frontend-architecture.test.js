@@ -26,7 +26,7 @@ test('templates frontend is physically absent', async () => {
 
 test('CSS architecture is compact and has one permanent entrypoint', async () => {
   const [entry, tokens] = await Promise.all([read('css/index.css'), read('css/tokens.css')]);
-  for (const required of ['./tokens.css','./base.css','./shell.css','./components.css','./forms.css','./tables.css','./pages/events.css','./editor/editor.css','./auth/signin.css']) {
+  for (const required of ['./tokens.css','./base.css','./shell.css','./components.css','./forms.css','./tables.css','./pages/events.css','./connect-tv.css','./editor/editor.css','./auth/signin.css']) {
     assert.ok(entry.includes(required), required);
   }
   assert.doesNotMatch(entry, /tv1|templates\.css|error-log\.css/i);
@@ -38,7 +38,7 @@ test('CSS architecture is compact and has one permanent entrypoint', async () =>
   assert.match(tokens, /--ui-accent-on-chrome:/);
 });
 
-test('shell remains modular and settings expose one event journal', async () => {
+test('shell remains modular and event journal exists only as its own route', async () => {
   const [shell, navigation, settings, bell] = await Promise.all([
     read('js/components/shell.js'), read('js/core/navigation.js'), read('settings.html'), read('js/components/notifications.js')
   ]);
@@ -49,9 +49,7 @@ test('shell remains modular and settings expose one event journal', async () => 
   assert.match(navigation, /catalog:\s*Object\.freeze\(\[\['Продукция', '\/catalog\.html'\]\]\)/);
   assert.match(navigation, /\['Журнал событий', '\/events\.html'\]/);
   assert.doesNotMatch(navigation, /Журнал ошибок|error-log\.html|Журнал действий/);
-  assert.match(settings, /Журнал событий/);
-  assert.match(settings, /href="\/events\.html"/);
-  assert.doesNotMatch(settings, /Журнал действий|data-activity-list/);
+  assert.doesNotMatch(settings, /Журнал событий|href="\/events\.html"|event-journal-link-title/);
   assert.match(bell, /href="\/events\.html"/);
   assert.match(bell, /Открыть журнал событий/);
 });
@@ -101,6 +99,7 @@ test('authenticated navigation uses one persistent client-side shell', async () 
   assert.match(sidebar, /refreshSidebarActive/);
   assert.match(context, /refreshContextPanel/);
   assert.match(header, /refreshHeaderRoute/);
+  assert.match(header, /document\.title = `\$\{appName\(\)\} — \$\{title\}`/);
   assert.match(screens, /await navigate\(`\/screen-editor\.html\?id=\$\{screen\.id\}`\)/);
   assert.doesNotMatch(screens, /window\.location\.assign/);
 });
