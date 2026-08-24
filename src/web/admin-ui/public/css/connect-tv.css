@@ -1,8 +1,66 @@
-.connect-tv-grid {
+.connect-tv-page {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.connect-tv-heading-copy {
+  margin: 8px 0 0;
+  color: var(--muted-text, #667085);
+  line-height: 1.45;
+}
+
+.connect-tv-flow {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
-  align-items: start;
+  gap: 14px;
+}
+
+.connect-tv-progress {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.connect-tv-progress span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #d9dee8);
+  border-radius: 12px;
+  color: var(--muted-text, #667085);
+  background: var(--surface, #fff);
+}
+
+.connect-tv-progress b {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: rgba(102, 112, 133, 0.12);
+  font-size: 12px;
+}
+
+.connect-tv-progress em {
+  overflow: hidden;
+  font-style: normal;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connect-tv-progress .is-active {
+  border-color: var(--accent, #f4c915);
+  color: inherit;
+}
+
+.connect-tv-progress .is-active b,
+.connect-tv-progress .is-done b {
+  background: var(--accent, #f4c915);
+  color: #101317;
 }
 
 .connect-tv-card,
@@ -10,77 +68,63 @@
   border: 1px solid var(--border-color, #d9dee8);
   border-radius: 18px;
   background: var(--surface, #fff);
-  padding: 22px;
-}
-
-.connect-tv-card {
-  min-height: 360px;
+  padding: 20px;
 }
 
 .connect-tv-card.is-disabled {
-  opacity: 0.48;
+  opacity: 0.5;
   pointer-events: none;
+}
+
+.connect-tv-card-head {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.connect-tv-card-head h2 {
+  margin: 0 0 4px;
+}
+
+.connect-tv-card-head p {
+  margin: 0;
+  color: var(--muted-text, #667085);
+  line-height: 1.4;
 }
 
 .connect-tv-step {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
   border-radius: 50%;
   background: var(--accent, #f4c915);
   color: #101317;
   font-weight: 800;
 }
 
-.connect-tv-card h2,
-.connect-tv-success h2 {
-  margin: 16px 0 8px;
-}
-
-.connect-tv-card > p {
-  margin: 0 0 20px;
-  color: var(--muted-text, #667085);
-  line-height: 1.5;
-}
-
-.connect-tv-camera-wrap {
-  position: relative;
-  overflow: hidden;
-  aspect-ratio: 1;
-  margin: 0 0 14px;
-  border-radius: 16px;
-  background: #0b0f16;
-}
-
-.connect-tv-camera {
+.connect-tv-scan-button,
+.connect-tv-authorize {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  min-height: 48px;
 }
 
-.connect-tv-camera-frame {
-  position: absolute;
-  inset: 18%;
-  border: 3px solid #f4c915;
-  border-radius: 16px;
-  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.25);
-}
-
-.connect-tv-divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 18px 0;
+.connect-tv-code-toggle {
+  width: 100%;
+  margin-top: 12px;
+  border: 0;
+  background: transparent;
   color: var(--muted-text, #667085);
+  text-decoration: underline;
+  cursor: pointer;
 }
 
-.connect-tv-divider::before,
-.connect-tv-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border-color, #d9dee8);
+.connect-tv-code-panel {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color, #d9dee8);
 }
 
 .connect-tv-code-row {
@@ -97,11 +141,11 @@
 }
 
 .connect-tv-device {
-  margin: 16px 0 0 !important;
-  padding: 12px 14px;
+  margin: 14px 0 0;
+  padding: 11px 13px;
   border-radius: 12px;
-  background: rgba(244, 201, 21, 0.12);
-  color: inherit !important;
+  background: rgba(18, 183, 106, 0.12);
+  color: inherit;
   font-weight: 700;
 }
 
@@ -112,7 +156,8 @@
 
 .connect-tv-option {
   width: 100%;
-  padding: 14px 16px;
+  min-height: 52px;
+  padding: 13px 15px;
   border: 1px solid var(--border-color, #d9dee8);
   border-radius: 12px;
   background: transparent;
@@ -127,7 +172,7 @@
 }
 
 .connect-tv-option span {
-  margin-top: 4px;
+  margin-top: 3px;
   color: var(--muted-text, #667085);
   font-size: 13px;
 }
@@ -138,27 +183,30 @@
 }
 
 .connect-tv-authorize {
-  width: 100%;
-  margin-top: 18px;
+  margin-top: 16px;
+}
+
+.connect-tv-empty {
+  margin: 0;
+  color: var(--muted-text, #667085);
 }
 
 .connect-tv-success {
   display: flex;
-  gap: 18px;
+  gap: 16px;
   align-items: center;
-  margin-top: 20px;
 }
 
 .connect-tv-success-icon {
   display: grid;
   place-items: center;
-  width: 54px;
-  height: 54px;
+  width: 52px;
+  height: 52px;
   flex: 0 0 auto;
   border-radius: 50%;
   background: #12b76a;
   color: #fff;
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 800;
 }
 
@@ -167,22 +215,159 @@
   margin-top: 0;
 }
 
-@media (max-width: 1050px) {
-  .connect-tv-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .connect-tv-card {
-    min-height: 0;
-  }
+.connect-tv-scanner {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  background: rgba(4, 7, 12, 0.96);
+  color: #fff;
 }
 
-@media (max-width: 560px) {
+.connect-tv-scanner-shell {
+  width: min(100%, 520px);
+  display: grid;
+  gap: 16px;
+}
+
+.connect-tv-scanner-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.connect-tv-scanner-head h2,
+.connect-tv-scanner-head p {
+  margin: 0;
+}
+
+.connect-tv-scanner-close {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 50%;
+  background: rgba(255,255,255,.08);
+  color: #fff;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.connect-tv-camera-wrap {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
+  max-height: 68vh;
+  border-radius: 24px;
+  background: #000;
+}
+
+.connect-tv-camera {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.connect-tv-camera-frame {
+  position: absolute;
+  inset: 16%;
+  border: 3px solid var(--accent, #f4c915);
+  border-radius: 22px;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.34);
+}
+
+.connect-tv-camera-frame i {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 50%;
+  height: 2px;
+  background: var(--accent, #f4c915);
+  opacity: .8;
+}
+
+.connect-tv-scanner-status {
+  margin: 0;
+  text-align: center;
+  font-weight: 700;
+}
+
+.connect-tv-scanner-fallback {
+  width: 100%;
+}
+
+.connect-tv-scanner-open {
+  overflow: hidden;
+}
+
+@media (max-width: 760px) {
+  .connect-tv-page {
+    width: 100%;
+  }
+
+  .connect-tv-heading {
+    margin-bottom: 12px;
+  }
+
+  .connect-tv-heading-copy {
+    font-size: 14px;
+  }
+
+  .connect-tv-progress {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    padding: 8px 0;
+    background: var(--page-bg, transparent);
+  }
+
+  .connect-tv-progress span {
+    justify-content: center;
+    padding: 8px 6px;
+  }
+
+  .connect-tv-progress em {
+    font-size: 12px;
+  }
+
   .connect-tv-card {
-    padding: 18px;
+    scroll-margin-top: 72px;
+    padding: 16px;
+  }
+
+  .connect-tv-card.is-disabled {
+    display: none;
+  }
+
+  .connect-tv-card-head {
+    margin-bottom: 14px;
   }
 
   .connect-tv-code-row {
     display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .connect-tv-option {
+    min-height: 56px;
+  }
+
+  .connect-tv-success {
+    align-items: flex-start;
+    padding: 18px;
+  }
+
+  .connect-tv-scanner {
+    place-items: stretch;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .connect-tv-scanner-shell {
+    width: 100%;
+    align-content: center;
   }
 }

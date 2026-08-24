@@ -13,15 +13,19 @@ const showActivationButton = document.querySelector('[data-show-activation]');
 const pairing = document.querySelector('[data-activation-pairing]');
 const qrContainer = document.querySelector('[data-activation-qr]');
 const reserveCode = document.querySelector('[data-reserve-code]');
+const activationExpiry = document.querySelector('[data-activation-expiry]');
 const activationStatus = document.querySelector('[data-activation-status]');
 const player = document.querySelector('[data-tv-player]');
 const playerStage = document.querySelector('[data-player-stage]');
 const playerMessage = document.querySelector('[data-player-message]');
 
 let pollTimer = null;
+let expiryTimer = null;
+let rotationRetryTimer = null;
 let refreshTimer = null;
 let wakeLock = null;
 let playerRefreshMs = 5000;
+let activationRequestInFlight = false;
 
 function setHidden(element, hidden) {
   element?.classList.toggle('is-hidden', hidden);
@@ -56,10 +60,7 @@ function cachedPlayerContext() {
 
 function savePlayerContext(context) {
   try {
-    localStorage.setItem(PLAYER_CONTEXT_STORAGE_KEY, JSON.stringify({
-      saved_at: new Date().toISOString(),
-      context
-    }));
+    localStorage.setItem(PLAYER_CONTEXT_STORAGE_KEY, JSON.stringify({ saved_at: new Date().toISOString(), context }));
   } catch {}
 }
 
@@ -70,6 +71,29 @@ function clearPlayerContext() {
 function formatReserveCode(value) {
   const code = String(value || '').replace(/\D/g, '').slice(0, 6);
   return code.length === 6 ? `${code.slice(0, 3)} ${code.slice(3)}` : '—— ——';
+}
+
+function formatRemaining(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function clearPairingTimers() {
+  if (pollTimer) clearTimeout(pollTimer);
+  if (expiryTimer) clearInterval(expiryTimer);
+  if (rotationRetryTimer) clearTimeout(rotationRetryTimer);
+  pollTimer = null;
+  expiryTimer = null;
+  rotationRetryTimer = null;
+}
+
+function invalidatePairing(text = 'Обновляем код подключения…') {
+  qrContainer.innerHTML = '';
+  reserveCode.textContent = '—— ——';
+  if (activationExpiry) activationExpiry.textContent = 'QR обновляется';
+  activationStatus.textContent = text;
 }
 
 async function requestWakeLock() {
@@ -95,13 +119,35 @@ function showActivationScreen() {
   setHidden(playerMessage, true);
 }
 
+function startExpiryCountdown(record) {
+  if (expiryTimer) clearInterval(expiryTimer);
+  let rotationStarted = false;
+  const tick = () => {
+    const remaining = Date.parse(record.expires_at) - Date.now();
+    if (remaining > 0) {
+      if (activationExpiry) activationExpiry.textContent = `QR действителен ${formatRemaining(remaining)}`;
+      return;
+    }
+    if (rotationStarted) return;
+    rotationStarted = true;
+    if (expiryTimer) clearInterval(expiryTimer);
+    expiryTimer = null;
+    clearActivation();
+    invalidatePairing();
+    void createActivation({ automatic: true });
+  };
+  tick();
+  if (!rotationStarted) expiryTimer = setInterval(tick, 250);
+}
+
 function showPairing(record) {
   showActivationScreen();
   qrContainer.innerHTML = record.qr_svg;
   reserveCode.textContent = formatReserveCode(record.reserve_code);
   activationStatus.textContent = 'Ожидание авторизации…';
-  showActivationButton.textContent = 'Получить новый код';
+  showActivationButton.textContent = 'Обновить код сейчас';
   setHidden(pairing, false);
+  startExpiryCountdown(record);
 }
 
 function schedulePoll(record) {
@@ -111,13 +157,7 @@ function schedulePoll(record) {
 }
 
 async function pollActivation(record) {
-  if (Date.parse(record.expires_at) <= Date.now()) {
-    clearActivation();
-    activationStatus.textContent = 'Код подключения истёк. Получите новый.';
-    showActivationButton.textContent = 'Получить новый код';
-    return;
-  }
-
+  if (Date.parse(record.expires_at) <= Date.now()) return;
   try {
     const response = await fetch(`/api/device/activations/${encodeURIComponent(record.activation_id)}/status`, {
       headers: { 'x-device-activation-secret': record.poll_secret },
@@ -125,30 +165,37 @@ async function pollActivation(record) {
     });
     if (response.status === 410 || response.status === 404) {
       clearActivation();
-      activationStatus.textContent = 'Код подключения больше не действителен.';
-      showActivationButton.textContent = 'Получить новый код';
+      invalidatePairing();
+      await createActivation({ automatic: true });
       return;
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const body = await response.json();
     if (body.status === 'authorized') {
       clearActivation();
+      clearPairingTimers();
       activationStatus.textContent = 'Авторизовано. Запускаем ТВ МЕНЮ…';
       await loadPlayer();
       return;
     }
     activationStatus.textContent = 'Ожидание авторизации…';
   } catch {
-    activationStatus.textContent = 'Нет связи с сервером. Повторяем…';
+    activationStatus.textContent = 'Нет связи с сервером. QR действует до окончания таймера.';
   }
-  schedulePoll(record);
+  if (Date.parse(record.expires_at) > Date.now()) schedulePoll(record);
 }
 
-async function createActivation() {
+async function createActivation({ automatic = false } = {}) {
+  if (activationRequestInFlight) return;
+  activationRequestInFlight = true;
   if (pollTimer) clearTimeout(pollTimer);
   pollTimer = null;
+  if (!automatic) {
+    if (expiryTimer) clearInterval(expiryTimer);
+    expiryTimer = null;
+  }
   showActivationButton.disabled = true;
-  activationStatus.textContent = 'Создаём код подключения…';
+  activationStatus.textContent = automatic ? 'Обновляем код подключения…' : 'Создаём код подключения…';
   try {
     await enterImmersiveMode();
     const response = await fetch('/api/device/activations', {
@@ -159,25 +206,25 @@ async function createActivation() {
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const record = await response.json();
+    clearPairingTimers();
     saveActivation(record);
     showPairing(record);
     schedulePoll(record);
   } catch (error) {
     console.error('TV activation could not start', error);
+    clearActivation();
     setHidden(pairing, false);
-    qrContainer.innerHTML = '';
-    reserveCode.textContent = '—— ——';
-    activationStatus.textContent = 'Не удалось получить код. Проверьте соединение с сервером.';
+    invalidatePairing('Нет связи с сервером. Новый QR появится автоматически после восстановления связи.');
+    rotationRetryTimer = setTimeout(() => void createActivation({ automatic: true }), 5000);
   } finally {
+    activationRequestInFlight = false;
     showActivationButton.disabled = false;
   }
 }
 
 function resolutionOf(screen) {
   const match = String(screen?.resolution || '').match(/(\d+)\D+(\d+)/);
-  const width = Number(match?.[1]) || 1920;
-  const height = Number(match?.[2]) || 1080;
-  return { width, height };
+  return { width: Number(match?.[1]) || 1920, height: Number(match?.[2]) || 1080 };
 }
 
 function sameOriginAsset(value) {
@@ -246,10 +293,7 @@ async function fetchPlayerContext(timeoutMs = 5000) {
     const context = await response.json();
     savePlayerContext(context);
     void warmPlayerAssetCache(context);
-    return {
-      context,
-      offline: response.headers.get('x-tv-menu-offline') === '1'
-    };
+    return { context, offline: response.headers.get('x-tv-menu-offline') === '1' };
   } finally {
     clearTimeout(timer);
   }
@@ -257,6 +301,7 @@ async function fetchPlayerContext(timeoutMs = 5000) {
 
 function showCachedPlayer(record, message = 'Нет связи с сервером. ТВ работает по последней сохранённой версии меню.') {
   if (!record?.context) return false;
+  clearPairingTimers();
   renderPlayerContext(record.context);
   setHidden(activationView, true);
   setHidden(player, false);
@@ -280,17 +325,14 @@ async function refreshPlayer() {
     showConnectionMessage(result.offline ? 'Нет связи с сервером. ТВ работает по последней сохранённой версии меню.' : '');
   } catch (error) {
     console.error('TV player refresh failed', error);
-    if (!showCachedPlayer(cachedPlayerContext())) {
-      showConnectionMessage('Связь с сервером временно потеряна.');
-    }
+    if (!showCachedPlayer(cachedPlayerContext())) showConnectionMessage('Связь с сервером временно потеряна.');
     return;
   }
   schedulePlayerRefresh();
 }
 
 async function loadPlayer() {
-  if (pollTimer) clearTimeout(pollTimer);
-  pollTimer = null;
+  clearPairingTimers();
   try {
     const result = await fetchPlayerContext();
     if (result.unauthorized) {
@@ -328,9 +370,7 @@ async function initialisePlayer() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') void requestWakeLock();
   });
-
   await registerOfflinePlayer();
-
   try {
     const response = await fetch('/api/device/session', { cache: 'no-store' });
     if (response.ok) {
@@ -341,7 +381,6 @@ async function initialisePlayer() {
   } catch {
     if (showCachedPlayer(cachedPlayerContext())) return;
   }
-
   const pending = activationFromStorage();
   if (pending) {
     showPairing(pending);

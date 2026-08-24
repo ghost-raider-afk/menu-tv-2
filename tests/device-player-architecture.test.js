@@ -15,10 +15,13 @@ test('player is public while TV connection page remains admin protected', async 
   assert.doesNotMatch(server.match(/const protectedPages = \[[\s\S]*?\];/)?.[0] || '', /player/);
   assert.match(server, /app\.use\('\/api\/device', createDevicePublicRouter/);
   assert.match(server, /app\.use\('\/api\/device-admin', createDeviceAdminRouter/);
+  assert.match(server, /app\.use\('\/vendor', express\.static\(path\.join\(nodeModulesDir, 'jsqr', 'dist'\)/);
   assert.match(playerHtml, /data-activation-view/);
   assert.match(playerHtml, /data-tv-player/);
-  assert.match(connectHtml, /Сканировать QR/);
+  assert.match(playerHtml, /data-activation-expiry/);
+  assert.match(connectHtml, /Сканировать QR-код/);
   assert.match(connectHtml, /6-значный резервный код/);
+  assert.match(connectHtml, /\/vendor\/jsQR\.js/);
 });
 
 test('offline player refreshes its shell online and falls back to cache offline', async () => {
@@ -39,11 +42,13 @@ test('offline player refreshes its shell online and falls back to cache offline'
   assert.match(player, /Нет связи с сервером\. ТВ работает по последней сохранённой версии меню/);
 });
 
-test('admin connection flow requires explicit location and screen selection before authorization', async () => {
-  const [navigation, application, page] = await Promise.all([
+test('admin connection flow is mobile-first and keeps explicit location and screen selection', async () => {
+  const [navigation, application, page, html, css] = await Promise.all([
     read('src/web/admin-ui/public/js/core/navigation.js'),
     read('src/web/admin-ui/public/js/application.js'),
-    read('src/web/admin-ui/public/js/pages/connect-tv.js')
+    read('src/web/admin-ui/public/js/pages/connect-tv.js'),
+    read('src/web/admin-ui/public/connect-tv.html'),
+    read('src/web/admin-ui/public/css/connect-tv.css')
   ]);
   assert.match(navigation, /\['Подключить ТВ', '\/connect-tv\.html'\]/);
   assert.match(application, /case 'connect-tv'/);
@@ -51,6 +56,30 @@ test('admin connection flow requires explicit location and screen selection befo
   assert.match(page, /selectedScreenId/);
   assert.match(page, /API\.deviceAuthorize/);
   assert.match(page, /BarcodeDetector/);
+  assert.match(page, /window\.jsQR/);
+  assert.match(page, /getUserMedia/);
+  assert.match(page, /focusStep\(locationStep, 'location'\)/);
+  assert.match(page, /focusStep\(screenStep, 'screen'\)/);
+  assert.match(html, /data-scanner role="dialog" aria-modal="true"/);
+  assert.match(html, /data-scanner-code/);
+  assert.match(css, /\.connect-tv-scanner \{[\s\S]*position: fixed;[\s\S]*inset: 0;/);
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.connect-tv-card\.is-disabled \{[\s\S]*display: none;/);
+});
+
+test('TV activation lifetime is env-driven, defaults to two minutes and rotates automatically', async () => {
+  const [env, player, publicRoutes] = await Promise.all([
+    read('.env.example'),
+    read('src/web/admin-ui/public/js/player/player.js'),
+    read('src/api/device/public-routes.js')
+  ]);
+  assert.match(env, /^DEVICE_ACTIVATION_TTL_MINUTES=2$/m);
+  assert.match(publicRoutes, /config\.deviceActivationTtlMinutes \* 60_000/);
+  assert.match(publicRoutes, /expires_at: expiresAt/);
+  assert.match(player, /Date\.parse\(record\.expires_at\) - Date\.now\(\)/);
+  assert.match(player, /QR действителен/);
+  assert.match(player, /createActivation\(\{ automatic: true \}\)/);
+  assert.match(player, /invalidatePairing/);
+  assert.doesNotMatch(player, /120_000|120000/);
 });
 
 test('runtime TV device settings are declared in env example', async () => {
