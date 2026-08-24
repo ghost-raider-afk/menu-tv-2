@@ -68,16 +68,25 @@ export function createDevicesRepository(pool) {
   async function activeBindingByScreen(screenId, { lock = false } = {}) {
     const { rows } = await pool.query(
       `SELECT b.id AS binding_id, b.device_id, b.screen_id, b.active, b.bound_by, b.bound_at,
-              d.device_key, d.label, d.last_seen_at AS device_last_seen_at,
-              (SELECT MAX(ds.last_seen_at) FROM tv_device_sessions ds
-                WHERE ds.device_id = d.id AND ds.revoked_at IS NULL) AS session_last_seen_at
+              d.device_key, d.label, d.last_seen_at AS device_last_seen_at
          FROM tv_device_bindings b
          JOIN tv_devices d ON d.id = b.device_id
         WHERE b.screen_id = $1 AND b.active = TRUE
         LIMIT 1${lock ? ' FOR UPDATE' : ''}`,
       [screenId]
     );
-    return bindingRecord(rows[0]);
+    const binding = bindingRecord(rows[0]);
+    if (!binding) return null;
+    const sessionActivity = await pool.query(
+      `SELECT MAX(last_seen_at) AS session_last_seen_at
+         FROM tv_device_sessions
+        WHERE device_id = $1 AND revoked_at IS NULL`,
+      [binding.device_id]
+    );
+    return {
+      ...binding,
+      session_last_seen_at: sessionActivity.rows[0]?.session_last_seen_at ?? null
+    };
   }
 
   async function activeBindingByKey(deviceKey, { lock = false } = {}) {
@@ -299,12 +308,19 @@ export function createDevicesRepository(pool) {
         `SELECT b.id AS binding_id, b.device_id, b.screen_id, b.bound_by, b.bound_at,
                 d.device_key, d.label, d.user_agent, d.remote_address, d.last_seen_at AS device_last_seen_at,
                 s.name AS screen_name, s.location_number, l.id AS location_id, l.name AS location_name,
-                (SELECT MAX(ds.last_seen_at) FROM tv_device_sessions ds WHERE ds.device_id = d.id AND ds.revoked_at IS NULL) AS session_last_seen_at,
-                (SELECT MAX(ds.expires_at) FROM tv_device_sessions ds WHERE ds.device_id = d.id AND ds.revoked_at IS NULL) AS session_expires_at
+                sessions.session_last_seen_at, sessions.session_expires_at
            FROM tv_device_bindings b
            JOIN tv_devices d ON d.id = b.device_id
            JOIN screens s ON s.id = b.screen_id
            JOIN locations l ON l.id = s.location_id
+           LEFT JOIN (
+             SELECT device_id,
+                    MAX(last_seen_at) AS session_last_seen_at,
+                    MAX(expires_at) AS session_expires_at
+               FROM tv_device_sessions
+              WHERE revoked_at IS NULL
+              GROUP BY device_id
+           ) sessions ON sessions.device_id = b.device_id
           WHERE b.active = TRUE
           ORDER BY l.name, s.location_number, b.id`
       );
