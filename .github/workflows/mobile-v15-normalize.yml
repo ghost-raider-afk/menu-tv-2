@@ -1,0 +1,48 @@
+name: mobile-v15-normalize
+
+on:
+  push:
+    branches:
+      - release/v1.5.0
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: release/v1.5.0
+      - name: Normalize mobile architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/@media(max-width:760px)/@media(max-width:960px)/' src/web/admin-ui/public/css/mobile.css
+          sed -i 's/PHONE_BREAKPOINT = 760/PHONE_BREAKPOINT = 960/' tests/mobile-ui.test.js
+          sed -i 's/@media\\(max-width:760px\\)/@media\\(max-width:960px\\)/' tests/mobile-ui.test.js
+          sed -i "s/DEVICE_ACTIVATION_TTL_MINUTES: '10'/DEVICE_ACTIVATION_TTL_MINUTES: '2'/" .github/workflows/check.yml
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/web/admin-ui/public/css/mobile.css')
+          text = path.read_text()
+          marker = '  body[data-page="connect-tv"] .connect-tv-card{border-radius:15px}\n'
+          insert = '  body[data-page="connect-tv"] .connect-tv-card.is-disabled{display:none}\n'
+          if insert not in text:
+              if marker not in text:
+                  raise SystemExit('connect-tv mobile marker not found')
+              text = text.replace(marker, insert + marker, 1)
+          path.write_text(text)
+          PY
+          git rm .github/workflows/mobile-v15-normalize.yml
+      - name: Commit normalized release branch
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m 'Normalize v1.5 mobile landscape behavior'
+          git push origin HEAD:release/v1.5.0
