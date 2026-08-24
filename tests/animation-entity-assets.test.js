@@ -76,3 +76,21 @@ test('Entity asset byte limit is controlled independently from screen background
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('Entity source image can exceed screen dimensions while staying inside the global decoded-pixel guard', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'menu-tv-entity-'));
+  try {
+    const bytes = await sharp({
+      create: { width: 720, height: 1440, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }
+    }).composite([{ input: Buffer.from('<svg width="720" height="1440"><rect x="180" y="40" width="360" height="1360" rx="120" fill="#f6c90e"/></svg>') }]).png().toBuffer();
+    const asset = await writeAnimationEntityAsset({
+      bytes,
+      config: config(root, { screenMaxWidth: 640, screenMaxHeight: 360, imageMaxPixels: 2_000_000 })
+    });
+    assert.equal(asset.width, 720);
+    assert.equal(asset.height, 1440);
+    await removeAnimationEntityAsset({ assetUrl: asset.url, config: config(root) });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
