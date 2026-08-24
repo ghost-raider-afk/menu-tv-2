@@ -18,7 +18,7 @@ function normaliseAnimationSettings(row) {
   return {
     id: value.id,
     enabled: value.enabled === true,
-    preset_id: value.preset_id || 'single-promo-focus',
+    preset_id: value.preset_id || 'cinematic-live-menu',
     profile: completeAnimationProfile(profile),
     entity: completeSceneEntity(entity),
     announcement: completeAnnouncement(announcement),

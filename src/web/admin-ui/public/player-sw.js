@@ -1,15 +1,18 @@
-const SHELL_CACHE = 'tv-menu-player-shell-v5';
-const DATA_CACHE = 'tv-menu-player-data-v5';
+const SHELL_CACHE = 'tv-menu-player-shell-v7';
+const DATA_CACHE = 'tv-menu-player-data-v7';
 const PLAYER_CONTEXT = '/api/device/player-context';
 const SHELL_ASSETS = [
   '/player.html',
   '/css/player.css',
   '/js/player/player.js',
-  '/js/player/entity-runtime.js',
   '/js/editor/renderer.js',
+  '/js/editor/renderer-model.js',
+  '/js/editor/renderer-svg.js',
   '/js/motion/entity-editor.js',
   '/js/motion/entity-behavior.js',
   '/js/motion/announcement.js',
+  '/js/motion/live-menu-motion.js',
+  '/js/motion/motion-plan.js',
   '/js/motion/dom-scene-adapter.js',
   '/js/motion/scene-graph.js',
   '/js/motion/scene-composer.js',
@@ -63,9 +66,7 @@ async function playerContext(request) {
       await cache.delete(PLAYER_CONTEXT);
       return response;
     }
-    if (response.status === 304) {
-      return (await cache.match(PLAYER_CONTEXT)) || response;
-    }
+    if (response.status === 304) return (await cache.match(PLAYER_CONTEXT)) || response;
     if (response.ok) {
       await cache.put(PLAYER_CONTEXT, response.clone());
       return response;
@@ -127,7 +128,5 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (url.pathname.startsWith('/site-assets/')) {
-    event.respondWith(assetRequest(event.request));
-  }
+  if (url.pathname.startsWith('/site-assets/')) event.respondWith(assetRequest(event.request));
 });

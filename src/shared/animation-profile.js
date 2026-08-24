@@ -1,31 +1,36 @@
-export const ANIMATION_PROFILE_VERSION = 2;
-export const ANIMATION_PATTERNS = Object.freeze(['ambient', 'wave', 'focus', 'pulse', 'spark', 'parallax']);
+export const ANIMATION_PROFILE_VERSION = 3;
+export const ANIMATION_PATTERNS = Object.freeze(['cinematic', 'ambient', 'wave', 'focus', 'pulse', 'spark', 'parallax']);
 export const ANIMATION_FLOW_DIRECTIONS = Object.freeze(['none', 'left-to-right', 'right-to-left', 'top-to-bottom', 'bottom-to-top', 'alternate']);
 export const ANIMATION_EASINGS = Object.freeze(['standard', 'smooth', 'snappy', 'cinematic', 'elastic']);
-export const SECTION_EFFECTS = Object.freeze(['none', 'glow', 'pulse', 'shimmer', 'lift', 'wave']);
-export const ITEM_EFFECTS = Object.freeze(['none', 'breathe', 'wave', 'focus', 'lift']);
-export const PROMOTION_EFFECTS = Object.freeze(['none', 'breathe', 'wave', 'focus', 'lift', 'pulse', 'glow', 'pop']);
-export const PRICE_EFFECTS = Object.freeze(['none', 'pulse', 'glow', 'wave', 'pop']);
-export const BACKGROUND_EFFECTS = Object.freeze(['none', 'drift', 'breathe', 'zoom']);
+export const SECTION_EFFECTS = Object.freeze(['none', 'glow', 'pulse', 'shimmer', 'lift', 'wave', 'cinematic']);
+export const ITEM_EFFECTS = Object.freeze(['none', 'breathe', 'wave', 'focus', 'lift', 'cinematic']);
+export const PROMOTION_EFFECTS = Object.freeze(['none', 'pulse', 'glow', 'pop', 'cinematic', 'bounce', 'sweep']);
+export const PRICE_EFFECTS = Object.freeze(['none', 'pulse', 'glow', 'wave', 'pop', 'cinematic']);
 
 export const DEFAULT_ANIMATION_PROFILE = Object.freeze({
   motion_version: ANIMATION_PROFILE_VERSION,
-  pattern: 'ambient',
-  flow_direction: 'none',
-  easing: 'smooth',
-  cycle_seconds: 11,
-  event_duration_ms: 1500,
-  wave_stagger_ms: 0,
-  travel_px: 0,
-  scale_amount: 0.045,
-  brightness_amount: 0.18,
-  section_effect: 'none',
-  item_effect: 'none',
-  promotion_effect: 'pulse',
-  price_effect: 'none',
-  background_effect: 'none',
-  background_zoom_percent: 0,
-  intensity: 45
+  pattern: 'cinematic',
+  flow_direction: 'alternate',
+  easing: 'cinematic',
+  cycle_seconds: 8.5,
+  event_duration_ms: 6900,
+  wave_stagger_ms: 180,
+  travel_px: 28,
+  scale_amount: 0.042,
+  brightness_amount: 0.26,
+  section_effect: 'cinematic',
+  item_effect: 'cinematic',
+  promotion_effect: 'cinematic',
+  price_effect: 'glow',
+  intensity: 80,
+  promotion_intensity: 96,
+  promotion_cycle_seconds: 4.8,
+  promotion_event_duration_ms: 1800,
+  promotion_travel_px: 10,
+  promotion_scale_amount: 0.18,
+  promotion_brightness_amount: 0.55,
+  promotion_glow_radius: 34,
+  promotion_easing: 'elastic'
 });
 
 function sourceObject(profile) {
@@ -63,11 +68,17 @@ function canonicalCurrent(source) {
     brightness_amount: present(source.brightness_amount, DEFAULT_ANIMATION_PROFILE.brightness_amount),
     section_effect: present(source.section_effect, DEFAULT_ANIMATION_PROFILE.section_effect),
     item_effect: present(source.item_effect, DEFAULT_ANIMATION_PROFILE.item_effect),
-    promotion_effect: present(source.promotion_effect, present(source.item_effect, DEFAULT_ANIMATION_PROFILE.promotion_effect)),
+    promotion_effect: present(source.promotion_effect, DEFAULT_ANIMATION_PROFILE.promotion_effect),
     price_effect: present(source.price_effect, DEFAULT_ANIMATION_PROFILE.price_effect),
-    background_effect: present(source.background_effect, DEFAULT_ANIMATION_PROFILE.background_effect),
-    background_zoom_percent: present(source.background_zoom_percent, DEFAULT_ANIMATION_PROFILE.background_zoom_percent),
-    intensity: present(source.intensity, DEFAULT_ANIMATION_PROFILE.intensity)
+    intensity: present(source.intensity, DEFAULT_ANIMATION_PROFILE.intensity),
+    promotion_intensity: present(source.promotion_intensity, DEFAULT_ANIMATION_PROFILE.promotion_intensity),
+    promotion_cycle_seconds: present(source.promotion_cycle_seconds, DEFAULT_ANIMATION_PROFILE.promotion_cycle_seconds),
+    promotion_event_duration_ms: present(source.promotion_event_duration_ms, DEFAULT_ANIMATION_PROFILE.promotion_event_duration_ms),
+    promotion_travel_px: present(source.promotion_travel_px, DEFAULT_ANIMATION_PROFILE.promotion_travel_px),
+    promotion_scale_amount: present(source.promotion_scale_amount, DEFAULT_ANIMATION_PROFILE.promotion_scale_amount),
+    promotion_brightness_amount: present(source.promotion_brightness_amount, DEFAULT_ANIMATION_PROFILE.promotion_brightness_amount),
+    promotion_glow_radius: present(source.promotion_glow_radius, DEFAULT_ANIMATION_PROFILE.promotion_glow_radius),
+    promotion_easing: present(source.promotion_easing, DEFAULT_ANIMATION_PROFILE.promotion_easing)
   };
 }
 
@@ -83,7 +94,7 @@ function legacyPattern(source) {
   if (['focus', 'zoom'].includes(source.entrance)) return 'focus';
   if (['slide', 'cascade', 'wipe', 'reveal', 'diagonal', 'split'].includes(source.entrance)) return 'wave';
   if (source.glow || source.shimmer) return 'spark';
-  return 'ambient';
+  return 'cinematic';
 }
 
 function legacySectionEffect(source) {
@@ -91,51 +102,77 @@ function legacySectionEffect(source) {
   if (source.glow === true || source.section_emphasis === 'glow') return 'glow';
   if (source.section_emphasis === 'pulse') return 'pulse';
   if (['slide', 'wipe'].includes(source.section_emphasis)) return 'wave';
-  return 'none';
+  return 'cinematic';
 }
 
 function legacyItemEffect(source) {
   if (['focus', 'zoom'].includes(source.entrance)) return 'focus';
   if (['slide', 'cascade', 'wipe', 'reveal', 'diagonal', 'split'].includes(source.entrance)) return 'wave';
-  return 'none';
+  return 'cinematic';
 }
 
 function legacyPriceEffect(source) {
   if (source.price_emphasis === 'pop') return 'pulse';
   if (source.price_emphasis === 'slide') return 'wave';
   if (source.price_emphasis === 'fade') return 'glow';
-  return 'none';
+  return 'glow';
+}
+
+function migrateV2(source) {
+  const intensity = clamp(number(source.intensity, DEFAULT_ANIMATION_PROFILE.intensity), 0, 100);
+  const itemEffect = oneOf(source.item_effect, ITEM_EFFECTS, source.item_effect === 'none' ? 'cinematic' : DEFAULT_ANIMATION_PROFILE.item_effect);
+  return canonicalCurrent({
+    pattern: oneOf(source.pattern, ANIMATION_PATTERNS, DEFAULT_ANIMATION_PROFILE.pattern),
+    flow_direction: oneOf(source.flow_direction, ANIMATION_FLOW_DIRECTIONS, DEFAULT_ANIMATION_PROFILE.flow_direction),
+    easing: oneOf(source.easing, ANIMATION_EASINGS, DEFAULT_ANIMATION_PROFILE.easing),
+    cycle_seconds: clamp(number(source.cycle_seconds, DEFAULT_ANIMATION_PROFILE.cycle_seconds), 4, 60),
+    event_duration_ms: clamp(number(source.event_duration_ms, DEFAULT_ANIMATION_PROFILE.event_duration_ms), 400, 10000),
+    wave_stagger_ms: clamp(number(source.wave_stagger_ms, DEFAULT_ANIMATION_PROFILE.wave_stagger_ms), 0, 1000),
+    travel_px: Math.max(18, clamp(number(source.travel_px, DEFAULT_ANIMATION_PROFILE.travel_px) * 1.65, 0, 48)),
+    scale_amount: Math.max(0.03, clamp(number(source.scale_amount, DEFAULT_ANIMATION_PROFILE.scale_amount) * 1.35, 0, 0.12)),
+    brightness_amount: Math.max(0.2, clamp(number(source.brightness_amount, DEFAULT_ANIMATION_PROFILE.brightness_amount) * 1.25, 0, 0.7)),
+    section_effect: oneOf(source.section_effect, SECTION_EFFECTS, DEFAULT_ANIMATION_PROFILE.section_effect),
+    item_effect: itemEffect,
+    promotion_effect: oneOf(source.promotion_effect, PROMOTION_EFFECTS, DEFAULT_ANIMATION_PROFILE.promotion_effect),
+    price_effect: oneOf(source.price_effect, PRICE_EFFECTS, DEFAULT_ANIMATION_PROFILE.price_effect),
+    intensity: Math.max(68, intensity),
+    promotion_intensity: Math.max(90, intensity),
+    promotion_scale_amount: Math.max(0.16, clamp(number(source.scale_amount, 0.04) * 3.5, 0.1, 0.22)),
+    promotion_brightness_amount: Math.max(0.42, clamp(number(source.brightness_amount, 0.18) * 2, 0.25, 0.7)),
+    promotion_glow_radius: Math.max(30, DEFAULT_ANIMATION_PROFILE.promotion_glow_radius)
+  });
 }
 
 function migrateLegacyProfile(source) {
   const intensity = clamp(number(source.intensity, DEFAULT_ANIMATION_PROFILE.intensity), 0, 100);
   const oldScale = number(source.scale_from, 1);
-  const itemEffect = legacyItemEffect(source);
-  return {
-    motion_version: ANIMATION_PROFILE_VERSION,
+  return canonicalCurrent({
     pattern: legacyPattern(source),
     flow_direction: legacyDirection(source.direction),
     easing: oneOf(source.easing, ANIMATION_EASINGS, DEFAULT_ANIMATION_PROFILE.easing),
-    cycle_seconds: clamp(number(source.ambient_speed_seconds, 14), 4, 60),
-    event_duration_ms: clamp(Math.round(number(source.duration_ms, 1200) * 1.35), 400, 6000),
-    wave_stagger_ms: clamp(Math.round(number(source.stagger_ms, 70) * 2), 0, 1000),
-    travel_px: clamp(Math.round(number(source.distance_px, 0) * 0.12), 0, 24),
-    scale_amount: clamp(Math.abs(1 - oldScale), 0, 0.08),
-    brightness_amount: clamp(0.08 + intensity / 500, 0, 0.5),
+    cycle_seconds: clamp(number(source.ambient_speed_seconds, 10), 4, 60),
+    event_duration_ms: clamp(Math.round(number(source.duration_ms, 1800) * 3.1), 800, 10000),
+    wave_stagger_ms: clamp(Math.round(number(source.stagger_ms, 70) * 2.4), 0, 1000),
+    travel_px: Math.max(20, clamp(Math.round(number(source.distance_px, 48) * 0.48), 0, 48)),
+    scale_amount: Math.max(0.032, clamp(Math.abs(1 - oldScale) * 1.6, 0, 0.12)),
+    brightness_amount: clamp(0.16 + intensity / 300, 0, 0.7),
     section_effect: legacySectionEffect(source),
-    item_effect: itemEffect,
-    promotion_effect: itemEffect,
+    item_effect: legacyItemEffect(source),
+    promotion_effect: 'cinematic',
     price_effect: legacyPriceEffect(source),
-    background_effect: source.background_motion === false ? 'none' : 'drift',
-    background_zoom_percent: source.background_motion === false ? 0 : 2,
-    intensity
-  };
+    intensity: Math.max(72, intensity),
+    promotion_intensity: Math.max(92, intensity),
+    promotion_scale_amount: 0.18,
+    promotion_brightness_amount: 0.5,
+    promotion_glow_radius: 34
+  });
 }
 
 export function completeAnimationProfile(profile = {}) {
   const source = sourceObject(profile);
   if (Object.keys(source).length === 0) return canonicalCurrent(DEFAULT_ANIMATION_PROFILE);
-  return Number(source.motion_version) === ANIMATION_PROFILE_VERSION
-    ? canonicalCurrent(source)
-    : migrateLegacyProfile(source);
+  const version = Number(source.motion_version);
+  if (version === ANIMATION_PROFILE_VERSION) return canonicalCurrent(source);
+  if (version === 2) return migrateV2(source);
+  return migrateLegacyProfile(source);
 }

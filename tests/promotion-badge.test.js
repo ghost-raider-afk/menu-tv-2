@@ -37,7 +37,7 @@ test('promotion badge keeps shape and label inside one SVG group', () => {
   assert.ok(contentStart > badgeEnd, 'promotion badge must be a sibling of the item motion content, not nested inside it');
 });
 
-test('Motion Engine v3 keeps promotion and row content as sibling scene nodes with independent effects', async () => {
+test('Motion Engine keeps promotion, row content and prices as sibling scene nodes with independent ownership', async () => {
   const [domAdapter, sceneGraph, motionPlan, composer, runtime, player] = await Promise.all([
     readFile(new URL('js/motion/dom-scene-adapter.js', publicRoot), 'utf8'),
     readFile(new URL('js/motion/scene-graph.js', publicRoot), 'utf8'),
@@ -47,18 +47,20 @@ test('Motion Engine v3 keeps promotion and row content as sibling scene nodes wi
     readFile(new URL('js/motion/preview-player.js', publicRoot), 'utf8')
   ]);
 
-  assert.match(domAdapter, /row\.classList\.contains\('table-packaging'\)/);
-  assert.match(domAdapter, /:scope > g\.table-item-content/);
-  assert.match(domAdapter, /:scope > g\.promotion-badge/);
+  assert.match(domAdapter, /g\.table-item-content, g\.packaging-cell-content/);
+  assert.match(domAdapter, /g\.promotion-badge/);
+  assert.match(domAdapter, /g\.table-item-prices, g\.packaging-cell-price/);
   assert.match(domAdapter, /id: `menu\.item\.\$\{index\}`/);
   assert.match(domAdapter, /id: `menu\.promotion\.\$\{index\}`/);
-  assert.match(domAdapter, /order: index,[\s\S]*count: rows\.length/);
+  assert.match(domAdapter, /id: `menu\.price\.\$\{index\}`/);
+  assert.match(domAdapter, /transformOwner: 'promotion-motion'/);
+  assert.match(domAdapter, /nestedTransforms: false/);
   assert.match(sceneGraph, /transformOwner/);
   assert.doesNotMatch(sceneGraph, /querySelector|instanceof Element/);
-  assert.match(motionPlan, /if \(kind === 'promotion'\) return profile\.promotion_effect \?\? profile\.item_effect/);
-  assert.match(motionPlan, /kind === 'promotion' && effect === 'pulse'/);
-  assert.match(motionPlan, /targetDelay\(profile, node\.order, node\.count, duration\)/);
-  assert.match(motionPlan, /claims:\s*Object\.freeze\(\['transform', 'opacity', 'appearance'\]\)/);
+  assert.match(motionPlan, /compilePromotionMotionProgram/);
+  assert.match(motionPlan, /node\.kind === 'promotion'/);
+  assert.match(motionPlan, /id: 'promotion-motion'/);
+  assert.match(motionPlan, /claims:\s*Object\.freeze\(\['transform', 'appearance'\]\)/);
   assert.match(composer, /Scene ownership conflict/);
   assert.match(runtime, /composeScenePrograms/);
   assert.match(player, /buildDomMotionScene\(this\.stage\)/);

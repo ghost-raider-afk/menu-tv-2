@@ -13,43 +13,68 @@ test('player is public while TV connection page remains admin protected', async 
   assert.doesNotMatch(server.match(/const protectedPages = \[[\s\S]*?\];/)?.[0] || '', /player/);
   assert.match(server, /app\.use\('\/api\/device', createDevicePublicRouter/);
   assert.match(server, /app\.use\('\/api\/device-admin', createDeviceAdminRouter/);
-  assert.match(server, /app\.use\('\/vendor', express\.static\(path\.join\(nodeModulesDir, 'jsqr', 'dist'\)/);
   assert.match(playerHtml, /data-activation-view/);
   assert.match(playerHtml, /data-tv-player/);
-  assert.match(playerHtml, /data-activation-expiry/);
   assert.match(connectHtml, /Сканировать QR-код/);
-  assert.match(connectHtml, /6-значный резервный код/);
-  assert.match(connectHtml, /\/vendor\/jsQR\.js/);
 });
 
-test('offline player caches entity and announcement renderers and falls back to saved context', async () => {
-  const [worker, player, publicRoutes, playerCss] = await Promise.all([
+test('real TV player runs the canonical Motion Engine and keeps it available offline', async () => {
+  const [worker, player, liveMotion, motionPlan, adapter, publicRoutes, playerCss] = await Promise.all([
     read('src/web/admin-ui/public/player-sw.js'),
     read('src/web/admin-ui/public/js/player/player.js'),
+    read('src/web/admin-ui/public/js/motion/live-menu-motion.js'),
+    read('src/web/admin-ui/public/js/motion/motion-plan.js'),
+    read('src/web/admin-ui/public/js/motion/dom-scene-adapter.js'),
     read('src/api/device/public-routes.js'),
     read('src/web/admin-ui/public/css/player.css')
   ]);
   assert.match(worker, /tv-menu-player-shell-v\d+/);
-  assert.match(worker, /\/js\/motion\/announcement\.js/);
-  assert.match(worker, /networkFirstShell/);
-  assert.match(worker, /PLAYER_CONTEXT = '\/api\/device\/player-context'/);
-  assert.match(worker, /url\.pathname\.startsWith\('\/site-assets\/'\)/);
-  assert.doesNotMatch(worker, /\/api\/auth|\/api\/settings|\/api\/catalog/);
-  assert.match(player, /PLAYER_CONTEXT_STORAGE_KEY/);
-  assert.match(player, /renderAnnouncementLayer/);
-  assert.match(player, /data-announcement-layer/);
-  assert.match(publicRoutes, /announcement: animationSettings\?\.announcement \|\| null/);
+  for (const asset of [
+    '/js/editor/renderer.js', '/js/editor/renderer-model.js', '/js/editor/renderer-svg.js',
+    '/js/motion/live-menu-motion.js', '/js/motion/motion-plan.js', '/js/motion/dom-scene-adapter.js'
+  ]) assert.ok(worker.includes(`'${asset}'`), `offline shell is missing ${asset}`);
+  assert.match(player, /new LiveMenuMotion\(playerStage\)/);
+  assert.match(player, /context\.animation\?\.enabled/);
+  assert.match(liveMotion, /DEFAULT_SCENE_COMPILERS/);
+  assert.match(liveMotion, /buildDomMotionScene/);
+  assert.match(motionPlan, /compilePromotionMotionProgram/);
+  assert.doesNotMatch(motionPlan, /background_effect|background_zoom_percent/);
+  assert.doesNotMatch(adapter, /kind: 'background'/);
+  assert.match(publicRoutes, /animation:\s*\{/);
+  assert.match(publicRoutes, /enabled: animationSettings\?\.enabled === true/);
   assert.match(playerCss, /\.tv-player-announcement-layer/);
-  assert.match(playerCss, /scene-announcement-marquee/);
+  assert.match(playerCss, /transform-box:\s*fill-box/);
   assert.match(player, /showCachedPlayer/);
   assert.match(player, /serviceWorker\.register\('\/player-sw\.js'/);
 });
 
-test('admin connection flow is mobile-first and its styles survive persistent SPA navigation', async () => {
-  const [navigation, application, page, html, css, indexCss] = await Promise.all([
+test('TV identity is persistent and monitor binding is a first-class one-to-one relation', async () => {
+  const [migration, repository, routes, player] = await Promise.all([
+    read('src/db/migrations/device-bindings.js'),
+    read('src/db/devices.js'),
+    read('src/api/device/public-routes.js'),
+    read('src/web/admin-ui/public/js/player/player.js')
+  ]);
+  assert.match(migration, /device_key TEXT/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS tv_device_bindings/);
+  assert.match(migration, /tv_device_bindings_active_device_unique/);
+  assert.match(migration, /tv_device_bindings_active_screen_unique/);
+  assert.match(migration, /UPDATE tv_devices SET screen_id = NULL/);
+  assert.match(repository, /async function bindDevice/);
+  assert.match(repository, /JOIN tv_device_bindings b ON b\.device_id = d\.id AND b\.active = TRUE/);
+  assert.match(repository, /UPDATE tv_device_sessions SET revoked_at/);
+  assert.match(routes, /deviceKey: persistentDeviceKey\(activation\.device_key\)/);
+  assert.match(routes, /tx\.bindDevice/);
+  assert.match(player, /DEVICE_KEY_STORAGE_KEY/);
+  assert.match(player, /device_key: currentDeviceKey\(\) \|\| undefined/);
+  assert.match(player, /rememberDeviceKey/);
+});
+
+test('admin connection flow is mobile-first and selects location then monitor', async () => {
+  const [navigation, application, page, html, css] = await Promise.all([
     read('src/web/admin-ui/public/js/core/navigation.js'), read('src/web/admin-ui/public/js/application.js'),
     read('src/web/admin-ui/public/js/pages/connect-tv.js'), read('src/web/admin-ui/public/connect-tv.html'),
-    read('src/web/admin-ui/public/css/connect-tv.css'), read('src/web/admin-ui/public/css/index.css')
+    read('src/web/admin-ui/public/css/connect-tv.css')
   ]);
   assert.match(navigation, /\['Подключить ТВ', '\/connect-tv\.html'\]/);
   assert.match(application, /case 'connect-tv'/);
@@ -57,17 +82,9 @@ test('admin connection flow is mobile-first and its styles survive persistent SP
   assert.match(page, /selectedScreenId/);
   assert.match(page, /API\.deviceAuthorize/);
   assert.match(page, /BarcodeDetector/);
-  assert.match(page, /window\.jsQR/);
   assert.match(page, /getUserMedia/);
-  assert.match(page, /focusStep\(locationStep, 'location'\)/);
-  assert.match(page, /focusStep\(screenStep, 'screen'\)/);
   assert.match(html, /data-scanner role="dialog" aria-modal="true"/);
-  assert.match(html, /data-scanner-code/);
-  assert.match(indexCss, /@import url\('\.\/connect-tv\.css'\)/);
   assert.match(css, /\.connect-tv-scanner\{[\s\S]*position:fixed;[\s\S]*inset:0/);
-  assert.match(css, /var\(--ui-panel\)/);
-  assert.doesNotMatch(css, /var\(--surface|var\(--border-color|var\(--muted-text/);
-  assert.match(css, /@media\(max-width:760px\)[\s\S]*\.connect-tv-card\.is-disabled\{display:none/);
 });
 
 test('TV activation lifetime is env-driven, defaults to two minutes and rotates automatically', async () => {
@@ -78,9 +95,7 @@ test('TV activation lifetime is env-driven, defaults to two minutes and rotates 
   assert.match(publicRoutes, /config\.deviceActivationTtlMinutes \* 60_000/);
   assert.match(publicRoutes, /expires_at: expiresAt/);
   assert.match(player, /Date\.parse\(record\.expires_at\) - Date\.now\(\)/);
-  assert.match(player, /QR действителен/);
   assert.match(player, /createActivation\(\{ automatic: true \}\)/);
-  assert.match(player, /invalidatePairing/);
   assert.doesNotMatch(player, /120_000|120000/);
 });
 

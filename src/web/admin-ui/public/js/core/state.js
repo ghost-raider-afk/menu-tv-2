@@ -5,6 +5,7 @@ export const state = {
   notificationTimer: null,
   locations: [],
   screens: [],
+  deviceBindings: [],
   products: [],
   packaging: [],
   sftpDirectories: [],

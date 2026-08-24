@@ -39,6 +39,7 @@ export function createDeviceAdminRouter({ store }) {
     const id = activationId(request.body?.activation_id);
     if (!id) return response.status(400).json({ error: 'Некорректная заявка подключения.' });
     const screenId = positiveId(request.body?.screen_id, 'screen_id');
+    const replaceExisting = request.body?.replace_existing === true;
 
     const result = await store.transaction(async (tx) => {
       const activation = await tx.getDeviceActivation(id, { lock: true });
@@ -47,26 +48,41 @@ export function createDeviceAdminRouter({ store }) {
       if (activation.status === 'consumed') throw conflict('Этот код уже использован для подключения телевизора.');
       if (activation.status === 'approved') {
         if (activation.approved_screen_id !== screenId) throw conflict('Этот код уже подтверждён для другого монитора.');
-        return { activation, screen: await tx.getScreen(screenId) };
+        return { activation, screen: await tx.getScreen(screenId), replacesExisting: false };
       }
 
       const screen = await tx.getScreen(screenId);
       if (!screen || screen.active === false) throw notFound('Активный монитор не найден.');
+
+      const binding = await tx.getActiveDeviceBindingByScreen(screenId, { lock: true });
+      const samePhysicalTv = binding && activation.device_key && binding.device_key === activation.device_key;
+      if (binding && !samePhysicalTv && !replaceExisting) {
+        throw conflict('К этому монитору уже подключён другой ТВ.', {
+          reason: 'screen_already_bound',
+          screen_id: screenId,
+          screen_name: screen.name,
+          current_tv_last_seen_at: binding.session_last_seen_at || binding.device_last_seen_at || null
+        });
+      }
+
       const approved = await tx.approveDeviceActivation(id, screenId, request.session.sub);
       if (!approved) throw conflict('Код подключения уже изменился или истёк.');
-      return { activation: approved, screen };
+      return { activation: approved, screen, replacesExisting: Boolean(binding && !samePhysicalTv) };
     });
 
     if (!result.screen) throw notFound('Монитор не найден.');
     await activity(store, request, {
-      action: 'device.authorized',
+      action: result.replacesExisting ? 'device.reassigned' : 'device.authorized',
       entity_type: 'screen',
       entity_id: result.screen.id,
-      message: `Разрешено подключение телевизора к монитору «${result.screen.name}».`
+      message: result.replacesExisting
+        ? `Подтверждена замена ТВ у монитора «${result.screen.name}».`
+        : `Разрешено подключение телевизора к монитору «${result.screen.name}».`
     });
     return response.json({
       status: 'approved',
       activation_id: result.activation.id,
+      replaces_existing: result.replacesExisting,
       screen: {
         id: result.screen.id,
         name: result.screen.name,

@@ -4,7 +4,6 @@ import {
   ANIMATION_FLOW_DIRECTIONS,
   ANIMATION_PATTERNS,
   ANIMATION_PROFILE_VERSION,
-  BACKGROUND_EFFECTS,
   DEFAULT_ANIMATION_PROFILE,
   ITEM_EFFECTS,
   PRICE_EFFECTS,
@@ -34,21 +33,27 @@ export function animationProfileInput(source) {
   return {
     motion_version: ANIMATION_PROFILE_VERSION,
     pattern: enumValue(profile.pattern, 'Характер движения', ANIMATION_PATTERNS),
-    flow_direction: enumValue(profile.flow_direction, 'Направление волны', ANIMATION_FLOW_DIRECTIONS),
-    easing: enumValue(profile.easing, 'Easing', ANIMATION_EASINGS),
-    cycle_seconds: numberValue(profile.cycle_seconds, 'Период цикла', { min: 4, max: 60 }),
-    event_duration_ms: numberValue(profile.event_duration_ms, 'Длительность события', { min: 400, max: 6000, integer: true }),
-    wave_stagger_ms: numberValue(profile.wave_stagger_ms, 'Шаг волны', { min: 0, max: 1000, integer: true }),
-    travel_px: numberValue(profile.travel_px, 'Амплитуда перемещения', { min: 0, max: 24 }),
-    scale_amount: numberValue(profile.scale_amount, 'Амплитуда масштаба', { min: 0, max: 0.08 }),
-    brightness_amount: numberValue(profile.brightness_amount, 'Амплитуда яркости', { min: 0, max: 0.5 }),
+    flow_direction: enumValue(profile.flow_direction, 'Направление движения', ANIMATION_FLOW_DIRECTIONS),
+    easing: enumValue(profile.easing, 'Пластика движения', ANIMATION_EASINGS),
+    cycle_seconds: numberValue(profile.cycle_seconds, 'Период движения', { min: 4, max: 60 }),
+    event_duration_ms: numberValue(profile.event_duration_ms, 'Длительность пластики', { min: 400, max: 10000, integer: true }),
+    wave_stagger_ms: numberValue(profile.wave_stagger_ms, 'Фаза между элементами', { min: 0, max: 1000, integer: true }),
+    travel_px: numberValue(profile.travel_px, 'Амплитуда перемещения', { min: 0, max: 48 }),
+    scale_amount: numberValue(profile.scale_amount, 'Амплитуда масштаба', { min: 0, max: 0.12 }),
+    brightness_amount: numberValue(profile.brightness_amount, 'Световой акцент', { min: 0, max: 0.7 }),
     section_effect: enumValue(profile.section_effect, 'Эффект разделов', SECTION_EFFECTS),
     item_effect: enumValue(profile.item_effect, 'Эффект строк', ITEM_EFFECTS),
-    promotion_effect: enumValue(profile.promotion_effect, 'Эффект плашки «Акция»', PROMOTION_EFFECTS),
     price_effect: enumValue(profile.price_effect, 'Эффект цен', PRICE_EFFECTS),
-    background_effect: enumValue(profile.background_effect, 'Эффект фона', BACKGROUND_EFFECTS),
-    background_zoom_percent: numberValue(profile.background_zoom_percent, 'Глубина фона', { min: 0, max: 8 }),
-    intensity: numberValue(profile.intensity, 'Интенсивность', { min: 0, max: 100, integer: true })
+    intensity: numberValue(profile.intensity, 'Интенсивность меню', { min: 0, max: 100, integer: true }),
+    promotion_effect: enumValue(profile.promotion_effect, 'Эффект плашки «Акция»', PROMOTION_EFFECTS),
+    promotion_intensity: numberValue(profile.promotion_intensity, 'Интенсивность акции', { min: 0, max: 100, integer: true }),
+    promotion_cycle_seconds: numberValue(profile.promotion_cycle_seconds, 'Период акции', { min: 2, max: 30 }),
+    promotion_event_duration_ms: numberValue(profile.promotion_event_duration_ms, 'Длительность акцента акции', { min: 300, max: 6000, integer: true }),
+    promotion_travel_px: numberValue(profile.promotion_travel_px, 'Перемещение акции', { min: 0, max: 40 }),
+    promotion_scale_amount: numberValue(profile.promotion_scale_amount, 'Масштаб акции', { min: 0, max: 0.25 }),
+    promotion_brightness_amount: numberValue(profile.promotion_brightness_amount, 'Яркость акции', { min: 0, max: 0.8 }),
+    promotion_glow_radius: numberValue(profile.promotion_glow_radius, 'Свечение акции', { min: 0, max: 48 }),
+    promotion_easing: enumValue(profile.promotion_easing, 'Пластика акции', ANIMATION_EASINGS)
   };
 }
 
@@ -56,7 +61,7 @@ export function animationSettingsInput(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new ValidationError('Настройки анимации должны быть объектом.');
   const enabled = body.enabled ?? false;
   if (typeof enabled !== 'boolean') throw new ValidationError('Поле «enabled» должно быть логическим значением.');
-  const presetId = typeof body.preset_id === 'string' ? body.preset_id.trim() : 'single-promo-focus';
+  const presetId = typeof body.preset_id === 'string' ? body.preset_id.trim() : 'cinematic-live-menu';
   if (!/^[a-z0-9-]{1,64}$/.test(presetId)) throw new ValidationError('Идентификатор профиля указан неверно.');
   return {
     enabled,
