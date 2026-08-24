@@ -89,8 +89,8 @@ function updateIntensityOutput() {
 function restartPreview() {
   cancelAnimationFrame(previewFrame);
   previewFrame = requestAnimationFrame(() => {
-    player?.restart(collectProfile());
     entityEditor?.render();
+    player?.restart(collectProfile(), currentEntity);
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) player?.pause();
   });
 }
@@ -174,6 +174,7 @@ function applyEntity(entity) {
   currentEntity = normaliseSceneEntity(entity);
   syncEntityControls(currentEntity);
   entityEditor?.setEntity(currentEntity);
+  restartPreview();
 }
 
 function patchEntity(patch) {
@@ -184,6 +185,7 @@ function patchEntity(patch) {
   });
   syncEntityControls(currentEntity);
   entityEditor?.setEntity(currentEntity);
+  restartPreview();
 }
 
 async function uploadEntityAsset(file) {
@@ -367,6 +369,9 @@ export function initialiseAnimationStudio() {
     onChange(entity) {
       currentEntity = entity;
       syncEntityControls(entity);
+    },
+    onCommit() {
+      restartPreview();
     }
   });
   renderPresets();
