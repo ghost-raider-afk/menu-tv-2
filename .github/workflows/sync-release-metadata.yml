@@ -1,0 +1,30 @@
+name: sync-release-metadata
+
+on:
+  push:
+    branches:
+      - agent/promo-motion-packaging-visual
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Synchronize package and lock versions
+        run: npm version 1.3.4 --no-git-tag-version --allow-same-version
+      - name: Remove one-shot workflow and commit lock metadata
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/sync-release-metadata.yml
+          git add package.json package-lock.json
+          git commit -m 'Synchronize release metadata for 1.3.4'
+          git push origin HEAD:agent/promo-motion-packaging-visual
