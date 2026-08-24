@@ -1,10 +1,13 @@
 import { test, expect } from '@playwright/test';
 
 const PROMO_PROFILE = {
-  motion_version: 2, pattern: 'ambient', flow_direction: 'none', easing: 'smooth', cycle_seconds: 11,
-  event_duration_ms: 1500, wave_stagger_ms: 0, travel_px: 0, scale_amount: 0.045,
-  brightness_amount: 0.18, section_effect: 'none', item_effect: 'none', promotion_effect: 'pulse',
-  price_effect: 'none', background_effect: 'none', background_zoom_percent: 0, intensity: 45
+  motion_version: 3,
+  pattern: 'cinematic', flow_direction: 'alternate', easing: 'cinematic', cycle_seconds: 8,
+  event_duration_ms: 6500, wave_stagger_ms: 160, travel_px: 24, scale_amount: 0.04,
+  brightness_amount: 0.24, section_effect: 'cinematic', item_effect: 'none', price_effect: 'none', intensity: 80,
+  promotion_effect: 'cinematic', promotion_intensity: 100, promotion_cycle_seconds: 4.5,
+  promotion_event_duration_ms: 1800, promotion_travel_px: 10, promotion_scale_amount: 0.18,
+  promotion_brightness_amount: 0.55, promotion_glow_radius: 34, promotion_easing: 'elastic'
 };
 
 async function login(page) {
@@ -50,14 +53,8 @@ async function createPreviewFixture(page) {
       method: 'POST',
       body: JSON.stringify({
         name: `Animation product ${suffix}`,
-        producer: '',
-        characteristics: '',
-        strength: '',
-        price_primary: '240',
-        alcoholic: false,
-        beverage_color: 'none',
-        filtration: 'none',
-        active: true
+        producer: '', characteristics: '', strength: '', price_primary: '240',
+        alcoholic: false, beverage_color: 'none', filtration: 'none', active: true
       })
     });
     const location = await request('/api/locations', { method: 'POST', body: JSON.stringify({ name: `Animation ${suffix}`, address: '', active: true }) });
@@ -86,14 +83,15 @@ async function removePreviewFixture(page, fixture) {
   }, fixture);
 }
 
-test('animation studio uses one promotion-focused profile and contained live preview', async ({ page }) => {
+test('animation studio exposes one cinematic live profile, independent promo channel and static background', async ({ page }) => {
   await login(page);
   const fixture = await createPreviewFixture(page);
   const original = await animationSettings(page);
   try {
     await page.goto(`/animation.html?screen=${fixture.screenId}`);
-    await expect(page.getByRole('heading', { name: 'Анимация' })).toBeVisible();
-    await expect(page.getByText('Плашка «Акция»')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Живое меню' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '«Акция»' })).toBeVisible();
+    await expect(page.getByText('ФОН · STATIC')).toBeVisible();
     await expect(page.locator('[data-animation-preset]')).toHaveCount(0);
     await expect(page.locator('#animation-presets')).toHaveCount(0);
     await expect(page.locator('#animation-stage')).toHaveAttribute('data-screen-id', String(fixture.screenId));
@@ -101,10 +99,14 @@ test('animation studio uses one promotion-focused profile and contained live pre
     await expect(page.locator('#animation-stage .animation-screen-background')).toHaveCSS('inset', '0px');
     await expect(page.locator('#animation-stage')).toHaveCSS('overflow', 'hidden');
 
-    await page.locator('#animation-intensity').fill('62');
-    await expect(page.locator('#animation-intensity-output')).toHaveText('62%');
+    if (!(await page.locator('#animation-enabled').isChecked())) await page.locator('#animation-enabled').check();
+    await page.locator('#animation-item-effect').selectOption('cinematic');
+    await page.locator('#animation-promotion-effect').selectOption('cinematic');
+    await page.locator('#animation-intensity').fill('82');
+    await expect(page.locator('#animation-intensity-output')).toHaveText('82%');
+    await expect.poll(() => page.evaluate(() => document.querySelector('#animation-stage g.table-item-content')?.getAnimations().length || 0)).toBeGreaterThan(0);
     await expect.poll(() => page.evaluate(() => document.querySelector('#animation-stage g.promotion-badge')?.getAnimations().length || 0)).toBeGreaterThan(0);
-    expect(await page.evaluate(() => document.querySelector('#animation-stage g.table-item-content')?.getAnimations().length || 0)).toBe(0);
+    expect(await page.evaluate(() => document.querySelector('#animation-stage .animation-screen-background')?.getAnimations().length || 0)).toBe(0);
 
     await page.locator('#animation-announcement-enabled').check();
     await page.locator('#animation-announcement-text').fill('Сегодня специальное предложение до 22:00');
@@ -112,17 +114,17 @@ test('animation studio uses one promotion-focused profile and contained live pre
     await expect(page.locator('#animation-stage .scene-announcement-text')).toHaveText('Сегодня специальное предложение до 22:00');
     await expect(page.locator('#animation-stage .animation-screen-announcement-layer')).toHaveClass(/is-enabled/);
 
-    await page.locator('#animation-enabled').check();
     const responsePromise = page.waitForResponse((response) => response.url().endsWith('/api/settings/animation') && response.request().method() === 'PUT');
     await page.locator('#animation-save').click();
     expect((await responsePromise).ok()).toBeTruthy();
-    await expect(page.locator('#animation-message')).toContainText('Настройки анимации сохранены');
+    await expect(page.locator('#animation-message')).toContainText('Настройки живого меню сохранены');
 
     const saved = await animationSettings(page);
-    expect(saved.preset_id).toBe('single-promo-focus');
-    expect(saved.profile.item_effect).toBe('none');
-    expect(saved.profile.promotion_effect).toBe('pulse');
-    expect(saved.profile.intensity).toBe(62);
+    expect(saved.preset_id).toBe('cinematic-live-menu');
+    expect(saved.profile.motion_version).toBe(3);
+    expect(saved.profile.item_effect).toBe('cinematic');
+    expect(saved.profile.promotion_effect).toBe('cinematic');
+    expect(saved.profile.intensity).toBe(82);
     expect(saved.announcement.enabled).toBe(true);
     expect(saved.announcement.text).toContain('специальное предложение');
   } finally {
@@ -167,7 +169,7 @@ test('promotion badge scales as one isolated SVG motion group', async ({ page })
       badgeTransform: badge ? getComputedStyle(badge).transform : 'none'
     };
     player.destroy(); stage.remove(); return snapshot;
-  }, { ...PROMO_PROFILE, intensity: 100 });
+  }, PROMO_PROFILE);
   expect(result.contentMotion).toBe('item');
   expect(result.badgeMotion).toBe('promotion');
   expect(result.contentAnimations).toBe(0);
