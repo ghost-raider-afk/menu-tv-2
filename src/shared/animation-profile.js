@@ -4,26 +4,28 @@ export const ANIMATION_FLOW_DIRECTIONS = Object.freeze(['none', 'left-to-right',
 export const ANIMATION_EASINGS = Object.freeze(['standard', 'smooth', 'snappy', 'cinematic', 'elastic']);
 export const SECTION_EFFECTS = Object.freeze(['none', 'glow', 'pulse', 'shimmer', 'lift', 'wave']);
 export const ITEM_EFFECTS = Object.freeze(['none', 'breathe', 'wave', 'focus', 'lift']);
+export const PROMOTION_EFFECTS = Object.freeze(['none', 'breathe', 'wave', 'focus', 'lift', 'pulse', 'glow', 'pop']);
 export const PRICE_EFFECTS = Object.freeze(['none', 'pulse', 'glow', 'wave', 'pop']);
 export const BACKGROUND_EFFECTS = Object.freeze(['none', 'drift', 'breathe', 'zoom']);
 
 export const DEFAULT_ANIMATION_PROFILE = Object.freeze({
   motion_version: ANIMATION_PROFILE_VERSION,
-  pattern: 'wave',
-  flow_direction: 'top-to-bottom',
+  pattern: 'ambient',
+  flow_direction: 'none',
   easing: 'smooth',
-  cycle_seconds: 13,
-  event_duration_ms: 1800,
-  wave_stagger_ms: 250,
-  travel_px: 4,
-  scale_amount: 0.01,
-  brightness_amount: 0.12,
-  section_effect: 'glow',
-  item_effect: 'focus',
-  price_effect: 'glow',
-  background_effect: 'drift',
-  background_zoom_percent: 2,
-  intensity: 42
+  cycle_seconds: 11,
+  event_duration_ms: 1500,
+  wave_stagger_ms: 0,
+  travel_px: 0,
+  scale_amount: 0.045,
+  brightness_amount: 0.18,
+  section_effect: 'none',
+  item_effect: 'none',
+  promotion_effect: 'pulse',
+  price_effect: 'none',
+  background_effect: 'none',
+  background_zoom_percent: 0,
+  intensity: 45
 });
 
 function sourceObject(profile) {
@@ -61,6 +63,7 @@ function canonicalCurrent(source) {
     brightness_amount: present(source.brightness_amount, DEFAULT_ANIMATION_PROFILE.brightness_amount),
     section_effect: present(source.section_effect, DEFAULT_ANIMATION_PROFILE.section_effect),
     item_effect: present(source.item_effect, DEFAULT_ANIMATION_PROFILE.item_effect),
+    promotion_effect: present(source.promotion_effect, present(source.item_effect, DEFAULT_ANIMATION_PROFILE.promotion_effect)),
     price_effect: present(source.price_effect, DEFAULT_ANIMATION_PROFILE.price_effect),
     background_effect: present(source.background_effect, DEFAULT_ANIMATION_PROFILE.background_effect),
     background_zoom_percent: present(source.background_zoom_percent, DEFAULT_ANIMATION_PROFILE.background_zoom_percent),
@@ -107,6 +110,7 @@ function legacyPriceEffect(source) {
 function migrateLegacyProfile(source) {
   const intensity = clamp(number(source.intensity, DEFAULT_ANIMATION_PROFILE.intensity), 0, 100);
   const oldScale = number(source.scale_from, 1);
+  const itemEffect = legacyItemEffect(source);
   return {
     motion_version: ANIMATION_PROFILE_VERSION,
     pattern: legacyPattern(source),
@@ -119,7 +123,8 @@ function migrateLegacyProfile(source) {
     scale_amount: clamp(Math.abs(1 - oldScale), 0, 0.08),
     brightness_amount: clamp(0.08 + intensity / 500, 0, 0.5),
     section_effect: legacySectionEffect(source),
-    item_effect: legacyItemEffect(source),
+    item_effect: itemEffect,
+    promotion_effect: itemEffect,
     price_effect: legacyPriceEffect(source),
     background_effect: source.background_motion === false ? 'none' : 'drift',
     background_zoom_percent: source.background_motion === false ? 0 : 2,
