@@ -5,6 +5,7 @@ import {
   buildTableSvg
 } from '../editor/renderer.js';
 import { renderSceneEntity } from '../motion/entity-editor.js';
+import { renderAnnouncementLayer } from '../motion/announcement.js';
 
 const ACTIVATION_STORAGE_KEY = 'tv-menu.device-activation';
 const PLAYER_CONTEXT_STORAGE_KEY = 'tv-menu.player-context.v1';
@@ -257,11 +258,13 @@ function renderPlayerContext(context) {
   const layout = buildRenderLayout(model, lines);
   playerStage.innerHTML = `
     <div class="tv-player-menu-layer">${buildTableSvg(model, lines, layout)}</div>
-    <div class="tv-player-entity-layer" data-motion-entity-layer aria-hidden="true"></div>`;
+    <div class="tv-player-entity-layer" data-motion-entity-layer aria-hidden="true"></div>
+    <div class="tv-player-announcement-layer" data-announcement-layer aria-label="Объявление"></div>`;
   playerStage.style.backgroundColor = model.settings.background_color || '#101828';
   const background = sameOriginAsset(model.settings.background_image_url);
   playerStage.style.backgroundImage = background ? `url(${JSON.stringify(background)})` : 'none';
   renderSceneEntity(playerStage, context.entity, { editable: false });
+  renderAnnouncementLayer(playerStage.querySelector('[data-announcement-layer]'), context.announcement);
   playerRefreshMs = Math.max(2000, Number(context.refresh_interval_ms) || 5000);
 }
 

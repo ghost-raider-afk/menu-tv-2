@@ -9,7 +9,8 @@ function clamp(value, minimum, maximum) {
 
 function effectFor(profile, kind) {
   if (kind === 'section') return profile.section_effect;
-  if (kind === 'item' || kind === 'promotion') return profile.item_effect;
+  if (kind === 'item') return profile.item_effect;
+  if (kind === 'promotion') return profile.promotion_effect ?? profile.item_effect;
   if (kind === 'price') return profile.price_effect;
   if (kind === 'background') return profile.background_effect;
   return null;
@@ -67,7 +68,7 @@ function peakFrame(profile, kind, effect, index, offset) {
   if (effect === 'pulse') state.scale = 1 + scaleAmount * (kind === 'price' ? 1.5 : 1);
   if (effect === 'pop') state.scale = 1 + scaleAmount * 1.8;
   if (effect === 'shimmer') Object.assign(state, { x: vector.x * 0.25, y: vector.y * 0.25, scale: 1 + scaleAmount * 0.25 });
-  if (effect === 'glow' || effect === 'shimmer') {
+  if (effect === 'glow' || effect === 'shimmer' || (kind === 'promotion' && effect === 'pulse')) {
     state.glowRadius = 4 + 18 * gain;
     state.glowColor = GOLD_SHADOW;
   }
@@ -97,7 +98,7 @@ function backgroundFrames(profile) {
   const intensity = clamp(Number(profile.intensity) || 0, 0, 100) / 100;
   const travel = (Number(profile.travel_px) || 0) * intensity;
   const depth = (Number(profile.background_zoom_percent) || 0) / 100;
-  const baseScale = 1.035 + depth * 0.35;
+  const baseScale = 1;
   const peakScale = baseScale + depth * Math.max(0.2, intensity);
   if (profile.background_effect === 'breathe' || profile.background_effect === 'zoom') {
     return [
@@ -142,11 +143,10 @@ function menuTrackFor(node, profile, duration) {
       timing: timing(duration, 0, profile.easing || 'smooth')
     });
   }
-  const frameKind = node.kind === 'promotion' ? 'item' : node.kind;
   return Object.freeze({
     node,
     claims: Object.freeze(['transform', 'opacity', 'appearance']),
-    keyframes: Object.freeze(elementFrames(profile, frameKind, effect, node.order)),
+    keyframes: Object.freeze(elementFrames(profile, node.kind, effect, node.order)),
     timing: timing(duration, targetDelay(profile, node.order, node.count, duration), profile.easing || 'smooth')
   });
 }

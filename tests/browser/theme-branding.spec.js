@@ -33,7 +33,7 @@ test('site name updates the persistent application shell immediately after save'
   await page.locator('#site-settings-submit').click();
   await expect(page.locator('#site-settings-message')).toContainText('сохранены');
   await expect(page.locator('.app-header [data-app-name]')).toHaveText(changed);
-  await expect(page).toHaveTitle(changed);
+  await expect(page).toHaveTitle(`${changed} — Настройки сайта`);
 
   const sentinel = `branding-${Math.random()}`;
   await page.evaluate((value) => { window.__brandingSentinel = value; }, sentinel);
@@ -41,6 +41,7 @@ test('site name updates the persistent application shell immediately after save'
   await expect(page).toHaveURL(/\/screens\.html$/);
   await waitForRouteReady(page);
   await expect(page.locator('.app-header [data-app-name]')).toHaveText(changed);
+  await expect(page).toHaveTitle(`${changed} — Мониторы`);
   expect(await page.evaluate(() => window.__brandingSentinel)).toBe(sentinel);
 
   await page.locator('.ui-rail-button[aria-label="Настройки"]').click();
@@ -51,6 +52,7 @@ test('site name updates the persistent application shell immediately after save'
   await page.locator('#site-settings-submit').click();
   await expect(page.locator('#site-settings-message')).toContainText('сохранены');
   await expect(page.locator('.app-header [data-app-name]')).toHaveText(original);
+  await expect(page).toHaveTitle(`${original} — Настройки сайта`);
 });
 
 test('light theme uses light semantic chrome and editor surfaces', async ({ page }) => {

@@ -3,20 +3,16 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const publicRoot = new URL('../src/web/admin-ui/public/', import.meta.url);
+const read = (path) => readFile(new URL(path, publicRoot), 'utf8');
 
-async function read(path) {
-  return readFile(new URL(path, publicRoot), 'utf8');
-}
-
-test('catalog keeps one product submenu entry while context links auto-collapse after selection', async () => {
-  const [shell, navigation] = await Promise.all([
-    read('js/components/shell.js'),
-    read('js/core/navigation.js')
-  ]);
-
+test('context submenu uses one section-independent collapse policy', async () => {
+  const [shell, navigation] = await Promise.all([read('js/components/shell.js'), read('js/core/navigation.js')]);
   assert.match(navigation, /catalog:\s*Object\.freeze\(\[\['Продукция', '\/catalog\.html'\]\]\)/);
   assert.doesNotMatch(navigation, /\['Тара',|#packaging-list|#products-list/);
   assert.match(shell, /context\.addEventListener\('click'/);
-  assert.match(shell, /closest\('\.app-route-link'\)/);
-  assert.match(shell, /if \(routeLink && context\.contains\(routeLink\)\) setCollapsed\(shell, context, true\)/);
+  assert.match(shell, /context\.addEventListener\('pointerleave'/);
+  assert.doesNotMatch(shell, /uiSection === 'monitors'/);
+  assert.match(shell, /setCollapsed\(shell, context, true\);/);
+  assert.match(shell, /persist = false/);
+  assert.match(shell, /responsiveCollapsed\(\) \? true : savedCollapsedState\(\)/);
 });
