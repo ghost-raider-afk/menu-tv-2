@@ -8,6 +8,8 @@ const EASING = Object.freeze({
   linear: 'linear'
 });
 
+const ALL_CLAIMS = Object.freeze(['transform', 'opacity', 'appearance']);
+
 function number(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -46,13 +48,13 @@ function filterCss(appearance = {}) {
     : `brightness(${brightness.toFixed(3)})`;
 }
 
-export function toWaapiKeyframe(state) {
-  return {
-    offset: state.offset,
-    opacity: state.opacity,
-    transform: transformCss(state.transform),
-    filter: filterCss(state.appearance)
-  };
+export function toWaapiKeyframe(state, claims = ALL_CLAIMS) {
+  const owned = new Set(claims);
+  const keyframe = { offset: state.offset };
+  if (owned.has('opacity')) keyframe.opacity = state.opacity;
+  if (owned.has('transform')) keyframe.transform = transformCss(state.transform);
+  if (owned.has('appearance')) keyframe.filter = filterCss(state.appearance);
+  return keyframe;
 }
 
 export function toWaapiTiming(timing = {}) {
@@ -80,7 +82,10 @@ export class WaapiMotionDriver {
 
   createTrack(track) {
     if (!(track?.node?.target instanceof Element)) throw new TypeError('WAAPI track requires a DOM target.');
-    return track.node.target.animate(track.keyframes.map(toWaapiKeyframe), toWaapiTiming(track.timing));
+    return track.node.target.animate(
+      track.keyframes.map((state) => toWaapiKeyframe(state, track.claims)),
+      toWaapiTiming(track.timing)
+    );
   }
 
   createClock(root, clock) {
