@@ -37,18 +37,23 @@ test('promotion badge keeps shape and label inside one SVG group', () => {
   assert.ok(contentStart > badgeEnd, 'promotion badge must be a sibling of the item motion content, not nested inside it');
 });
 
-test('motion preview isolates promotion scaling from product row content and keeps row phase synchronized', async () => {
-  const [screenPreview, player] = await Promise.all([
-    readFile(new URL('js/motion/screen-preview.js', publicRoot), 'utf8'),
+test('Motion Engine v3 keeps promotion and row content as sibling scene nodes with shared phase', async () => {
+  const [sceneGraph, motionPlan, player] = await Promise.all([
+    readFile(new URL('js/motion/scene-graph.js', publicRoot), 'utf8'),
+    readFile(new URL('js/motion/motion-plan.js', publicRoot), 'utf8'),
     readFile(new URL('js/motion/preview-player.js', publicRoot), 'utf8')
   ]);
 
-  assert.match(screenPreview, /row\.classList\.contains\('table-packaging'\)[\s\S]*markMotionTarget\(row, 'item', index, rows\.length\)/);
-  assert.match(screenPreview, /:scope > g\.table-item-content/);
-  assert.match(screenPreview, /:scope > g\.promotion-badge/);
-  assert.match(screenPreview, /markMotionTarget\(content, 'item', index, rows\.length\)/);
-  assert.match(screenPreview, /markMotionTarget\(promotion, 'promotion', index, rows\.length\)/);
-  assert.match(player, /promotion:\s*\[\.\.\.this\.stage\.querySelectorAll\('\[data-motion="promotion"\]'\)\]/);
-  assert.match(player, /sequenceFor\(element, index, targets\.length\)/);
-  assert.match(player, /kind === 'promotion' \? 'item' : kind/);
+  assert.match(sceneGraph, /row\.classList\.contains\('table-packaging'\)/);
+  assert.match(sceneGraph, /:scope > g\.table-item-content/);
+  assert.match(sceneGraph, /:scope > g\.promotion-badge/);
+  assert.match(sceneGraph, /id: `menu\.item\.\$\{index\}`/);
+  assert.match(sceneGraph, /id: `menu\.promotion\.\$\{index\}`/);
+  assert.match(sceneGraph, /order: index,[\s\S]*count: rows\.length/);
+  assert.match(sceneGraph, /transformOwner: 'self'/);
+  assert.match(motionPlan, /node\.kind === 'promotion' \? 'item' : node\.kind/);
+  assert.match(motionPlan, /targetDelay\(profile, node\.order, node\.count, duration\)/);
+  assert.match(player, /buildMotionScene\(this\.stage\)/);
+  assert.match(player, /compileMotionPlan\(this\.scene, profile\)/);
+  assert.doesNotMatch(player, /\.animate\(/);
 });
