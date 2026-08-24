@@ -8,7 +8,7 @@ function requireDriver(driver) {
 
 export class MotionTimeline {
   constructor({ root, driver }) {
-    if (!(root instanceof Element)) throw new TypeError('Motion timeline requires a DOM root.');
+    if (root === undefined || root === null) throw new TypeError('Motion timeline requires a render root.');
     this.root = root;
     this.driver = requireDriver(driver);
     this.trackHandles = [];
