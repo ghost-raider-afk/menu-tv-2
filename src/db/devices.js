@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { isoNow } from './helpers.js';
 
 function deviceRecord(row) {
@@ -33,6 +34,7 @@ export function createDevicesRepository(pool) {
   return Object.freeze({
     async createDeviceActivation({
       id,
+      deviceKey = '',
       scanTokenHash,
       pollSecretHash,
       reserveCodeHash,
@@ -43,10 +45,10 @@ export function createDevicesRepository(pool) {
       const now = isoNow();
       const { rows } = await pool.query(
         `INSERT INTO tv_device_activations
-          (id, scan_token_hash, poll_secret_hash, reserve_code_hash, status, user_agent, remote_address, expires_at, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $8)
+          (id, device_key, scan_token_hash, poll_secret_hash, reserve_code_hash, status, user_agent, remote_address, expires_at, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7, $8, $9, $9)
          RETURNING *`,
-        [id, scanTokenHash, pollSecretHash, reserveCodeHash, userAgent, remoteAddress, expiresAt, now]
+        [id, deviceKey, scanTokenHash, pollSecretHash, reserveCodeHash, userAgent, remoteAddress, expiresAt, now]
       );
       return activationRecord(rows[0]);
     },
@@ -136,14 +138,57 @@ export function createDevicesRepository(pool) {
       return rows.map(deviceRecord);
     },
 
-    async createDevice({ screenId, label = '', userAgent = '', remoteAddress = '', authorizedBy = '' }) {
+    async bindDevice({ deviceKey, screenId, label = '', userAgent = '', remoteAddress = '', authorizedBy = '' }) {
+      const key = String(deviceKey || '').trim();
+      if (!key) throw new TypeError('TV binding requires a persistent device key.');
+      const now = isoNow();
+
+      await pool.query(
+        `UPDATE tv_device_sessions SET revoked_at = $1
+         WHERE revoked_at IS NULL AND device_id IN (
+           SELECT id FROM tv_devices
+           WHERE active = TRUE AND (screen_id = $2 OR device_key = $3)
+         )`,
+        [now, screenId, key]
+      );
+
+      await pool.query(
+        `UPDATE tv_devices SET active = FALSE, updated_at = $1
+         WHERE active = TRUE AND (screen_id = $2 OR device_key = $3)`,
+        [now, screenId, key]
+      );
+
+      const existing = await pool.query('SELECT id FROM tv_devices WHERE device_key = $1 LIMIT 1', [key]);
+      if (existing.rowCount) {
+        const { rows } = await pool.query(
+          `UPDATE tv_devices
+           SET screen_id = $1, label = $2, user_agent = $3, remote_address = $4,
+               authorized_by = $5, active = TRUE, updated_at = $6
+           WHERE device_key = $7
+           RETURNING *`,
+          [screenId, label, userAgent, remoteAddress, authorizedBy, now, key]
+        );
+        return deviceRecord(rows[0]);
+      }
+
+      const { rows } = await pool.query(
+        `INSERT INTO tv_devices
+          (device_key, screen_id, label, user_agent, remote_address, authorized_by, active, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $7)
+         RETURNING *`,
+        [key, screenId, label, userAgent, remoteAddress, authorizedBy, now]
+      );
+      return deviceRecord(rows[0]);
+    },
+
+    async createDevice({ deviceKey = crypto.randomUUID(), screenId, label = '', userAgent = '', remoteAddress = '', authorizedBy = '' }) {
       const now = isoNow();
       const { rows } = await pool.query(
         `INSERT INTO tv_devices
-          (screen_id, label, user_agent, remote_address, authorized_by, active, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, TRUE, $6, $6)
+          (device_key, screen_id, label, user_agent, remote_address, authorized_by, active, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $7)
          RETURNING *`,
-        [screenId, label, userAgent, remoteAddress, authorizedBy, now]
+        [deviceKey, screenId, label, userAgent, remoteAddress, authorizedBy, now]
       );
       return deviceRecord(rows[0]);
     },
@@ -163,7 +208,7 @@ export function createDevicesRepository(pool) {
     async getActiveDeviceSessionByHash(hash) {
       const { rows } = await pool.query(
         `SELECT ds.id AS session_id, ds.device_id, ds.expires_at, ds.last_seen_at AS session_last_seen_at,
-                d.screen_id, d.label AS device_label, d.last_seen_at AS device_last_seen_at,
+                d.device_key, d.screen_id, d.label AS device_label, d.last_seen_at AS device_last_seen_at,
                 s.name AS screen_name, s.location_number, s.resolution, s.status AS screen_status,
                 l.id AS location_id, l.name AS location_name
          FROM tv_device_sessions ds
