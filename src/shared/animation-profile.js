@@ -7,7 +7,6 @@ export const ITEM_EFFECTS = Object.freeze(['none', 'breathe', 'wave', 'focus', '
 export const PRICE_EFFECTS = Object.freeze(['none', 'pulse', 'glow', 'wave', 'pop']);
 export const BACKGROUND_EFFECTS = Object.freeze(['none', 'drift', 'breathe', 'zoom']);
 export const ENTITY_IDLE_EFFECTS = Object.freeze(['none', 'alive', 'float', 'breathe', 'drift']);
-export const TICKER_DIRECTIONS = Object.freeze(['right-to-left', 'left-to-right']);
 
 export const DEFAULT_ENTITY_PROFILE = Object.freeze({
   enabled: false,
@@ -20,20 +19,6 @@ export const DEFAULT_ENTITY_PROFILE = Object.freeze({
   idle_effect: 'alive',
   idle_amount: 38,
   idle_cycle_seconds: 8.5
-});
-
-export const DEFAULT_TICKER_PROFILE = Object.freeze({
-  enabled: false,
-  text: '',
-  y_percent: 91,
-  height_percent: 7,
-  font_size_percent: 3.1,
-  depth: 12,
-  direction: 'right-to-left',
-  cycle_seconds: 14,
-  text_color: '#FFFFFF',
-  background_color: '#101828',
-  background_opacity: 82
 });
 
 export const DEFAULT_ANIMATION_PROFILE = Object.freeze({
@@ -53,8 +38,7 @@ export const DEFAULT_ANIMATION_PROFILE = Object.freeze({
   background_effect: 'drift',
   background_zoom_percent: 2,
   intensity: 42,
-  entity: DEFAULT_ENTITY_PROFILE,
-  ticker: DEFAULT_TICKER_PROFILE
+  entity: DEFAULT_ENTITY_PROFILE
 });
 
 function sourceObject(profile) {
@@ -94,23 +78,6 @@ function canonicalEntity(value) {
   };
 }
 
-function canonicalTicker(value) {
-  const source = sourceObject(value);
-  return {
-    enabled: source.enabled === true,
-    text: typeof source.text === 'string' ? source.text.trim() : DEFAULT_TICKER_PROFILE.text,
-    y_percent: present(source.y_percent, DEFAULT_TICKER_PROFILE.y_percent),
-    height_percent: present(source.height_percent, DEFAULT_TICKER_PROFILE.height_percent),
-    font_size_percent: present(source.font_size_percent, DEFAULT_TICKER_PROFILE.font_size_percent),
-    depth: present(source.depth, DEFAULT_TICKER_PROFILE.depth),
-    direction: present(source.direction, DEFAULT_TICKER_PROFILE.direction),
-    cycle_seconds: present(source.cycle_seconds, DEFAULT_TICKER_PROFILE.cycle_seconds),
-    text_color: typeof source.text_color === 'string' ? source.text_color.trim().toUpperCase() : DEFAULT_TICKER_PROFILE.text_color,
-    background_color: typeof source.background_color === 'string' ? source.background_color.trim().toUpperCase() : DEFAULT_TICKER_PROFILE.background_color,
-    background_opacity: present(source.background_opacity, DEFAULT_TICKER_PROFILE.background_opacity)
-  };
-}
-
 function canonicalCurrent(source) {
   return {
     motion_version: ANIMATION_PROFILE_VERSION,
@@ -129,8 +96,7 @@ function canonicalCurrent(source) {
     background_effect: present(source.background_effect, DEFAULT_ANIMATION_PROFILE.background_effect),
     background_zoom_percent: present(source.background_zoom_percent, DEFAULT_ANIMATION_PROFILE.background_zoom_percent),
     intensity: present(source.intensity, DEFAULT_ANIMATION_PROFILE.intensity),
-    entity: canonicalEntity(source.entity),
-    ticker: canonicalTicker(source.ticker)
+    entity: canonicalEntity(source.entity)
   };
 }
 
@@ -190,8 +156,7 @@ function migrateLegacyProfile(source) {
     background_effect: source.background_motion === false ? 'none' : 'drift',
     background_zoom_percent: source.background_motion === false ? 0 : 2,
     intensity,
-    entity: canonicalEntity(source.entity),
-    ticker: canonicalTicker(source.ticker)
+    entity: canonicalEntity(source.entity)
   };
 }
 
