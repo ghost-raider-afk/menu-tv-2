@@ -34,6 +34,7 @@ function activeProfile() {
     pattern: 'wave',
     flow_direction: 'left-to-right',
     item_effect: 'pulse',
+    promotion_effect: 'pulse',
     section_effect: 'shimmer',
     price_effect: 'none',
     background_effect: 'drift',
@@ -110,16 +111,21 @@ test('Motion Engine v3 composes independent menu and atmosphere programs into on
   assert.ok(background);
   assert.ok(shimmer);
   assert.equal(plan.tracks.some((track) => track.node.kind === 'entity'), false, 'default compilers must not own future entity behavior');
-  assert.equal(item.timing.delay, promotion.timing.delay, 'promotion must share its row phase');
+  assert.equal(item.timing.delay, promotion.timing.delay, 'promotion keeps the row phase while owning an independent effect');
   assert.equal(secondItem.timing.delay, 120);
   assert.deepEqual(item.claims, ['transform', 'opacity', 'appearance']);
+  assert.deepEqual(promotion.claims, ['transform', 'opacity', 'appearance']);
   assert.deepEqual(background.claims, ['transform']);
   assert.deepEqual(shimmer.claims, ['transform', 'opacity']);
   assert.equal(plan.ownership['menu.item.0:transform'], 'menu-motion');
+  assert.equal(plan.ownership['menu.promotion.0:transform'], 'menu-motion');
   assert.equal(plan.ownership['atmosphere.shimmer:opacity'], 'atmosphere');
   assert.equal(typeof item.keyframes[1].transform.scale, 'number');
   assert.equal(typeof item.keyframes[1].appearance.brightness, 'number');
-  assert.deepEqual(item.keyframes, promotion.keyframes, 'promotion and row content use the same row motion frames');
+  assert.notDeepEqual(item.keyframes, promotion.keyframes, 'promotion accent must not inherit the row animation frames');
+  assert.equal(item.keyframes[1].appearance.glowColor, null);
+  assert.equal(promotion.keyframes[1].appearance.glowColor, 'rgba(244,201,21,.58)');
+  assert.ok(promotion.keyframes[1].appearance.glowRadius > 0);
   assert.equal(JSON.stringify(plan).includes('translate3d('), false);
   assert.equal(JSON.stringify(plan).includes('drop-shadow('), false);
 });
