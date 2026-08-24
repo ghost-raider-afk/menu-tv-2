@@ -9,6 +9,7 @@ import { migrateFrontendErrorJournal } from './migrations/frontend-error-journal
 import { migrateEventJournal } from './migrations/event-journal.js';
 import { migrateSceneEntity } from './migrations/scene-entity.js';
 import { migrateAnnouncementTicker } from './migrations/announcement-ticker.js';
+import { migrateDeviceIdentity } from './migrations/device-identity.js';
 import { runMigrations } from './migrations/runner.js';
 import { seedDemoData } from './migrations/seed.js';
 import { createOverviewRepository } from './overview.js';
@@ -32,7 +33,8 @@ const MIGRATIONS = Object.freeze([
   { name: '007-frontend-error-journal', run: migrateFrontendErrorJournal },
   { name: '008-event-journal', run: migrateEventJournal },
   { name: '009-scene-entity', run: migrateSceneEntity },
-  { name: '010-announcement-ticker', run: migrateAnnouncementTicker }
+  { name: '010-announcement-ticker', run: migrateAnnouncementTicker },
+  { name: '011-device-identity', run: migrateDeviceIdentity }
 ]);
 
 function createRepositories(queryable) {
