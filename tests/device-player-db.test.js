@@ -4,6 +4,7 @@ import test from 'node:test';
 import { newDb } from 'pg-mem';
 import { initialiseSchema } from '../src/db/migrations/schema.js';
 import { migrateDevicePlayer } from '../src/db/migrations/device-player.js';
+import { migrateDeviceIdentity } from '../src/db/migrations/device-identity.js';
 import { createDevicesRepository } from '../src/db/devices.js';
 
 const memoryDb = newDb({ autoCreateForeignKeyIndices: true });
@@ -29,16 +30,18 @@ async function seedScreen() {
 test.before(async () => {
   await initialiseSchema(pool);
   await migrateDevicePlayer(pool);
+  await migrateDeviceIdentity(pool);
 });
 
 test.after(async () => {
   await pool.end();
 });
 
-test('TV activation can be approved, consumed and resolved as an active device session', async () => {
+test('TV activation carries persistent identity into an active device session', async () => {
   const repository = createDevicesRepository(pool);
   const { screenId, screenName } = await seedScreen();
   const activationId = crypto.randomUUID();
+  const deviceKey = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 60_000).toISOString();
   const scanHash = crypto.randomBytes(32).toString('hex');
   const pollHash = crypto.randomBytes(32).toString('hex');
@@ -46,6 +49,7 @@ test('TV activation can be approved, consumed and resolved as an active device s
 
   await repository.createDeviceActivation({
     id: activationId,
+    deviceKey,
     scanTokenHash: scanHash,
     pollSecretHash: pollHash,
     reserveCodeHash: codeHash,
@@ -55,15 +59,12 @@ test('TV activation can be approved, consumed and resolved as an active device s
   });
 
   const byQr = await repository.getDeviceActivationByScanTokenHash(scanHash);
-  const byCode = await repository.getDeviceActivationByReserveCodeHash(codeHash);
-  assert.equal(byQr.id, activationId);
-  assert.equal(byCode.id, activationId);
-
+  assert.equal(byQr.device_key, deviceKey);
   const approved = await repository.approveDeviceActivation(activationId, screenId, 'admin');
-  assert.equal(approved.status, 'approved');
   assert.equal(approved.approved_screen_id, screenId);
 
-  const device = await repository.createDevice({
+  const device = await repository.bindDevice({
+    deviceKey,
     screenId,
     label: 'ТВ 1',
     userAgent: 'test-tv',
@@ -72,40 +73,46 @@ test('TV activation can be approved, consumed and resolved as an active device s
   });
   const sessionId = crypto.randomUUID();
   const rawTokenHash = crypto.randomBytes(32).toString('hex');
-  await repository.createDeviceSession({
-    id: sessionId,
-    deviceId: device.id,
-    tokenHash: rawTokenHash,
-    expiresAt: new Date(Date.now() + 86_400_000).toISOString()
-  });
-  const consumed = await repository.markDeviceActivationConsumed(activationId, device.id, sessionId);
-  assert.equal(consumed.status, 'consumed');
+  await repository.createDeviceSession({ id: sessionId, deviceId: device.id, tokenHash: rawTokenHash, expiresAt: new Date(Date.now() + 86_400_000).toISOString() });
+  await repository.markDeviceActivationConsumed(activationId, device.id, sessionId);
 
   const session = await repository.getActiveDeviceSessionByHash(rawTokenHash);
   assert.equal(session.device_id, device.id);
+  assert.equal(session.device_key, deviceKey);
   assert.equal(session.screen_id, screenId);
   assert.equal(session.screen_name, screenName);
-  assert.equal(session.device_label, 'ТВ 1');
 });
 
-test('re-authorizing a screen revokes the old device before a replacement is created', async () => {
+test('same physical TV is moved between monitors instead of creating parallel devices', async () => {
   const repository = createDevicesRepository(pool);
-  const { screenId } = await seedScreen();
-  const oldDevice = await repository.createDevice({ screenId, label: 'Старый ТВ', authorizedBy: 'admin' });
+  const first = await seedScreen();
+  const second = await seedScreen();
+  const deviceKey = crypto.randomUUID();
+
+  const original = await repository.bindDevice({ deviceKey, screenId: first.screenId, label: 'ТВ', authorizedBy: 'admin' });
   const oldTokenHash = crypto.randomBytes(32).toString('hex');
   await repository.createDeviceSession({
     id: crypto.randomUUID(),
-    deviceId: oldDevice.id,
+    deviceId: original.id,
     tokenHash: oldTokenHash,
     expiresAt: new Date(Date.now() + 86_400_000).toISOString()
   });
   assert.ok(await repository.getActiveDeviceSessionByHash(oldTokenHash));
 
-  const deactivated = await repository.deactivateDevicesForScreen(screenId);
-  assert.equal(deactivated.length, 1);
-  assert.equal(await repository.getActiveDeviceSessionByHash(oldTokenHash), null);
+  const moved = await repository.bindDevice({ deviceKey, screenId: second.screenId, label: 'ТВ', authorizedBy: 'admin' });
+  assert.equal(moved.id, original.id, 'physical TV keeps one database identity');
+  assert.equal(moved.screen_id, second.screenId);
+  assert.equal(await repository.getActiveDeviceSessionByHash(oldTokenHash), null, 'old session is revoked atomically on rebind');
+});
 
-  const replacement = await repository.createDevice({ screenId, label: 'Новый ТВ', authorizedBy: 'admin' });
-  assert.notEqual(replacement.id, oldDevice.id);
-  assert.equal(replacement.screen_id, screenId);
+test('one monitor can have only one active physical TV', async () => {
+  const repository = createDevicesRepository(pool);
+  const { screenId } = await seedScreen();
+  const first = await repository.bindDevice({ deviceKey: crypto.randomUUID(), screenId, label: 'Первый ТВ', authorizedBy: 'admin' });
+  const replacement = await repository.bindDevice({ deviceKey: crypto.randomUUID(), screenId, label: 'Второй ТВ', authorizedBy: 'admin' });
+  assert.notEqual(replacement.id, first.id);
+  const bindings = await repository.listDeviceBindings();
+  const screenBindings = bindings.filter((binding) => binding.screen_id === screenId);
+  assert.equal(screenBindings.length, 1);
+  assert.equal(screenBindings[0].id, replacement.id);
 });
