@@ -29,6 +29,7 @@ import { createDeviceAdminRouter } from './api/device/admin-routes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, 'web', 'admin-ui', 'public');
+const nodeModulesDir = path.resolve(__dirname, '..', 'node_modules');
 const protectedPages = [
   '/', '/index.html', '/locations.html', '/screens.html', '/catalog.html',
   '/screen-editor.html', '/profile.html', '/settings.html', '/sftp-settings.html',
@@ -161,6 +162,13 @@ function mountProtectedApi(app, dependencies, requireApiSession) {
 
 function mountFrontend(app, requirePageSession) {
   for (const page of protectedPages) app.get(page, requirePageSession, (_request, _response, next) => next());
+  app.use('/vendor', express.static(path.join(nodeModulesDir, 'jsqr', 'dist'), {
+    etag: true,
+    maxAge: 0,
+    setHeaders(response) {
+      response.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    }
+  }));
   app.use(express.static(publicDir, {
     extensions: ['html'],
     index: 'index.html',
