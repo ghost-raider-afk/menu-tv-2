@@ -1,5 +1,5 @@
-const SHELL_CACHE = 'tv-menu-player-shell-v4';
-const DATA_CACHE = 'tv-menu-player-data-v4';
+const SHELL_CACHE = 'tv-menu-player-shell-v5';
+const DATA_CACHE = 'tv-menu-player-data-v5';
 const PLAYER_CONTEXT = '/api/device/player-context';
 const SHELL_ASSETS = [
   '/player.html',
@@ -9,6 +9,7 @@ const SHELL_ASSETS = [
   '/js/editor/renderer.js',
   '/js/motion/entity-editor.js',
   '/js/motion/entity-behavior.js',
+  '/js/motion/announcement.js',
   '/js/motion/dom-scene-adapter.js',
   '/js/motion/scene-graph.js',
   '/js/motion/scene-composer.js',
