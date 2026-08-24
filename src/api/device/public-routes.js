@@ -218,6 +218,7 @@ export function createDevicePublicRouter({ store, config }) {
       products,
       packaging,
       entity: animationSettings?.entity || null,
+      announcement: animationSettings?.announcement || null,
       refresh_interval_ms: config.playerRefreshSeconds * 1000
     };
     const etag = contextEtag(context);
