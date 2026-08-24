@@ -83,11 +83,16 @@ test('animation studio uses a real-screen loop through Motion Engine v3 without 
   assert.match(domAdapter, /buildDomMotionScene/);
   assert.match(domAdapter, /querySelector/);
   assert.match(motionPlan, /compileMotionPlan/);
-  assert.match(motionPlan, /iterations:\s*Infinity/);
+  assert.match(motionPlan, /loop:\s*true/);
+  assert.match(motionPlan, /transform:\s*Object\.freeze/);
+  assert.doesNotMatch(motionPlan, /translate3d\(|drop-shadow\(|cubic-bezier\(/);
   assert.match(timeline, /export class MotionTimeline/);
   assert.doesNotMatch(timeline, /instanceof Element|\.animate\(/);
   assert.match(waapiDriver, /export class WaapiMotionDriver/);
   assert.match(waapiDriver, /instanceof Element/);
+  assert.match(waapiDriver, /translate3d\(/);
+  assert.match(waapiDriver, /drop-shadow\(/);
+  assert.match(waapiDriver, /cubic-bezier\(/);
   assert.match(waapiDriver, /\.animate\(/);
   assert.match(player, /new WaapiMotionDriver\(\)/);
   assert.match(player, /new MotionTimeline/);
