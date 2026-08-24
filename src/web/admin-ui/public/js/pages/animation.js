@@ -343,7 +343,7 @@ async function saveSettings() {
     populateProfile(saved.profile);
     applyEntity(saved.entity);
     updatePresetSelection();
-    setMessage('animation-message', 'Профиль анимации и объект сцены сохранены.', 'success');
+    setMessage('animation-message', 'Профиль постоянной анимации сохранён.', 'success');
   } catch (error) {
     setMessage('animation-message', error.message);
   } finally {
