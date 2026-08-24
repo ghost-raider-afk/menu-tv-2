@@ -4,6 +4,7 @@ import { state } from './state.js';
 import { element } from './dom.js';
 import { formatDate } from './presentation.js';
 
+const PHONE_BREAKPOINT = 960;
 const SEVERITY_LABELS = Object.freeze({ success: 'Успешно', warning: 'Предупреждение', error: 'Ошибка', info: 'Информация' });
 const CATEGORY_LABELS = Object.freeze({ interface: 'Интерфейс', catalog: 'Каталог', monitors: 'Мониторы', tv: 'ТВ', sftp: 'SFTP', auth: 'Авторизация', settings: 'Настройки', system: 'Система' });
 
@@ -36,6 +37,34 @@ function updateBadge(count) {
   badge.classList.toggle('is-hidden', visible === 0);
 }
 
+function phoneLayout() {
+  return window.innerWidth <= PHONE_BREAKPOINT;
+}
+
+function positionDesktopPanel(button, layer) {
+  if (phoneLayout()) {
+    layer.style.removeProperty('--notification-panel-top');
+    layer.style.removeProperty('--notification-panel-right');
+    return;
+  }
+  const rect = button.getBoundingClientRect();
+  layer.style.setProperty('--notification-panel-top', `${Math.round(rect.bottom + 7)}px`);
+  layer.style.setProperty('--notification-panel-right', `${Math.max(10, Math.round(window.innerWidth - rect.right))}px`);
+}
+
+function setPanelOpen(button, layer, panel, open, { restoreFocus = false } = {}) {
+  layer.classList.toggle('is-hidden', !open);
+  button.setAttribute('aria-expanded', String(open));
+  panel.setAttribute('aria-modal', String(open && phoneLayout()));
+  document.body.classList.toggle('notifications-open', open && phoneLayout());
+  if (open) {
+    positionDesktopPanel(button, layer);
+    return;
+  }
+  document.body.classList.remove('notifications-open');
+  if (restoreFocus) button.focus({ preventScroll: true });
+}
+
 export async function loadNotifications(limit = 20) {
   const result = await api.get(`${API.notifications}?limit=${limit}`);
   renderEvents(document.querySelector('[data-notification-list]'), document.querySelector('[data-notification-empty]'), result.items);
@@ -53,8 +82,12 @@ export function startNotificationPolling() {
 
 export function initialiseNotifications() {
   const button = element('notifications-button');
+  const layer = element('notifications-layer');
   const panel = element('notifications-panel');
-  if (!(button instanceof HTMLButtonElement) || !panel) return;
+  if (!(button instanceof HTMLButtonElement) || !layer || !panel) return;
+  if (button.dataset.notificationsBound === '1') return;
+  button.dataset.notificationsBound = '1';
+
   void loadNotifications().catch(() => undefined);
   startNotificationPolling();
 
@@ -63,17 +96,39 @@ export function initialiseNotifications() {
   };
   window.addEventListener('menu-tv:event-recorded', refreshFromEvent);
 
+  const close = (restoreFocus = false) => setPanelOpen(button, layer, panel, false, { restoreFocus });
+  const open = () => {
+    setPanelOpen(button, layer, panel, true);
+    void loadNotifications().catch(() => undefined);
+    if (phoneLayout()) requestAnimationFrame(() => panel.querySelector('button, a')?.focus({ preventScroll: true }));
+  };
+
   button.addEventListener('click', () => {
-    const opens = panel.classList.contains('is-hidden');
-    panel.classList.toggle('is-hidden', !opens);
-    button.setAttribute('aria-expanded', String(opens));
-    if (opens) void loadNotifications().catch(() => undefined);
+    if (layer.classList.contains('is-hidden')) open();
+    else close(true);
   });
+
+  layer.querySelectorAll('[data-notifications-close]').forEach((control) => {
+    control.addEventListener('click', () => close(true));
+  });
+
   document.addEventListener('click', (event) => {
-    if (panel.classList.contains('is-hidden') || panel.contains(event.target) || button.contains(event.target)) return;
-    panel.classList.add('is-hidden');
-    button.setAttribute('aria-expanded', 'false');
+    if (layer.classList.contains('is-hidden') || phoneLayout()) return;
+    if (panel.contains(event.target) || button.contains(event.target)) return;
+    close();
   });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !layer.classList.contains('is-hidden')) close(true);
+  });
+
+  window.addEventListener('resize', () => {
+    if (layer.classList.contains('is-hidden')) return;
+    positionDesktopPanel(button, layer);
+    panel.setAttribute('aria-modal', String(phoneLayout()));
+    document.body.classList.toggle('notifications-open', phoneLayout());
+  }, { passive: true });
+
   element('mark-notifications-read')?.addEventListener('click', async () => {
     try {
       await api.post(`${API.notifications}/read`);
