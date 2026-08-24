@@ -4,6 +4,7 @@ import {
   buildRenderModel,
   buildTableSvg
 } from '../editor/renderer.js';
+import { renderSceneEntity } from '../motion/entity-editor.js';
 
 const ACTIVATION_STORAGE_KEY = 'tv-menu.device-activation';
 const PLAYER_CONTEXT_STORAGE_KEY = 'tv-menu.player-context.v1';
@@ -191,9 +192,11 @@ function sameOriginAsset(value) {
 }
 
 async function warmPlayerAssetCache(context) {
-  const background = sameOriginAsset(context?.draft?.settings?.background_image_url);
-  if (!background) return;
-  await fetch(background, { cache: 'reload' }).catch(() => undefined);
+  const assets = [
+    sameOriginAsset(context?.draft?.settings?.background_image_url),
+    sameOriginAsset(context?.entity?.asset_url)
+  ].filter(Boolean);
+  await Promise.all(assets.map((asset) => fetch(asset, { cache: 'reload' }).catch(() => undefined)));
 }
 
 function renderPlayerContext(context) {
@@ -205,10 +208,13 @@ function renderPlayerContext(context) {
     fallbackTitle: context.screen?.name || 'Меню'
   });
   const layout = buildRenderLayout(model, lines);
-  playerStage.innerHTML = buildTableSvg(model, lines, layout);
+  playerStage.innerHTML = `
+    <div class="tv-player-menu-layer">${buildTableSvg(model, lines, layout)}</div>
+    <div class="tv-player-entity-layer" data-motion-entity-layer aria-hidden="true"></div>`;
   playerStage.style.backgroundColor = model.settings.background_color || '#101828';
   const background = sameOriginAsset(model.settings.background_image_url);
   playerStage.style.backgroundImage = background ? `url(${JSON.stringify(background)})` : 'none';
+  renderSceneEntity(playerStage, context.entity, { editable: false });
   playerRefreshMs = Math.max(2000, Number(context.refresh_interval_ms) || 5000);
 }
 
