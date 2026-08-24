@@ -1,11 +1,3 @@
-const EASING = Object.freeze({
-  standard: 'cubic-bezier(.2,.7,.2,1)',
-  smooth: 'cubic-bezier(.16,1,.3,1)',
-  snappy: 'cubic-bezier(.2,.9,.15,1)',
-  cinematic: 'cubic-bezier(.22,.61,.36,1)',
-  elastic: 'cubic-bezier(.34,1.56,.64,1)'
-});
-
 const GOLD_SHADOW = 'rgba(244,201,21,.58)';
 
 function clamp(value, minimum, maximum) {
@@ -31,12 +23,30 @@ function vectorFor(profile, travel, index) {
   }
 }
 
-function transform({ x = 0, y = 0, z = 0, scale = 1 } = {}) {
-  return `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, ${z.toFixed(2)}px) scale(${scale.toFixed(4)})`;
+function frame({
+  offset,
+  opacity = 1,
+  x = 0,
+  y = 0,
+  z = 0,
+  xPercent = null,
+  scale = 1,
+  skewXDeg = 0,
+  transformOrder = 'translate-scale',
+  brightness = 1,
+  glowRadius = 0,
+  glowColor = null
+}) {
+  return Object.freeze({
+    offset,
+    opacity,
+    transform: Object.freeze({ x, y, z, xPercent, scale, skewXDeg, order: transformOrder }),
+    appearance: Object.freeze({ brightness, glowRadius, glowColor })
+  });
 }
 
 function baseFrame(offset) {
-  return { offset, opacity: 1, transform: transform(), filter: 'brightness(1)' };
+  return frame({ offset });
 }
 
 function peakFrame(profile, kind, effect, index, offset) {
@@ -45,20 +55,20 @@ function peakFrame(profile, kind, effect, index, offset) {
   const scaleAmount = (Number(profile.scale_amount) || 0) * gain;
   const brightness = 1 + (Number(profile.brightness_amount) || 0) * gain;
   const vector = vectorFor(profile, travel, index);
-  const frame = { offset, opacity: 1, transform: transform(), filter: `brightness(${brightness.toFixed(3)})` };
+  const state = { offset, brightness };
 
-  if (effect === 'wave') frame.transform = transform({ ...vector, scale: 1 + scaleAmount * 0.35 });
-  if (effect === 'lift') frame.transform = transform({ x: vector.x * 0.45, y: vector.y || -travel, scale: 1 + scaleAmount * 0.45 });
-  if (effect === 'breathe') frame.transform = transform({ scale: 1 + scaleAmount * 0.6 });
-  if (effect === 'focus') frame.transform = transform({ scale: 1 + scaleAmount });
-  if (effect === 'pulse') frame.transform = transform({ scale: 1 + scaleAmount * (kind === 'price' ? 1.5 : 1) });
-  if (effect === 'pop') frame.transform = transform({ scale: 1 + scaleAmount * 1.8 });
-  if (effect === 'shimmer') frame.transform = transform({ x: vector.x * 0.25, y: vector.y * 0.25, scale: 1 + scaleAmount * 0.25 });
+  if (effect === 'wave') Object.assign(state, vector, { scale: 1 + scaleAmount * 0.35 });
+  if (effect === 'lift') Object.assign(state, { x: vector.x * 0.45, y: vector.y || -travel, scale: 1 + scaleAmount * 0.45 });
+  if (effect === 'breathe') state.scale = 1 + scaleAmount * 0.6;
+  if (effect === 'focus') state.scale = 1 + scaleAmount;
+  if (effect === 'pulse') state.scale = 1 + scaleAmount * (kind === 'price' ? 1.5 : 1);
+  if (effect === 'pop') state.scale = 1 + scaleAmount * 1.8;
+  if (effect === 'shimmer') Object.assign(state, { x: vector.x * 0.25, y: vector.y * 0.25, scale: 1 + scaleAmount * 0.25 });
   if (effect === 'glow' || effect === 'shimmer') {
-    const radius = 4 + 18 * gain;
-    frame.filter = `brightness(${brightness.toFixed(3)}) drop-shadow(0 0 ${radius.toFixed(1)}px ${GOLD_SHADOW})`;
+    state.glowRadius = 4 + 18 * gain;
+    state.glowColor = GOLD_SHADOW;
   }
-  return frame;
+  return frame(state);
 }
 
 function elementFrames(profile, kind, effect, index) {
@@ -86,14 +96,17 @@ function backgroundFrames(profile) {
   const depth = (Number(profile.background_zoom_percent) || 0) / 100;
   const baseScale = 1.035 + depth * 0.35;
   const peakScale = baseScale + depth * Math.max(0.2, intensity);
-  const base = `scale(${baseScale.toFixed(4)}) translate3d(0,0,0)`;
   if (profile.background_effect === 'breathe' || profile.background_effect === 'zoom') {
-    return [{ transform: base }, { transform: `scale(${peakScale.toFixed(4)}) translate3d(0,0,0)` }, { transform: base }];
+    return [
+      frame({ offset: 0, scale: baseScale, transformOrder: 'scale-translate' }),
+      frame({ offset: 0.5, scale: peakScale, transformOrder: 'scale-translate' }),
+      frame({ offset: 1, scale: baseScale, transformOrder: 'scale-translate' })
+    ];
   }
   return [
-    { transform: `scale(${baseScale.toFixed(4)}) translate3d(${-travel * 0.45}px, ${travel * 0.2}px, 0)` },
-    { transform: `scale(${peakScale.toFixed(4)}) translate3d(${travel}px, ${-travel * 0.45}px, 0)` },
-    { transform: `scale(${baseScale.toFixed(4)}) translate3d(${-travel * 0.45}px, ${travel * 0.2}px, 0)` }
+    frame({ offset: 0, x: -travel * 0.45, y: travel * 0.2, scale: baseScale, transformOrder: 'scale-translate' }),
+    frame({ offset: 0.5, x: travel, y: -travel * 0.45, scale: peakScale, transformOrder: 'scale-translate' }),
+    frame({ offset: 1, x: -travel * 0.45, y: travel * 0.2, scale: baseScale, transformOrder: 'scale-translate' })
   ];
 }
 
@@ -102,12 +115,16 @@ function shimmerFrames(profile) {
   const eventFraction = clamp((Number(profile.event_duration_ms) || 1800) / cycleMs, 0.08, 0.72);
   const gain = clamp(Number(profile.intensity) || 0, 0, 100) / 100;
   return [
-    { offset: 0, opacity: 0, transform: 'translateX(0) skewX(-18deg)' },
-    { offset: eventFraction * 0.15, opacity: 0, transform: 'translateX(0) skewX(-18deg)' },
-    { offset: eventFraction * 0.45, opacity: 0.28 * gain, transform: 'translateX(320%) skewX(-18deg)' },
-    { offset: eventFraction, opacity: 0, transform: 'translateX(720%) skewX(-18deg)' },
-    { offset: 1, opacity: 0, transform: 'translateX(720%) skewX(-18deg)' }
+    frame({ offset: 0, opacity: 0, xPercent: 0, skewXDeg: -18, transformOrder: 'translate-skew' }),
+    frame({ offset: eventFraction * 0.15, opacity: 0, xPercent: 0, skewXDeg: -18, transformOrder: 'translate-skew' }),
+    frame({ offset: eventFraction * 0.45, opacity: 0.28 * gain, xPercent: 320, skewXDeg: -18, transformOrder: 'translate-skew' }),
+    frame({ offset: eventFraction, opacity: 0, xPercent: 720, skewXDeg: -18, transformOrder: 'translate-skew' }),
+    frame({ offset: 1, opacity: 0, xPercent: 720, skewXDeg: -18, transformOrder: 'translate-skew' })
   ];
+}
+
+function timing(duration, delay, easing) {
+  return Object.freeze({ duration, delay, easing, loop: true });
 }
 
 function trackFor(node, profile, duration) {
@@ -118,7 +135,7 @@ function trackFor(node, profile, duration) {
       node,
       channel: 'transform',
       keyframes: Object.freeze(backgroundFrames(profile)),
-      timing: Object.freeze({ duration, delay: 0, easing: EASING[profile.easing] || EASING.smooth, iterations: Infinity, fill: 'both' })
+      timing: timing(duration, 0, profile.easing || 'smooth')
     });
   }
   if (node.kind === 'shimmer') {
@@ -126,7 +143,7 @@ function trackFor(node, profile, duration) {
       node,
       channel: 'atmosphere',
       keyframes: Object.freeze(shimmerFrames(profile)),
-      timing: Object.freeze({ duration, delay: 0, easing: 'ease-in-out', iterations: Infinity, fill: 'both' })
+      timing: timing(duration, 0, 'ease-in-out')
     });
   }
   const frameKind = node.kind === 'promotion' ? 'item' : node.kind;
@@ -134,13 +151,7 @@ function trackFor(node, profile, duration) {
     node,
     channel: 'motion',
     keyframes: Object.freeze(elementFrames(profile, frameKind, effect, node.order)),
-    timing: Object.freeze({
-      duration,
-      delay: targetDelay(profile, node.order, node.count, duration),
-      easing: EASING[profile.easing] || EASING.smooth,
-      iterations: Infinity,
-      fill: 'both'
-    })
+    timing: timing(duration, targetDelay(profile, node.order, node.count, duration), profile.easing || 'smooth')
   });
 }
 
@@ -159,6 +170,6 @@ export function compileMotionPlan(scene, profile) {
     duration,
     profile: Object.freeze({ ...(profile || {}) }),
     tracks: Object.freeze(tracks),
-    clock: Object.freeze({ duration, iterations: Infinity, fill: 'both' })
+    clock: Object.freeze({ duration, loop: true })
   });
 }
