@@ -37,11 +37,13 @@ test('promotion badge keeps shape and label inside one SVG group', () => {
   assert.ok(contentStart > badgeEnd, 'promotion badge must be a sibling of the item motion content, not nested inside it');
 });
 
-test('Motion Engine v3 keeps promotion and row content as sibling scene nodes with shared phase', async () => {
-  const [domAdapter, sceneGraph, motionPlan, player] = await Promise.all([
+test('Motion Engine v3 keeps promotion and row content as sibling scene nodes with shared phase and ownership', async () => {
+  const [domAdapter, sceneGraph, motionPlan, composer, runtime, player] = await Promise.all([
     readFile(new URL('js/motion/dom-scene-adapter.js', publicRoot), 'utf8'),
     readFile(new URL('js/motion/scene-graph.js', publicRoot), 'utf8'),
     readFile(new URL('js/motion/motion-plan.js', publicRoot), 'utf8'),
+    readFile(new URL('js/motion/scene-composer.js', publicRoot), 'utf8'),
+    readFile(new URL('js/motion/scene-runtime.js', publicRoot), 'utf8'),
     readFile(new URL('js/motion/preview-player.js', publicRoot), 'utf8')
   ]);
 
@@ -55,7 +57,11 @@ test('Motion Engine v3 keeps promotion and row content as sibling scene nodes wi
   assert.doesNotMatch(sceneGraph, /querySelector|instanceof Element/);
   assert.match(motionPlan, /node\.kind === 'promotion' \? 'item' : node\.kind/);
   assert.match(motionPlan, /targetDelay\(profile, node\.order, node\.count, duration\)/);
+  assert.match(motionPlan, /claims:\s*Object\.freeze\(\['transform', 'opacity', 'appearance'\]\)/);
+  assert.match(composer, /Scene ownership conflict/);
+  assert.match(runtime, /composeScenePrograms/);
   assert.match(player, /buildDomMotionScene\(this\.stage\)/);
-  assert.match(player, /compileMotionPlan\(this\.scene, profile\)/);
+  assert.match(player, /new SceneRuntime/);
+  assert.match(player, /this\.runtime\.load/);
   assert.doesNotMatch(player, /\.animate\(/);
 });
