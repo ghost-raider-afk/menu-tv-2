@@ -5,7 +5,7 @@ export async function migrateDeviceBindings(pool) {
     ALTER TABLE tv_device_activations ADD COLUMN IF NOT EXISTS device_key TEXT;
 
     UPDATE tv_devices
-       SET device_key = 'legacy-' || id::text
+       SET device_key = 'legacy-' || CAST(id AS TEXT)
      WHERE device_key IS NULL OR device_key = '';
 
     ALTER TABLE tv_devices ALTER COLUMN device_key SET NOT NULL;
@@ -44,6 +44,6 @@ export async function migrateDeviceBindings(pool) {
     CREATE INDEX IF NOT EXISTS tv_device_bindings_screen_index
       ON tv_device_bindings(screen_id);
 
-    UPDATE tv_devices SET screen_id = NULL WHERE screen_id IS NOT NULL;
+    ALTER TABLE tv_devices DROP COLUMN screen_id;
   `);
 }
