@@ -10,6 +10,7 @@ import { migrateEventJournal } from './migrations/event-journal.js';
 import { migrateSceneEntity } from './migrations/scene-entity.js';
 import { migrateAnnouncementTicker } from './migrations/announcement-ticker.js';
 import { migrateDeviceIdentity } from './migrations/device-identity.js';
+import { migrateMotionProfileV3 } from './migrations/motion-profile-v3.js';
 import { runMigrations } from './migrations/runner.js';
 import { seedDemoData } from './migrations/seed.js';
 import { createOverviewRepository } from './overview.js';
@@ -34,7 +35,8 @@ const MIGRATIONS = Object.freeze([
   { name: '008-event-journal', run: migrateEventJournal },
   { name: '009-scene-entity', run: migrateSceneEntity },
   { name: '010-announcement-ticker', run: migrateAnnouncementTicker },
-  { name: '011-device-identity', run: migrateDeviceIdentity }
+  { name: '011-device-identity', run: migrateDeviceIdentity },
+  { name: '012-motion-profile-v3', run: migrateMotionProfileV3 }
 ]);
 
 function createRepositories(queryable) {
