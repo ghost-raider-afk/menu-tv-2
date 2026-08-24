@@ -22,21 +22,19 @@ function translateCss(transform) {
   return `translate3d(${number(transform.x).toFixed(2)}px, ${number(transform.y).toFixed(2)}px, ${number(transform.z).toFixed(2)}px)`;
 }
 
-function scaleCss(transform) {
-  return `scale(${number(transform.scale, 1).toFixed(4)})`;
-}
-
-function skewCss(transform) {
-  return `skewX(${number(transform.skewXDeg).toFixed(2)}deg)`;
-}
+function scaleCss(transform) { return `scale(${number(transform.scale, 1).toFixed(4)})`; }
+function skewCss(transform) { return `skewX(${number(transform.skewXDeg).toFixed(2)}deg)`; }
+function rotateCss(transform) { return `rotate(${number(transform.rotateDeg).toFixed(2)}deg)`; }
 
 function transformCss(transform = {}) {
   const translate = translateCss(transform);
   const scale = scaleCss(transform);
   const skew = skewCss(transform);
+  const rotate = rotateCss(transform);
   if (transform.order === 'scale-translate') return `${scale} ${translate}`;
   if (transform.order === 'translate-skew') return `${translate} ${skew}`;
-  return `${translate} ${scale}${number(transform.skewXDeg) ? ` ${skew}` : ''}`;
+  if (transform.order === 'translate-rotate-scale') return `${translate} ${rotate} ${scale}`;
+  return `${translate} ${scale}${number(transform.rotateDeg) ? ` ${rotate}` : ''}${number(transform.skewXDeg) ? ` ${skew}` : ''}`;
 }
 
 function filterCss(appearance = {}) {
@@ -76,44 +74,19 @@ function clockTiming(clock = {}) {
 }
 
 export class WaapiMotionDriver {
-  constructor() {
-    this.name = 'waapi';
-  }
-
+  constructor() { this.name = 'waapi'; }
   createTrack(track) {
     if (!(track?.node?.target instanceof Element)) throw new TypeError('WAAPI track requires a DOM target.');
-    return track.node.target.animate(
-      track.keyframes.map((state) => toWaapiKeyframe(state, track.claims)),
-      toWaapiTiming(track.timing)
-    );
+    return track.node.target.animate(track.keyframes.map((state) => toWaapiKeyframe(state, track.claims)), toWaapiTiming(track.timing));
   }
-
   createClock(root, clock) {
     if (!(root instanceof Element)) throw new TypeError('WAAPI clock requires a DOM root.');
     return root.animate([{ opacity: 1 }, { opacity: 1 }], clockTiming(clock));
   }
-
-  play(handle) {
-    handle?.play?.();
-  }
-
-  pause(handle) {
-    handle?.pause?.();
-  }
-
-  cancel(handle) {
-    handle?.cancel?.();
-  }
-
-  seek(handle, milliseconds) {
-    if (handle) handle.currentTime = milliseconds;
-  }
-
-  currentTime(handle) {
-    return Number(handle?.currentTime) || 0;
-  }
-
-  playState(handle) {
-    return handle?.playState || 'idle';
-  }
+  play(handle) { handle?.play?.(); }
+  pause(handle) { handle?.pause?.(); }
+  cancel(handle) { handle?.cancel?.(); }
+  seek(handle, milliseconds) { if (handle) handle.currentTime = milliseconds; }
+  currentTime(handle) { return Number(handle?.currentTime) || 0; }
+  playState(handle) { return handle?.playState || 'idle'; }
 }

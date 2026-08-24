@@ -11,6 +11,7 @@ import {
   SECTION_EFFECTS,
   completeAnimationProfile
 } from '../shared/animation-profile.js';
+import { sceneEntityInput } from './scene-entity.js';
 
 function enumValue(value, field, allowed) {
   if (typeof value !== 'string' || !allowed.includes(value)) throw new ValidationError(`Поле «${field}» содержит неподдерживаемое значение.`);
@@ -57,6 +58,7 @@ export function animationSettingsInput(body) {
   return {
     enabled,
     preset_id: presetId,
-    profile: animationProfileInput(body.profile ?? DEFAULT_ANIMATION_PROFILE)
+    profile: animationProfileInput(body.profile ?? DEFAULT_ANIMATION_PROFILE),
+    entity: sceneEntityInput(body.entity)
   };
 }

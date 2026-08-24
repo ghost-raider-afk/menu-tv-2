@@ -1,6 +1,7 @@
 import { WaapiMotionDriver } from './drivers/waapi-driver.js';
 import { buildDomMotionScene } from './dom-scene-adapter.js';
 import { DEFAULT_SCENE_COMPILERS } from './motion-plan.js';
+import { compileEntityBehaviorProgram } from './entity-behavior.js';
 import { SceneRuntime } from './scene-runtime.js';
 
 function clamp(value, minimum, maximum) {
@@ -20,11 +21,12 @@ export class AnimationPreviewPlayer {
     this.pauseButton = pauseButton;
     this.replayButton = replayButton;
     this.driver = driver || new WaapiMotionDriver();
-    this.sceneCompilers = compilers || DEFAULT_SCENE_COMPILERS;
+    this.sceneCompilers = compilers || [...DEFAULT_SCENE_COMPILERS, compileEntityBehaviorProgram];
     this.runtime = new SceneRuntime({ root: stage, driver: this.driver, compilers: this.sceneCompilers });
     this.total = 12000;
     this.raf = null;
     this.profile = null;
+    this.entity = null;
     this.scene = null;
     this.plan = null;
     this.bindControls();
@@ -41,9 +43,7 @@ export class AnimationPreviewPlayer {
     });
   }
 
-  setScene(scene) {
-    this.scene = scene || null;
-  }
+  setScene(scene) { this.scene = scene || null; }
 
   sceneIsCurrent() {
     if (!this.scene || this.scene.root !== this.stage || !this.scene.nodes.length) return false;
@@ -60,15 +60,16 @@ export class AnimationPreviewPlayer {
     this.plan = null;
   }
 
-  restart(profile) {
+  restart(profile, entity = null) {
     this.profile = { ...profile };
+    this.entity = entity ? { ...entity, transform: { ...(entity.transform || {}) } } : null;
     const intensity = clamp(Number(profile.intensity) || 0, 0, 100);
     this.stage.style.setProperty('--motion-intensity', String(intensity / 100));
     this.stage.dataset.motionMode = 'continuous';
     if (!this.sceneIsCurrent()) this.scene = buildDomMotionScene(this.stage);
     this.plan = this.runtime.load({
       scene: this.scene,
-      context: { profile: this.profile }
+      context: { profile: this.profile, entity: this.entity }
     });
     this.total = this.plan.duration;
     this.updateProgress();

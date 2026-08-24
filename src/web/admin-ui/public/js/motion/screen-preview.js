@@ -49,6 +49,7 @@ export function renderAnimationScreenPreview(stage, bundle) {
   stage.innerHTML = `
     <div class="animation-screen-background" data-motion-background></div>
     <div class="animation-screen-canvas">${buildTableSvg(model, lines, layout)}</div>
+    <div class="animation-screen-entity-layer" data-motion-entity-layer aria-label="Объекты сцены"></div>
     <div class="animation-screen-vignette" aria-hidden="true"></div>
     <div class="animation-screen-shimmer" aria-hidden="true"></div>`;
 

@@ -50,6 +50,52 @@
             </div>
           </section>
 
+          <section class="settings-card animation-entity-card" aria-label="Редактор объекта сцены">
+            <div class="card-heading">
+              <div><p class="eyebrow">LIVE ENTITY · V1</p><h2>Объект сцены</h2><p>Отдельный визуальный объект поверх меню. Положение хранится в каноническом пространстве 1920×1080 и не зависит от размера предпросмотра.</p></div>
+              <span class="animation-entity-space">1920 × 1080</span>
+            </div>
+            <div class="animation-entity-grid">
+              <div class="animation-entity-asset-panel">
+                <div class="animation-entity-thumbnail" id="animation-entity-thumbnail"><span>PNG / WebP</span></div>
+                <div class="animation-entity-asset-actions">
+                  <input class="is-hidden" id="animation-entity-file" type="file" accept="image/png,image/webp" />
+                  <button class="button button-secondary" id="animation-entity-upload" type="button">Загрузить PNG / WebP</button>
+                  <small>Прозрачность сохраняется. JPEG намеренно не поддерживается для Entity.</small>
+                </div>
+              </div>
+
+              <div class="animation-entity-properties">
+                <div class="form-grid animation-entity-main-fields">
+                  <label class="field"><span>Название</span><input id="animation-entity-name" type="text" maxlength="80" value="Бокал пива" /></label>
+                  <label class="animation-entity-visible"><input id="animation-entity-visible" type="checkbox" /><span>Показывать объект</span></label>
+                </div>
+                <div class="animation-entity-transform-grid">
+                  <label class="field"><span>X</span><input id="animation-entity-x" type="number" step="1" /></label>
+                  <label class="field"><span>Y</span><input id="animation-entity-y" type="number" step="1" /></label>
+                  <label class="field"><span>Ширина</span><input id="animation-entity-width" type="number" min="24" step="1" /></label>
+                  <label class="field"><span>Поворот, °</span><input id="animation-entity-rotation" type="number" min="-180" max="180" step="1" /></label>
+                  <label class="field"><span>Масштаб</span><input id="animation-entity-scale" type="range" min="0.1" max="4" step="0.01" /><output id="animation-entity-scale-output">1.00×</output></label>
+                  <label class="field"><span>Глубина Z</span><input id="animation-entity-depth" type="range" min="-100" max="100" step="1" /><output id="animation-entity-depth-output">10</output></label>
+                  <label class="field"><span>Opacity</span><input id="animation-entity-opacity" type="range" min="0" max="1" step="0.01" /><output id="animation-entity-opacity-output">100%</output></label>
+                </div>
+                <div class="animation-entity-positioning">
+                  <span>Быстрое позиционирование</span>
+                  <div class="animation-entity-position-buttons">
+                    <button class="button button-secondary" type="button" data-entity-align="left">Слева</button>
+                    <button class="button button-secondary" type="button" data-entity-align="center">Центр</button>
+                    <button class="button button-secondary" type="button" data-entity-align="right">Справа</button>
+                    <button class="button button-secondary" type="button" data-entity-align="top">Сверху</button>
+                    <button class="button button-secondary" type="button" data-entity-align="middle">По центру Y</button>
+                    <button class="button button-secondary" type="button" data-entity-align="bottom">Снизу</button>
+                    <button class="button button-secondary" id="animation-entity-reset" type="button">Сбросить положение</button>
+                  </div>
+                  <small>Объект можно перетаскивать мышью или пальцем прямо в Live Preview. Маркер в правом нижнем углу меняет размер с сохранением пропорций.</small>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section class="animation-controls-grid" aria-label="Детальные параметры постоянной анимации">
             <div class="settings-card">
               <div class="card-heading"><div><p class="eyebrow">ЛОГИКА</p><h2>Характер движения</h2><p>Определяет, как акцент живёт внутри уже открытого меню.</p></div></div>
