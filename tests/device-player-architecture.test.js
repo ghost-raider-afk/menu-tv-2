@@ -28,9 +28,11 @@ test('real TV player runs the canonical Motion Engine and keeps it available off
     read('src/api/device/public-routes.js'),
     read('src/web/admin-ui/public/css/player.css')
   ]);
-  assert.match(worker, /tv-menu-player-shell-v6/);
-  assert.match(worker, /\/js\/motion\/live-menu-motion\.js/);
-  assert.match(worker, /\/js\/motion\/motion-plan\.js/);
+  assert.match(worker, /tv-menu-player-shell-v\d+/);
+  for (const asset of [
+    '/js/editor/renderer.js', '/js/editor/renderer-model.js', '/js/editor/renderer-svg.js',
+    '/js/motion/live-menu-motion.js', '/js/motion/motion-plan.js', '/js/motion/dom-scene-adapter.js'
+  ]) assert.ok(worker.includes(`'${asset}'`), `offline shell is missing ${asset}`);
   assert.match(player, /new LiveMenuMotion\(playerStage\)/);
   assert.match(player, /context\.animation\?\.enabled/);
   assert.match(liveMotion, /DEFAULT_SCENE_COMPILERS/);
@@ -41,27 +43,30 @@ test('real TV player runs the canonical Motion Engine and keeps it available off
   assert.match(publicRoutes, /animation:\s*\{/);
   assert.match(publicRoutes, /enabled: animationSettings\?\.enabled === true/);
   assert.match(playerCss, /\.tv-player-announcement-layer/);
+  assert.match(playerCss, /transform-box:\s*fill-box/);
   assert.match(player, /showCachedPlayer/);
   assert.match(player, /serviceWorker\.register\('\/player-sw\.js'/);
 });
 
-test('TV identity is persistent and one-to-one with monitor binding', async () => {
+test('TV identity is persistent and monitor binding is a first-class one-to-one relation', async () => {
   const [migration, repository, routes, player] = await Promise.all([
-    read('src/db/migrations/device-identity.js'),
+    read('src/db/migrations/device-bindings.js'),
     read('src/db/devices.js'),
     read('src/api/device/public-routes.js'),
     read('src/web/admin-ui/public/js/player/player.js')
   ]);
   assert.match(migration, /device_key TEXT/);
-  assert.match(migration, /tv_devices_device_key_unique/);
-  assert.match(migration, /tv_devices_active_screen_unique/);
-  assert.match(repository, /async bindDevice/);
-  assert.match(repository, /screen_id = \$2 OR device_key = \$3/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS tv_device_bindings/);
+  assert.match(migration, /tv_device_bindings_active_device_unique/);
+  assert.match(migration, /tv_device_bindings_active_screen_unique/);
+  assert.match(migration, /UPDATE tv_devices SET screen_id = NULL/);
+  assert.match(repository, /async function bindDevice/);
+  assert.match(repository, /JOIN tv_device_bindings b ON b\.device_id = d\.id AND b\.active = TRUE/);
   assert.match(repository, /UPDATE tv_device_sessions SET revoked_at/);
   assert.match(routes, /deviceKey: persistentDeviceKey\(activation\.device_key\)/);
   assert.match(routes, /tx\.bindDevice/);
   assert.match(player, /DEVICE_KEY_STORAGE_KEY/);
-  assert.match(player, /device_key: currentDeviceKey\(\)/);
+  assert.match(player, /device_key: currentDeviceKey\(\) \|\| undefined/);
   assert.match(player, /rememberDeviceKey/);
 });
 
