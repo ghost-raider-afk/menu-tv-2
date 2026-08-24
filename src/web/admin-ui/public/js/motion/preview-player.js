@@ -1,7 +1,7 @@
 import { WaapiMotionDriver } from './drivers/waapi-driver.js';
 import { buildDomMotionScene } from './dom-scene-adapter.js';
-import { compileMotionPlan } from './motion-plan.js';
-import { MotionTimeline } from './timeline.js';
+import { DEFAULT_SCENE_COMPILERS } from './motion-plan.js';
+import { SceneRuntime } from './scene-runtime.js';
 
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
@@ -12,7 +12,7 @@ function formatTime(milliseconds) {
 }
 
 export class AnimationPreviewPlayer {
-  constructor({ stage, timeline, timeLabel, playButton, pauseButton, replayButton, driver = null }) {
+  constructor({ stage, timeline, timeLabel, playButton, pauseButton, replayButton, driver = null, compilers = null }) {
     this.stage = stage;
     this.timeline = timeline;
     this.timeLabel = timeLabel;
@@ -20,7 +20,8 @@ export class AnimationPreviewPlayer {
     this.pauseButton = pauseButton;
     this.replayButton = replayButton;
     this.driver = driver || new WaapiMotionDriver();
-    this.motionTimeline = new MotionTimeline({ root: stage, driver: this.driver });
+    this.sceneCompilers = compilers || DEFAULT_SCENE_COMPILERS;
+    this.runtime = new SceneRuntime({ root: stage, driver: this.driver, compilers: this.sceneCompilers });
     this.total = 12000;
     this.raf = null;
     this.profile = null;
@@ -40,46 +41,51 @@ export class AnimationPreviewPlayer {
     });
   }
 
+  setScene(scene) {
+    this.scene = scene || null;
+  }
+
   destroy() {
     cancelAnimationFrame(this.raf);
-    this.motionTimeline.destroy();
+    this.runtime.destroy();
     this.scene = null;
     this.plan = null;
   }
 
   restart(profile) {
-    this.motionTimeline.destroy();
     this.profile = { ...profile };
     const intensity = clamp(Number(profile.intensity) || 0, 0, 100);
     this.stage.style.setProperty('--motion-intensity', String(intensity / 100));
     this.stage.dataset.motionMode = 'continuous';
-    this.scene = buildDomMotionScene(this.stage);
-    this.plan = compileMotionPlan(this.scene, profile);
+    if (!this.scene || this.scene.root !== this.stage) this.scene = buildDomMotionScene(this.stage);
+    this.plan = this.runtime.load({
+      scene: this.scene,
+      context: { profile: this.profile }
+    });
     this.total = this.plan.duration;
-    this.motionTimeline.load(this.plan);
     this.updateProgress();
   }
 
   play() {
     if (!this.plan) return;
-    this.motionTimeline.play();
+    this.runtime.play();
     this.updateProgress();
   }
 
   pause() {
-    this.motionTimeline.pause();
+    this.runtime.pause();
     this.updateProgress();
   }
 
   replay() {
     if (!this.plan) return;
-    this.motionTimeline.replay();
+    this.runtime.replay();
     this.updateProgress();
   }
 
   seek(milliseconds) {
-    const time = this.motionTimeline.seek(milliseconds);
-    this.motionTimeline.pause();
+    const time = this.runtime.seek(milliseconds);
+    this.runtime.pause();
     this.renderProgress(time);
   }
 
@@ -94,8 +100,8 @@ export class AnimationPreviewPlayer {
     cancelAnimationFrame(this.raf);
     const tick = () => {
       if (!this.plan) return;
-      this.renderProgress(this.motionTimeline.currentTime());
-      if (this.motionTimeline.playState() === 'running') this.raf = requestAnimationFrame(tick);
+      this.renderProgress(this.runtime.currentTime());
+      if (this.runtime.playState() === 'running') this.raf = requestAnimationFrame(tick);
     };
     tick();
   }
