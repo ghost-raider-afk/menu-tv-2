@@ -11,6 +11,7 @@
 - Добавлен `Scene Runtime`, объединяющий независимые compilers в один master timeline и единый lifecycle `play/pause/replay/seek/destroy`.
 - Motion state хранит числовые `x/y/z`, scale, opacity, brightness/glow и семантический timing без CSS-строк; CSS serialization выполняется только WAAPI driver.
 - WAAPI driver записывает только явно заявленные track claims, поэтому программа не может незаметно менять чужой канал.
+- После перерендера или смены монитора preview player проверяет актуальность scene targets и автоматически перестраивает Scene Graph вместо использования ссылок на удалённые SVG-узлы.
 
 ### Будущая 2.5D / 3D сцена
 - Scene Graph уже содержит независимый слой `entity`, но default menu/atmosphere compilers намеренно не управляют будущей Live Entity.
@@ -20,6 +21,7 @@
 ### Проверки
 - Добавлены regression-тесты Scene Composer ownership, независимого вызова compilers, Scene Runtime и выборочной WAAPI serialization по claims.
 - Сохранены Chromium-проверки существующей анимации и единой плашки «Акция» после архитектурной переработки.
+- Добавлен Chromium regression на замену DOM preview: после повторного render анимация обязана перепривязаться к новым scene targets, а старые targets не должны сохранять активные анимации.
 
 ## [1.3.4] - 2026-08-24
 
