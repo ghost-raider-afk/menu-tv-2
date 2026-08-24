@@ -48,11 +48,16 @@ test('legacy entrance profile is migrated into always-visible continuous motion'
   assert.equal('opacity_from' in migrated, false);
 });
 
-test('animation studio uses a real-screen continuous loop instead of slide entrance animation', async () => {
-  const [html, app, navigation, config, css, previewCss, page, player, screenPreview] = await Promise.all([
+test('animation studio uses a composed Motion Engine v3 runtime without changing the saved profile format', async () => {
+  const [
+    html, app, navigation, config, css, previewCss, page, player, screenPreview,
+    sceneGraph, domAdapter, motionPlan, composer, runtime, timeline, waapiDriver
+  ] = await Promise.all([
     read('animation.html'), read('js/application.js'), read('js/core/navigation.js'), read('js/core/config.js'),
     read('css/pages/animation.css'), read('css/pages/animation-screen-preview.css'), read('js/pages/animation.js'),
-    read('js/motion/preview-player.js'), read('js/motion/screen-preview.js')
+    read('js/motion/preview-player.js'), read('js/motion/screen-preview.js'), read('js/motion/scene-graph.js'),
+    read('js/motion/dom-scene-adapter.js'), read('js/motion/motion-plan.js'), read('js/motion/scene-composer.js'),
+    read('js/motion/scene-runtime.js'), read('js/motion/timeline.js'), read('js/motion/drivers/waapi-driver.js')
   ]);
   assert.match(html, /data-page="animation"/);
   for (const id of ['animation-stage','animation-screen-select','animation-screen-status','animation-play','animation-pause','animation-replay','animation-timeline','animation-save','animation-pattern','animation-cycle','animation-section-effect','animation-background-effect']) {
@@ -69,14 +74,57 @@ test('animation studio uses a real-screen continuous loop instead of slide entra
   assert.match(page, /ANIMATION_PRESETS/);
   assert.match(page, /api\.get\(API\.screens\)/);
   assert.match(page, /renderAnimationScreenPreview/);
+
   assert.match(screenPreview, /buildRenderModel/);
   assert.match(screenPreview, /buildDisplayLines/);
   assert.match(screenPreview, /buildRenderLayout/);
   assert.match(screenPreview, /buildTableSvg/);
-  assert.match(player, /iterations:\s*Infinity/);
-  assert.match(player, /opacity:\s*1/);
+  assert.doesNotMatch(screenPreview, /buildDomMotionScene|compileMotionPlan|SceneRuntime/);
+
+  assert.match(sceneGraph, /MOTION_SCENE_VERSION = 3/);
+  assert.match(sceneGraph, /ENTITY:\s*'entity'/);
+  assert.match(sceneGraph, /createMotionScene/);
+  assert.match(sceneGraph, /transformOwner/);
+  assert.doesNotMatch(sceneGraph, /querySelector|instanceof Element|\.animate\(/);
+
+  assert.match(domAdapter, /buildDomMotionScene/);
+  assert.match(domAdapter, /querySelector/);
+
+  assert.match(motionPlan, /compileMenuMotionProgram/);
+  assert.match(motionPlan, /compileAtmosphereProgram/);
+  assert.match(motionPlan, /DEFAULT_SCENE_COMPILERS/);
+  assert.match(motionPlan, /claims:/);
+  assert.doesNotMatch(motionPlan, /translate3d\(|drop-shadow\(|cubic-bezier\(/);
+
+  assert.match(composer, /composeScenePrograms/);
+  assert.match(composer, /Scene ownership conflict/);
+  assert.match(composer, /menu\.item\.0|KNOWN_CLAIMS|ownership/);
+
+  assert.match(runtime, /export class SceneRuntime/);
+  assert.match(runtime, /composeScenePrograms/);
+  assert.match(runtime, /new MotionTimeline/);
+  assert.doesNotMatch(runtime, /instanceof Element|querySelector|\.animate\(/);
+
+  assert.match(timeline, /export class MotionTimeline/);
+  assert.doesNotMatch(timeline, /instanceof Element|\.animate\(/);
+
+  assert.match(waapiDriver, /export class WaapiMotionDriver/);
+  assert.match(waapiDriver, /instanceof Element/);
+  assert.match(waapiDriver, /translate3d\(/);
+  assert.match(waapiDriver, /drop-shadow\(/);
+  assert.match(waapiDriver, /cubic-bezier\(/);
+  assert.match(waapiDriver, /track\.claims/);
+  assert.match(waapiDriver, /\.animate\(/);
+
+  assert.match(player, /new WaapiMotionDriver\(\)/);
+  assert.match(player, /new SceneRuntime/);
+  assert.match(player, /DEFAULT_SCENE_COMPILERS/);
+  assert.match(player, /buildDomMotionScene\(this\.stage\)/);
+  assert.match(player, /this\.runtime\.load/);
+  assert.doesNotMatch(player, /new MotionTimeline|compileMotionPlan|\.animate\(/);
   assert.doesNotMatch(player, /opacity_from|entranceTransform|clipFrames/);
   assert.match(player, /currentTime/);
+
   assert.match(css, /\.animation-stage/);
   assert.match(css, /aspect-ratio:16\/9/);
   assert.match(previewCss, /\.animation-screen-canvas \.menu-table-svg/);

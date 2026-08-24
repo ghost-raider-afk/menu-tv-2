@@ -37,18 +37,31 @@ test('promotion badge keeps shape and label inside one SVG group', () => {
   assert.ok(contentStart > badgeEnd, 'promotion badge must be a sibling of the item motion content, not nested inside it');
 });
 
-test('motion preview isolates promotion scaling from product row content and keeps row phase synchronized', async () => {
-  const [screenPreview, player] = await Promise.all([
-    readFile(new URL('js/motion/screen-preview.js', publicRoot), 'utf8'),
+test('Motion Engine v3 keeps promotion and row content as sibling scene nodes with shared phase and ownership', async () => {
+  const [domAdapter, sceneGraph, motionPlan, composer, runtime, player] = await Promise.all([
+    readFile(new URL('js/motion/dom-scene-adapter.js', publicRoot), 'utf8'),
+    readFile(new URL('js/motion/scene-graph.js', publicRoot), 'utf8'),
+    readFile(new URL('js/motion/motion-plan.js', publicRoot), 'utf8'),
+    readFile(new URL('js/motion/scene-composer.js', publicRoot), 'utf8'),
+    readFile(new URL('js/motion/scene-runtime.js', publicRoot), 'utf8'),
     readFile(new URL('js/motion/preview-player.js', publicRoot), 'utf8')
   ]);
 
-  assert.match(screenPreview, /row\.classList\.contains\('table-packaging'\)[\s\S]*markMotionTarget\(row, 'item', index, rows\.length\)/);
-  assert.match(screenPreview, /:scope > g\.table-item-content/);
-  assert.match(screenPreview, /:scope > g\.promotion-badge/);
-  assert.match(screenPreview, /markMotionTarget\(content, 'item', index, rows\.length\)/);
-  assert.match(screenPreview, /markMotionTarget\(promotion, 'promotion', index, rows\.length\)/);
-  assert.match(player, /promotion:\s*\[\.\.\.this\.stage\.querySelectorAll\('\[data-motion="promotion"\]'\)\]/);
-  assert.match(player, /sequenceFor\(element, index, targets\.length\)/);
-  assert.match(player, /kind === 'promotion' \? 'item' : kind/);
+  assert.match(domAdapter, /row\.classList\.contains\('table-packaging'\)/);
+  assert.match(domAdapter, /:scope > g\.table-item-content/);
+  assert.match(domAdapter, /:scope > g\.promotion-badge/);
+  assert.match(domAdapter, /id: `menu\.item\.\$\{index\}`/);
+  assert.match(domAdapter, /id: `menu\.promotion\.\$\{index\}`/);
+  assert.match(domAdapter, /order: index,[\s\S]*count: rows\.length/);
+  assert.match(sceneGraph, /transformOwner/);
+  assert.doesNotMatch(sceneGraph, /querySelector|instanceof Element/);
+  assert.match(motionPlan, /node\.kind === 'promotion' \? 'item' : node\.kind/);
+  assert.match(motionPlan, /targetDelay\(profile, node\.order, node\.count, duration\)/);
+  assert.match(motionPlan, /claims:\s*Object\.freeze\(\['transform', 'opacity', 'appearance'\]\)/);
+  assert.match(composer, /Scene ownership conflict/);
+  assert.match(runtime, /composeScenePrograms/);
+  assert.match(player, /buildDomMotionScene\(this\.stage\)/);
+  assert.match(player, /new SceneRuntime/);
+  assert.match(player, /this\.runtime\.load/);
+  assert.doesNotMatch(player, /\.animate\(/);
 });

@@ -9,33 +9,6 @@ function applyTypography(stage, layout) {
   svg.dataset.fontKey = layout.typography.key;
 }
 
-function markMotionTarget(node, kind, order = null, count = null) {
-  if (!(node instanceof SVGElement)) return;
-  node.dataset.motion = kind;
-  if (Number.isInteger(order)) node.dataset.motionOrder = String(order);
-  if (Number.isInteger(count) && count > 0) node.dataset.motionCount = String(count);
-}
-
-function markMotionTargets(stage) {
-  const sections = [...stage.querySelectorAll('g.table-section')];
-  sections.forEach((node, index) => markMotionTarget(node, 'section', index, sections.length));
-
-  const rows = [...stage.querySelectorAll('g.table-item, g.table-packaging')];
-  rows.forEach((row, index) => {
-    if (row.classList.contains('table-packaging')) {
-      markMotionTarget(row, 'item', index, rows.length);
-      return;
-    }
-    const content = row.querySelector(':scope > g.table-item-content');
-    const promotion = row.querySelector(':scope > g.promotion-badge');
-    markMotionTarget(content, 'item', index, rows.length);
-    markMotionTarget(promotion, 'promotion', index, rows.length);
-  });
-
-  const prices = [...stage.querySelectorAll('text.price, text.packaging-price')];
-  prices.forEach((node, index) => markMotionTarget(node, 'price', index, prices.length));
-}
-
 function backgroundStyle(layer, model, palette) {
   layer.style.backgroundColor = palette.background;
   layer.style.backgroundImage = model.settings.background_image_url ? `url("${model.settings.background_image_url}")` : '';
@@ -81,7 +54,6 @@ export function renderAnimationScreenPreview(stage, bundle) {
 
   backgroundStyle(stage.querySelector('.animation-screen-background'), model, layout.palette);
   applyTypography(stage, layout);
-  markMotionTargets(stage);
 
   return { model, lines, layout };
 }
@@ -89,6 +61,7 @@ export function renderAnimationScreenPreview(stage, bundle) {
 export function renderAnimationScreenEmpty(stage, message = 'Создайте монитор, чтобы просматривать его анимацию.') {
   if (!stage) return;
   delete stage.dataset.screenId;
+  delete stage.dataset.motionSceneVersion;
   stage.style.aspectRatio = '16 / 9';
   stage.replaceChildren(Object.assign(document.createElement('p'), {
     className: 'animation-screen-empty',

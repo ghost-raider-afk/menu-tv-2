@@ -205,3 +205,62 @@ test('promotion badge scales as one isolated SVG motion group', async ({ page })
   expect(result.contentTransform).not.toBe('none');
   expect(result.badgeTransform).toBe(result.contentTransform);
 });
+
+test('preview player rebinds scene targets after the preview DOM is replaced', async ({ page }) => {
+  await login(page);
+  await page.goto('/animation.html');
+
+  const result = await page.evaluate(async () => {
+    const [{ renderAnimationScreenPreview }, { AnimationPreviewPlayer }, { profileForPreset }] = await Promise.all([
+      import('/js/motion/screen-preview.js'),
+      import('/js/motion/preview-player.js'),
+      import('/js/motion/presets.js')
+    ]);
+    const stage = document.createElement('div');
+    stage.className = 'animation-stage';
+    stage.style.width = '960px';
+    document.body.append(stage);
+    const player = new AnimationPreviewPlayer({ stage });
+    const profile = { ...profileForPreset('accent-pulse'), item_effect: 'pulse', price_effect: 'none', background_effect: 'none' };
+    const bundle = (name) => ({
+      screen: { id: 999998, resolution: '1920x1080' },
+      draft: {
+        rows: [
+          { id: `section-${name}`, kind: 'section', name: 'ПРОВЕРКА REBIND', enabled: true },
+          { id: `item-${name}`, kind: 'item', name, price_primary: '240', price_secondary: '360', enabled: true }
+        ],
+        settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC' }
+      },
+      products: [], packaging: []
+    });
+
+    renderAnimationScreenPreview(stage, bundle('ПЕРВАЯ ПОЗИЦИЯ'));
+    player.restart(profile);
+    const firstTarget = player.scene.node('menu.item.0')?.target;
+
+    renderAnimationScreenPreview(stage, bundle('ВТОРАЯ ПОЗИЦИЯ'));
+    const oldTargetStillInStage = firstTarget ? stage.contains(firstTarget) : null;
+    const secondContentBeforeRestart = stage.querySelector('g.table-item > g.table-item-content');
+    player.restart(profile);
+    const reboundTarget = player.scene.node('menu.item.0')?.target;
+
+    const snapshot = {
+      oldTargetStillInStage,
+      targetChanged: firstTarget !== reboundTarget,
+      reboundIsCurrentDom: reboundTarget === secondContentBeforeRestart,
+      reboundAnimations: reboundTarget?.getAnimations().length ?? -1,
+      oldAnimations: firstTarget?.getAnimations().length ?? -1,
+      currentName: stage.querySelector('.item-name')?.textContent || ''
+    };
+    player.destroy();
+    stage.remove();
+    return snapshot;
+  });
+
+  expect(result.oldTargetStillInStage).toBe(false);
+  expect(result.targetChanged).toBe(true);
+  expect(result.reboundIsCurrentDom).toBe(true);
+  expect(result.reboundAnimations).toBeGreaterThan(0);
+  expect(result.oldAnimations).toBe(0);
+  expect(result.currentName).toBe('ВТОРАЯ ПОЗИЦИЯ');
+});
