@@ -1,6 +1,6 @@
 import { WaapiMotionDriver } from './drivers/waapi-driver.js';
+import { buildDomMotionScene } from './dom-scene-adapter.js';
 import { compileMotionPlan } from './motion-plan.js';
-import { buildMotionScene } from './scene-graph.js';
 import { MotionTimeline } from './timeline.js';
 
 function clamp(value, minimum, maximum) {
@@ -53,7 +53,7 @@ export class AnimationPreviewPlayer {
     const intensity = clamp(Number(profile.intensity) || 0, 0, 100);
     this.stage.style.setProperty('--motion-intensity', String(intensity / 100));
     this.stage.dataset.motionMode = 'continuous';
-    this.scene = buildMotionScene(this.stage);
+    this.scene = buildDomMotionScene(this.stage);
     this.plan = compileMotionPlan(this.scene, profile);
     this.total = this.plan.duration;
     this.motionTimeline.load(this.plan);
