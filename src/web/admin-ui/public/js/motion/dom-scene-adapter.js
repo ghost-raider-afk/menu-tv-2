@@ -95,6 +95,16 @@ function collectAuxiliaryNodes(stage) {
     transformOwner: 'self'
   });
   append(nodes, {
+    id: 'entity.beer-glass',
+    kind: 'entity',
+    layer: MOTION_LAYERS.ENTITY,
+    target: stage.querySelector('[data-entity-motion="beer-glass"]'),
+    order: 0,
+    count: 1,
+    depth: 10,
+    transformOwner: 'entity-behavior'
+  });
+  append(nodes, {
     id: 'atmosphere.shimmer',
     kind: 'shimmer',
     layer: MOTION_LAYERS.ATMOSPHERE,
