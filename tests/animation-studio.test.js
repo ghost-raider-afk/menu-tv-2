@@ -49,11 +49,11 @@ test('legacy entrance profile is migrated into always-visible continuous motion'
 });
 
 test('animation studio uses a real-screen loop through Motion Engine v3 without changing the saved profile format', async () => {
-  const [html, app, navigation, config, css, previewCss, page, player, screenPreview, sceneGraph, motionPlan, timeline, waapiDriver] = await Promise.all([
+  const [html, app, navigation, config, css, previewCss, page, player, screenPreview, sceneGraph, domAdapter, motionPlan, timeline, waapiDriver] = await Promise.all([
     read('animation.html'), read('js/application.js'), read('js/core/navigation.js'), read('js/core/config.js'),
     read('css/pages/animation.css'), read('css/pages/animation-screen-preview.css'), read('js/pages/animation.js'),
     read('js/motion/preview-player.js'), read('js/motion/screen-preview.js'), read('js/motion/scene-graph.js'),
-    read('js/motion/motion-plan.js'), read('js/motion/timeline.js'), read('js/motion/drivers/waapi-driver.js')
+    read('js/motion/dom-scene-adapter.js'), read('js/motion/motion-plan.js'), read('js/motion/timeline.js'), read('js/motion/drivers/waapi-driver.js')
   ]);
   assert.match(html, /data-page="animation"/);
   for (const id of ['animation-stage','animation-screen-select','animation-screen-status','animation-play','animation-pause','animation-replay','animation-timeline','animation-save','animation-pattern','animation-cycle','animation-section-effect','animation-background-effect']) {
@@ -74,18 +74,24 @@ test('animation studio uses a real-screen loop through Motion Engine v3 without 
   assert.match(screenPreview, /buildDisplayLines/);
   assert.match(screenPreview, /buildRenderLayout/);
   assert.match(screenPreview, /buildTableSvg/);
-  assert.match(screenPreview, /buildMotionScene/);
+  assert.match(screenPreview, /buildDomMotionScene/);
   assert.match(sceneGraph, /MOTION_SCENE_VERSION = 3/);
   assert.match(sceneGraph, /ENTITY:\s*'entity'/);
+  assert.match(sceneGraph, /createMotionScene/);
   assert.match(sceneGraph, /transformOwner/);
+  assert.doesNotMatch(sceneGraph, /querySelector|instanceof Element|\.animate\(/);
+  assert.match(domAdapter, /buildDomMotionScene/);
+  assert.match(domAdapter, /querySelector/);
   assert.match(motionPlan, /compileMotionPlan/);
   assert.match(motionPlan, /iterations:\s*Infinity/);
   assert.match(timeline, /export class MotionTimeline/);
+  assert.doesNotMatch(timeline, /instanceof Element|\.animate\(/);
   assert.match(waapiDriver, /export class WaapiMotionDriver/);
+  assert.match(waapiDriver, /instanceof Element/);
   assert.match(waapiDriver, /\.animate\(/);
   assert.match(player, /new WaapiMotionDriver\(\)/);
   assert.match(player, /new MotionTimeline/);
-  assert.match(player, /buildMotionScene\(this\.stage\)/);
+  assert.match(player, /buildDomMotionScene\(this\.stage\)/);
   assert.match(player, /compileMotionPlan\(this\.scene, profile\)/);
   assert.doesNotMatch(player, /\.animate\(/);
   assert.doesNotMatch(player, /opacity_from|entranceTransform|clipFrames/);
