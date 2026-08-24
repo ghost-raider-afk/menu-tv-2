@@ -25,6 +25,7 @@ const successText = document.querySelector('[data-connect-success-text]');
 let activationId = null;
 let locations = [];
 let screens = [];
+let bindings = [];
 let selectedLocationId = null;
 let selectedScreenId = null;
 let mediaStream = null;
@@ -77,15 +78,20 @@ function resetSelection() {
   locationOptions.innerHTML = '';
   screenOptions.innerHTML = '';
   authorizeButton.disabled = true;
+  authorizeButton.textContent = 'Подключить ТВ';
   deviceFound?.classList.add('is-hidden');
   success?.classList.add('is-hidden');
   setProgress('scan');
 }
 
-function optionButton({ title, subtitle = '', selected = false, onClick }) {
+function bindingForScreen(screenId) {
+  return bindings.find((binding) => Number(binding.screen_id) === Number(screenId)) || null;
+}
+
+function optionButton({ title, subtitle = '', selected = false, occupied = false, onClick }) {
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = `connect-tv-option${selected ? ' is-selected' : ''}`;
+  button.className = `connect-tv-option${selected ? ' is-selected' : ''}${occupied ? ' is-occupied' : ''}`;
   const strong = document.createElement('strong');
   strong.textContent = title;
   button.append(strong);
@@ -93,6 +99,12 @@ function optionButton({ title, subtitle = '', selected = false, onClick }) {
     const span = document.createElement('span');
     span.textContent = subtitle;
     button.append(span);
+  }
+  if (occupied) {
+    const state = document.createElement('em');
+    state.className = 'connect-tv-option-state';
+    state.textContent = 'ТВ подключён';
+    button.append(state);
   }
   button.addEventListener('click', onClick);
   return button;
@@ -110,14 +122,17 @@ function renderScreens() {
     return;
   }
   for (const screen of available) {
+    const binding = bindingForScreen(screen.id);
     screenOptions.append(optionButton({
       title: screen.name,
       subtitle: `${screen.resolution || '1920×1080'} · ТВ ${screen.location_number || screen.id}`,
       selected: Number(screen.id) === Number(selectedScreenId),
+      occupied: Boolean(binding),
       onClick: () => {
         selectedScreenId = Number(screen.id);
         renderScreens();
         authorizeButton.disabled = false;
+        authorizeButton.textContent = binding ? 'Заменить подключённый ТВ' : 'Подключить ТВ';
       }
     }));
   }
@@ -133,6 +148,8 @@ function renderLocations() {
       onClick: () => {
         selectedLocationId = Number(location.id);
         selectedScreenId = null;
+        authorizeButton.disabled = true;
+        authorizeButton.textContent = 'Подключить ТВ';
         renderLocations();
         screenStep?.classList.remove('is-disabled');
         renderScreens();
@@ -143,7 +160,12 @@ function renderLocations() {
 }
 
 async function loadStructure() {
-  [locations, screens] = await Promise.all([api.get(API.locations), api.get(API.screens)]);
+  [locations, screens, bindings] = await Promise.all([
+    api.get(API.locations),
+    api.get(API.screens),
+    api.get(API.deviceBindings)
+  ]);
+  if (!Array.isArray(bindings)) bindings = [];
 }
 
 async function resolveActivation(payload) {
@@ -259,13 +281,37 @@ function normalizeReserveCode() {
   return digits;
 }
 
+async function sendAuthorization(replaceExisting) {
+  return api.post(API.deviceAuthorize, {
+    activation_id: activationId,
+    screen_id: selectedScreenId,
+    replace_existing: replaceExisting
+  });
+}
+
 async function authorize() {
   if (!activationId || !selectedScreenId) return;
+  const screen = screens.find((item) => Number(item.id) === Number(selectedScreenId));
+  const occupied = Boolean(bindingForScreen(selectedScreenId));
+  if (occupied) {
+    const confirmed = window.confirm(`К монитору «${screen?.name || selectedScreenId}» уже подключён ТВ. Отвязать его и подключить этот телевизор?`);
+    if (!confirmed) return;
+  }
+
   authorizeButton.disabled = true;
-  setMessage('Подключаем телевизор…');
+  setMessage(occupied ? 'Заменяем привязку телевизора…' : 'Подключаем телевизор…');
   try {
-    const result = await api.post(API.deviceAuthorize, { activation_id: activationId, screen_id: selectedScreenId });
-    successText.textContent = `${result.screen.location_name} → ${result.screen.name}. Телевизор автоматически откроет ТВ МЕНЮ.`;
+    let result;
+    try {
+      result = await sendAuthorization(occupied);
+    } catch (error) {
+      const collision = error?.status === 409 && error?.body?.details?.reason === 'screen_already_bound';
+      if (!collision || occupied) throw error;
+      const confirmed = window.confirm(`К монитору «${screen?.name || selectedScreenId}» только что подключили другой ТВ. Заменить его?`);
+      if (!confirmed) throw error;
+      result = await sendAuthorization(true);
+    }
+    successText.textContent = `${result.screen.location_name} → ${result.screen.name}. ${result.replaces_existing ? 'Предыдущий ТВ будет отвязан. ' : ''}Телевизор автоматически откроет ТВ МЕНЮ.`;
     success.classList.remove('is-hidden');
     document.querySelector('.connect-tv-flow')?.classList.add('is-hidden');
     setMessage('');
