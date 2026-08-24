@@ -8,10 +8,12 @@ import {
   DEFAULT_ANIMATION_PROFILE,
   ITEM_EFFECTS,
   PRICE_EFFECTS,
+  PROMOTION_EFFECTS,
   SECTION_EFFECTS,
   completeAnimationProfile
 } from '../shared/animation-profile.js';
 import { sceneEntityInput } from './scene-entity.js';
+import { announcementInput } from './announcement.js';
 
 function enumValue(value, field, allowed) {
   if (typeof value !== 'string' || !allowed.includes(value)) throw new ValidationError(`Поле «${field}» содержит неподдерживаемое значение.`);
@@ -42,6 +44,7 @@ export function animationProfileInput(source) {
     brightness_amount: numberValue(profile.brightness_amount, 'Амплитуда яркости', { min: 0, max: 0.5 }),
     section_effect: enumValue(profile.section_effect, 'Эффект разделов', SECTION_EFFECTS),
     item_effect: enumValue(profile.item_effect, 'Эффект строк', ITEM_EFFECTS),
+    promotion_effect: enumValue(profile.promotion_effect, 'Эффект плашки «Акция»', PROMOTION_EFFECTS),
     price_effect: enumValue(profile.price_effect, 'Эффект цен', PRICE_EFFECTS),
     background_effect: enumValue(profile.background_effect, 'Эффект фона', BACKGROUND_EFFECTS),
     background_zoom_percent: numberValue(profile.background_zoom_percent, 'Глубина фона', { min: 0, max: 8 }),
@@ -53,12 +56,13 @@ export function animationSettingsInput(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new ValidationError('Настройки анимации должны быть объектом.');
   const enabled = body.enabled ?? false;
   if (typeof enabled !== 'boolean') throw new ValidationError('Поле «enabled» должно быть логическим значением.');
-  const presetId = typeof body.preset_id === 'string' ? body.preset_id.trim() : '';
-  if (!/^[a-z0-9-]{1,64}$/.test(presetId)) throw new ValidationError('Идентификатор пресета указан неверно.');
+  const presetId = typeof body.preset_id === 'string' ? body.preset_id.trim() : 'single-promo-focus';
+  if (!/^[a-z0-9-]{1,64}$/.test(presetId)) throw new ValidationError('Идентификатор профиля указан неверно.');
   return {
     enabled,
     preset_id: presetId,
     profile: animationProfileInput(body.profile ?? DEFAULT_ANIMATION_PROFILE),
-    entity: sceneEntityInput(body.entity)
+    entity: sceneEntityInput(body.entity),
+    announcement: announcementInput(body.announcement)
   };
 }
