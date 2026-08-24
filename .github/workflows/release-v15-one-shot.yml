@@ -1,18 +1,32 @@
 name: release-v15-one-shot
 
 on:
-  issue_comment:
-    types: [created]
+  push:
+    branches:
+      - main
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   finalize:
-    if: github.event.issue.number == 43 && github.event.comment.body == '/finalize-v1.5.0'
+    if: contains(github.event.head_commit.message, '[release-v15-trigger]')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Cancel duplicate main gate run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 3
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow check.yml --branch main --limit 20 --json databaseId,headSha,status --jq ".[] | select(.headSha == \"$GITHUB_SHA\" and .status != \"completed\") | .databaseId" | while read -r run_id; do
+            [[ -n "$run_id" ]] || continue
+            echo "Cancelling duplicate check run $run_id"
+            gh run cancel "$run_id" --repo "$GITHUB_REPOSITORY" || true
+          done
       - name: Checkout main
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -33,8 +47,7 @@ jobs:
               if old not in text:
                   raise SystemExit('expected unreleased 1.4.2 changelog header not found')
               mobile = '''## [1.5.0] - 2026-08-24\n\n### Мобильный интерфейс\n- Мобильная версия переведена на отдельную архитектуру оболочки вместо набора локальных адаптивных патчей поверх desktop UI.\n- На телефоне основная навигация перенесена в нижнюю панель «Обзор / Мониторы / Каталог / Настройки», а подразделы открываются отдельной контекстной шторкой.\n- Добавлены safe-area отступы, мобильная шапка, touch-targets не меньше 44 px и 16 px для текстовых полей, чтобы Safari не включал нежелательный zoom.\n- Формы, карточки, уведомления, диалоги, Каталог, Мониторы, Настройки, Журнал, редактор меню, Анимация и подключение ТВ получили единые мобильные правила без общего горизонтального overflow.\n- Добавлены Chromium-regressions для 360×800 и 390×844, включая навигацию, шторку раздела, touch-размеры и отсутствие page-level overflow.\n\n'''
-              text = text.replace(old, mobile, 1)
-              changelog.write_text(text)
+              changelog.write_text(text.replace(old, mobile, 1))
 
           workflow = Path('.github/workflows/check.yml')
           wf = workflow.read_text()
@@ -51,7 +64,7 @@ jobs:
           wf = wf.replace("DEVICE_ACTIVATION_TTL_MINUTES: '10'", "DEVICE_ACTIVATION_TTL_MINUTES: '2'")
           workflow.write_text(wf)
           PY
-          git rm .github/workflows/release-v15-one-shot.yml
+          git rm .github/workflows/release-v15-one-shot.yml .release-v15-trigger
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add package.json package-lock.json CHANGELOG.md .github/workflows/check.yml
@@ -69,6 +82,7 @@ jobs:
           test "$ROOT_LOCK_VERSION" = "$VERSION"
           grep -F '## [1.5.0]' CHANGELOG.md
           ! test -e .github/workflows/release-v15-one-shot.yml
+          ! test -e .release-v15-trigger
       - name: Publish v1.5.0 and installer tag
         env:
           GH_TOKEN: ${{ github.token }}
