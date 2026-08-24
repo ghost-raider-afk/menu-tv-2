@@ -4,8 +4,8 @@ export class WaapiMotionDriver {
   }
 
   createTrack(track) {
-    if (!(track?.node?.element instanceof Element)) throw new TypeError('WAAPI track requires a DOM element.');
-    return track.node.element.animate(track.keyframes, track.timing);
+    if (!(track?.node?.target instanceof Element)) throw new TypeError('WAAPI track requires a DOM target.');
+    return track.node.target.animate(track.keyframes, track.timing);
   }
 
   createClock(root, clock) {
