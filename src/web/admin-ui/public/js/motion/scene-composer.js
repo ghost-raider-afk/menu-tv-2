@@ -38,18 +38,20 @@ export function composeScenePrograms(scene, programs = []) {
   const activePrograms = programs.filter(Boolean);
   if (!activePrograms.length) throw new TypeError('Scene composer requires at least one program.');
 
+  const programIds = new Set();
   const claims = new Map();
   const tracks = [];
   for (const program of activePrograms) {
     if (!program?.id || !Array.isArray(program.tracks)) throw new TypeError('Scene composer received an invalid program.');
+    if (programIds.has(program.id)) throw new Error(`Duplicate scene program id: ${program.id}.`);
+    programIds.add(program.id);
+
     for (const track of program.tracks) {
       validateTrackNode(scene, track);
       for (const claim of track.claims) {
         const key = `${track.node.id}:${claim}`;
         const owner = claims.get(key);
-        if (owner && owner !== program.id) {
-          throw new Error(`Scene ownership conflict for ${key}: ${owner} vs ${program.id}.`);
-        }
+        if (owner) throw new Error(`Scene ownership conflict for ${key}: ${owner} vs ${program.id}.`);
         claims.set(key, program.id);
       }
       tracks.push(track);
