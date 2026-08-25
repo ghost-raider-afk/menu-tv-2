@@ -2,20 +2,21 @@ import { WaapiMotionDriver } from './waapi-driver.js';
 import { loadMotionKernel } from '../wasm-motion-kernel.js';
 
 const RED_GLOW = 'rgba(255,48,72,.78)';
+const ROW_GLOW = 'rgba(255,255,255,.28)';
 
 function number(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function clamp(value, minimum, maximum) {
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
 function phaseAt(time, duration) {
   if (!duration) return 0;
   const phase = (time % duration) / duration;
   return phase < 0 ? phase + 1 : phase;
-}
-
-function isCustom(handle) {
-  return handle?.driver === 'mira-wasm';
 }
 
 export class WasmMotionDriver {
@@ -61,9 +62,7 @@ export class WasmMotionDriver {
   play(handle) {
     if (!handle) return;
     if (handle.driver === 'waapi') return this.waapi.play(handle.handle);
-    if (handle.kind === 'clock' && handle.state !== 'running') {
-      handle.startedAt = performance.now() - handle.currentTime;
-    }
+    if (handle.kind === 'clock' && handle.state !== 'running') handle.startedAt = performance.now() - handle.currentTime;
     handle.state = 'running';
     this.ensureLoop();
   }
@@ -156,7 +155,25 @@ export class WasmMotionDriver {
       const x = this.kernel._mira_row_x(phase, number(spec.phaseOffset), number(spec.xAmplitude));
       const y = this.kernel._mira_row_y(phase, number(spec.phaseOffset), number(spec.yAmplitude));
       const scale = this.kernel._mira_row_scale(phase, number(spec.phaseOffset), number(spec.scaleAmount));
-      const brightness = this.kernel._mira_row_brightness(phase, number(spec.phaseOffset), number(spec.brightnessAmount));
+      const brightnessAmount = number(spec.brightnessAmount);
+      const brightness = this.kernel._mira_row_brightness(phase, number(spec.phaseOffset), brightnessAmount);
+      if (spec.surfaceOnly) {
+        const energy = brightnessAmount > 0.0001 ? clamp((brightness - 1) / brightnessAmount, 0, 1) : 0;
+        const opacity = energy * number(spec.surfaceOpacity, 0.08);
+        const pattern = spec.pattern || 'ambient';
+        if (['wave', 'cinematic', 'parallax'].includes(pattern)) {
+          target.style.transform = `translate3d(${x.toFixed(3)}px, ${y.toFixed(3)}px, 0) scale(${scale.toFixed(5)})`;
+        } else if (pattern === 'focus') {
+          target.style.transform = `scale(${scale.toFixed(5)})`;
+        } else {
+          target.style.transform = 'none';
+        }
+        target.style.opacity = opacity.toFixed(4);
+        target.style.filter = pattern === 'spark' && opacity > 0.002
+          ? `brightness(${(1.08 + energy * 0.32).toFixed(3)}) drop-shadow(0 0 ${(3 + energy * 10).toFixed(2)}px ${ROW_GLOW})`
+          : `brightness(${(1 + energy * 0.22).toFixed(3)})`;
+        return;
+      }
       target.style.transform = `translate3d(${x.toFixed(3)}px, ${y.toFixed(3)}px, 0) scale(${scale.toFixed(5)})`;
       target.style.filter = `brightness(${brightness.toFixed(4)})`;
       return;
