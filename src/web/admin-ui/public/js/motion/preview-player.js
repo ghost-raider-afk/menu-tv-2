@@ -84,6 +84,7 @@ export class AnimationPreviewPlayer {
       context: { profile: this.profile, entity: this.entity }
     });
     this.total = this.plan.duration;
+    this.runtime.play();
     this.updateProgress();
   }
 
