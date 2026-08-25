@@ -1,16 +1,20 @@
-const SHELL_CACHE = 'mira-tv-player-shell-v8';
-const DATA_CACHE = 'mira-tv-player-data-v8';
+const SHELL_CACHE = 'mira-tv-player-shell-v9';
+const DATA_CACHE = 'mira-tv-player-data-v9';
 const PLAYER_CONTEXT = '/api/device/player-context';
 const SHELL_ASSETS = [
   '/player.html',
   '/css/player.css',
+  '/css/motion-overlays.css',
   '/js/player/player.js',
+  '/js/player/overlay-runtime.js',
   '/js/editor/renderer.js',
   '/js/editor/renderer-model.js',
   '/js/editor/renderer-svg.js',
   '/js/motion/entity-editor.js',
   '/js/motion/entity-behavior.js',
   '/js/motion/announcement.js',
+  '/js/motion/brand-title.js',
+  '/js/motion/aquarium.js',
   '/js/motion/live-menu-motion.js',
   '/js/motion/motion-plan.js',
   '/js/motion/dom-scene-adapter.js',
@@ -139,7 +143,8 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin || event.request.method !== 'GET') return;
   if (event.request.mode === 'navigate' && (url.pathname === '/player' || url.pathname === '/player.html')) { event.respondWith(playerPage(event.request)); return; }
   if (url.pathname === PLAYER_CONTEXT) { event.respondWith(playerContext(event.request)); return; }
-  if (SHELL_ASSETS.includes(url.pathname)) { event.respondWith(networkFirstShell(event.request)); return; }
-  if (/^\/site-assets\/entities\/.*\.(?:mp4|webm)$/i.test(url.pathname)) { event.respondWith(videoRequest(event.request)); return; }
-  if (url.pathname.startsWith('/site-assets/')) event.respondWith(assetRequest(event.request));
+  if (url.pathname.startsWith('/api/')) return;
+  if (url.pathname.startsWith('/assets/entity/') && event.request.headers.has('range')) { event.respondWith(videoRequest(event.request)); return; }
+  if (url.pathname.startsWith('/assets/')) { event.respondWith(assetRequest(event.request)); return; }
+  if (SHELL_ASSETS.includes(url.pathname)) event.respondWith(networkFirstShell(event.request));
 });
