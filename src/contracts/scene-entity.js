@@ -70,12 +70,20 @@ function safeUrl(value, regex, message) {
   return value;
 }
 
+function mediaFromUrl(assetUrl) {
+  if (!assetUrl) return null;
+  if (/\.webm$/i.test(assetUrl)) return { assetType: 'video', mediaType: 'video/webm' };
+  if (/\.mp4$/i.test(assetUrl)) return { assetType: 'video', mediaType: 'video/mp4' };
+  if (/\.webp$/i.test(assetUrl)) return { assetType: 'image', mediaType: 'image/webp' };
+  return { assetType: 'image', mediaType: 'image/png' };
+}
+
 function inferredMedia(source, assetUrl) {
-  const video = /\.(?:mp4|webm)$/i.test(assetUrl);
-  const assetType = oneOf(source.asset_type, 'asset_type', ASSET_TYPES, video ? 'video' : 'image');
-  const fallbackMedia = /\.webm$/i.test(assetUrl) ? 'video/webm' : /\.mp4$/i.test(assetUrl) ? 'video/mp4' : /\.webp$/i.test(assetUrl) ? 'image/webp' : 'image/png';
-  const mediaType = oneOf(source.media_type, 'media_type', MEDIA_TYPES, fallbackMedia);
+  const inferred = mediaFromUrl(assetUrl);
+  const assetType = oneOf(source.asset_type, 'asset_type', ASSET_TYPES, inferred?.assetType || DEFAULT_SCENE_ENTITY.asset_type);
+  const mediaType = oneOf(source.media_type, 'media_type', MEDIA_TYPES, inferred?.mediaType || DEFAULT_SCENE_ENTITY.media_type);
   if ((assetType === 'video') !== mediaType.startsWith('video/')) throw new ValidationError('Тип Entity не соответствует MIME-типу файла.');
+  if (inferred && (assetType !== inferred.assetType || mediaType !== inferred.mediaType)) throw new ValidationError('Тип Entity не соответствует расширению медиафайла.');
   return { assetType, mediaType };
 }
 
