@@ -2,8 +2,8 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
-import { ValidationError } from '../shared/errors.js';
+import { mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { PayloadTooLargeError, ValidationError } from '../shared/errors.js';
 import { sceneEntityInput } from '../contracts/scene-entity.js';
 import { validateImage } from './image-validation.js';
 
@@ -24,6 +24,44 @@ function assetFileFromUrl(url) {
 
 function normalizedContentType(value) {
   return String(value || '').split(';', 1)[0].trim().toLowerCase();
+}
+
+function entityLimitText(config) {
+  const megabytes = config.entityAssetMaxBytes / (1024 * 1024);
+  return Number.isInteger(megabytes) ? `${megabytes} МБ` : `${megabytes.toFixed(1)} МБ`;
+}
+
+function entityTooLarge(config) {
+  return new PayloadTooLargeError(`Медиафайл Entity превышает допустимый размер ${entityLimitText(config)}.`);
+}
+
+function assertEntitySize(size, config) {
+  if (!Number.isSafeInteger(size) || size < 1) throw new ValidationError('Медиафайл Entity пустой или имеет некорректный размер.');
+  if (size > config.entityAssetMaxBytes) throw entityTooLarge(config);
+}
+
+function declaredContentLength(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function resolveMedia(contentType) {
+  const mime = normalizedContentType(contentType);
+  const media = MEDIA[mime];
+  if (!media) throw new ValidationError('Entity поддерживает PNG, WebP, MP4 и WebM.');
+  return { mime, media };
+}
+
+function entityPaths(config, media) {
+  const filename = `entity-${crypto.randomUUID()}.${media.extension}`;
+  const directory = path.join(config.siteAssetsRoot, ENTITY_DIR);
+  return {
+    filename,
+    directory,
+    target: path.join(directory, filename),
+    temporary: path.join(directory, `.${filename}.upload`)
+  };
 }
 
 function videoHasAlpha(stream = {}) {
@@ -64,31 +102,21 @@ async function inspectVideo(file, config, mime) {
   return { width, height, hasAlpha: videoHasAlpha(stream), codec: String(stream.codec_name || '') };
 }
 
-export async function replaceEntityAsset({ bytes, contentType, config, store, username }) {
-  if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > config.screenBackgroundMaxBytes) throw new ValidationError('Размер медиафайла Entity недопустим.');
-  const mime = normalizedContentType(contentType);
-  const media = MEDIA[mime];
-  if (!media) throw new ValidationError('Entity поддерживает PNG, WebP, MP4 и WebM.');
+async function inspectEntityFile(temporary, media, mime, config) {
+  if (media.kind === 'video') return inspectVideo(temporary, config, mime);
+  const bytes = await readFile(temporary);
+  const image = await validateImage(bytes, {
+    allowedTypes: ['png', 'webp'], maxWidth: config.screenMaxWidth, maxHeight: config.screenMaxHeight,
+    maxPixels: config.imageMaxPixels, label: 'Entity'
+  });
+  if (`image/${image.type}` !== mime) throw new ValidationError('MIME-тип Entity не соответствует содержимому файла.');
+  return { width: image.width, height: image.height, hasAlpha: image.type === 'png' || image.type === 'webp' };
+}
 
-  const filename = `entity-${crypto.randomUUID()}.${media.extension}`;
-  const directory = path.join(config.siteAssetsRoot, ENTITY_DIR);
-  const target = path.join(directory, filename);
-  const temporary = path.join(directory, `.${filename}.tmp`);
-  await mkdir(directory, { recursive: true, mode: 0o770 });
-  await writeFile(temporary, bytes, { mode: 0o640 });
-
+async function persistEntityAsset({ temporary, target, filename, media, mime, config, store, username }) {
   let info;
   try {
-    if (media.kind === 'image') {
-      const image = await validateImage(bytes, {
-        allowedTypes: ['png', 'webp'], maxWidth: config.screenMaxWidth, maxHeight: config.screenMaxHeight,
-        maxPixels: config.imageMaxPixels, label: 'Entity'
-      });
-      if (`image/${image.type}` !== mime) throw new ValidationError('MIME-тип Entity не соответствует содержимому файла.');
-      info = { width: image.width, height: image.height, hasAlpha: image.type === 'png' || image.type === 'webp' };
-    } else {
-      info = await inspectVideo(temporary, config, mime);
-    }
+    info = await inspectEntityFile(temporary, media, mime, config);
     await rename(temporary, target);
   } catch (error) {
     await unlink(temporary).catch(() => undefined);
@@ -119,6 +147,55 @@ export async function replaceEntityAsset({ bytes, contentType, config, store, us
     await unlink(target).catch(() => undefined);
     throw error;
   }
-  if (previousFile && previousFile !== filename) await unlink(path.join(directory, previousFile)).catch(() => undefined);
+  if (previousFile && previousFile !== filename) await unlink(path.join(path.dirname(target), previousFile)).catch(() => undefined);
   return updated;
+}
+
+async function writeChunk(handle, chunk) {
+  let offset = 0;
+  while (offset < chunk.length) {
+    const { bytesWritten } = await handle.write(chunk, offset, chunk.length - offset);
+    if (bytesWritten < 1) throw new Error('Не удалось записать медиафайл Entity.');
+    offset += bytesWritten;
+  }
+}
+
+export async function replaceEntityAssetStream({ stream, contentLength, contentType, config, store, username }) {
+  const { mime, media } = resolveMedia(contentType);
+  const declared = declaredContentLength(contentLength);
+  if (declared !== null) assertEntitySize(declared, config);
+
+  const { filename, directory, target, temporary } = entityPaths(config, media);
+  await mkdir(directory, { recursive: true, mode: 0o770 });
+
+  let handle;
+  let size = 0;
+  try {
+    handle = await open(temporary, 'wx', 0o640);
+    for await (const part of stream) {
+      const chunk = Buffer.isBuffer(part) ? part : Buffer.from(part);
+      size += chunk.length;
+      if (size > config.entityAssetMaxBytes) throw entityTooLarge(config);
+      await writeChunk(handle, chunk);
+    }
+    await handle.close();
+    handle = null;
+    assertEntitySize(size, config);
+  } catch (error) {
+    if (handle) await handle.close().catch(() => undefined);
+    await unlink(temporary).catch(() => undefined);
+    throw error;
+  }
+
+  return persistEntityAsset({ temporary, target, filename, media, mime, config, store, username });
+}
+
+export async function replaceEntityAsset({ bytes, contentType, config, store, username }) {
+  if (!Buffer.isBuffer(bytes)) throw new ValidationError('Медиафайл Entity не передан.');
+  assertEntitySize(bytes.length, config);
+  const { mime, media } = resolveMedia(contentType);
+  const { filename, directory, target, temporary } = entityPaths(config, media);
+  await mkdir(directory, { recursive: true, mode: 0o770 });
+  await writeFile(temporary, bytes, { mode: 0o640, flag: 'wx' });
+  return persistEntityAsset({ temporary, target, filename, media, mime, config, store, username });
 }
