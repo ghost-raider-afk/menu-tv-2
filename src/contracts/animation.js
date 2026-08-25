@@ -13,6 +13,8 @@ import {
 } from '../shared/animation-profile.js';
 import { sceneEntityInput } from './scene-entity.js';
 import { announcementInput } from './announcement.js';
+import { brandTitleInput } from './brand-title.js';
+import { aquariumInput } from './aquarium.js';
 
 function enumValue(value, field, allowed) {
   if (typeof value !== 'string' || !allowed.includes(value)) throw new ValidationError(`Поле «${field}» содержит неподдерживаемое значение.`);
@@ -68,6 +70,8 @@ export function animationSettingsInput(body) {
     preset_id: presetId,
     profile: animationProfileInput(body.profile ?? DEFAULT_ANIMATION_PROFILE),
     entity: sceneEntityInput(body.entity),
-    announcement: announcementInput(body.announcement)
+    announcement: announcementInput(body.announcement),
+    brand: brandTitleInput(body.brand),
+    aquarium: aquariumInput(body.aquarium)
   };
 }
