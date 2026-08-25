@@ -33,7 +33,7 @@ jobs:
           path.write_text(text.replace(old, '"version": "1.7.0"', 2))
           PY
           git diff --check -- package-lock.json
-          test "$(git diff --numstat -- package-lock.json)" = $'2\t2\tpackage-lock.json'
+          test "$(git diff --numstat fb0a3bc2bbb165101d4658d133092f31f062a0fe -- package-lock.json)" = $'2\t2\tpackage-lock.json'
       - name: Commit repaired lock
         shell: bash
         run: |
