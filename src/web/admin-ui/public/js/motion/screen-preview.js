@@ -48,8 +48,10 @@ export function renderAnimationScreenPreview(stage, bundle) {
   stage.dataset.fontKey = layout.typography.key;
   stage.innerHTML = `
     <div class="animation-screen-background" data-motion-background></div>
+    <div class="animation-screen-aquarium-layer" data-aquarium-layer aria-label="Аквариум"></div>
     <div class="animation-screen-canvas">${buildTableSvg(model, lines, layout)}</div>
     <div class="animation-screen-entity-layer" data-motion-entity-layer aria-label="Объекты сцены"></div>
+    <div class="animation-screen-brand-layer" data-brand-layer aria-label="Название бренда"></div>
     <div class="animation-screen-announcement-layer" data-announcement-layer aria-label="Бегущая строка"></div>
     <div class="animation-screen-vignette" aria-hidden="true"></div>
     <div class="animation-screen-shimmer" aria-hidden="true"></div>`;
