@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-test('MIRA-TV release metadata is synchronized while legacy package identity remains compatible', async () => {
+test('MIRA-TV v1.8.0 release metadata is synchronized while legacy package identity remains compatible', async () => {
   const [packageText, lockText, installer, changelog, workflow] = await Promise.all([
     readFile(new URL('../package.json', import.meta.url), 'utf8'),
     readFile(new URL('../package-lock.json', import.meta.url), 'utf8'),
