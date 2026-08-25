@@ -1,0 +1,50 @@
+name: publish-v1.8.0
+
+on:
+  push:
+    branches:
+      - work/v1.8.0-motion-brand-aquarium
+    paths:
+      - .github/workflows/publish-v1.8.0.yml
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_SHA: 2f6bd311970365ea691efad1e4b746ff2b29ad57
+    steps:
+      - name: Publish exact release commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v1.8.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v1.8.0" --jq '.object.sha')" = "$TARGET_SHA"
+            echo "v1.8.0 already exists at the expected commit"
+            exit 0
+          fi
+          cat > "$RUNNER_TEMP/release-notes.md" <<'EOF'
+          # MIRA-TV v1.8.0
+
+          - Menu text, characteristics and prices stay on fixed coordinates; WASM animates dedicated light surfaces instead of moving glyphs.
+          - The old moving red promotion stripe is replaced by a soft full-row promotion glow pulse.
+          - Running ticker adds font selection, vertical font stretch and configurable row glow.
+          - New Brand Title entity with independent font, glow animation and free X/Y positioning.
+          - New procedural Aquarium overlay with water-fill intro, caustics, fish, bubbles and side plants in Premium / Neon / Reef modes without changing the existing background or table style.
+          - Entity PNG/WebP/MP4/WebM uploads stream to disk with independent `ENTITY_ASSET_MAX_BYTES` control (100 MiB default), bounded 413 handling and no whole-video RAM buffering.
+          - TV pairing survives repeated/hard Player reloads: a valid activation is reused, failed QR refresh/HTTP 429 no longer destroys the current pairing channel.
+          - Offline Player keeps the new overlay modules and existing Video Entity Range-cache behavior.
+
+          Validation: release candidate `c131978416dcad7dc41c03931215849ca79d1845` passed node-check, browser-visual and clean-install-smoke in GitHub Actions run 32909643274. PR #52 was squash-merged to the exact target commit below.
+          EOF
+          gh release create v1.8.0 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$TARGET_SHA" \
+            --title "MIRA-TV v1.8.0" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            --verify-tag=false
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v1.8.0" --jq '.object.sha')" = "$TARGET_SHA"
+          test "$(gh release view v1.8.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease --jq '[.isDraft,.isPrerelease] | @tsv')" = $'false\tfalse'
