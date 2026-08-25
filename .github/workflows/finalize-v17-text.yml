@@ -28,31 +28,32 @@ jobs:
           changelog = Path('CHANGELOG.md')
           text = changelog.read_text()
           if '## [1.7.0]' not in text:
-              entry = '''## [1.7.0] - 2026-08-25
-
-### MIRA-TV
-- Публичное имя продукта изменено на MIRA-TV / MIRA TV; legacy package, БД, cookie, compose identifiers и путь обновления установщика сохранены для совместимости.
-
-### Motion Engine
-- Добавлен C++ motion kernel с воспроизводимой сборкой в WebAssembly и непрерывной периодической sin/cos-математикой вместо дискретных keyframes меню.
-- Строка меню теперь имеет одного transform owner: название, характеристики и цены движутся как единая SVG-группа; фон остаётся полностью статичным.
-- Эффект «Акция» заменён на cinematic scale плашки, красную световую волну через всю строку, мягкое послесвечение и бесшовный цикл без bounce/elastic рывков.
-
-### Video Entity v2
-- Entity поддерживает PNG, WebP, MP4 и WebM с media_type/asset_type, loop, muted, playsinline, playback_rate, размерами, transform и opacity.
-- MP4/WebM анализируются через ffprobe; alpha определяется по медиаданным, тяжёлый покадровый chroma key на ТВ не используется.
-- Видео участвует в offline cache Player с поддержкой Range / 206 Partial Content.
-
-### QR scanner
-- Исправлены secure-context/iOS camera diagnostics, ожидание реального видеокадра, fallback camera constraints и проверка window.jsQR.
-- Scanner получил единый rAF lifecycle и корректный dispose при SPA-навигации, поэтому камера и listeners не переживают уход со страницы.
-
-### Build / release
-- Production Docker image собирает WASM из C++ source и содержит ffmpeg/ffprobe.
-- CI сведён к одному PR gate с тремя job: node-check, browser-visual и clean-install-smoke; автоматический release/branch cleanup удалён.
-
-'''
-              changelog.write_text(entry + text)
+              lines = [
+                  '## [1.7.0] - 2026-08-25',
+                  '',
+                  '### MIRA-TV',
+                  '- Публичное имя продукта изменено на MIRA-TV / MIRA TV; legacy package, БД, cookie, compose identifiers и путь обновления установщика сохранены для совместимости.',
+                  '',
+                  '### Motion Engine',
+                  '- Добавлен C++ motion kernel с воспроизводимой сборкой в WebAssembly и непрерывной периодической sin/cos-математикой вместо дискретных keyframes меню.',
+                  '- Строка меню теперь имеет одного transform owner: название, характеристики и цены движутся как единая SVG-группа; фон остаётся полностью статичным.',
+                  '- Эффект «Акция» заменён на cinematic scale плашки, красную световую волну через всю строку, мягкое послесвечение и бесшовный цикл без bounce/elastic рывков.',
+                  '',
+                  '### Video Entity v2',
+                  '- Entity поддерживает PNG, WebP, MP4 и WebM с media_type/asset_type, loop, muted, playsinline, playback_rate, размерами, transform и opacity.',
+                  '- MP4/WebM анализируются через ffprobe; alpha определяется по медиаданным, тяжёлый покадровый chroma key на ТВ не используется.',
+                  '- Видео участвует в offline cache Player с поддержкой Range / 206 Partial Content.',
+                  '',
+                  '### QR scanner',
+                  '- Исправлены secure-context/iOS camera diagnostics, ожидание реального видеокадра, fallback camera constraints и проверка window.jsQR.',
+                  '- Scanner получил единый rAF lifecycle и корректный dispose при SPA-навигации, поэтому камера и listeners не переживают уход со страницы.',
+                  '',
+                  '### Build / release',
+                  '- Production Docker image собирает WASM из C++ source и содержит ffmpeg/ffprobe.',
+                  '- CI сведён к одному PR gate с тремя job: node-check, browser-visual и clean-install-smoke; автоматический release/branch cleanup удалён.',
+                  '',
+              ]
+              changelog.write_text('\n'.join(lines) + '\n' + text)
 
           readme = Path('README.md')
           text = readme.read_text()
