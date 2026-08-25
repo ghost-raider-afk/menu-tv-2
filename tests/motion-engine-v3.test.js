@@ -19,11 +19,11 @@ function fakeScene() {
   return createMotionScene({
     root: { renderer: 'fake' },
     nodes: [
-      { id: 'menu.section.0', kind: 'section', layer: 'menu', target: target('section'), order: 0, count: 1, depth: 0, transformOwner: 'self' },
-      { id: 'menu.item.0', kind: 'item', layer: 'menu', target: target('row-0'), order: 0, count: 2, depth: 0, transformOwner: 'row' },
+      { id: 'menu.section.0', kind: 'section', layer: 'menu', target: target('section-surface'), order: 0, count: 1, depth: 0, transformOwner: 'surface', metadata: { surfaceOnly: true } },
+      { id: 'menu.item.0', kind: 'item', layer: 'menu', target: target('row-surface-0'), order: 0, count: 2, depth: 0, transformOwner: 'surface', metadata: { surfaceOnly: true } },
       { id: 'menu.promotion.0', kind: 'promotion', layer: 'menu', target: target('promotion'), order: 0, count: 1, depth: 2, transformOwner: 'promotion-badge' },
-      { id: 'menu.promotion-wave.0', kind: 'promotion-wave', layer: 'menu', target: target('promotion-wave'), order: 0, count: 1, depth: 1, transformOwner: 'promotion-overlay', metadata: { travel: 2200 } },
-      { id: 'menu.item.1', kind: 'item', layer: 'menu', target: target('row-1'), order: 1, count: 2, depth: 0, transformOwner: 'row' },
+      { id: 'menu.promotion-glow.0', kind: 'promotion-glow', layer: 'menu', target: target('promotion-glow'), order: 0, count: 1, depth: 1, transformOwner: 'promotion-overlay' },
+      { id: 'menu.item.1', kind: 'item', layer: 'menu', target: target('row-surface-1'), order: 1, count: 2, depth: 0, transformOwner: 'surface', metadata: { surfaceOnly: true } },
       { id: 'entity.future.0', kind: 'entity', layer: 'entity', target: target('future-entity'), order: 0, count: 1, depth: 20, transformOwner: 'entity-runtime' }
     ]
   });
@@ -58,18 +58,19 @@ function fakeDriver() {
   };
 }
 
-test('scene graph reserves entity layer while background stays outside Motion Engine', () => {
+test('scene graph reserves entity layer while menu text and background stay outside transform motion', () => {
   const scene = fakeScene();
   assert.equal(scene.version, 3);
   assert.ok(scene.layers.includes(MOTION_LAYERS.ENTITY));
   assert.equal(scene.nodes.some((node) => node.kind === 'background'), false);
   assert.equal(scene.nodes.some((node) => node.kind === 'price'), false);
-  assert.equal(scene.node('menu.item.0').transformOwner, 'row');
+  assert.equal(scene.node('menu.item.0').transformOwner, 'surface');
+  assert.equal(scene.node('menu.item.0').metadata.surfaceOnly, true);
   assert.equal(scene.node('menu.promotion.0').transformOwner, 'promotion-badge');
-  assert.equal(scene.node('menu.promotion-wave.0').transformOwner, 'promotion-overlay');
+  assert.equal(scene.node('menu.promotion-glow.0').transformOwner, 'promotion-overlay');
 });
 
-test('Motion Engine compiles continuous WASM row tracks and independent cinematic promo overlay', () => {
+test('Motion Engine compiles continuous WASM light surfaces and independent promo row glow', () => {
   const scene = fakeScene();
   const profile = activeProfile();
   const menuDuration = profile.cycle_seconds * 1000;
@@ -85,22 +86,24 @@ test('Motion Engine compiles continuous WASM row tracks and independent cinemati
 
   const item = plan.tracks.find((track) => track.node.id === 'menu.item.0');
   const promotion = plan.tracks.find((track) => track.node.id === 'menu.promotion.0');
-  const wave = plan.tracks.find((track) => track.node.id === 'menu.promotion-wave.0');
+  const glow = plan.tracks.find((track) => track.node.id === 'menu.promotion-glow.0');
   assert.ok(item);
   assert.ok(promotion);
-  assert.ok(wave);
+  assert.ok(glow);
   assert.equal(item.programId, 'menu-motion');
   assert.equal(promotion.programId, 'promotion-motion');
   assert.equal(item.procedural.kind, 'row');
+  assert.equal(item.procedural.surfaceOnly, true);
   assert.equal(promotion.procedural.kind, 'promo-badge');
-  assert.equal(wave.procedural.kind, 'promo-wave');
-  assert.deepEqual(item.claims, ['transform', 'appearance']);
+  assert.equal(glow.procedural.kind, 'promo-glow');
+  assert.deepEqual(item.claims, ['transform', 'appearance', 'opacity']);
   assert.deepEqual(promotion.claims, ['transform', 'appearance']);
-  assert.deepEqual(wave.claims, ['transform', 'opacity']);
+  assert.deepEqual(glow.claims, ['opacity', 'appearance']);
   assert.equal(item.timing.easing, 'linear');
   assert.equal(promotion.timing.easing, 'linear');
-  assert.ok(promotion.procedural.scaleAmount >= 0.03 && promotion.procedural.scaleAmount <= 0.08);
-  assert.equal(wave.procedural.travel, 2200);
+  assert.ok(promotion.procedural.scaleAmount >= 0.01 && promotion.procedural.scaleAmount <= 0.06);
+  assert.ok(glow.procedural.opacity > 0);
+  assert.equal('travel' in glow.procedural, false);
   assert.equal('keyframes' in item, false);
   assert.equal('keyframes' in promotion, false);
 });
@@ -113,17 +116,17 @@ test('menu and promotion compilers remain independently callable', () => {
   assert.equal(menu.id, 'menu-motion');
   assert.equal(promotion.id, 'promotion-motion');
   assert.equal(menu.tracks.some((track) => track.node.kind === 'promotion'), false);
-  assert.deepEqual(new Set(promotion.tracks.map((track) => track.node.kind)), new Set(['promotion', 'promotion-wave']));
+  assert.deepEqual(new Set(promotion.tracks.map((track) => track.node.kind)), new Set(['promotion', 'promotion-glow']));
   assert.equal(DEFAULT_SCENE_COMPILERS.length, 2);
 });
 
-test('C++ motion kernel is mathematically periodic and owns promo envelope math', async () => {
+test('C++ motion kernel is mathematically periodic and owns smooth promo envelope math', async () => {
   const source = await readFile(new URL('../native/motion-kernel/motion_kernel.cpp', import.meta.url), 'utf8');
   assert.match(source, /std::sin\(TAU \* wrap01\(phase \+ phase_offset\)\)/);
   assert.match(source, /std::cos\(TAU \* wrap01\(phase \+ phase_offset\)\)/);
   assert.match(source, /std::sin\(PI \* u\)/);
   assert.match(source, /if \(p >= active\) return 0\.0;/);
-  assert.match(source, /mira_promo_wave_progress/);
+  assert.match(source, /mira_promo_glow/);
 });
 
 test('scene composer rejects competing ownership and allows independent channels on one node', () => {
