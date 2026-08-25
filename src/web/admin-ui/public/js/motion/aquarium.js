@@ -86,11 +86,16 @@ function setVisualVariables(layer, aquarium) {
   layer.style.setProperty('--caustics-b-duration', `${(38 - (aquarium.speed / 100) * 15).toFixed(2)}s`);
 }
 
+function resetHostState(layer) {
+  layer.classList.remove('aquarium-style-premium', 'aquarium-style-neon', 'aquarium-style-reef', 'aquarium-intro-active', 'is-enabled');
+  layer.classList.add('scene-aquarium-layer');
+}
+
 export function renderAquariumLayer(layer, value, { allowIntro = true } = {}) {
   if (!(layer instanceof Element)) return null;
   const aquarium = normaliseAquarium(value);
   layer.replaceChildren();
-  layer.className = 'scene-aquarium-layer';
+  resetHostState(layer);
   layer.classList.toggle('is-enabled', aquarium.enabled);
   if (!aquarium.enabled) return aquarium;
 
