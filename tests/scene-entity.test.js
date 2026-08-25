@@ -20,8 +20,8 @@ test('scene entity v2 keeps canonical FullHD coordinates and image compatibility
     ...DEFAULT_SCENE_ENTITY,
     asset_url: '/site-assets/entities/entity-123e4567-e89b-42d3-a456-426614174000.webp',
     media_type: 'image/webp',
-    asset_width: 560,
-    asset_height: 980,
+    width: 560,
+    height: 980,
     visible: true,
     transform: { x: 1500, y: 330, width: 320, scale: 1.1, rotation: -3, depth: 12, opacity: 0.92 }
   });
@@ -30,6 +30,8 @@ test('scene entity v2 keeps canonical FullHD coordinates and image compatibility
   assert.equal(entity.media_type, 'image/webp');
   assert.equal(entity.width, 560);
   assert.equal(entity.height, 980);
+  assert.equal(entity.asset_width, 560);
+  assert.equal(entity.asset_height, 980);
   assert.equal(entity.visible, true);
   assert.deepEqual(entity.transform, { x: 1500, y: 330, width: 320, scale: 1.1, rotation: -3, depth: 12, opacity: 0.92 });
 });
@@ -71,6 +73,8 @@ test('Video Entity processing uses ffprobe and never a per-frame chroma key', as
   assert.match(service, /execFileAsync\('ffprobe'/);
   assert.match(service, /pix_fmt/);
   assert.match(service, /videoHasAlpha/);
+  assert.match(service, /format_name/);
+  assert.match(service, /videoContainerMatches/);
   assert.match(service, /video\/mp4/);
   assert.match(service, /video\/webm/);
   assert.doesNotMatch(service, /chroma|canvas|getImageData|green.?screen/i);
