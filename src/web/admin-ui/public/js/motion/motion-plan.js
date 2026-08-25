@@ -76,7 +76,7 @@ export function compilePromotionMotionProgram(scene, context = {}) {
   const gain = clamp(Number(profile.promotion_intensity) || 0, 0, 100) / 100;
   const activeFraction = clamp((Number(profile.promotion_event_duration_ms) || 1800) / duration, 0.18, 0.72);
   const requestedScale = Math.max(0, Number(profile.promotion_scale_amount) || 0.06);
-  const scaleAmount = clamp(requestedScale * gain * 0.44, 0.03, 0.08);
+  const scaleAmount = gain === 0 ? 0 : clamp(requestedScale * gain * 0.44, 0.03, 0.08);
   const tracks = effect === 'none' ? [] : scene.nodes.flatMap((node) => {
     if (node.kind === 'promotion') return [Object.freeze({
       node,
@@ -94,7 +94,7 @@ export function compilePromotionMotionProgram(scene, context = {}) {
       procedural: Object.freeze({
         kind: 'promo-wave', activeFraction,
         travel: Number(node.metadata?.travel) || 0,
-        opacity: clamp(0.42 + gain * 0.42, 0.42, 0.84)
+        opacity: gain === 0 ? 0 : clamp(0.42 + gain * 0.42, 0.42, 0.84)
       }),
       timing: Object.freeze({ duration, delay: 0, easing: 'linear', loop: true })
     })];
