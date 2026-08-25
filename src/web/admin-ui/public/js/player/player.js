@@ -8,7 +8,8 @@ import { renderSceneEntity } from '../motion/entity-editor.js';
 import { renderAnnouncementLayer } from '../motion/announcement.js';
 import { LiveMenuMotion } from '../motion/live-menu-motion.js';
 
-const ACTIVATION_STORAGE_KEY = 'tv-menu.device-activation';
+const ACTIVATION_STORAGE_KEY = 'tv-menu.device-activation.v2';
+const LEGACY_ACTIVATION_STORAGE_KEY = 'tv-menu.device-activation';
 const DEVICE_KEY_STORAGE_KEY = 'tv-menu.device-key.v1';
 const PLAYER_CONTEXT_STORAGE_KEY = 'tv-menu.player-context.v1';
 const activationView = document.querySelector('[data-activation-view]');
@@ -35,22 +36,43 @@ function setHidden(element, hidden) {
   element?.classList.toggle('is-hidden', hidden);
 }
 
+function usableActivation(record) {
+  return Boolean(
+    record
+    && typeof record === 'object'
+    && typeof record.activation_id === 'string'
+    && typeof record.poll_secret === 'string'
+    && typeof record.expires_at === 'string'
+    && Date.parse(record.expires_at) > Date.now()
+  );
+}
+
 function activationFromStorage() {
   try {
-    const record = JSON.parse(sessionStorage.getItem(ACTIVATION_STORAGE_KEY) || 'null');
-    if (!record || Date.parse(record.expires_at) <= Date.now()) return null;
-    return record;
-  } catch {
-    return null;
-  }
+    const record = JSON.parse(localStorage.getItem(ACTIVATION_STORAGE_KEY) || 'null');
+    if (usableActivation(record)) return record;
+  } catch {}
+
+  try {
+    const legacy = JSON.parse(sessionStorage.getItem(LEGACY_ACTIVATION_STORAGE_KEY) || 'null');
+    if (usableActivation(legacy)) {
+      saveActivation(legacy);
+      return legacy;
+    }
+  } catch {}
+
+  clearActivation();
+  return null;
 }
 
 function saveActivation(record) {
-  try { sessionStorage.setItem(ACTIVATION_STORAGE_KEY, JSON.stringify(record)); } catch {}
+  try { localStorage.setItem(ACTIVATION_STORAGE_KEY, JSON.stringify(record)); } catch {}
+  try { sessionStorage.removeItem(LEGACY_ACTIVATION_STORAGE_KEY); } catch {}
 }
 
 function clearActivation() {
-  try { sessionStorage.removeItem(ACTIVATION_STORAGE_KEY); } catch {}
+  try { localStorage.removeItem(ACTIVATION_STORAGE_KEY); } catch {}
+  try { sessionStorage.removeItem(LEGACY_ACTIVATION_STORAGE_KEY); } catch {}
 }
 
 function currentDeviceKey() {
@@ -113,6 +135,19 @@ function invalidatePairing(text = 'Обновляем код подключен�
   reserveCode.textContent = '—— ——';
   if (activationExpiry) activationExpiry.textContent = 'QR обновляется';
   activationStatus.textContent = text;
+}
+
+function retryAfterSeconds(response) {
+  const raw = Number.parseInt(response?.headers?.get?.('retry-after') || '', 10);
+  return Number.isInteger(raw) && raw > 0 ? raw : 5;
+}
+
+async function activationRequestError(response) {
+  const body = await response.json().catch(() => null);
+  const error = new Error(body?.error || `HTTP ${response.status}`);
+  error.status = response.status;
+  error.retryAfterSeconds = retryAfterSeconds(response);
+  return error;
 }
 
 async function requestWakeLock() {
@@ -207,6 +242,7 @@ async function pollActivation(record) {
 
 async function createActivation({ automatic = false } = {}) {
   if (activationRequestInFlight) return;
+  const previous = activationFromStorage();
   activationRequestInFlight = true;
   if (pollTimer) clearTimeout(pollTimer);
   pollTimer = null;
@@ -224,7 +260,7 @@ async function createActivation({ automatic = false } = {}) {
       body: JSON.stringify({ device_key: currentDeviceKey() || undefined }),
       cache: 'no-store'
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) throw await activationRequestError(response);
     const record = await response.json();
     rememberDeviceKey(record.device_key);
     clearPairingTimers();
@@ -233,10 +269,26 @@ async function createActivation({ automatic = false } = {}) {
     schedulePoll(record);
   } catch (error) {
     console.error('TV activation could not start', error);
-    clearActivation();
+    if (usableActivation(previous)) {
+      showPairing(previous);
+      schedulePoll(previous);
+      if (error?.status === 429) {
+        activationStatus.textContent = `Код обновлялся слишком часто. Текущий QR продолжает работать. Новый код можно запросить через ${error.retryAfterSeconds || 5} с.`;
+      } else {
+        activationStatus.textContent = 'Не удалось обновить QR. Текущий код продолжает работать и остаётся связан с сервером.';
+      }
+      return;
+    }
+
     setHidden(pairing, false);
-    invalidatePairing('Нет связи с сервером. Новый QR появится автоматически после восстановления связи.');
-    rotationRetryTimer = setTimeout(() => void createActivation({ automatic: true }), 5000);
+    if (error?.status === 429) {
+      const delay = Math.max(1, Number(error.retryAfterSeconds) || 5);
+      invalidatePairing(`Слишком много запросов на обновление QR. Повтор через ${delay} с.`);
+      rotationRetryTimer = setTimeout(() => void createActivation({ automatic: true }), delay * 1000);
+    } else {
+      invalidatePairing('Связь с сервером временно недоступна. Новый QR появится автоматически после восстановления связи.');
+      rotationRetryTimer = setTimeout(() => void createActivation({ automatic: true }), 5000);
+    }
   } finally {
     activationRequestInFlight = false;
     showActivationButton.disabled = false;
