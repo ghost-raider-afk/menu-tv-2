@@ -26,6 +26,12 @@ export class ConflictError extends AppError {
   }
 }
 
+export class PayloadTooLargeError extends AppError {
+  constructor(message = 'Размер запроса превышает допустимый лимит.', options = {}) {
+    super(message, { status: 413, code: 'payload_too_large', ...options });
+  }
+}
+
 export class UnprocessableEntityError extends AppError {
   constructor(message, options = {}) {
     super(message, { status: 422, code: 'unprocessable_entity', ...options });
