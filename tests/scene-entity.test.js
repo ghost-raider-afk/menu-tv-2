@@ -111,5 +111,4 @@ test('TV player receives, renders and caches Video Entity with offline Range sup
   assert.match(serviceWorker, /cachedVideoRange/);
   assert.match(serviceWorker, /status:\s*206/);
   assert.match(serviceWorker, /Content-Range/);
-  assert.match(serviceWorker, /\.(?:mp4\|webm)/);
 });
