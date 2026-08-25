@@ -80,6 +80,23 @@ test('Video Entity processing uses ffprobe and never a per-frame chroma key', as
   assert.doesNotMatch(service, /chroma|canvas|getImageData|green.?screen/i);
 });
 
+test('Entity media upload streams to disk and has an independent env-controlled size limit', async () => {
+  const [service, routes, config] = await Promise.all([
+    read('services/entity-assets-service.js'),
+    read('api/settings/routes.js'),
+    read('config/index.js')
+  ]);
+  assert.match(service, /replaceEntityAssetStream/);
+  assert.match(service, /for await \(const part of stream\)/);
+  assert.match(service, /config\.entityAssetMaxBytes/);
+  assert.match(service, /PayloadTooLargeError/);
+  assert.match(routes, /stream:\s*request/);
+  assert.match(routes, /contentLength:\s*request\.get\('content-length'\)/);
+  assert.doesNotMatch(routes, /entity-asset',\s*express\.raw/);
+  assert.match(config, /ENTITY_ASSET_MAX_BYTES/);
+  assert.doesNotMatch(service, /screenBackgroundMaxBytes/);
+});
+
 test('Entity Editor renders image or video on a layer independent from menu and background', async () => {
   const [html, page, preview, editor, animationContract, db, migration] = await Promise.all([
     read('web/admin-ui/public/animation.html'), read('web/admin-ui/public/js/pages/animation.js'),
