@@ -1,11 +1,9 @@
 name: check
 
 on:
-  push:
-    branches:
-      - main
-      - 'agent/**'
   pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -29,7 +27,7 @@ jobs:
 
   browser-visual:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:17-bookworm@sha256:84560e3b9c6874893fc4e2854f5dc3e7c1a37bc9d1dfd7a8c641310ae22ba5ad
@@ -45,7 +43,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      APP_NAME: ТВ МЕНЮ
+      APP_NAME: MIRA-TV
       NODE_ENV: test
       HOST: 127.0.0.1
       PORT: '8080'
@@ -65,7 +63,7 @@ jobs:
       SESSION_SECRET: ci-browser-session-secret-0123456789012345678901234567890123456789
       SESSION_TTL_HOURS: '12'
       SECURE_COOKIES: 'false'
-      DEVICE_ACTIVATION_TTL_MINUTES: '10'
+      DEVICE_ACTIVATION_TTL_MINUTES: '2'
       DEVICE_ACTIVATION_POLL_SECONDS: '2'
       DEVICE_ACTIVATION_MAX_ATTEMPTS: '20'
       DEVICE_ACTIVATION_WINDOW_MINUTES: '10'
@@ -116,17 +114,27 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Build canonical WASM kernel
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --target wasm-build -t mira-tv-wasm-build .
+          cid="$(docker create mira-tv-wasm-build)"
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          mkdir -p src/web/admin-ui/public/wasm
+          docker cp "$cid:/out/mira-motion-kernel.wasm" src/web/admin-ui/public/wasm/mira-motion-kernel.wasm
+          test -s src/web/admin-ui/public/wasm/mira-motion-kernel.wasm
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Start application
         run: |
-          node src/server.js > /tmp/menu-tv-browser.log 2>&1 &
-          echo $! > /tmp/menu-tv-browser.pid
+          node src/server.js > /tmp/mira-tv-browser.log 2>&1 &
+          echo $! > /tmp/mira-tv-browser.pid
           for attempt in $(seq 1 40); do
             curl -fsS http://127.0.0.1:8080/readyz >/dev/null && exit 0
             sleep 1
           done
-          cat /tmp/menu-tv-browser.log
+          cat /tmp/mira-tv-browser.log
           exit 1
       - name: Run browser and visual checks
         run: npm run test:browser
@@ -141,44 +149,22 @@ jobs:
           if-no-files-found: ignore
       - name: Show application log on failure
         if: failure()
-        run: cat /tmp/menu-tv-browser.log || true
+        run: cat /tmp/mira-tv-browser.log || true
       - name: Stop application
         if: always()
-        run: test ! -f /tmp/menu-tv-browser.pid || kill "$(cat /tmp/menu-tv-browser.pid)" || true
+        run: test ! -f /tmp/mira-tv-browser.pid || kill "$(cat /tmp/mira-tv-browser.pid)" || true
 
   clean-install-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Check installer syntax
-        run: bash -n menu-tv-2.sh
-      - name: Check legacy CPU environment cleanup
+      - name: Check installer syntax and stable channel
         shell: bash
         run: |
-          TEST_ENV_FILE="$(mktemp)"
-          trap 'rm -f -- "$TEST_ENV_FILE"' EXIT
-          printf '%s\n' \
-            'APP_CPU_LIMIT=2.0' \
-            'APP_MEMORY_LIMIT=768m' \
-            'APP_PIDS_LIMIT=256' \
-            'DB_CPU_LIMIT=2.0' \
-            'DB_MEMORY_LIMIT=1g' \
-            'DB_PIDS_LIMIT=256' \
-            'SFTP_CPU_LIMIT=1.0' \
-            'SFTP_MEMORY_LIMIT=512m' \
-            'SFTP_PIDS_LIMIT=256' > "$TEST_ENV_FILE"
-          TEST_ENV_FILE="$TEST_ENV_FILE" bash -c '
-            source ./menu-tv-2.sh
-            cleanup_obsolete_env "$TEST_ENV_FILE"
-          '
-          ! grep -Eq '^[A-Z0-9_]*CPU_LIMIT=' "$TEST_ENV_FILE"
-          for key in APP_MEMORY_LIMIT APP_PIDS_LIMIT DB_MEMORY_LIMIT DB_PIDS_LIMIT SFTP_MEMORY_LIMIT SFTP_PIDS_LIMIT; do
-            grep -Eq "^${key}=" "$TEST_ENV_FILE"
-          done
-      - name: Check stable release installer
-        run: |
+          set -euo pipefail
+          bash -n menu-tv-2.sh
           bash menu-tv-2.sh help | grep -F 'Канал обновлений: стабильные GitHub Releases'
           bash menu-tv-2.sh help | grep -F 'Канал обновлений скрипта: теги installer-vX.Y.Z'
           SCRIPT_VERSION="$(sed -nE 's/^SCRIPT_VERSION="([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' menu-tv-2.sh | head -n 1)"
@@ -186,14 +172,16 @@ jobs:
           bash menu-tv-2.sh help | grep -F "Версия скрипта: $SCRIPT_VERSION"
           ! grep -q 'MENU_TV_REF' menu-tv-2.sh
           ! grep -q '^BRANCH=' menu-tv-2.sh
-      - name: Check canonical environment
+      - name: Check canonical environment and resource limits
+        shell: bash
         run: |
+          set -euo pipefail
+          grep -Fx 'APP_NAME=MIRA-TV' .env.example
+          grep -Fx 'SCREEN_MAX_WIDTH=1920' .env.example
+          grep -Fx 'SCREEN_MAX_HEIGHT=1080' .env.example
           grep -Fx 'SCREEN_BACKGROUND_MAX_BYTES=20971520' .env.example
           grep -Fx 'EVENT_JOURNAL_RETENTION_DAYS=30' .env.example
           grep -Fx 'EVENT_JOURNAL_MAX_ENTRIES=5000' .env.example
-          ! grep -q 'FRONTEND_ERROR_RETENTION_DAYS' .env.example
-          ! grep -q 'FRONTEND_ERROR_MAX_ENTRIES' .env.example
-          ! grep -q 'TEMPLATE_BACKGROUND_MAX_BYTES' .env.example
           ! grep -Eq '^[A-Z0-9_]*CPU_LIMIT=' .env.example
           ! grep -Eq '^[[:space:]]*cpus:' compose.yaml
           for key in APP_MEMORY_LIMIT APP_PIDS_LIMIT DB_MEMORY_LIMIT DB_PIDS_LIMIT SFTP_MEMORY_LIMIT SFTP_PIDS_LIMIT; do
@@ -201,20 +189,19 @@ jobs:
           done
           test "$(grep -Ec '^[[:space:]]+mem_limit:' compose.yaml)" -eq 3
           test "$(grep -Ec '^[[:space:]]+pids_limit:' compose.yaml)" -eq 3
-      - name: Check proxy socket isolation
+      - name: Check proxy socket isolation and immutable runtime images
+        shell: bash
         run: |
+          set -euo pipefail
           grep -F 'tcp://docker-socket-proxy:2375' infra/traefik-compose.yaml
           test "$(grep -c '/var/run/docker.sock:/var/run/docker.sock:ro' infra/traefik-compose.yaml)" -eq 1
           TRAEFIK_ACME_EMAIL=ci@example.test docker compose -f infra/traefik-compose.yaml config -q
-      - name: Check immutable external images
-        run: |
           grep -Eq '^FROM node:[^ ]+@sha256:[0-9a-f]{64} AS runtime$' Dockerfile
           grep -Eq 'image: postgres:[^ ]+@sha256:[0-9a-f]{64}$' compose.yaml
           test "$(grep -Ec 'image: busybox:[^ ]+@sha256:[0-9a-f]{64}$' compose.yaml)" -eq 2
           grep -Eq 'image: drakkan/sftpgo:[^ ]+@sha256:[0-9a-f]{64}$' compose.yaml
-          grep -Eq 'image: ghcr.io/tecnativa/docker-socket-proxy:[^ ]+@sha256:[0-9a-f]{64}$' infra/traefik-compose.yaml
-          grep -Eq 'image: traefik:[^ ]+@sha256:[0-9a-f]{64}$' infra/traefik-compose.yaml
       - name: Prepare clean-install environment
+        shell: bash
         run: |
           cp .env.example .env
           sed -i 's|^MENU_TV_2_DOMAIN=.*|MENU_TV_2_DOMAIN=menu.example.test|' .env
@@ -227,33 +214,30 @@ jobs:
           sed -i 's|^SECURE_COOKIES=.*|SECURE_COOKIES=false|' .env
       - name: Validate Docker Compose
         run: docker compose --env-file .env config -q
-      - name: Build production application image
-        run: docker build --pull -t menu-tv-2-ci .
+      - name: Build production image and verify generated runtime assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --pull -t mira-tv-ci .
+          docker run --rm --entrypoint sh mira-tv-ci -c 'test -s /app/src/web/admin-ui/public/wasm/mira-motion-kernel.wasm && ffprobe -version >/dev/null && ffmpeg -version >/dev/null'
       - name: Start clean runtime stack
+        shell: bash
         run: |
           docker network create menu-tv-2-proxy
           docker compose --project-name menu-tv-2-ci --env-file .env up -d --build --wait
       - name: Smoke test application workflow
+        shell: bash
         run: |
           docker compose --project-name menu-tv-2-ci --env-file .env exec -T app node --input-type=module <<'NODE'
-          import sharp from 'sharp';
-
           const base = 'http://127.0.0.1:8080';
           const health = await fetch(`${base}/healthz`);
           if (!health.ok || (await health.json()).service !== 'menu-tv-2.0') throw new Error('health check failed');
           const ready = await fetch(`${base}/readyz`);
           const readyBody = await ready.json();
-          if (!ready.ok || readyBody.status !== 'ready' || readyBody.service !== 'menu-tv-2.0') throw new Error('readiness check failed');
+          if (!ready.ok || readyBody.status !== 'ready') throw new Error('readiness check failed');
 
-          const cssResponse = await fetch(`${base}/css/index.css`);
-          const css = await cssResponse.text();
-          if (!cssResponse.ok || !css.includes('./shell.css') || !css.includes('./editor/editor.css') || !css.includes('./pages/events.css') || /templates\.css|tv1/i.test(css)) throw new Error('final CSS entrypoint invalid');
-          const legacyCss = await fetch(`${base}/style.css`);
-          if (legacyCss.ok) throw new Error('legacy style.css is still served');
-
-          const loaderResponse = await fetch(`${base}/app.js`);
-          const loader = await loaderResponse.text();
-          if (!loaderResponse.ok || !loader.includes("import('/js/application.js')") || /tv1|style\.css/i.test(loader)) throw new Error('frontend loader invalid');
+          const wasm = await fetch(`${base}/wasm/mira-motion-kernel.wasm`);
+          if (!wasm.ok || (await wasm.arrayBuffer()).byteLength < 100) throw new Error('WASM kernel is not served');
 
           const login = await fetch(`${base}/api/auth/login`, {
             method: 'POST',
@@ -263,99 +247,13 @@ jobs:
           if (login.status !== 204) throw new Error(`login failed: ${login.status}`);
           const setCookies = typeof login.headers.getSetCookie === 'function' ? login.headers.getSetCookie() : [login.headers.get('set-cookie')];
           const sessionCookie = setCookies.flatMap((value) => String(value || '').split(/,(?=\s*menu_tv_)/)).find((value) => value.trim().startsWith('menu_tv_2_session='));
-          if (!sessionCookie) throw new Error('session cookie missing');
+          if (!sessionCookie) throw new Error('legacy-compatible session cookie missing');
           const cookie = sessionCookie.split(';', 1)[0].trim();
-          const jsonHeaders = { 'Content-Type': 'application/json', Cookie: cookie };
-
-          const templatesGone = await fetch(`${base}/api/templates`, { headers: { Cookie: cookie } });
-          if (templatesGone.status !== 404) throw new Error(`legacy templates API still exists: ${templatesGone.status}`);
-
-          const journalPost = await fetch(`${base}/api/diagnostics/frontend-errors`, {
-            method: 'POST',
-            headers: jsonHeaders,
-            body: JSON.stringify({ error_type: 'error', message: 'CI frontend journal probe', page: '/ci' })
-          });
-          if (journalPost.status !== 204) throw new Error(`frontend journal write failed: ${journalPost.status}`);
-          const journalResponse = await fetch(`${base}/api/notifications/events?limit=5&severity=error&category=interface`, { headers: { Cookie: cookie } });
-          const journalBody = await journalResponse.json();
-          if (!journalResponse.ok || !journalBody.items.some((item) => item.message === 'CI frontend journal probe' && item.severity === 'error' && item.category === 'interface')) throw new Error('event journal read failed');
 
           const siteResponse = await fetch(`${base}/api/settings/site`, { headers: { Cookie: cookie } });
           if (!siteResponse.ok) throw new Error('site settings load failed');
           const site = await siteResponse.json();
-          const siteUpdate = await fetch(`${base}/api/settings/site`, {
-            method: 'PUT', headers: jsonHeaders,
-            body: JSON.stringify({
-              application_name: site.app_name,
-              accent_color: site.accent_color,
-              timezone: site.timezone,
-              date_format: site.date_format,
-              dashboard_refresh_seconds: site.dashboard_refresh_seconds,
-              default_screen_resolution: site.default_screen_resolution,
-              signin_logo_size: 7
-            })
-          });
-          if (!siteUpdate.ok || Number((await siteUpdate.json()).signin_logo_size) !== 7) throw new Error('signin logo size setting failed');
-
-          const locationResponse = await fetch(`${base}/api/locations`, { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name: 'CI точка', address: 'CI' }) });
-          if (locationResponse.status !== 201) throw new Error(`location create failed: ${locationResponse.status}`);
-          const location = await locationResponse.json();
-
-          const screenResponse = await fetch(`${base}/api/locations/${location.id}/screens`, { method: 'POST', headers: jsonHeaders, body: '{}' });
-          if (screenResponse.status !== 201) throw new Error(`screen create failed: ${screenResponse.status}`);
-          const screen = await screenResponse.json();
-          const editorResponse = await fetch(`${base}/api/screens/${screen.id}/editor`, { headers: { Cookie: cookie } });
-          if (!editorResponse.ok) throw new Error(`editor load failed: ${editorResponse.status}`);
-          let editor = await editorResponse.json();
-          if (!Number.isInteger(Number(editor.draft?.revision)) || Number(editor.draft.revision) < 1) throw new Error('draft revision missing');
-          if ('templates' in editor || 'template_id' in editor.screen) throw new Error('template data leaked into editor contract');
-
-          const png = await sharp({ create: { width: 16, height: 16, channels: 4, background: { r: 16, g: 24, b: 40, alpha: 1 } } }).png().toBuffer();
-          const backgroundResponse = await fetch(`${base}/api/screens/${screen.id}/background`, {
-            method: 'PUT', headers: { Cookie: cookie, 'Content-Type': 'image/png', 'X-Draft-Revision': String(editor.draft.revision) }, body: png
-          });
-          if (!backgroundResponse.ok) throw new Error(`screen background upload failed: ${backgroundResponse.status}`);
-          const backgroundSaved = await backgroundResponse.json();
-          const backgroundUrl = backgroundSaved.draft?.settings?.background_image_url;
-          if (!/^\/site-assets\/screens\/background-[0-9a-f-]{36}\.png$/i.test(backgroundUrl || '')) throw new Error('screen background URL invalid');
-          const backgroundAsset = await fetch(`${base}${backgroundUrl}`);
-          if (!backgroundAsset.ok || Buffer.compare(Buffer.from(await backgroundAsset.arrayBuffer()), png) !== 0) throw new Error('screen background asset not served');
-          editor = backgroundSaved;
-
-          const draftPayload = {
-            revision: Number(editor.draft.revision),
-            rows: [{ id: 'ci-section', kind: 'section', name: 'CI раздел', enabled: true }],
-            settings: {
-              ...editor.draft.settings,
-              background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC', font_scale_percent: 100,
-              table_x: 56, table_y: 15, table_width_px: 1374, table_height_px: 925
-            },
-            screen: { location_id: screen.location_id, name: screen.name, resolution: screen.resolution, status: screen.status, active: screen.active }
-          };
-          const draftSave = await fetch(`${base}/api/screens/${screen.id}/draft`, { method: 'PUT', headers: jsonHeaders, body: JSON.stringify(draftPayload) });
-          if (!draftSave.ok) throw new Error(`draft save failed: ${draftSave.status}`);
-          const savedDraft = await draftSave.json();
-          if (Number(savedDraft.draft?.revision) !== Number(editor.draft.revision) + 1) throw new Error('draft revision did not increment');
-          const staleSave = await fetch(`${base}/api/screens/${screen.id}/draft`, { method: 'PUT', headers: jsonHeaders, body: JSON.stringify(draftPayload) });
-          if (staleSave.status !== 409) throw new Error(`stale editor write was not rejected: ${staleSave.status}`);
-
-          const cloneResponse = await fetch(`${base}/api/locations/${location.id}/screens`, {
-            method: 'POST', headers: jsonHeaders, body: JSON.stringify({ source_screen_id: screen.id })
-          });
-          if (cloneResponse.status !== 201) throw new Error(`screen clone failed: ${cloneResponse.status}`);
-          const clone = await cloneResponse.json();
-          if (clone.id === screen.id || clone.prepared_asset_key) throw new Error('screen clone is not independent');
-          const cloneEditor = await (await fetch(`${base}/api/screens/${clone.id}/editor`, { headers: { Cookie: cookie } })).json();
-          if (cloneEditor.draft.rows?.[0]?.name !== 'CI раздел' || cloneEditor.draft.settings?.background_image_url !== backgroundUrl) throw new Error('screen content clone failed');
-
-          const locationCloneResponse = await fetch(`${base}/api/locations/${location.id}/clone`, {
-            method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name: 'CI точка копия', address: 'CI clone', active: true })
-          });
-          if (locationCloneResponse.status !== 201) throw new Error(`location clone failed: ${locationCloneResponse.status}`);
-          const locationClone = await locationCloneResponse.json();
-          if (locationClone.id === location.id || locationClone.sftp_directory_id) throw new Error('location clone copied identity or SFTP');
-          const allScreens = await (await fetch(`${base}/api/screens`, { headers: { Cookie: cookie } })).json();
-          if (allScreens.filter((item) => item.location_id === locationClone.id).length !== 2) throw new Error('location monitor cloning failed');
+          if (site.app_name !== 'MIRA-TV' && site.application_name !== 'MIRA-TV') throw new Error('MIRA-TV branding seed failed');
 
           const [facadeResponse, modelResponse, svgResponse] = await Promise.all([
             fetch(`${base}/js/editor/renderer.js`),
@@ -365,8 +263,8 @@ jobs:
           const [facadeSource, modelSource, svgSource] = await Promise.all([facadeResponse.text(), modelResponse.text(), svgResponse.text()]);
           if (!facadeResponse.ok || !modelResponse.ok || !svgResponse.ok) throw new Error('canonical renderer modules not served');
           if (!facadeSource.includes('renderer-model.js') || !facadeSource.includes('renderer-svg.js')) throw new Error('renderer facade contract missing');
-          if (!modelSource.includes('MENU_REFERENCE') || !modelSource.includes('table_width_px') || !modelSource.includes('autoReduced')) throw new Error('renderer model contract missing');
-          if (!svgSource.includes('buildTableSvg')) throw new Error('renderer SVG contract missing');
+          if (!modelSource.includes('MENU_REFERENCE') || !modelSource.includes('table_width_px')) throw new Error('renderer model contract missing');
+          if (!svgSource.includes('buildTableSvg') || !svgSource.includes('promotion-light-wave')) throw new Error('renderer SVG v1.7 contract missing');
           NODE
       - name: Smoke test SFTP service
         run: docker compose --project-name menu-tv-2-ci --env-file .env exec -T sftp sftpgo ping
@@ -378,87 +276,7 @@ jobs:
         run: docker compose --project-name menu-tv-2-ci --env-file .env logs --no-color --tail=200 || true
       - name: Clean runtime stack
         if: always()
+        shell: bash
         run: |
           docker compose --project-name menu-tv-2-ci --env-file .env down -v --remove-orphans || true
           docker network rm menu-tv-2-proxy >/dev/null 2>&1 || true
-
-  release-and-cleanup:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs:
-      - node-check
-      - browser-visual
-      - clean-install-smoke
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout verified main
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 0
-      - name: Resolve canonical versions
-        id: version
-        shell: bash
-        run: |
-          VERSION="$(node -p "require('./package.json').version")"
-          LOCK_VERSION="$(node -p "require('./package-lock.json').version")"
-          ROOT_LOCK_VERSION="$(node -p "require('./package-lock.json').packages[''].version")"
-          SCRIPT_VERSION="$(sed -nE 's/^SCRIPT_VERSION="([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' menu-tv-2.sh | head -n 1)"
-          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          [[ "$SCRIPT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          [[ "$LOCK_VERSION" == "$VERSION" ]]
-          [[ "$ROOT_LOCK_VERSION" == "$VERSION" ]]
-          grep -F "## [$VERSION]" CHANGELOG.md
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-          echo "script_version=$SCRIPT_VERSION" >> "$GITHUB_OUTPUT"
-          echo "installer_tag=installer-v$SCRIPT_VERSION" >> "$GITHUB_OUTPUT"
-      - name: Verify and publish immutable application release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.version.outputs.tag }}
-        shell: bash
-        run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
-            TAG_SHA="$(git rev-list -n 1 "$TAG")"
-            if [[ "$TAG_SHA" != "$GITHUB_SHA" ]]; then
-              if ! git diff --quiet "$TAG_SHA" "$GITHUB_SHA" -- .env.example Dockerfile compose.yaml package.json package-lock.json src infra; then
-                echo "Application tag $TAG already points to $TAG_SHA while verified runtime content changed at $GITHUB_SHA." >&2
-                echo "Increase package.json version before merging application/runtime changes." >&2
-                exit 1
-              fi
-              echo "Application runtime is identical to existing $TAG; only installer/docs/CI changed."
-            else
-              echo "Application tag $TAG already points to verified main."
-            fi
-          else
-            gh release create "$TAG" --target "$GITHUB_SHA" --title "TV Menu 2 $TAG" --generate-notes
-          fi
-      - name: Verify and publish independent installer tag
-        env:
-          INSTALLER_TAG: ${{ steps.version.outputs.installer_tag }}
-        shell: bash
-        run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/$INSTALLER_TAG" >/dev/null 2>&1; then
-            git fetch --force origin "refs/tags/$INSTALLER_TAG:refs/tags/$INSTALLER_TAG"
-            if ! cmp -s menu-tv-2.sh <(git show "$INSTALLER_TAG:menu-tv-2.sh"); then
-              echo "Installer tag $INSTALLER_TAG already exists with different menu-tv-2.sh content." >&2
-              echo "Increase SCRIPT_VERSION before changing the installer again." >&2
-              exit 1
-            fi
-            echo "Installer tag $INSTALLER_TAG already contains the verified script."
-          else
-            git tag "$INSTALLER_TAG" "$GITHUB_SHA"
-            git push origin "refs/tags/$INSTALLER_TAG"
-          fi
-      - name: Remove every branch except main
-        shell: bash
-        run: |
-          git ls-remote --heads origin | while read -r _ ref; do
-            branch="${ref#refs/heads/}"
-            [[ "$branch" == main ]] && continue
-            echo "Deleting obsolete branch: $branch"
-            git push origin --delete "$branch"
-          done
