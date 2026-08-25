@@ -37,11 +37,10 @@ function collectMenuNodes(stage) {
     order: index, count: promotions.length, depth: 2, transformOwner: 'promotion-badge'
   }));
 
-  const waves = [...stage.querySelectorAll('g.promotion-light-wave')];
-  waves.forEach((target, index) => append(nodes, {
-    id: `menu.promotion-wave.${index}`, kind: 'promotion-wave', layer: MOTION_LAYERS.MENU, target,
-    order: index, count: waves.length, depth: 1, transformOwner: 'promotion-overlay',
-    metadata: { travel: Number(target.dataset.waveTravel) || 0 }
+  const glows = [...stage.querySelectorAll('g.promotion-row-glow')];
+  glows.forEach((target, index) => append(nodes, {
+    id: `menu.promotion-glow.${index}`, kind: 'promotion-glow', layer: MOTION_LAYERS.MENU, target,
+    order: index, count: glows.length, depth: 1, transformOwner: 'promotion-overlay'
   }));
   return nodes;
 }
@@ -61,7 +60,7 @@ export function buildDomMotionScene(stage) {
   const scene = createMotionScene({
     root: stage,
     nodes: [...collectMenuNodes(stage), ...collectEntityNodes(stage)],
-    metadata: { adapter: 'dom', backgroundMotion: false, rowTransformOwner: true }
+    metadata: { adapter: 'dom', backgroundMotion: false, rowTransformOwner: true, promotionOverlay: 'row-glow' }
   });
   scene.nodes.forEach(markTarget);
   stage.dataset.motionSceneVersion = String(MOTION_SCENE_VERSION);
