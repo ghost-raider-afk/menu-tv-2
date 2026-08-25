@@ -36,17 +36,17 @@ export const DEFAULT_LIVE_PROFILE = Object.freeze({
   brightness_amount: 0.26,
   section_effect: 'cinematic',
   item_effect: 'cinematic',
-  price_effect: 'glow',
+  price_effect: 'none',
   intensity: 80,
   promotion_effect: 'cinematic',
   promotion_intensity: 96,
   promotion_cycle_seconds: 4.8,
   promotion_event_duration_ms: 1800,
-  promotion_travel_px: 10,
-  promotion_scale_amount: 0.18,
-  promotion_brightness_amount: 0.55,
-  promotion_glow_radius: 34,
-  promotion_easing: 'elastic'
+  promotion_travel_px: 0,
+  promotion_scale_amount: 0.06,
+  promotion_brightness_amount: 0.35,
+  promotion_glow_radius: 28,
+  promotion_easing: 'smooth'
 });
 
 const OUTPUTS = Object.freeze({
@@ -61,18 +61,22 @@ const OUTPUTS = Object.freeze({
   'animation-promotion-scale-output': () => `${Math.round(numberValue('animation-promotion-scale') * 100)}%`,
   'animation-promotion-brightness-output': () => `${Math.round(numberValue('animation-promotion-brightness') * 100)}%`,
   'animation-promotion-glow-output': () => `${Math.round(numberValue('animation-promotion-glow'))} px`,
-  'animation-promotion-travel-output': () => `${Math.round(numberValue('animation-promotion-travel'))} px`,
   'animation-promotion-cycle-output': () => `${numberValue('animation-promotion-cycle').toFixed(1)} с`,
   'animation-promotion-duration-output': () => `${Math.round(numberValue('animation-promotion-duration'))} мс`
 });
 
-function node(id) {
-  return document.getElementById(id);
-}
+function node(id) { return document.getElementById(id); }
+function numberValue(id) { const value = Number(node(id)?.value); return Number.isFinite(value) ? value : 0; }
+function clamp(value, minimum, maximum) { const number = Number(value); return Math.max(minimum, Math.min(maximum, Number.isFinite(number) ? number : minimum)); }
 
-function numberValue(id) {
-  const value = Number(node(id)?.value);
-  return Number.isFinite(value) ? value : 0;
+function canonicalStudioProfile(source = {}) {
+  const profile = { ...DEFAULT_LIVE_PROFILE, ...(source || {}) };
+  profile.price_effect = 'none';
+  profile.promotion_effect = profile.promotion_effect === 'none' ? 'none' : 'cinematic';
+  profile.promotion_easing = profile.promotion_easing === 'cinematic' ? 'cinematic' : 'smooth';
+  profile.promotion_scale_amount = clamp(profile.promotion_scale_amount, 0.03, 0.08);
+  profile.promotion_travel_px = 0;
+  return profile;
 }
 
 function updateOutputs() {
@@ -89,11 +93,11 @@ export function readMotionProfile() {
     if (!control) continue;
     profile[key] = type === 'number' ? Number(control.value) : control.value;
   }
-  return { ...DEFAULT_LIVE_PROFILE, ...profile };
+  return canonicalStudioProfile(profile);
 }
 
 export function writeMotionProfile(source = {}) {
-  const profile = { ...DEFAULT_LIVE_PROFILE, ...(source || {}) };
+  const profile = canonicalStudioProfile(source);
   for (const [key, [id]] of Object.entries(PROFILE_FIELDS)) {
     const control = node(id);
     if (control && profile[key] !== undefined) control.value = String(profile[key]);
@@ -108,10 +112,7 @@ export function bindMotionProfileControls(onChange) {
     const control = node(id);
     if (!control) return;
     const eventName = control instanceof HTMLSelectElement ? 'change' : 'input';
-    control.addEventListener(eventName, () => {
-      updateOutputs();
-      listener(readMotionProfile());
-    });
+    control.addEventListener(eventName, () => { updateOutputs(); listener(readMotionProfile()); });
   });
   updateOutputs();
 }

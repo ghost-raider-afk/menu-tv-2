@@ -11,11 +11,8 @@ import {
 function textAttributes({ size, weight = 400, fill, letterSpacing = 0, anchor = null, opacity = null }, typography) {
   const resolvedWeight = Math.max(weight, typography?.weightFloor || 400);
   return [
-    `font-size="${size}"`,
-    `font-weight="${resolvedWeight}"`,
-    fill ? `fill="${fill}"` : '',
-    letterSpacing ? `letter-spacing="${letterSpacing}"` : '',
-    anchor ? `text-anchor="${anchor}"` : '',
+    `font-size="${size}"`, `font-weight="${resolvedWeight}"`, fill ? `fill="${fill}"` : '',
+    letterSpacing ? `letter-spacing="${letterSpacing}"` : '', anchor ? `text-anchor="${anchor}"` : '',
     opacity !== null ? `opacity="${opacity}"` : ''
   ].filter(Boolean).join(' ');
 }
@@ -33,20 +30,24 @@ function priceMarkup(value, x, baseline, scale, toneColor, typography, className
   return `<text x="${x}" y="${baseline}" class="${className}" ${attributes}>${escapeXml(parts.whole)}<tspan class="cents" dy="${-16 * fontScale}" font-size="${14 * fontScale}" font-weight="700" fill="${toneColor}">${escapeXml(parts.cents)}</tspan></text>`;
 }
 
-function promotionMarkup(line, x, box, scale, typography) {
-  if (!line.promotion || !line.promotionText) return { markup: '', width: 0 };
+function promotionMarkup(line, x, box, scale, typography, horizontal) {
+  if (!line.promotion || !line.promotionText) return { markup: '', wave: '', width: 0 };
   const fontScale = TV1_REFERENCE_SCALE * scale;
   const text = truncateText(line.promotionText, 12);
   const width = Math.min(130 * fontScale, Math.max(68 * fontScale, ([...text].length * 9 + 24) * fontScale));
   const height = 27 * fontScale;
   const top = box.top + 4 * scale;
   const notch = 9 * fontScale;
+  const waveWidth = Math.max(150 * scale, horizontal.tableWidth * 0.18);
+  const waveStart = horizontal.left - waveWidth;
+  const travel = horizontal.tableWidth + waveWidth * 2;
   return {
     width,
     markup: `<g class="promotion-badge">
       <path d="M${x} ${top}H${x + width - notch}L${x + width} ${top + height / 2}L${x + width - notch} ${top + height}H${x}Z" fill="${MENU_TABLE_STYLE.promotion}"/>
       <text x="${x + (width - notch) / 2}" y="${top + 18.5 * fontScale}" class="promotion" ${textAttributes({ size: 12 * fontScale, weight: 800, fill: '#FFFFFF', letterSpacing: 0.2 * scale, anchor: 'middle' }, typography)}>${escapeXml(text)}</text>
-    </g>`
+    </g>`,
+    wave: `<g class="promotion-light-wave" data-wave-travel="${travel}" opacity="0" pointer-events="none"><rect x="${waveStart}" y="${box.top}" width="${waveWidth}" height="${box.height}" rx="${Math.max(3, 5 * scale)}" fill="url(#mira-promo-wave)" filter="url(#mira-promo-glow)"/></g>`
   };
 }
 
@@ -54,20 +55,13 @@ function sectionMarkup(line, box, horizontal, palette, scale, typography) {
   const fontScale = TV1_REFERENCE_SCALE * scale;
   const title = String(line.name || 'Меню');
   const baseline = box.top + 35 * fontScale;
-  const titleWidth = line.showPriceLabels
-    ? horizontal.primaryPriceX - horizontal.left - 45 * horizontal.scaleX
-    : horizontal.tableWidth;
+  const titleWidth = line.showPriceLabels ? horizontal.primaryPriceX - horizontal.left - 45 * horizontal.scaleX : horizontal.tableWidth;
   const maximumCharacters = Math.max(16, Math.floor(titleWidth / (17 * fontScale)));
   const labels = line.showPriceLabels
     ? `<text x="${horizontal.primaryPriceX}" y="${baseline}" class="price-label" ${textAttributes({ size: 22 * fontScale, weight: 700, fill: palette.sectionText, anchor: 'end' }, typography)}>1 л</text>
-      <text x="${horizontal.secondaryPriceX}" y="${baseline}" class="price-label" ${textAttributes({ size: 22 * fontScale, weight: 700, fill: palette.sectionText, anchor: 'end' }, typography)}>1,5 л</text>`
-    : '';
+      <text x="${horizontal.secondaryPriceX}" y="${baseline}" class="price-label" ${textAttributes({ size: 22 * fontScale, weight: 700, fill: palette.sectionText, anchor: 'end' }, typography)}>1,5 л</text>` : '';
   const rectHeight = Math.max(1, box.height - MENU_REFERENCE.sectionInset * scale);
-  return `<g class="table-section">
-    <rect x="${horizontal.left}" y="${box.top}" width="${horizontal.tableWidth}" height="${rectHeight}" rx="5" ry="5" fill="${palette.accent}"/>
-    <text x="${horizontal.left + 19 * horizontal.scaleX}" y="${baseline}" class="section-title" ${textAttributes({ size: 28 * fontScale, weight: 700, fill: palette.sectionText, letterSpacing: 0.3 }, typography)}>${escapeXml(truncateText(title, maximumCharacters))}</text>
-    ${labels}
-  </g>`;
+  return `<g class="table-section"><rect x="${horizontal.left}" y="${box.top}" width="${horizontal.tableWidth}" height="${rectHeight}" rx="5" ry="5" fill="${palette.accent}"/><text x="${horizontal.left + 19 * horizontal.scaleX}" y="${baseline}" class="section-title" ${textAttributes({ size: 28 * fontScale, weight: 700, fill: palette.sectionText, letterSpacing: 0.3 }, typography)}>${escapeXml(truncateText(title, maximumCharacters))}</text>${labels}</g>`;
 }
 
 function itemMarkup(line, box, horizontal, palette, scale, typography) {
@@ -75,25 +69,19 @@ function itemMarkup(line, box, horizontal, palette, scale, typography) {
   const toneColor = line.tone === 'accent' ? palette.accentText : palette.primaryText;
   const metaColor = line.tone === 'accent' ? palette.accentSecondaryText : palette.secondaryText;
   const nameX = horizontal.left + 22 * horizontal.scaleX;
-  const promotion = promotionMarkup(line, nameX, box, scale, typography);
+  const promotion = promotionMarkup(line, nameX, box, scale, typography, horizontal);
   const itemNameX = nameX + (promotion.width ? promotion.width + 11 * fontScale : 0);
   const nameCharacters = Math.max(8, Math.floor((horizontal.primaryPriceX - itemNameX - 30 * horizontal.scaleX) / (13 * fontScale)));
   const metaCharacters = Math.max(18, Math.floor((horizontal.primaryPriceX - nameX - 30 * horizontal.scaleX) / (7 * fontScale)));
   const priceBaseline = box.top + 35 * fontScale;
   const nameBaseline = line.metadata ? box.top + 24 * fontScale : priceBaseline;
   const metaBaseline = box.top + 44 * fontScale;
-
   return `<g class="table-item tone-${line.tone === 'accent' ? 'accent' : 'light'}">
     ${separatorMarkup(box, horizontal, scale)}
+    ${promotion.wave}
     ${promotion.markup}
-    <g class="table-item-content">
-      <text x="${itemNameX}" y="${nameBaseline}" class="item-name" ${textAttributes({ size: 25 * fontScale, weight: 700, fill: toneColor }, typography)}>${escapeXml(truncateText(line.name, nameCharacters))}</text>
-      ${line.metadata ? `<text x="${nameX}" y="${metaBaseline}" class="item-meta" ${textAttributes({ size: 14 * fontScale, weight: 400, fill: metaColor }, typography)}>${escapeXml(truncateText(line.metadata, metaCharacters))}</text>` : ''}
-    </g>
-    <g class="table-item-prices">
-      ${priceMarkup(line.pricePrimary, horizontal.primaryPriceX, priceBaseline, scale, toneColor, typography)}
-      ${priceMarkup(line.priceSecondary, horizontal.secondaryPriceX, priceBaseline, scale, toneColor, typography)}
-    </g>
+    <g class="table-item-content"><text x="${itemNameX}" y="${nameBaseline}" class="item-name" ${textAttributes({ size: 25 * fontScale, weight: 700, fill: toneColor }, typography)}>${escapeXml(truncateText(line.name, nameCharacters))}</text>${line.metadata ? `<text x="${nameX}" y="${metaBaseline}" class="item-meta" ${textAttributes({ size: 14 * fontScale, weight: 400, fill: metaColor }, typography)}>${escapeXml(truncateText(line.metadata, metaCharacters))}</text>` : ''}</g>
+    <g class="table-item-prices">${priceMarkup(line.pricePrimary, horizontal.primaryPriceX, priceBaseline, scale, toneColor, typography)}${priceMarkup(line.priceSecondary, horizontal.secondaryPriceX, priceBaseline, scale, toneColor, typography)}</g>
   </g>`;
 }
 
@@ -107,10 +95,7 @@ function packagingMarkup(line, box, horizontal, palette, scale, typography) {
     const right = x + cellWidth;
     const toneColor = item.tone === 'accent' ? palette.accentText : palette.primaryText;
     const maximumCharacters = Math.max(8, Math.floor((cellWidth - 175 * horizontal.scaleX) / (13 * fontScale)));
-    return `<g class="packaging-cell tone-${item.tone === 'accent' ? 'accent' : 'light'}">
-      <g class="packaging-cell-content"><text x="${x + 22 * horizontal.scaleX}" y="${baseline}" class="packaging-name" ${textAttributes({ size: 25 * fontScale, weight: 700, fill: toneColor }, typography)}>${escapeXml(truncateText(item.name, maximumCharacters))}</text></g>
-      <g class="packaging-cell-price">${priceMarkup(item.unitPrice, right - 22 * horizontal.scaleX, baseline, scale, toneColor, typography, 'packaging-price')}</g>
-    </g>`;
+    return `<g class="packaging-cell tone-${item.tone === 'accent' ? 'accent' : 'light'}"><g class="packaging-cell-content"><text x="${x + 22 * horizontal.scaleX}" y="${baseline}" class="packaging-name" ${textAttributes({ size: 25 * fontScale, weight: 700, fill: toneColor }, typography)}>${escapeXml(truncateText(item.name, maximumCharacters))}</text></g><g class="packaging-cell-price">${priceMarkup(item.unitPrice, right - 22 * horizontal.scaleX, baseline, scale, toneColor, typography, 'packaging-price')}</g></g>`;
   }).join('\n');
   return `<g class="table-packaging">${separatorMarkup(box, horizontal, scale)}${cells}</g>`;
 }
@@ -124,8 +109,11 @@ export function buildTableSvg(model, lines, layout = buildRenderLayout(model, li
     if (line.kind === 'packaging') return packagingMarkup(line, box, horizontal, palette, scale, typography);
     return itemMarkup(line, box, horizontal, palette, scale, typography);
   }).join('\n');
-
   return `<svg xmlns="http://www.w3.org/2000/svg" class="menu-table-svg" width="${model.viewport.width}" height="${model.viewport.height}" viewBox="0 0 ${model.viewport.width} ${model.viewport.height}" preserveAspectRatio="xMinYMin meet" aria-label="Предпросмотр таблицы меню" font-family="${escapeXml(typography.family)}">
+    <defs>
+      <linearGradient id="mira-promo-wave" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff3030" stop-opacity="0"/><stop offset="0.42" stop-color="#ff3030" stop-opacity="0.18"/><stop offset="0.5" stop-color="#ff6b6b" stop-opacity="0.72"/><stop offset="0.58" stop-color="#ff3030" stop-opacity="0.18"/><stop offset="1" stop-color="#ff3030" stop-opacity="0"/></linearGradient>
+      <filter id="mira-promo-glow" x="-60%" y="-100%" width="220%" height="300%"><feGaussianBlur stdDeviation="10"/></filter>
+    </defs>
     ${content}
   </svg>`;
 }

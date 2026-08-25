@@ -4,8 +4,8 @@ export const ANIMATION_FLOW_DIRECTIONS = Object.freeze(['none', 'left-to-right',
 export const ANIMATION_EASINGS = Object.freeze(['standard', 'smooth', 'snappy', 'cinematic', 'elastic']);
 export const SECTION_EFFECTS = Object.freeze(['none', 'glow', 'pulse', 'shimmer', 'lift', 'wave', 'cinematic']);
 export const ITEM_EFFECTS = Object.freeze(['none', 'breathe', 'wave', 'focus', 'lift', 'cinematic']);
-export const PROMOTION_EFFECTS = Object.freeze(['none', 'pulse', 'glow', 'pop', 'cinematic', 'bounce', 'sweep']);
-export const PRICE_EFFECTS = Object.freeze(['none', 'pulse', 'glow', 'wave', 'pop', 'cinematic']);
+export const PROMOTION_EFFECTS = Object.freeze(['none', 'cinematic']);
+export const PRICE_EFFECTS = Object.freeze(['none']);
 
 export const DEFAULT_ANIMATION_PROFILE = Object.freeze({
   motion_version: ANIMATION_PROFILE_VERSION,
@@ -21,16 +21,16 @@ export const DEFAULT_ANIMATION_PROFILE = Object.freeze({
   section_effect: 'cinematic',
   item_effect: 'cinematic',
   promotion_effect: 'cinematic',
-  price_effect: 'glow',
+  price_effect: 'none',
   intensity: 80,
   promotion_intensity: 96,
   promotion_cycle_seconds: 4.8,
   promotion_event_duration_ms: 1800,
-  promotion_travel_px: 10,
-  promotion_scale_amount: 0.18,
-  promotion_brightness_amount: 0.55,
-  promotion_glow_radius: 34,
-  promotion_easing: 'elastic'
+  promotion_travel_px: 0,
+  promotion_scale_amount: 0.06,
+  promotion_brightness_amount: 0.35,
+  promotion_glow_radius: 28,
+  promotion_easing: 'smooth'
 });
 
 function sourceObject(profile) {
@@ -54,6 +54,14 @@ function present(value, fallback) {
   return value === undefined ? fallback : value;
 }
 
+function canonicalPromotionEffect(value) {
+  return value === 'none' ? 'none' : 'cinematic';
+}
+
+function canonicalPromotionEasing(value) {
+  return value === 'cinematic' ? 'cinematic' : 'smooth';
+}
+
 function canonicalCurrent(source) {
   return {
     motion_version: ANIMATION_PROFILE_VERSION,
@@ -68,17 +76,17 @@ function canonicalCurrent(source) {
     brightness_amount: present(source.brightness_amount, DEFAULT_ANIMATION_PROFILE.brightness_amount),
     section_effect: present(source.section_effect, DEFAULT_ANIMATION_PROFILE.section_effect),
     item_effect: present(source.item_effect, DEFAULT_ANIMATION_PROFILE.item_effect),
-    promotion_effect: present(source.promotion_effect, DEFAULT_ANIMATION_PROFILE.promotion_effect),
-    price_effect: present(source.price_effect, DEFAULT_ANIMATION_PROFILE.price_effect),
+    promotion_effect: canonicalPromotionEffect(present(source.promotion_effect, DEFAULT_ANIMATION_PROFILE.promotion_effect)),
+    price_effect: 'none',
     intensity: present(source.intensity, DEFAULT_ANIMATION_PROFILE.intensity),
     promotion_intensity: present(source.promotion_intensity, DEFAULT_ANIMATION_PROFILE.promotion_intensity),
     promotion_cycle_seconds: present(source.promotion_cycle_seconds, DEFAULT_ANIMATION_PROFILE.promotion_cycle_seconds),
     promotion_event_duration_ms: present(source.promotion_event_duration_ms, DEFAULT_ANIMATION_PROFILE.promotion_event_duration_ms),
-    promotion_travel_px: present(source.promotion_travel_px, DEFAULT_ANIMATION_PROFILE.promotion_travel_px),
-    promotion_scale_amount: present(source.promotion_scale_amount, DEFAULT_ANIMATION_PROFILE.promotion_scale_amount),
-    promotion_brightness_amount: present(source.promotion_brightness_amount, DEFAULT_ANIMATION_PROFILE.promotion_brightness_amount),
-    promotion_glow_radius: present(source.promotion_glow_radius, DEFAULT_ANIMATION_PROFILE.promotion_glow_radius),
-    promotion_easing: present(source.promotion_easing, DEFAULT_ANIMATION_PROFILE.promotion_easing)
+    promotion_travel_px: 0,
+    promotion_scale_amount: clamp(number(present(source.promotion_scale_amount, DEFAULT_ANIMATION_PROFILE.promotion_scale_amount), DEFAULT_ANIMATION_PROFILE.promotion_scale_amount), 0.03, 0.08),
+    promotion_brightness_amount: clamp(number(present(source.promotion_brightness_amount, DEFAULT_ANIMATION_PROFILE.promotion_brightness_amount), DEFAULT_ANIMATION_PROFILE.promotion_brightness_amount), 0, 0.8),
+    promotion_glow_radius: clamp(number(present(source.promotion_glow_radius, DEFAULT_ANIMATION_PROFILE.promotion_glow_radius), DEFAULT_ANIMATION_PROFILE.promotion_glow_radius), 0, 48),
+    promotion_easing: canonicalPromotionEasing(present(source.promotion_easing, DEFAULT_ANIMATION_PROFILE.promotion_easing))
   };
 }
 
@@ -111,13 +119,6 @@ function legacyItemEffect(source) {
   return 'cinematic';
 }
 
-function legacyPriceEffect(source) {
-  if (source.price_emphasis === 'pop') return 'pulse';
-  if (source.price_emphasis === 'slide') return 'wave';
-  if (source.price_emphasis === 'fade') return 'glow';
-  return 'glow';
-}
-
 function migrateV2(source) {
   const intensity = clamp(number(source.intensity, DEFAULT_ANIMATION_PROFILE.intensity), 0, 100);
   const itemEffect = oneOf(source.item_effect, ITEM_EFFECTS, source.item_effect === 'none' ? 'cinematic' : DEFAULT_ANIMATION_PROFILE.item_effect);
@@ -133,13 +134,14 @@ function migrateV2(source) {
     brightness_amount: Math.max(0.2, clamp(number(source.brightness_amount, DEFAULT_ANIMATION_PROFILE.brightness_amount) * 1.25, 0, 0.7)),
     section_effect: oneOf(source.section_effect, SECTION_EFFECTS, DEFAULT_ANIMATION_PROFILE.section_effect),
     item_effect: itemEffect,
-    promotion_effect: oneOf(source.promotion_effect, PROMOTION_EFFECTS, DEFAULT_ANIMATION_PROFILE.promotion_effect),
-    price_effect: oneOf(source.price_effect, PRICE_EFFECTS, DEFAULT_ANIMATION_PROFILE.price_effect),
+    promotion_effect: canonicalPromotionEffect(source.promotion_effect),
+    price_effect: 'none',
     intensity: Math.max(68, intensity),
     promotion_intensity: Math.max(90, intensity),
-    promotion_scale_amount: Math.max(0.16, clamp(number(source.scale_amount, 0.04) * 3.5, 0.1, 0.22)),
-    promotion_brightness_amount: Math.max(0.42, clamp(number(source.brightness_amount, 0.18) * 2, 0.25, 0.7)),
-    promotion_glow_radius: Math.max(30, DEFAULT_ANIMATION_PROFILE.promotion_glow_radius)
+    promotion_scale_amount: 0.06,
+    promotion_brightness_amount: 0.35,
+    promotion_glow_radius: 28,
+    promotion_easing: 'smooth'
   });
 }
 
@@ -159,12 +161,13 @@ function migrateLegacyProfile(source) {
     section_effect: legacySectionEffect(source),
     item_effect: legacyItemEffect(source),
     promotion_effect: 'cinematic',
-    price_effect: legacyPriceEffect(source),
+    price_effect: 'none',
     intensity: Math.max(72, intensity),
     promotion_intensity: Math.max(92, intensity),
-    promotion_scale_amount: 0.18,
-    promotion_brightness_amount: 0.5,
-    promotion_glow_radius: 34
+    promotion_scale_amount: 0.06,
+    promotion_brightness_amount: 0.35,
+    promotion_glow_radius: 28,
+    promotion_easing: 'smooth'
   });
 }
 

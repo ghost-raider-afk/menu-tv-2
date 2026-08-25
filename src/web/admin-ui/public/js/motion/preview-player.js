@@ -1,4 +1,4 @@
-import { WaapiMotionDriver } from './drivers/waapi-driver.js';
+import { WasmMotionDriver } from './drivers/wasm-motion-driver.js';
 import { buildDomMotionScene } from './dom-scene-adapter.js';
 import { DEFAULT_SCENE_COMPILERS } from './motion-plan.js';
 import { compileEntityBehaviorProgram } from './entity-behavior.js';
@@ -20,7 +20,7 @@ export class AnimationPreviewPlayer {
     this.playButton = playButton;
     this.pauseButton = pauseButton;
     this.replayButton = replayButton;
-    this.driver = driver || new WaapiMotionDriver();
+    this.driver = driver || new WasmMotionDriver();
     this.sceneCompilers = compilers || [...DEFAULT_SCENE_COMPILERS, compileEntityBehaviorProgram];
     this.runtime = new SceneRuntime({ root: stage, driver: this.driver, compilers: this.sceneCompilers });
     this.total = 0;
@@ -77,13 +77,14 @@ export class AnimationPreviewPlayer {
       this.renderProgress(0);
       return;
     }
-    this.stage.dataset.motionMode = 'continuous';
+    this.stage.dataset.motionMode = 'wasm-continuous';
     this.scene = buildDomMotionScene(this.stage);
     this.plan = this.runtime.load({
       scene: this.scene,
       context: { profile: this.profile, entity: this.entity }
     });
     this.total = this.plan.duration;
+    this.runtime.play();
     this.updateProgress();
   }
 

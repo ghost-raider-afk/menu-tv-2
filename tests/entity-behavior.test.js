@@ -53,9 +53,9 @@ test('preview and TV player use the same scene runtime for entity behavior and c
     read('js/motion/entity-editor.js')
   ]);
   assert.match(entityEditor, /animation-scene-entity-motion/);
-  assert.match(entityEditor, /motion\.dataset\.entityMotion/);
-  assert.match(adapter, /entity\.beer-glass/);
-  assert.match(adapter, /data-entity-motion="beer-glass"/);
+  assert.match(entityEditor, /motion\.dataset\.entityMotion = entity\.id/);
+  assert.match(adapter, /\[data-entity-motion\]/);
+  assert.match(adapter, /id: `entity\.\$\{target\.dataset\.entityMotion \|\| index\}`/);
   assert.match(preview, /compileEntityBehaviorProgram/);
   assert.match(preview, /entity:\s*this\.entity/);
   assert.match(liveMotion, /compileEntityBehaviorProgram/);

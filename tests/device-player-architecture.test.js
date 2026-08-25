@@ -18,34 +18,55 @@ test('player is public while TV connection page remains admin protected', async 
   assert.match(connectHtml, /Сканировать QR-код/);
 });
 
-test('real TV player runs the canonical Motion Engine and keeps it available offline', async () => {
-  const [worker, player, liveMotion, motionPlan, adapter, publicRoutes, playerCss] = await Promise.all([
+test('real TV player runs the continuous WASM Motion Engine and keeps it available offline', async () => {
+  const [worker, player, liveMotion, motionPlan, adapter, wasmDriver, publicRoutes, playerCss] = await Promise.all([
     read('src/web/admin-ui/public/player-sw.js'),
     read('src/web/admin-ui/public/js/player/player.js'),
     read('src/web/admin-ui/public/js/motion/live-menu-motion.js'),
     read('src/web/admin-ui/public/js/motion/motion-plan.js'),
     read('src/web/admin-ui/public/js/motion/dom-scene-adapter.js'),
+    read('src/web/admin-ui/public/js/motion/drivers/wasm-motion-driver.js'),
     read('src/api/device/public-routes.js'),
     read('src/web/admin-ui/public/css/player.css')
   ]);
-  assert.match(worker, /tv-menu-player-shell-v\d+/);
+  assert.match(worker, /mira-tv-player-shell-v\d+/);
   for (const asset of [
-    '/js/editor/renderer.js', '/js/editor/renderer-model.js', '/js/editor/renderer-svg.js',
-    '/js/motion/live-menu-motion.js', '/js/motion/motion-plan.js', '/js/motion/dom-scene-adapter.js'
+    '/js/editor/renderer.js','/js/editor/renderer-model.js','/js/editor/renderer-svg.js',
+    '/js/motion/live-menu-motion.js','/js/motion/motion-plan.js','/js/motion/dom-scene-adapter.js',
+    '/js/motion/drivers/wasm-motion-driver.js','/js/motion/wasm-motion-kernel.js','/wasm/mira-motion-kernel.wasm'
   ]) assert.ok(worker.includes(`'${asset}'`), `offline shell is missing ${asset}`);
   assert.match(player, /new LiveMenuMotion\(playerStage\)/);
   assert.match(player, /context\.animation\?\.enabled/);
+  assert.match(player, /sameOriginAsset\(context\?\.entity\?\.asset_url\)/);
+  assert.match(liveMotion, /WasmMotionDriver/);
   assert.match(liveMotion, /DEFAULT_SCENE_COMPILERS/);
-  assert.match(liveMotion, /buildDomMotionScene/);
-  assert.match(motionPlan, /compilePromotionMotionProgram/);
+  assert.match(motionPlan, /procedural:/);
+  assert.doesNotMatch(motionPlan, /keyframes:/);
   assert.doesNotMatch(motionPlan, /background_effect|background_zoom_percent/);
   assert.doesNotMatch(adapter, /kind: 'background'/);
+  assert.doesNotMatch(adapter, /kind: 'price'/);
+  assert.match(wasmDriver, /requestAnimationFrame/);
   assert.match(publicRoutes, /animation:\s*\{/);
   assert.match(publicRoutes, /enabled: animationSettings\?\.enabled === true/);
   assert.match(playerCss, /\.tv-player-announcement-layer/);
   assert.match(playerCss, /transform-box:\s*fill-box/);
   assert.match(player, /showCachedPlayer/);
   assert.match(player, /serviceWorker\.register\('\/player-sw\.js'/);
+});
+
+test('offline player caches Video Entity fully and serves byte ranges from cache', async () => {
+  const [worker, player] = await Promise.all([
+    read('src/web/admin-ui/public/player-sw.js'),
+    read('src/web/admin-ui/public/js/player/player.js')
+  ]);
+  assert.match(player, /warmPlayerAssetCache/);
+  assert.match(player, /fetch\(asset, \{ cache: 'reload' \}/);
+  assert.match(worker, /cachedVideoRange/);
+  assert.match(worker, /Accept-Ranges/);
+  assert.match(worker, /Content-Range/);
+  assert.match(worker, /Partial Content/);
+  assert.match(worker, /status:\s*206/);
+  assert.match(worker, /mp4\|webm/);
 });
 
 test('TV identity is persistent and monitor binding is a first-class one-to-one relation', async () => {
@@ -70,7 +91,7 @@ test('TV identity is persistent and monitor binding is a first-class one-to-one 
   assert.match(player, /rememberDeviceKey/);
 });
 
-test('admin connection flow is mobile-first and selects location then monitor', async () => {
+test('admin connection flow is mobile-first and diagnoses iOS camera/decoder failures', async () => {
   const [navigation, application, page, html, css] = await Promise.all([
     read('src/web/admin-ui/public/js/core/navigation.js'), read('src/web/admin-ui/public/js/application.js'),
     read('src/web/admin-ui/public/js/pages/connect-tv.js'), read('src/web/admin-ui/public/connect-tv.html'),
@@ -82,8 +103,14 @@ test('admin connection flow is mobile-first and selects location then monitor', 
   assert.match(page, /selectedScreenId/);
   assert.match(page, /API\.deviceAuthorize/);
   assert.match(page, /BarcodeDetector/);
-  assert.match(page, /getUserMedia/);
+  assert.match(page, /window\.jsQR/);
+  assert.match(page, /window\.isSecureContext/);
+  assert.match(page, /facingMode:\s*\{ ideal: 'environment' \}/);
+  assert.match(page, /video\.videoWidth/);
+  assert.match(page, /requestAnimationFrame/);
+  assert.match(page, /NotAllowedError/);
   assert.match(html, /data-scanner role="dialog" aria-modal="true"/);
+  assert.match(html, /\/vendor\/jsQR\.js/);
   assert.match(css, /\.connect-tv-scanner\{[\s\S]*position:fixed;[\s\S]*inset:0/);
 });
 

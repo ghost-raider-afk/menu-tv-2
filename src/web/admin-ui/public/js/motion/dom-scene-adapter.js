@@ -21,66 +21,38 @@ function collectMenuNodes(stage) {
   const nodes = [];
   const sections = [...stage.querySelectorAll('g.table-section')];
   sections.forEach((target, index) => append(nodes, {
-    id: `menu.section.${index}`,
-    kind: 'section',
-    layer: MOTION_LAYERS.MENU,
-    target,
-    order: index,
-    count: sections.length,
-    depth: 0,
-    transformOwner: 'self'
+    id: `menu.section.${index}`, kind: 'section', layer: MOTION_LAYERS.MENU, target,
+    order: index, count: sections.length, depth: 0, transformOwner: 'self'
   }));
 
-  const content = [...stage.querySelectorAll('g.table-item-content, g.packaging-cell-content')];
-  content.forEach((target, index) => append(nodes, {
-    id: `menu.item.${index}`,
-    kind: 'item',
-    layer: MOTION_LAYERS.MENU,
-    target,
-    order: index,
-    count: content.length,
-    depth: 0,
-    transformOwner: 'self'
+  const rows = [...stage.querySelectorAll('g.table-item, g.table-packaging')];
+  rows.forEach((target, index) => append(nodes, {
+    id: `menu.item.${index}`, kind: 'item', layer: MOTION_LAYERS.MENU, target,
+    order: index, count: rows.length, depth: 0, transformOwner: 'row'
   }));
 
   const promotions = [...stage.querySelectorAll('g.promotion-badge')];
   promotions.forEach((target, index) => append(nodes, {
-    id: `menu.promotion.${index}`,
-    kind: 'promotion',
-    layer: MOTION_LAYERS.MENU,
-    target,
-    order: index,
-    count: promotions.length,
-    depth: 1,
-    transformOwner: 'promotion-motion'
+    id: `menu.promotion.${index}`, kind: 'promotion', layer: MOTION_LAYERS.MENU, target,
+    order: index, count: promotions.length, depth: 2, transformOwner: 'promotion-badge'
   }));
 
-  const prices = [...stage.querySelectorAll('g.table-item-prices, g.packaging-cell-price')];
-  prices.forEach((target, index) => append(nodes, {
-    id: `menu.price.${index}`,
-    kind: 'price',
-    layer: MOTION_LAYERS.MENU,
-    target,
-    order: index,
-    count: prices.length,
-    depth: 1,
-    transformOwner: 'self'
+  const waves = [...stage.querySelectorAll('g.promotion-light-wave')];
+  waves.forEach((target, index) => append(nodes, {
+    id: `menu.promotion-wave.${index}`, kind: 'promotion-wave', layer: MOTION_LAYERS.MENU, target,
+    order: index, count: waves.length, depth: 1, transformOwner: 'promotion-overlay',
+    metadata: { travel: Number(target.dataset.waveTravel) || 0 }
   }));
   return nodes;
 }
 
 function collectEntityNodes(stage) {
   const nodes = [];
-  append(nodes, {
-    id: 'entity.beer-glass',
-    kind: 'entity',
-    layer: MOTION_LAYERS.ENTITY,
-    target: stage.querySelector('[data-entity-motion="beer-glass"]'),
-    order: 0,
-    count: 1,
-    depth: 10,
-    transformOwner: 'entity-behavior'
-  });
+  stage.querySelectorAll('[data-entity-motion]').forEach((target, index) => append(nodes, {
+    id: `entity.${target.dataset.entityMotion || index}`,
+    kind: 'entity', layer: MOTION_LAYERS.ENTITY, target,
+    order: index, count: 1, depth: 10, transformOwner: 'entity-behavior'
+  }));
   return nodes;
 }
 
@@ -89,7 +61,7 @@ export function buildDomMotionScene(stage) {
   const scene = createMotionScene({
     root: stage,
     nodes: [...collectMenuNodes(stage), ...collectEntityNodes(stage)],
-    metadata: { adapter: 'dom', backgroundMotion: false, nestedTransforms: false }
+    metadata: { adapter: 'dom', backgroundMotion: false, rowTransformOwner: true }
   });
   scene.nodes.forEach(markTarget);
   stage.dataset.motionSceneVersion = String(MOTION_SCENE_VERSION);

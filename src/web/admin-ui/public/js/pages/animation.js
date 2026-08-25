@@ -2,7 +2,7 @@ import { API } from '../core/config.js';
 import { api } from '../core/api.js';
 import { element, setMessage, setPending } from '../core/dom.js';
 import { AnimationPreviewPlayer } from '../motion/preview-player.js';
-import { SceneEntityEditor, normaliseSceneEntity } from '../motion/entity-editor.js';
+import { SceneEntityEditor, createEntityMedia, normaliseSceneEntity } from '../motion/entity-editor.js';
 import { normaliseAnnouncement, renderAnnouncementLayer } from '../motion/announcement.js';
 import { renderAnimationScreenEmpty, renderAnimationScreenPreview } from '../motion/screen-preview.js';
 import {
@@ -13,6 +13,7 @@ import {
 } from '../motion/profile-editor.js';
 
 const PROFILE_ID = 'cinematic-live-menu';
+const ENTITY_MEDIA_TYPES = Object.freeze(['image/png', 'image/webp', 'video/mp4', 'video/webm']);
 let currentEntity = normaliseSceneEntity();
 let currentAnnouncement = normaliseAnnouncement();
 let player = null;
@@ -91,7 +92,7 @@ function bindAnnouncementControls() {
 }
 
 function entityHeight(entity) {
-  const ratio = entity.asset_width > 0 && entity.asset_height > 0 ? entity.asset_height / entity.asset_width : 1;
+  const ratio = entity.width > 0 && entity.height > 0 ? entity.height / entity.width : 1;
   return entity.transform.width * ratio * entity.transform.scale;
 }
 
@@ -107,6 +108,11 @@ function syncEntityControls(entity = currentEntity) {
   setValue('animation-entity-scale', current.transform.scale);
   setValue('animation-entity-depth', current.transform.depth);
   setValue('animation-entity-opacity', current.transform.opacity);
+  setValue('animation-entity-playback-rate', current.playback_rate);
+  const loop = element('animation-entity-loop');
+  const muted = element('animation-entity-muted');
+  if (loop) loop.checked = current.loop;
+  if (muted) muted.checked = current.muted;
   const scale = element('animation-entity-scale-output');
   const depth = element('animation-entity-depth-output');
   const opacity = element('animation-entity-opacity-output');
@@ -118,12 +124,15 @@ function syncEntityControls(entity = currentEntity) {
   if (!thumbnail) return;
   thumbnail.replaceChildren();
   if (current.asset_url) {
-    const image = document.createElement('img');
-    image.src = current.asset_url;
-    image.alt = current.name;
-    thumbnail.append(image);
+    const media = createEntityMedia(current, { thumbnail: true });
+    media.setAttribute('aria-label', current.name);
+    thumbnail.append(media);
+    const badge = document.createElement('small');
+    badge.className = 'animation-entity-media-meta';
+    badge.textContent = `${current.asset_type === 'video' ? 'VIDEO' : 'IMAGE'} · ${current.width || '?'}×${current.height || '?'}${current.asset_type === 'video' ? ` · alpha ${current.has_alpha ? 'yes' : 'no'}` : ''}`;
+    thumbnail.append(badge);
   } else {
-    thumbnail.append(Object.assign(document.createElement('span'), { textContent: 'PNG / WebP' }));
+    thumbnail.append(Object.assign(document.createElement('span'), { textContent: 'PNG / WebP / MP4 / WebM' }));
   }
 }
 
@@ -135,19 +144,15 @@ function applyEntity(entity) {
 }
 
 function patchEntity(patch) {
-  currentEntity = normaliseSceneEntity({
-    ...currentEntity,
-    ...patch,
-    transform: { ...currentEntity.transform, ...(patch.transform || {}) }
-  });
+  currentEntity = normaliseSceneEntity({ ...currentEntity, ...patch, transform: { ...currentEntity.transform, ...(patch.transform || {}) } });
   syncEntityControls(currentEntity);
   entityEditor?.setEntity(currentEntity);
   restartPreview();
 }
 
 async function uploadEntityAsset(file) {
-  if (!(file instanceof Blob) || !['image/png', 'image/webp'].includes(file.type)) {
-    setMessage('animation-message', 'Для объекта поддерживаются только PNG и WebP.', 'error');
+  if (!(file instanceof Blob) || !ENTITY_MEDIA_TYPES.includes(file.type)) {
+    setMessage('animation-message', 'Для Entity поддерживаются PNG, WebP, MP4 и WebM.', 'error');
     return;
   }
   const button = element('animation-entity-upload');
@@ -155,7 +160,12 @@ async function uploadEntityAsset(file) {
   try {
     const saved = await api.put(API.animationEntityAsset, file, { headers: { 'Content-Type': file.type } });
     applyEntity(saved.entity);
-    setMessage('animation-message', 'Изображение объекта загружено. Разместите его и сохраните настройки.', 'success');
+    const entity = normaliseSceneEntity(saved.entity);
+    if (entity.asset_type === 'video' && !entity.has_alpha) {
+      setMessage('animation-message', 'Видео загружено, но прозрачность в исходном файле не обнаружена. Для настоящего alpha используйте browser-compatible WebM/VP9 alpha.', 'success');
+    } else {
+      setMessage('animation-message', `${entity.asset_type === 'video' ? 'Видео' : 'Изображение'} Entity загружено. Разместите объект и сохраните настройки.`, 'success');
+    }
   } catch (error) {
     setMessage('animation-message', error.message);
   } finally {
@@ -187,41 +197,23 @@ function bindEntityControls() {
   });
   element('animation-entity-name')?.addEventListener('input', () => patchEntity({ name: value('animation-entity-name') || 'Бокал пива' }));
   element('animation-entity-visible')?.addEventListener('change', () => patchEntity({ visible: checked('animation-entity-visible') }));
+  element('animation-entity-loop')?.addEventListener('change', () => patchEntity({ loop: checked('animation-entity-loop') }));
+  element('animation-entity-muted')?.addEventListener('change', () => patchEntity({ muted: checked('animation-entity-muted') }));
+  element('animation-entity-playback-rate')?.addEventListener('input', () => patchEntity({ playback_rate: number('animation-entity-playback-rate') }));
   const transformControls = {
-    'animation-entity-x': 'x',
-    'animation-entity-y': 'y',
-    'animation-entity-width': 'width',
-    'animation-entity-rotation': 'rotation',
-    'animation-entity-scale': 'scale',
-    'animation-entity-depth': 'depth',
-    'animation-entity-opacity': 'opacity'
+    'animation-entity-x': 'x', 'animation-entity-y': 'y', 'animation-entity-width': 'width',
+    'animation-entity-rotation': 'rotation', 'animation-entity-scale': 'scale',
+    'animation-entity-depth': 'depth', 'animation-entity-opacity': 'opacity'
   };
-  Object.entries(transformControls).forEach(([id, key]) => {
-    element(id)?.addEventListener('input', () => patchEntity({ transform: { [key]: number(id) } }));
-  });
+  Object.entries(transformControls).forEach(([id, key]) => element(id)?.addEventListener('input', () => patchEntity({ transform: { [key]: number(id) } })));
   document.querySelectorAll('[data-entity-align]').forEach((button) => button.addEventListener('click', () => alignEntity(button.dataset.entityAlign)));
   element('animation-entity-reset')?.addEventListener('click', () => patchEntity({ transform: { x: 1580, y: 420, width: 280, scale: 1, rotation: 0, depth: 10, opacity: 1 } }));
 }
 
-function screenLabel(screen) {
-  return `${screen.location_name || 'Без точки'} — ${screen.name}`;
-}
-
-function setScreenStatus(text) {
-  const node = element('animation-screen-status');
-  if (node) node.textContent = text;
-}
-
-function screenFromUrl(screens) {
-  const candidate = Number(new URL(window.location.href).searchParams.get('screen'));
-  return screens.find((screen) => Number(screen.id) === candidate) || screens[0] || null;
-}
-
-function rememberSelectedScreen(screenId) {
-  const url = new URL(window.location.href);
-  url.searchParams.set('screen', String(screenId));
-  history.replaceState(history.state, '', `${url.pathname}${url.search}${url.hash}`);
-}
+function screenLabel(screen) { return `${screen.location_name || 'Без точки'} — ${screen.name}`; }
+function setScreenStatus(text) { const node = element('animation-screen-status'); if (node) node.textContent = text; }
+function screenFromUrl(screens) { const candidate = Number(new URL(window.location.href).searchParams.get('screen')); return screens.find((screen) => Number(screen.id) === candidate) || screens[0] || null; }
+function rememberSelectedScreen(screenId) { const url = new URL(window.location.href); url.searchParams.set('screen', String(screenId)); history.replaceState(history.state, '', `${url.pathname}${url.search}${url.hash}`); }
 
 async function loadScreenPreview(screenId) {
   const stage = element('animation-stage');
@@ -263,12 +255,7 @@ async function loadScreenOptions() {
   select.innerHTML = screens.map((screen) => `<option value="${screen.id}">${screenLabel(screen)}</option>`).join('');
   const selected = screenFromUrl(screens);
   select.value = String(selected.id);
-  select.addEventListener('change', () => {
-    const id = Number(select.value);
-    if (!id) return;
-    rememberSelectedScreen(id);
-    void loadScreenPreview(id);
-  });
+  select.addEventListener('change', () => { const id = Number(select.value); if (!id) return; rememberSelectedScreen(id); void loadScreenPreview(id); });
   await loadScreenPreview(selected.id);
 }
 
@@ -290,11 +277,7 @@ async function saveSettings() {
   try {
     currentAnnouncement = announcementFromControls();
     const saved = await api.put(API.animationSettings, {
-      enabled: checked('animation-enabled'),
-      preset_id: PROFILE_ID,
-      profile: readMotionProfile(),
-      entity: currentEntity,
-      announcement: currentAnnouncement
+      enabled: checked('animation-enabled'), preset_id: PROFILE_ID, profile: readMotionProfile(), entity: currentEntity, announcement: currentAnnouncement
     });
     writeMotionProfile(saved.profile);
     currentAnnouncement = normaliseAnnouncement(saved.announcement);
@@ -302,11 +285,8 @@ async function saveSettings() {
     applyEntity(saved.entity);
     renderAnnouncementPreview();
     setMessage('animation-message', 'Настройки живого меню сохранены.', 'success');
-  } catch (error) {
-    setMessage('animation-message', error.message);
-  } finally {
-    setPending(button, false, 'Сохраняем…');
-  }
+  } catch (error) { setMessage('animation-message', error.message); }
+  finally { setPending(button, false, 'Сохраняем…'); }
 }
 
 export function initialiseAnimationStudio() {
@@ -315,22 +295,13 @@ export function initialiseAnimationStudio() {
   player?.destroy();
   entityEditor?.destroy();
   player = new AnimationPreviewPlayer({
-    stage,
-    timeline: element('animation-timeline'),
-    timeLabel: element('animation-time'),
-    playButton: element('animation-play'),
-    pauseButton: element('animation-pause'),
-    replayButton: element('animation-replay')
+    stage, timeline: element('animation-timeline'), timeLabel: element('animation-time'),
+    playButton: element('animation-play'), pauseButton: element('animation-pause'), replayButton: element('animation-replay')
   });
   entityEditor = new SceneEntityEditor({
     stage,
-    onChange(entity) {
-      currentEntity = entity;
-      syncEntityControls(entity);
-    },
-    onCommit() {
-      restartPreview();
-    }
+    onChange(entity) { currentEntity = entity; syncEntityControls(entity); },
+    onCommit() { restartPreview(); }
   });
   bindMotionProfileControls(() => restartPreview());
   bindAnnouncementControls();

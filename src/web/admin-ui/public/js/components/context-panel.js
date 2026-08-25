@@ -2,7 +2,7 @@ import { navigationState, routeIsActive } from '../core/navigation.js';
 import { state } from '../core/state.js';
 
 function appName() {
-  return state.site?.app_name || state.site?.application_name || state.session?.app_name || 'ТВ МЕНЮ';
+  return state.site?.app_name || state.site?.application_name || state.session?.app_name || 'MIRA-TV';
 }
 
 function userName() {
@@ -10,7 +10,7 @@ function userName() {
 }
 
 function contextTitle(section) {
-  return ({ overview: 'Обзор', monitors: 'Мониторы', catalog: 'Каталог', settings: 'Настройки' })[section] || 'ТВ МЕНЮ';
+  return ({ overview: 'Обзор', monitors: 'Мониторы', catalog: 'Каталог', settings: 'Настройки' })[section] || 'MIRA-TV';
 }
 
 function contextLinksMarkup(contextLinks, currentPage) {
