@@ -34,35 +34,39 @@ export function normaliseAquarium(value = {}) {
   };
 }
 
-function createFish(index, count) {
+function createFish(index, speed) {
   const fish = document.createElement('span');
+  const factor = 0.86 + ((index % 4) * 0.11);
+  const baseDuration = 25 - (speed / 100) * 10;
   fish.className = `aquarium-fish aquarium-fish-${(index % 3) + 1}`;
-  fish.style.setProperty('--fish-index', String(index));
   fish.style.setProperty('--fish-y', `${14 + ((index * 19) % 64)}%`);
   fish.style.setProperty('--fish-delay', `${-(index * 3.7)}s`);
-  fish.style.setProperty('--fish-duration-factor', String(0.86 + ((index % 4) * 0.11)));
+  fish.style.setProperty('--fish-duration', `${Math.max(9, baseDuration * factor).toFixed(2)}s`);
   fish.setAttribute('aria-hidden', 'true');
   return fish;
 }
 
-function createBubble(index) {
+function createBubble(index, speed) {
   const bubble = document.createElement('span');
+  const duration = 9 - (speed / 100) * 3;
   bubble.className = 'aquarium-bubble';
   bubble.style.setProperty('--bubble-x', `${3 + ((index * 37) % 94)}%`);
   bubble.style.setProperty('--bubble-size', `${4 + ((index * 7) % 12)}px`);
   bubble.style.setProperty('--bubble-delay', `${-(index * 0.83)}s`);
   bubble.style.setProperty('--bubble-drift', `${-16 + ((index * 11) % 32)}px`);
+  bubble.style.setProperty('--bubble-duration', `${duration.toFixed(2)}s`);
   bubble.setAttribute('aria-hidden', 'true');
   return bubble;
 }
 
-function createPlant(index, side) {
+function createPlant(index, side, speed) {
   const plant = document.createElement('span');
+  const duration = 6 - (speed / 100) * 2;
   plant.className = `aquarium-plant aquarium-plant-${side}`;
-  plant.style.setProperty('--plant-index', String(index));
   plant.style.setProperty('--plant-offset', `${3 + index * 4.8}%`);
   plant.style.setProperty('--plant-height', `${13 + (index % 4) * 5}%`);
   plant.style.setProperty('--plant-delay', `${-(index * 0.9)}s`);
+  plant.style.setProperty('--plant-duration', `${duration.toFixed(2)}s`);
   plant.setAttribute('aria-hidden', 'true');
   return plant;
 }
@@ -78,12 +82,15 @@ export function renderAquariumLayer(layer, value, { allowIntro = true } = {}) {
   layer.classList.add(`aquarium-style-${aquarium.style}`);
   layer.style.setProperty('--aquarium-intensity', String(aquarium.intensity / 100));
   layer.style.setProperty('--aquarium-caustics', String(aquarium.caustics / 100));
-  layer.style.setProperty('--aquarium-speed', String(aquarium.speed / 100));
+  layer.style.setProperty('--caustics-a-duration', `${(30 - (aquarium.speed / 100) * 12).toFixed(2)}s`);
+  layer.style.setProperty('--caustics-b-duration', `${(38 - (aquarium.speed / 100) * 15).toFixed(2)}s`);
 
   const water = document.createElement('div');
   water.className = 'aquarium-water';
-  if (allowIntro && aquarium.intro_fill && !introPlayed) {
+  const playIntro = allowIntro && aquarium.intro_fill && !introPlayed;
+  if (playIntro) {
     water.classList.add('aquarium-water-intro');
+    layer.classList.add('aquarium-intro-active');
     introPlayed = true;
   }
   water.innerHTML = '<span class="aquarium-caustics aquarium-caustics-a"></span><span class="aquarium-caustics aquarium-caustics-b"></span><span class="aquarium-depth-haze"></span>';
@@ -92,17 +99,17 @@ export function renderAquariumLayer(layer, value, { allowIntro = true } = {}) {
   scenery.className = 'aquarium-scenery';
   const plantCount = Math.round((aquarium.plant_density / 100) * 5);
   for (let index = 0; index < plantCount; index += 1) {
-    scenery.append(createPlant(index, 'left'), createPlant(index, 'right'));
+    scenery.append(createPlant(index, 'left', aquarium.speed), createPlant(index, 'right', aquarium.speed));
   }
 
   const fishLayer = document.createElement('div');
   fishLayer.className = 'aquarium-fish-layer';
-  for (let index = 0; index < aquarium.fish_count; index += 1) fishLayer.append(createFish(index, aquarium.fish_count));
+  for (let index = 0; index < aquarium.fish_count; index += 1) fishLayer.append(createFish(index, aquarium.speed));
 
   const bubbles = document.createElement('div');
   bubbles.className = 'aquarium-bubbles';
   const bubbleCount = Math.round((aquarium.bubble_density / 100) * 18);
-  for (let index = 0; index < bubbleCount; index += 1) bubbles.append(createBubble(index));
+  for (let index = 0; index < bubbleCount; index += 1) bubbles.append(createBubble(index, aquarium.speed));
 
   layer.append(water, scenery, fishLayer, bubbles);
   return aquarium;
