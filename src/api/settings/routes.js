@@ -5,7 +5,7 @@ import { activity, notFound } from '../helpers.js';
 import { hashPassword, passwordChangeInput, verifyPassword } from '../../services/password-service.js';
 import { issueSession, sessionCookie, themeCookie } from '../../services/session-service.js';
 import { replaceSiteImage, siteSettingsResponse } from '../../services/site-assets-service.js';
-import { replaceEntityAsset } from '../../services/entity-assets-service.js';
+import { replaceEntityAssetStream } from '../../services/entity-assets-service.js';
 
 export function createSettingsRouter({ store, config }) {
   const router = express.Router();
@@ -34,8 +34,15 @@ export function createSettingsRouter({ store, config }) {
     const settings = await store.updateAnimationSettings({ ...animationSettingsInput(request.body), updated_by: request.session.sub });
     await activity(store, request, { action: 'settings.animation.updated', entity_type: 'animation_settings', entity_id: settings.id, message: 'Обновлены настройки анимации экранов.' }); response.json(settings);
   });
-  router.put('/animation/entity-asset', express.raw({ type: '*/*', limit: config.screenBackgroundMaxBytes }), async (request, response) => {
-    const settings = await replaceEntityAsset({ bytes: request.body, contentType: request.get('content-type'), config, store, username: request.session.sub });
+  router.put('/animation/entity-asset', async (request, response) => {
+    const settings = await replaceEntityAssetStream({
+      stream: request,
+      contentLength: request.get('content-length'),
+      contentType: request.get('content-type'),
+      config,
+      store,
+      username: request.session.sub
+    });
     await activity(store, request, { action: 'settings.animation.entity_asset_updated', entity_type: 'animation_settings', entity_id: settings.id, message: 'Обновлён медиафайл Entity.' }); response.json(settings);
   });
   router.put('/site/logo', express.raw({ type: '*/*', limit: config.siteLogoMaxBytes }), async (request, response) => {
