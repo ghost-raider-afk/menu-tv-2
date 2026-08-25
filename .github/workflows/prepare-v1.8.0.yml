@@ -26,7 +26,7 @@ jobs:
           python3 -c "from pathlib import Path; p=Path('package-lock.json'); s=p.read_text(); s=s.replace('\"version\": \"1.7.0\"','\"version\": \"1.8.0\"',2); p.write_text(s)"
           grep -q '^  "version": "1.8.0",$' package-lock.json
           grep -q '^      "version": "1.8.0",$' package-lock.json
-          test "$(node -p \"require('./package.json').version\")" = '1.8.0'
+          grep -q '^  "version": "1.8.0",$' package.json
           grep -q '^## \[1\.8\.0\] - 2026-08-26$' CHANGELOG.md
           git rm .github/workflows/prepare-v1.8.0.yml
           git config user.name 'github-actions[bot]'
