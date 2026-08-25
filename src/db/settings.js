@@ -2,6 +2,8 @@ import { isoNow, normaliseRow } from './helpers.js';
 import { completeAnimationProfile } from '../shared/animation-profile.js';
 import { completeSceneEntity } from '../contracts/scene-entity.js';
 import { completeAnnouncement } from '../contracts/announcement.js';
+import { completeBrandTitle } from '../contracts/brand-title.js';
+import { completeAquarium } from '../contracts/aquarium.js';
 
 function normaliseAnimationSettings(row) {
   const value = normaliseRow(row);
@@ -9,12 +11,18 @@ function normaliseAnimationSettings(row) {
   let profile = {};
   let entity = {};
   let announcement = {};
+  let brand = {};
+  let aquarium = {};
   try { profile = JSON.parse(value.profile_json || '{}'); }
   catch { profile = {}; }
   try { entity = JSON.parse(value.entity_json || '{}'); }
   catch { entity = {}; }
   try { announcement = JSON.parse(value.announcement_json || '{}'); }
   catch { announcement = {}; }
+  try { brand = JSON.parse(value.brand_json || '{}'); }
+  catch { brand = {}; }
+  try { aquarium = JSON.parse(value.aquarium_json || '{}'); }
+  catch { aquarium = {}; }
   return {
     id: value.id,
     enabled: value.enabled === true,
@@ -22,6 +30,8 @@ function normaliseAnimationSettings(row) {
     profile: completeAnimationProfile(profile),
     entity: completeSceneEntity(entity),
     announcement: completeAnnouncement(announcement),
+    brand: completeBrandTitle(brand),
+    aquarium: completeAquarium(aquarium),
     updated_by: value.updated_by || '',
     created_at: value.created_at,
     updated_at: value.updated_at
@@ -58,11 +68,12 @@ export function createSettingsRepository(pool) {
       return normaliseAnimationSettings(rows[0]);
     },
 
-    async updateAnimationSettings({ enabled, preset_id, profile, entity, announcement, updated_by }) {
+    async updateAnimationSettings({ enabled, preset_id, profile, entity, announcement, brand, aquarium, updated_by }) {
       const { rows } = await pool.query(
         `UPDATE animation_settings SET enabled = $1, preset_id = $2, profile_json = $3, entity_json = $4,
-         announcement_json = $5, updated_by = $6, updated_at = $7 WHERE id = 1 RETURNING *`,
-        [enabled, preset_id, JSON.stringify(profile), JSON.stringify(entity), JSON.stringify(announcement), updated_by, isoNow()]
+         announcement_json = $5, brand_json = $6, aquarium_json = $7, updated_by = $8, updated_at = $9
+         WHERE id = 1 RETURNING *`,
+        [enabled, preset_id, JSON.stringify(profile), JSON.stringify(entity), JSON.stringify(announcement), JSON.stringify(brand), JSON.stringify(aquarium), updated_by, isoNow()]
       );
       return normaliseAnimationSettings(rows[0]);
     },
