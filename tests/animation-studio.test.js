@@ -8,39 +8,33 @@ import { completeAnimationProfile, DEFAULT_ANIMATION_PROFILE } from '../src/shar
 const root = new URL('../src/web/admin-ui/public/', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
-test('canonical profile is cinematic, readable and keeps background structurally static', () => {
+test('canonical profile keeps one row owner, static background and smooth cinematic promotion', () => {
   const profile = completeAnimationProfile({});
   assert.equal(profile.motion_version, 3);
   assert.equal(profile.pattern, 'cinematic');
   assert.equal(profile.section_effect, 'cinematic');
   assert.equal(profile.item_effect, 'cinematic');
-  assert.equal(profile.price_effect, 'glow');
+  assert.equal(profile.price_effect, 'none');
   assert.equal('background_effect' in profile, false);
   assert.equal('background_zoom_percent' in profile, false);
   assert.equal(profile.promotion_effect, 'cinematic');
-  assert.ok(profile.promotion_intensity > profile.intensity);
+  assert.equal(profile.promotion_easing, 'smooth');
+  assert.equal(profile.promotion_travel_px, 0);
+  assert.ok(profile.promotion_scale_amount >= 0.03 && profile.promotion_scale_amount <= 0.08);
   const parsed = animationSettingsInput({ enabled: true, preset_id: 'cinematic-live-menu', profile: DEFAULT_ANIMATION_PROFILE, announcement: {} });
   assert.equal(parsed.preset_id, 'cinematic-live-menu');
-  assert.equal(parsed.profile.promotion_easing, 'elastic');
+  assert.equal(parsed.profile.price_effect, 'none');
+  assert.equal(parsed.profile.promotion_easing, 'smooth');
 });
 
 test('announcement contract validates an independent ticker', () => {
-  const parsed = announcementInput({
-    enabled: true,
-    text: 'Сегодня скидка 10%',
-    position: 'bottom',
-    speed_px_per_second: 90,
-    font_size: 34,
-    text_color: '#FFFFFF',
-    background_color: '#101317',
-    background_opacity: 0.8
-  });
+  const parsed = announcementInput({ enabled: true, text: 'Сегодня скидка 10%', position: 'bottom', speed_px_per_second: 90, font_size: 34, text_color: '#FFFFFF', background_color: '#101317', background_opacity: 0.8 });
   assert.equal(parsed.enabled, true);
   assert.equal(parsed.text, 'Сегодня скидка 10%');
   assert.throws(() => announcementInput({ enabled: true, text: '' }), /Введите текст объявления/);
 });
 
-test('legacy animation data migrates into current profile without background motion', () => {
+test('legacy animation data migrates without background or independent price motion', () => {
   const migrated = completeAnimationProfile({
     entrance: 'cascade', direction: 'left', easing: 'smooth', duration_ms: 900, stagger_ms: 70,
     distance_px: 54, scale_from: 0.98, opacity_from: 0, section_emphasis: 'pulse', price_emphasis: 'pop',
@@ -48,41 +42,57 @@ test('legacy animation data migrates into current profile without background mot
   });
   assert.equal(migrated.motion_version, 3);
   assert.equal('background_effect' in migrated, false);
+  assert.equal(migrated.price_effect, 'none');
   assert.equal(migrated.promotion_effect, 'cinematic');
+  assert.equal(migrated.promotion_easing, 'smooth');
+  assert.equal(migrated.promotion_scale_amount, 0.06);
 });
 
-test('Motion Studio exposes one consolidated editor and independent high-attention promotion controls', async () => {
-  const [html, page, profileEditor, motionPlan, domAdapter, previewPlayer, previewCss, announcement] = await Promise.all([
-    read('animation.html'),
-    read('js/pages/animation.js'),
-    read('js/motion/profile-editor.js'),
-    read('js/motion/motion-plan.js'),
-    read('js/motion/dom-scene-adapter.js'),
-    read('js/motion/preview-player.js'),
-    read('css/pages/animation-screen-preview.css'),
-    read('js/motion/announcement.js')
+test('stored v3 bounce/pop settings are canonicalized instead of reintroducing jerking', () => {
+  const migrated = completeAnimationProfile({
+    ...DEFAULT_ANIMATION_PROFILE,
+    motion_version: 3,
+    price_effect: 'pop',
+    promotion_effect: 'bounce',
+    promotion_easing: 'elastic',
+    promotion_scale_amount: 0.2,
+    promotion_travel_px: 24
+  });
+  assert.equal(migrated.price_effect, 'none');
+  assert.equal(migrated.promotion_effect, 'cinematic');
+  assert.equal(migrated.promotion_easing, 'smooth');
+  assert.equal(migrated.promotion_scale_amount, 0.08);
+  assert.equal(migrated.promotion_travel_px, 0);
+});
+
+test('Motion Studio exposes WASM row controls and Video Entity v2 without price transform controls', async () => {
+  const [html, page, profileEditor, motionPlan, domAdapter, liveMotion, previewCss, announcement] = await Promise.all([
+    read('animation.html'), read('js/pages/animation.js'), read('js/motion/profile-editor.js'),
+    read('js/motion/motion-plan.js'), read('js/motion/dom-scene-adapter.js'), read('js/motion/live-menu-motion.js'),
+    read('css/pages/animation-screen-preview.css'), read('js/motion/announcement.js')
   ]);
 
   for (const id of [
     'animation-stage','animation-screen-select','animation-save','animation-intensity','animation-travel','animation-scale',
-    'animation-section-effect','animation-item-effect','animation-price-effect','animation-promotion-effect',
-    'animation-promotion-intensity','animation-promotion-scale','animation-promotion-glow','animation-announcement-enabled'
+    'animation-section-effect','animation-item-effect','animation-promotion-effect','animation-promotion-intensity',
+    'animation-promotion-scale','animation-promotion-glow','animation-announcement-enabled','animation-entity-file',
+    'animation-entity-loop','animation-entity-muted','animation-entity-playback-rate'
   ]) assert.match(html, new RegExp(`id="${id}"`));
 
-  assert.doesNotMatch(html, /20 ПРЕСЕТОВ|animation-presets/);
-  assert.match(html, /Живое меню/);
+  assert.doesNotMatch(html, /id="animation-price-effect"/);
+  assert.match(html, /MIRA WASM MOTION/);
   assert.match(html, /ФОН · STATIC/);
-  assert.match(html, /PROMO ATTENTION/);
-  assert.match(page, /PROFILE_ID = 'cinematic-live-menu'/);
-  assert.match(page, /readMotionProfile/);
-  assert.match(page, /writeMotionProfile/);
-  assert.match(profileEditor, /promotion_intensity/);
-  assert.match(profileEditor, /promotion_glow_radius/);
-  assert.match(previewPlayer, /DEFAULT_SCENE_COMPILERS/);
-  assert.match(motionPlan, /compilePromotionMotionProgram/);
-  assert.doesNotMatch(motionPlan, /backgroundFrames|background_effect|background_zoom_percent/);
+  assert.match(html, /PROMO CINEMATIC WAVE/);
+  assert.match(html, /video\/mp4,video\/webm/);
+  assert.match(page, /ENTITY_MEDIA_TYPES/);
+  assert.match(page, /createEntityMedia/);
+  assert.match(profileEditor, /profile\.price_effect = 'none'/);
+  assert.match(profileEditor, /promotion_scale_amount = clamp/);
+  assert.match(liveMotion, /WasmMotionDriver/);
+  assert.match(motionPlan, /procedural:/);
+  assert.doesNotMatch(motionPlan, /keyframes:/);
   assert.doesNotMatch(domAdapter, /kind: 'background'/);
-  assert.doesNotMatch(domAdapter, /kind: 'shimmer'/);
+  assert.doesNotMatch(domAdapter, /kind: 'price'/);
   assert.match(previewCss, /\.animation-screen-background\{[^}]*background-size:cover/);
   assert.match(announcement, /renderAnnouncementLayer/);
 });
