@@ -71,6 +71,21 @@ function createPlant(index, side, speed) {
   return plant;
 }
 
+function setVisualVariables(layer, aquarium) {
+  const intensity = aquarium.intensity / 100;
+  const caustics = aquarium.caustics / 100;
+  layer.style.setProperty('--aquarium-water-opacity', (0.18 + intensity * 0.28).toFixed(3));
+  layer.style.setProperty('--aquarium-caustics-opacity-a', (caustics * 0.3).toFixed(3));
+  layer.style.setProperty('--aquarium-caustics-opacity-b', (caustics * 0.18).toFixed(3));
+  layer.style.setProperty('--aquarium-haze-opacity', intensity.toFixed(3));
+  layer.style.setProperty('--aquarium-fish-opacity', (0.25 + intensity * 0.55).toFixed(3));
+  layer.style.setProperty('--aquarium-fish-soft-opacity', (0.20 + intensity * 0.42).toFixed(3));
+  layer.style.setProperty('--aquarium-bubble-opacity', (0.16 + intensity * 0.38).toFixed(3));
+  layer.style.setProperty('--aquarium-plant-opacity', (0.14 + intensity * 0.45).toFixed(3));
+  layer.style.setProperty('--caustics-a-duration', `${(30 - (aquarium.speed / 100) * 12).toFixed(2)}s`);
+  layer.style.setProperty('--caustics-b-duration', `${(38 - (aquarium.speed / 100) * 15).toFixed(2)}s`);
+}
+
 export function renderAquariumLayer(layer, value, { allowIntro = true } = {}) {
   if (!(layer instanceof Element)) return null;
   const aquarium = normaliseAquarium(value);
@@ -80,10 +95,7 @@ export function renderAquariumLayer(layer, value, { allowIntro = true } = {}) {
   if (!aquarium.enabled) return aquarium;
 
   layer.classList.add(`aquarium-style-${aquarium.style}`);
-  layer.style.setProperty('--aquarium-intensity', String(aquarium.intensity / 100));
-  layer.style.setProperty('--aquarium-caustics', String(aquarium.caustics / 100));
-  layer.style.setProperty('--caustics-a-duration', `${(30 - (aquarium.speed / 100) * 12).toFixed(2)}s`);
-  layer.style.setProperty('--caustics-b-duration', `${(38 - (aquarium.speed / 100) * 15).toFixed(2)}s`);
+  setVisualVariables(layer, aquarium);
 
   const water = document.createElement('div');
   water.className = 'aquarium-water';
