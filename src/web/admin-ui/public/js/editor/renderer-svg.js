@@ -31,23 +31,20 @@ function priceMarkup(value, x, baseline, scale, toneColor, typography, className
 }
 
 function promotionMarkup(line, x, box, scale, typography, horizontal) {
-  if (!line.promotion || !line.promotionText) return { markup: '', wave: '', width: 0 };
+  if (!line.promotion || !line.promotionText) return { markup: '', glow: '', width: 0 };
   const fontScale = TV1_REFERENCE_SCALE * scale;
   const text = truncateText(line.promotionText, 12);
   const width = Math.min(130 * fontScale, Math.max(68 * fontScale, ([...text].length * 9 + 24) * fontScale));
   const height = 27 * fontScale;
   const top = box.top + 4 * scale;
   const notch = 9 * fontScale;
-  const waveWidth = Math.max(150 * scale, horizontal.tableWidth * 0.18);
-  const waveStart = horizontal.left - waveWidth;
-  const travel = horizontal.tableWidth + waveWidth * 2;
   return {
     width,
     markup: `<g class="promotion-badge">
       <path d="M${x} ${top}H${x + width - notch}L${x + width} ${top + height / 2}L${x + width - notch} ${top + height}H${x}Z" fill="${MENU_TABLE_STYLE.promotion}"/>
       <text x="${x + (width - notch) / 2}" y="${top + 18.5 * fontScale}" class="promotion" ${textAttributes({ size: 12 * fontScale, weight: 800, fill: '#FFFFFF', letterSpacing: 0.2 * scale, anchor: 'middle' }, typography)}>${escapeXml(text)}</text>
     </g>`,
-    wave: `<g class="promotion-light-wave" data-wave-travel="${travel}" opacity="0" pointer-events="none"><rect x="${waveStart}" y="${box.top}" width="${waveWidth}" height="${box.height}" rx="${Math.max(3, 5 * scale)}" fill="url(#mira-promo-wave)" filter="url(#mira-promo-glow)"/></g>`
+    glow: `<g class="promotion-row-glow" opacity="0" pointer-events="none"><rect x="${horizontal.left}" y="${box.top}" width="${horizontal.tableWidth}" height="${box.height}" rx="${Math.max(4, 6 * scale)}" fill="url(#mira-promo-row-glow)" filter="url(#mira-promo-row-softness)"/></g>`
   };
 }
 
@@ -78,7 +75,7 @@ function itemMarkup(line, box, horizontal, palette, scale, typography) {
   const metaBaseline = box.top + 44 * fontScale;
   return `<g class="table-item tone-${line.tone === 'accent' ? 'accent' : 'light'}">
     ${separatorMarkup(box, horizontal, scale)}
-    ${promotion.wave}
+    ${promotion.glow}
     ${promotion.markup}
     <g class="table-item-content"><text x="${itemNameX}" y="${nameBaseline}" class="item-name" ${textAttributes({ size: 25 * fontScale, weight: 700, fill: toneColor }, typography)}>${escapeXml(truncateText(line.name, nameCharacters))}</text>${line.metadata ? `<text x="${nameX}" y="${metaBaseline}" class="item-meta" ${textAttributes({ size: 14 * fontScale, weight: 400, fill: metaColor }, typography)}>${escapeXml(truncateText(line.metadata, metaCharacters))}</text>` : ''}</g>
     <g class="table-item-prices">${priceMarkup(line.pricePrimary, horizontal.primaryPriceX, priceBaseline, scale, toneColor, typography)}${priceMarkup(line.priceSecondary, horizontal.secondaryPriceX, priceBaseline, scale, toneColor, typography)}</g>
@@ -111,8 +108,8 @@ export function buildTableSvg(model, lines, layout = buildRenderLayout(model, li
   }).join('\n');
   return `<svg xmlns="http://www.w3.org/2000/svg" class="menu-table-svg" width="${model.viewport.width}" height="${model.viewport.height}" viewBox="0 0 ${model.viewport.width} ${model.viewport.height}" preserveAspectRatio="xMinYMin meet" aria-label="Предпросмотр таблицы меню" font-family="${escapeXml(typography.family)}">
     <defs>
-      <linearGradient id="mira-promo-wave" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff3030" stop-opacity="0"/><stop offset="0.42" stop-color="#ff3030" stop-opacity="0.18"/><stop offset="0.5" stop-color="#ff6b6b" stop-opacity="0.72"/><stop offset="0.58" stop-color="#ff3030" stop-opacity="0.18"/><stop offset="1" stop-color="#ff3030" stop-opacity="0"/></linearGradient>
-      <filter id="mira-promo-glow" x="-60%" y="-100%" width="220%" height="300%"><feGaussianBlur stdDeviation="10"/></filter>
+      <linearGradient id="mira-promo-row-glow" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff384f" stop-opacity="0.10"/><stop offset="0.16" stop-color="#ff3048" stop-opacity="0.30"/><stop offset="0.5" stop-color="#ff5267" stop-opacity="0.48"/><stop offset="0.84" stop-color="#ff3048" stop-opacity="0.30"/><stop offset="1" stop-color="#ff384f" stop-opacity="0.10"/></linearGradient>
+      <filter id="mira-promo-row-softness" x="-8%" y="-80%" width="116%" height="260%"><feGaussianBlur stdDeviation="4"/></filter>
     </defs>
     ${content}
   </svg>`;
