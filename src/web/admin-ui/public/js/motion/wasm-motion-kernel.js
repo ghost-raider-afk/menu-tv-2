@@ -1,15 +1,19 @@
 const DEFAULT_WASM_URL = '/wasm/mira-motion-kernel.wasm';
 let sharedPromise = null;
 
-function assertExports(exports) {
-  const required = [
-    '_mira_row_x', '_mira_row_y', '_mira_row_scale', '_mira_row_brightness',
-    '_mira_promo_scale', '_mira_promo_glow', '_mira_promo_wave_progress', '_mira_promo_wave_opacity'
-  ];
-  for (const name of required) {
-    if (typeof exports?.[name] !== 'function') throw new Error(`MIRA motion kernel is missing ${name}.`);
+const FUNCTIONS = Object.freeze([
+  'mira_row_x', 'mira_row_y', 'mira_row_scale', 'mira_row_brightness',
+  'mira_promo_scale', 'mira_promo_glow', 'mira_promo_wave_progress', 'mira_promo_wave_opacity'
+]);
+
+function normaliseExports(exports) {
+  const kernel = {};
+  for (const name of FUNCTIONS) {
+    const fn = exports?.[`_${name}`] || exports?.[name];
+    if (typeof fn !== 'function') throw new Error(`MIRA motion kernel is missing ${name}.`);
+    kernel[`_${name}`] = fn;
   }
-  return exports;
+  return Object.freeze(kernel);
 }
 
 async function instantiate(url) {
@@ -17,15 +21,12 @@ async function instantiate(url) {
   if (!response.ok) throw new Error(`MIRA motion kernel HTTP ${response.status}.`);
   let result;
   if (typeof WebAssembly.instantiateStreaming === 'function') {
-    try {
-      result = await WebAssembly.instantiateStreaming(response.clone(), {});
-    } catch {
-      result = await WebAssembly.instantiate(await response.arrayBuffer(), {});
-    }
+    try { result = await WebAssembly.instantiateStreaming(response.clone(), {}); }
+    catch { result = await WebAssembly.instantiate(await response.arrayBuffer(), {}); }
   } else {
     result = await WebAssembly.instantiate(await response.arrayBuffer(), {});
   }
-  return assertExports(result.instance?.exports || result.exports);
+  return normaliseExports(result.instance?.exports || result.exports);
 }
 
 export function loadMotionKernel(url = DEFAULT_WASM_URL) {
@@ -33,6 +34,4 @@ export function loadMotionKernel(url = DEFAULT_WASM_URL) {
   return sharedPromise;
 }
 
-export function resetMotionKernelForTests() {
-  sharedPromise = null;
-}
+export function resetMotionKernelForTests() { sharedPromise = null; }
