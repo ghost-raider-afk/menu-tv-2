@@ -33,22 +33,31 @@ function videoHasAlpha(stream = {}) {
   return Object.entries(tags).some(([key, value]) => /alpha/i.test(key) && /^(?:1|true|yes)$/i.test(String(value)));
 }
 
-async function inspectVideo(file, config) {
+function videoContainerMatches(mime, formatName) {
+  const formats = String(formatName || '').toLowerCase().split(',').map((value) => value.trim()).filter(Boolean);
+  if (mime === 'video/webm') return formats.includes('webm');
+  if (mime === 'video/mp4') return formats.includes('mp4') || formats.includes('mov');
+  return false;
+}
+
+async function inspectVideo(file, config, mime) {
   let stdout;
   try {
     ({ stdout } = await execFileAsync('ffprobe', [
       '-v', 'error', '-select_streams', 'v:0',
-      '-show_entries', 'stream=width,height,pix_fmt,codec_name:stream_tags',
+      '-show_entries', 'stream=width,height,pix_fmt,codec_name:stream_tags:format=format_name',
       '-of', 'json', file
     ], { timeout: 12000, maxBuffer: 1024 * 1024 }));
   } catch {
     throw new ValidationError('Видео Entity не удалось прочитать через ffprobe. Проверьте MP4/WebM файл.');
   }
-  let stream;
-  try { stream = JSON.parse(stdout)?.streams?.[0]; } catch {}
+  let probe;
+  try { probe = JSON.parse(stdout); } catch {}
+  const stream = probe?.streams?.[0];
   const width = Number(stream?.width);
   const height = Number(stream?.height);
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) throw new ValidationError('Видео Entity не содержит корректного видеопотока.');
+  if (!videoContainerMatches(mime, probe?.format?.format_name)) throw new ValidationError('MIME-тип Entity не соответствует контейнеру видеофайла.');
   if (width > config.screenMaxWidth || height > config.screenMaxHeight || width * height > config.imageMaxPixels) {
     throw new ValidationError(`Видео Entity превышает допустимое разрешение ${config.screenMaxWidth}×${config.screenMaxHeight}.`);
   }
@@ -78,7 +87,7 @@ export async function replaceEntityAsset({ bytes, contentType, config, store, us
       if (`image/${image.type}` !== mime) throw new ValidationError('MIME-тип Entity не соответствует содержимому файла.');
       info = { width: image.width, height: image.height, hasAlpha: image.type === 'png' || image.type === 'webp' };
     } else {
-      info = await inspectVideo(temporary, config);
+      info = await inspectVideo(temporary, config, mime);
     }
     await rename(temporary, target);
   } catch (error) {
