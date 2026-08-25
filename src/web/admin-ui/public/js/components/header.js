@@ -8,8 +8,8 @@ import { createNotificationsControl } from './notifications.js';
 import { updateContextAccount } from './context-panel.js';
 
 function initials(value) {
-  const parts = String(value || 'ТВ').trim().split(/\s+/).filter(Boolean);
-  return (parts.slice(0, 2).map((part) => part[0]).join('') || 'ТВ').toUpperCase();
+  const parts = String(value || 'TV').trim().split(/\s+/).filter(Boolean);
+  return (parts.slice(0, 2).map((part) => part[0]).join('') || 'TV').toUpperCase();
 }
 
 function displayName(user = state.user) {
@@ -17,13 +17,13 @@ function displayName(user = state.user) {
 }
 
 function appName() {
-  return state.site?.app_name || state.site?.application_name || state.session?.app_name || 'ТВ МЕНЮ';
+  return state.site?.app_name || state.site?.application_name || state.session?.app_name || 'MIRA-TV';
 }
 
 function accountControl() {
   const wrap = document.createElement('div');
   wrap.className = 'header-account';
-  wrap.innerHTML = `<button class="header-account-trigger" type="button" aria-expanded="false" aria-haspopup="menu"><span class="profile-avatar" data-profile-initials>ТВ</span><span class="header-account-name" data-profile-name></span></button><div class="header-account-menu is-hidden" role="menu"><a href="/profile.html" role="menuitem">Профиль</a><button type="button" data-logout role="menuitem">Выйти</button></div>`;
+  wrap.innerHTML = `<button class="header-account-trigger" type="button" aria-expanded="false" aria-haspopup="menu"><span class="profile-avatar" data-profile-initials>TV</span><span class="header-account-name" data-profile-name></span></button><div class="header-account-menu is-hidden" role="menu"><a href="/profile.html" role="menuitem">Профиль</a><button type="button" data-logout role="menuitem">Выйти</button></div>`;
   return wrap;
 }
 
