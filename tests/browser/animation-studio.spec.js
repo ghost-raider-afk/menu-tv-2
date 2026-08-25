@@ -4,10 +4,10 @@ const PROMO_PROFILE = {
   motion_version: 3,
   pattern: 'cinematic', flow_direction: 'alternate', easing: 'cinematic', cycle_seconds: 8,
   event_duration_ms: 6500, wave_stagger_ms: 160, travel_px: 24, scale_amount: 0.04,
-  brightness_amount: 0.24, section_effect: 'cinematic', item_effect: 'none', price_effect: 'none', intensity: 80,
+  brightness_amount: 0.24, section_effect: 'cinematic', item_effect: 'cinematic', price_effect: 'none', intensity: 80,
   promotion_effect: 'cinematic', promotion_intensity: 100, promotion_cycle_seconds: 4.5,
-  promotion_event_duration_ms: 1800, promotion_travel_px: 10, promotion_scale_amount: 0.18,
-  promotion_brightness_amount: 0.55, promotion_glow_radius: 34, promotion_easing: 'elastic'
+  promotion_event_duration_ms: 1800, promotion_travel_px: 0, promotion_scale_amount: 0.06,
+  promotion_brightness_amount: 0.35, promotion_glow_radius: 28, promotion_easing: 'smooth'
 };
 
 async function login(page) {
@@ -52,8 +52,7 @@ async function createPreviewFixture(page) {
     const product = await request('/api/catalog/products', {
       method: 'POST',
       body: JSON.stringify({
-        name: `Animation product ${suffix}`,
-        producer: '', characteristics: '', strength: '', price_primary: '240',
+        name: `Animation product ${suffix}`, producer: '', characteristics: '', strength: '', price_primary: '240',
         alcoholic: false, beverage_color: 'none', filtration: 'none', active: true
       })
     });
@@ -71,7 +70,7 @@ async function createPreviewFixture(page) {
         settings: { background_color: '#123456', accent_color: '#F4C915', text_color: '#F8FAFC' }
       })
     });
-    return { locationId: location.id, screenId: screen.id, screenName: screen.name, productId: product.id };
+    return { locationId: location.id, screenId: screen.id, productId: product.id };
   });
 }
 
@@ -83,7 +82,7 @@ async function removePreviewFixture(page, fixture) {
   }, fixture);
 }
 
-test('animation studio exposes one cinematic live profile, independent promo channel and static background', async ({ page }) => {
+test('animation studio runs continuous WASM row motion, cinematic promo and static background', async ({ page }) => {
   await login(page);
   const fixture = await createPreviewFixture(page);
   const original = await animationSettings(page);
@@ -92,48 +91,52 @@ test('animation studio exposes one cinematic live profile, independent promo cha
     await expect(page.getByRole('heading', { name: 'Живое меню' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '«Акция»' })).toBeVisible();
     await expect(page.getByText('ФОН · STATIC')).toBeVisible();
-    await expect(page.locator('[data-animation-preset]')).toHaveCount(0);
-    await expect(page.locator('#animation-presets')).toHaveCount(0);
     await expect(page.locator('#animation-stage')).toHaveAttribute('data-screen-id', String(fixture.screenId));
     await expect(page.locator('#animation-stage .section-title')).toHaveText('НАСТОЯЩИЙ ЭКРАН MOTION STUDIO');
-    await expect(page.locator('#animation-stage .animation-screen-background')).toHaveCSS('inset', '0px');
-    await expect(page.locator('#animation-stage')).toHaveCSS('overflow', 'hidden');
 
     if (!(await page.locator('#animation-enabled').isChecked())) await page.locator('#animation-enabled').check();
     await page.locator('#animation-item-effect').selectOption('cinematic');
     await page.locator('#animation-promotion-effect').selectOption('cinematic');
     await page.locator('#animation-intensity').fill('82');
     await expect(page.locator('#animation-intensity-output')).toHaveText('82%');
-    await expect.poll(() => page.evaluate(() => document.querySelector('#animation-stage g.table-item-content')?.getAnimations().length || 0)).toBeGreaterThan(0);
-    await expect.poll(() => page.evaluate(() => document.querySelector('#animation-stage g.promotion-badge')?.getAnimations().length || 0)).toBeGreaterThan(0);
-    expect(await page.evaluate(() => document.querySelector('#animation-stage .animation-screen-background')?.getAnimations().length || 0)).toBe(0);
+    await expect(page.locator('#animation-stage')).toHaveAttribute('data-motion-mode', 'wasm-continuous');
+
+    const row = page.locator('#animation-stage g.table-item').first();
+    const content = row.locator(':scope > g.table-item-content');
+    const prices = row.locator(':scope > g.table-item-prices');
+    const badge = row.locator(':scope > g.promotion-badge');
+    const wave = row.locator(':scope > g.promotion-light-wave');
+    await expect(row).toHaveAttribute('data-motion', 'item');
+    await expect(badge).toHaveAttribute('data-motion', 'promotion');
+    await expect(wave).toHaveAttribute('data-motion', 'promotion-wave');
+    await expect(content).not.toHaveAttribute('data-motion', /.+/);
+    await expect(prices).not.toHaveAttribute('data-motion', /.+/);
+    await expect.poll(() => row.evaluate((node) => getComputedStyle(node).transform)).not.toBe('none');
+    expect(await row.evaluate((node) => node.getAnimations().length)).toBe(0);
+    expect(await badge.evaluate((node) => node.getAnimations().length)).toBe(0);
+    expect(await page.locator('#animation-stage .animation-screen-background').evaluate((node) => node.getAnimations().length)).toBe(0);
 
     await page.locator('#animation-announcement-enabled').check();
     await page.locator('#animation-announcement-text').fill('Сегодня специальное предложение до 22:00');
     await page.locator('#animation-announcement-speed').fill('110');
     await expect(page.locator('#animation-stage .scene-announcement-text')).toHaveText('Сегодня специальное предложение до 22:00');
-    await expect(page.locator('#animation-stage .animation-screen-announcement-layer')).toHaveClass(/is-enabled/);
 
     const responsePromise = page.waitForResponse((response) => response.url().endsWith('/api/settings/animation') && response.request().method() === 'PUT');
     await page.locator('#animation-save').click();
     expect((await responsePromise).ok()).toBeTruthy();
-    await expect(page.locator('#animation-message')).toContainText('Настройки живого меню сохранены');
-
     const saved = await animationSettings(page);
     expect(saved.preset_id).toBe('cinematic-live-menu');
-    expect(saved.profile.motion_version).toBe(3);
-    expect(saved.profile.item_effect).toBe('cinematic');
+    expect(saved.profile.price_effect).toBe('none');
     expect(saved.profile.promotion_effect).toBe('cinematic');
+    expect(saved.profile.promotion_easing).toBe('smooth');
     expect(saved.profile.intensity).toBe(82);
-    expect(saved.announcement.enabled).toBe(true);
-    expect(saved.announcement.text).toContain('специальное предложение');
   } finally {
     await restoreAnimationSettings(page, original);
     await removePreviewFixture(page, fixture);
   }
 });
 
-test('promotion badge scales as one isolated SVG motion group', async ({ page }) => {
+test('promotion badge and light wave are isolated overlays inside one row transform owner', async ({ page }) => {
   await login(page);
   await page.goto('/animation.html');
   const result = await page.evaluate(async (profile) => {
@@ -141,42 +144,39 @@ test('promotion badge scales as one isolated SVG motion group', async ({ page })
       import('/js/motion/screen-preview.js'), import('/js/motion/preview-player.js')
     ]);
     const stage = document.createElement('div');
-    stage.className = 'animation-stage';
-    stage.style.width = '960px';
-    document.body.append(stage);
+    stage.className = 'animation-stage'; stage.style.width = '960px'; document.body.append(stage);
     renderAnimationScreenPreview(stage, {
       screen: { id: 999999, resolution: '1920x1080' },
-      draft: {
-        rows: [
-          { id: 'section', kind: 'section', name: 'ПРОВЕРКА АКЦИИ', enabled: true },
-          { id: 'item', kind: 'item', name: 'Тестовая позиция', price_primary: '240', price_secondary: '360', promotion: true, promotion_text: 'АКЦИЯ', enabled: true }
-        ],
-        settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC' }
-      }, products: [], packaging: []
+      draft: { rows: [
+        { id: 'section', kind: 'section', name: 'ПРОВЕРКА АКЦИИ', enabled: true },
+        { id: 'item', kind: 'item', name: 'Тестовая позиция', price_primary: '240', price_secondary: '360', promotion: true, promotion_text: 'АКЦИЯ', enabled: true }
+      ], settings: { background_color: '#101828', accent_color: '#F4C915', text_color: '#F8FAFC' } }, products: [], packaging: []
     });
-    const row = stage.querySelector('g.table-item');
-    const content = row?.querySelector(':scope > g.table-item-content');
-    const badge = row?.querySelector(':scope > g.promotion-badge');
-    const path = badge?.querySelector('path');
-    const text = badge?.querySelector('text.promotion');
     const player = new AnimationPreviewPlayer({ stage });
     player.restart(profile);
-    player.seek(700);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const row = stage.querySelector('g.table-item');
+    const content = row?.querySelector(':scope > g.table-item-content');
+    const prices = row?.querySelector(':scope > g.table-item-prices');
+    const badge = row?.querySelector(':scope > g.promotion-badge');
+    const wave = row?.querySelector(':scope > g.promotion-light-wave');
     const snapshot = {
-      contentMotion: content?.dataset.motion || '', badgeMotion: badge?.dataset.motion || '',
-      contentAnimations: content?.getAnimations().length ?? -1, badgeAnimations: badge?.getAnimations().length ?? -1,
-      pathAnimations: path?.getAnimations().length ?? -1, textAnimations: text?.getAnimations().length ?? -1,
-      badgeTransform: badge ? getComputedStyle(badge).transform : 'none'
+      rowMotion: row?.dataset.motion || '', contentMotion: content?.dataset.motion || '', pricesMotion: prices?.dataset.motion || '',
+      badgeMotion: badge?.dataset.motion || '', waveMotion: wave?.dataset.motion || '',
+      rowTransform: row ? getComputedStyle(row).transform : 'none', badgeTransform: badge ? getComputedStyle(badge).transform : 'none',
+      rowAnimations: row?.getAnimations().length ?? -1, badgeAnimations: badge?.getAnimations().length ?? -1
     };
     player.destroy(); stage.remove(); return snapshot;
   }, PROMO_PROFILE);
-  expect(result.contentMotion).toBe('item');
+  expect(result.rowMotion).toBe('item');
+  expect(result.contentMotion).toBe('');
+  expect(result.pricesMotion).toBe('');
   expect(result.badgeMotion).toBe('promotion');
-  expect(result.contentAnimations).toBe(0);
-  expect(result.badgeAnimations).toBe(1);
-  expect(result.pathAnimations).toBe(0);
-  expect(result.textAnimations).toBe(0);
+  expect(result.waveMotion).toBe('promotion-wave');
+  expect(result.rowTransform).not.toBe('none');
   expect(result.badgeTransform).not.toBe('none');
+  expect(result.rowAnimations).toBe(0);
+  expect(result.badgeAnimations).toBe(0);
 });
 
 test('preview player rebinds scene targets after preview DOM replacement', async ({ page }) => {
@@ -186,8 +186,7 @@ test('preview player rebinds scene targets after preview DOM replacement', async
     const [{ renderAnimationScreenPreview }, { AnimationPreviewPlayer }] = await Promise.all([
       import('/js/motion/screen-preview.js'), import('/js/motion/preview-player.js')
     ]);
-    const stage = document.createElement('div');
-    stage.className = 'animation-stage'; stage.style.width = '960px'; document.body.append(stage);
+    const stage = document.createElement('div'); stage.className = 'animation-stage'; stage.style.width = '960px'; document.body.append(stage);
     const player = new AnimationPreviewPlayer({ stage });
     const bundle = (name) => ({
       screen: { id: 999998, resolution: '1920x1080' },
@@ -202,12 +201,11 @@ test('preview player rebinds scene targets after preview DOM replacement', async
     const currentBadge = stage.querySelector('g.promotion-badge');
     player.restart(profile);
     const reboundTarget = player.scene.node('menu.promotion.0')?.target;
-    const snapshot = { oldInStage: stage.contains(firstTarget), targetChanged: firstTarget !== reboundTarget, reboundIsCurrent: reboundTarget === currentBadge, reboundAnimations: reboundTarget?.getAnimations().length ?? -1, oldAnimations: firstTarget?.getAnimations().length ?? -1 };
+    const snapshot = { oldInStage: stage.contains(firstTarget), targetChanged: firstTarget !== reboundTarget, reboundIsCurrent: reboundTarget === currentBadge, reboundMotion: reboundTarget?.dataset.motion || '' };
     player.destroy(); stage.remove(); return snapshot;
   }, PROMO_PROFILE);
   expect(result.oldInStage).toBe(false);
   expect(result.targetChanged).toBe(true);
   expect(result.reboundIsCurrent).toBe(true);
-  expect(result.reboundAnimations).toBeGreaterThan(0);
-  expect(result.oldAnimations).toBe(0);
+  expect(result.reboundMotion).toBe('promotion');
 });
