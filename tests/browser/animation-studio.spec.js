@@ -34,7 +34,10 @@ async function restoreAnimationSettings(page, settings) {
       method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
     });
     if (!response.ok) throw new Error(`animation settings restore failed: ${response.status}`);
-  }, { enabled: settings.enabled, preset_id: settings.preset_id, profile: settings.profile, entity: settings.entity, announcement: settings.announcement });
+  }, {
+    enabled: settings.enabled, preset_id: settings.preset_id, profile: settings.profile,
+    entity: settings.entity, announcement: settings.announcement, brand: settings.brand, aquarium: settings.aquarium
+  });
 }
 
 async function createPreviewFixture(page) {
@@ -82,7 +85,7 @@ async function removePreviewFixture(page, fixture) {
   }, fixture);
 }
 
-test('animation studio runs continuous WASM row motion, cinematic promo and static background', async ({ page }) => {
+test('animation studio keeps glyphs fixed while light surfaces, promo glow and overlays move', async ({ page }) => {
   await login(page);
   const fixture = await createPreviewFixture(page);
   const original = await animationSettings(page);
@@ -90,7 +93,7 @@ test('animation studio runs continuous WASM row motion, cinematic promo and stat
     await page.goto(`/animation.html?screen=${fixture.screenId}`);
     await expect(page.getByRole('heading', { name: 'Живое меню' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '«Акция»' })).toBeVisible();
-    await expect(page.getByText('ФОН · STATIC')).toBeVisible();
+    await expect(page.getByText('ФОН · БЕЗ ИЗМЕНЕНИЙ')).toBeVisible();
     await expect(page.locator('#animation-stage')).toHaveAttribute('data-screen-id', String(fixture.screenId));
     await expect(page.locator('#animation-stage .section-title')).toHaveText('НАСТОЯЩИЙ ЭКРАН MOTION STUDIO');
 
@@ -102,24 +105,52 @@ test('animation studio runs continuous WASM row motion, cinematic promo and stat
     await expect(page.locator('#animation-stage')).toHaveAttribute('data-motion-mode', 'wasm-continuous');
 
     const row = page.locator('#animation-stage g.table-item').first();
+    const surface = row.locator(':scope > .row-motion-surface-item');
     const content = row.locator(':scope > g.table-item-content');
     const prices = row.locator(':scope > g.table-item-prices');
     const badge = row.locator(':scope > g.promotion-badge');
-    const wave = row.locator(':scope > g.promotion-light-wave');
-    await expect(row).toHaveAttribute('data-motion', 'item');
+    const glow = row.locator(':scope > g.promotion-row-glow');
+    await expect(row).not.toHaveAttribute('data-motion', /.+/);
+    await expect(surface).toHaveAttribute('data-motion', 'item');
+    await expect(surface).toHaveAttribute('data-motion-transform-owner', 'surface');
     await expect(badge).toHaveAttribute('data-motion', 'promotion');
-    await expect(wave).toHaveAttribute('data-motion', 'promotion-wave');
+    await expect(glow).toHaveAttribute('data-motion', 'promotion-glow');
     await expect(content).not.toHaveAttribute('data-motion', /.+/);
     await expect(prices).not.toHaveAttribute('data-motion', /.+/);
-    await expect.poll(() => row.evaluate((node) => getComputedStyle(node).transform)).not.toBe('none');
-    expect(await row.evaluate((node) => node.getAnimations().length)).toBe(0);
+    await expect.poll(() => surface.evaluate((node) => getComputedStyle(node).transform)).not.toBe('none');
+    await expect.poll(() => glow.evaluate((node) => Number.parseFloat(getComputedStyle(node).opacity))).toBeGreaterThan(0);
+    await expect(row).toHaveCSS('transform', 'none');
+    expect(await surface.evaluate((node) => node.getAnimations().length)).toBe(0);
     expect(await badge.evaluate((node) => node.getAnimations().length)).toBe(0);
     expect(await page.locator('#animation-stage .animation-screen-background').evaluate((node) => node.getAnimations().length)).toBe(0);
 
+    const before = await content.boundingBox();
+    await page.waitForTimeout(450);
+    const after = await content.boundingBox();
+    expect(Math.abs((after?.x || 0) - (before?.x || 0))).toBeLessThan(0.1);
+    expect(Math.abs((after?.y || 0) - (before?.y || 0))).toBeLessThan(0.1);
+
     await page.locator('#animation-announcement-enabled').check();
     await page.locator('#animation-announcement-text').fill('Сегодня специальное предложение до 22:00');
-    await page.locator('#animation-announcement-speed').fill('110');
+    await page.locator('#animation-announcement-font-family').selectOption('oswald');
+    await page.locator('#animation-announcement-vertical-scale').fill('1.35');
+    await page.locator('#animation-announcement-glow-enabled').check();
     await expect(page.locator('#animation-stage .scene-announcement-text')).toHaveText('Сегодня специальное предложение до 22:00');
+    await expect(page.locator('#animation-stage .scene-announcement')).toHaveClass(/has-glow/);
+
+    await page.locator('#animation-brand-enabled').check();
+    await page.locator('#animation-brand-text').fill('БАР МАЯК');
+    await page.locator('#animation-brand-x').fill('300');
+    await page.locator('#animation-brand-y').fill('120');
+    await page.locator('#animation-brand-effect').selectOption('neon-pulse');
+    await expect(page.locator('#animation-stage .scene-brand-title-glyphs')).toHaveText('БАР МАЯК');
+
+    await page.locator('#animation-aquarium-enabled').check();
+    await page.locator('#animation-aquarium-style').selectOption('neon');
+    await page.locator('#animation-aquarium-fish-count').fill('4');
+    await expect(page.locator('#animation-stage [data-aquarium-layer]')).toHaveClass(/animation-screen-aquarium-layer/);
+    await expect(page.locator('#animation-stage .aquarium-fish')).toHaveCount(4);
+    await expect(page.locator('#animation-stage .animation-screen-background')).toHaveCSS('background-color', 'rgb(18, 52, 86)');
 
     const responsePromise = page.waitForResponse((response) => response.url().endsWith('/api/settings/animation') && response.request().method() === 'PUT');
     await page.locator('#animation-save').click();
@@ -130,13 +161,21 @@ test('animation studio runs continuous WASM row motion, cinematic promo and stat
     expect(saved.profile.promotion_effect).toBe('cinematic');
     expect(saved.profile.promotion_easing).toBe('smooth');
     expect(saved.profile.intensity).toBe(82);
+    expect(saved.announcement.font_family).toBe('oswald');
+    expect(saved.announcement.vertical_scale).toBe(1.35);
+    expect(saved.announcement.glow_enabled).toBe(true);
+    expect(saved.brand.text).toBe('БАР МАЯК');
+    expect(saved.brand.x).toBe(300);
+    expect(saved.aquarium.enabled).toBe(true);
+    expect(saved.aquarium.style).toBe('neon');
+    expect(saved.aquarium.fish_count).toBe(4);
   } finally {
     await restoreAnimationSettings(page, original);
     await removePreviewFixture(page, fixture);
   }
 });
 
-test('promotion badge and light wave are isolated overlays inside one row transform owner', async ({ page }) => {
+test('promotion badge and soft row glow are isolated from static row content', async ({ page }) => {
   await login(page);
   await page.goto('/animation.html');
   const result = await page.evaluate(async (profile) => {
@@ -156,26 +195,32 @@ test('promotion badge and light wave are isolated overlays inside one row transf
     player.restart(profile);
     await new Promise((resolve) => setTimeout(resolve, 250));
     const row = stage.querySelector('g.table-item');
+    const surface = row?.querySelector(':scope > .row-motion-surface-item');
     const content = row?.querySelector(':scope > g.table-item-content');
     const prices = row?.querySelector(':scope > g.table-item-prices');
     const badge = row?.querySelector(':scope > g.promotion-badge');
-    const wave = row?.querySelector(':scope > g.promotion-light-wave');
+    const glow = row?.querySelector(':scope > g.promotion-row-glow');
     const snapshot = {
-      rowMotion: row?.dataset.motion || '', contentMotion: content?.dataset.motion || '', pricesMotion: prices?.dataset.motion || '',
-      badgeMotion: badge?.dataset.motion || '', waveMotion: wave?.dataset.motion || '',
-      rowTransform: row ? getComputedStyle(row).transform : 'none', badgeTransform: badge ? getComputedStyle(badge).transform : 'none',
-      rowAnimations: row?.getAnimations().length ?? -1, badgeAnimations: badge?.getAnimations().length ?? -1
+      rowMotion: row?.dataset.motion || '', surfaceMotion: surface?.dataset.motion || '',
+      contentMotion: content?.dataset.motion || '', pricesMotion: prices?.dataset.motion || '',
+      badgeMotion: badge?.dataset.motion || '', glowMotion: glow?.dataset.motion || '',
+      rowTransform: row ? getComputedStyle(row).transform : 'none', surfaceTransform: surface ? getComputedStyle(surface).transform : 'none',
+      badgeTransform: badge ? getComputedStyle(badge).transform : 'none', glowOpacity: glow ? Number.parseFloat(getComputedStyle(glow).opacity) : 0,
+      surfaceAnimations: surface?.getAnimations().length ?? -1, badgeAnimations: badge?.getAnimations().length ?? -1
     };
     player.destroy(); stage.remove(); return snapshot;
   }, PROMO_PROFILE);
-  expect(result.rowMotion).toBe('item');
+  expect(result.rowMotion).toBe('');
+  expect(result.surfaceMotion).toBe('item');
   expect(result.contentMotion).toBe('');
   expect(result.pricesMotion).toBe('');
   expect(result.badgeMotion).toBe('promotion');
-  expect(result.waveMotion).toBe('promotion-wave');
-  expect(result.rowTransform).not.toBe('none');
+  expect(result.glowMotion).toBe('promotion-glow');
+  expect(result.rowTransform).toBe('none');
+  expect(result.surfaceTransform).not.toBe('none');
   expect(result.badgeTransform).not.toBe('none');
-  expect(result.rowAnimations).toBe(0);
+  expect(result.glowOpacity).toBeGreaterThanOrEqual(0);
+  expect(result.surfaceAnimations).toBe(0);
   expect(result.badgeAnimations).toBe(0);
 });
 

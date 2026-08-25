@@ -19,16 +19,16 @@ function append(nodes, node) {
 
 function collectMenuNodes(stage) {
   const nodes = [];
-  const sections = [...stage.querySelectorAll('g.table-section')];
+  const sections = [...stage.querySelectorAll('g.table-section .row-motion-surface-section')];
   sections.forEach((target, index) => append(nodes, {
     id: `menu.section.${index}`, kind: 'section', layer: MOTION_LAYERS.MENU, target,
-    order: index, count: sections.length, depth: 0, transformOwner: 'self'
+    order: index, count: sections.length, depth: 0, transformOwner: 'surface', metadata: { surfaceOnly: true }
   }));
 
-  const rows = [...stage.querySelectorAll('g.table-item, g.table-packaging')];
+  const rows = [...stage.querySelectorAll('g.table-item .row-motion-surface-item, g.table-packaging .row-motion-surface-packaging')];
   rows.forEach((target, index) => append(nodes, {
     id: `menu.item.${index}`, kind: 'item', layer: MOTION_LAYERS.MENU, target,
-    order: index, count: rows.length, depth: 0, transformOwner: 'row'
+    order: index, count: rows.length, depth: 0, transformOwner: 'surface', metadata: { surfaceOnly: true }
   }));
 
   const promotions = [...stage.querySelectorAll('g.promotion-badge')];
@@ -37,11 +37,10 @@ function collectMenuNodes(stage) {
     order: index, count: promotions.length, depth: 2, transformOwner: 'promotion-badge'
   }));
 
-  const waves = [...stage.querySelectorAll('g.promotion-light-wave')];
-  waves.forEach((target, index) => append(nodes, {
-    id: `menu.promotion-wave.${index}`, kind: 'promotion-wave', layer: MOTION_LAYERS.MENU, target,
-    order: index, count: waves.length, depth: 1, transformOwner: 'promotion-overlay',
-    metadata: { travel: Number(target.dataset.waveTravel) || 0 }
+  const glows = [...stage.querySelectorAll('g.promotion-row-glow')];
+  glows.forEach((target, index) => append(nodes, {
+    id: `menu.promotion-glow.${index}`, kind: 'promotion-glow', layer: MOTION_LAYERS.MENU, target,
+    order: index, count: glows.length, depth: 1, transformOwner: 'promotion-overlay'
   }));
   return nodes;
 }
@@ -61,7 +60,7 @@ export function buildDomMotionScene(stage) {
   const scene = createMotionScene({
     root: stage,
     nodes: [...collectMenuNodes(stage), ...collectEntityNodes(stage)],
-    metadata: { adapter: 'dom', backgroundMotion: false, rowTransformOwner: true }
+    metadata: { adapter: 'dom', backgroundMotion: false, rowTransformOwner: false, menuTextStatic: true, promotionOverlay: 'row-glow' }
   });
   scene.nodes.forEach(markTarget);
   stage.dataset.motionSceneVersion = String(MOTION_SCENE_VERSION);

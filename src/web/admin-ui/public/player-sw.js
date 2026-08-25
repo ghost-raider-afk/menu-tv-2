@@ -1,16 +1,20 @@
-const SHELL_CACHE = 'mira-tv-player-shell-v8';
-const DATA_CACHE = 'mira-tv-player-data-v8';
+const SHELL_CACHE = 'mira-tv-player-shell-v9';
+const DATA_CACHE = 'mira-tv-player-data-v9';
 const PLAYER_CONTEXT = '/api/device/player-context';
 const SHELL_ASSETS = [
   '/player.html',
   '/css/player.css',
+  '/css/motion-overlays.css',
   '/js/player/player.js',
+  '/js/player/overlay-runtime.js',
   '/js/editor/renderer.js',
   '/js/editor/renderer-model.js',
   '/js/editor/renderer-svg.js',
   '/js/motion/entity-editor.js',
   '/js/motion/entity-behavior.js',
   '/js/motion/announcement.js',
+  '/js/motion/brand-title.js',
+  '/js/motion/aquarium.js',
   '/js/motion/live-menu-motion.js',
   '/js/motion/motion-plan.js',
   '/js/motion/dom-scene-adapter.js',

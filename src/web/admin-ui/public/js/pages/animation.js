@@ -4,6 +4,8 @@ import { element, setMessage, setPending } from '../core/dom.js';
 import { AnimationPreviewPlayer } from '../motion/preview-player.js';
 import { SceneEntityEditor, createEntityMedia, normaliseSceneEntity } from '../motion/entity-editor.js';
 import { normaliseAnnouncement, renderAnnouncementLayer } from '../motion/announcement.js';
+import { normaliseBrandTitle, renderBrandTitleLayer } from '../motion/brand-title.js';
+import { normaliseAquarium, renderAquariumLayer, resetAquariumIntro } from '../motion/aquarium.js';
 import { renderAnimationScreenEmpty, renderAnimationScreenPreview } from '../motion/screen-preview.js';
 import {
   DEFAULT_LIVE_PROFILE,
@@ -16,6 +18,8 @@ const PROFILE_ID = 'cinematic-live-menu';
 const ENTITY_MEDIA_TYPES = Object.freeze(['image/png', 'image/webp', 'video/mp4', 'video/webm']);
 let currentEntity = normaliseSceneEntity();
 let currentAnnouncement = normaliseAnnouncement();
+let currentBrand = normaliseBrandTitle();
+let currentAquarium = normaliseAquarium();
 let player = null;
 let entityEditor = null;
 let previewFrame = null;
@@ -26,11 +30,28 @@ function checked(id) { return element(id)?.checked === true; }
 function value(id) { return element(id)?.value || ''; }
 function setValue(id, next) { const node = element(id); if (node) node.value = String(next); }
 
+function renderAnnouncementPreview() {
+  const layer = element('animation-stage')?.querySelector('[data-announcement-layer]');
+  if (layer) renderAnnouncementLayer(layer, currentAnnouncement);
+}
+
+function renderBrandPreview() {
+  const layer = element('animation-stage')?.querySelector('[data-brand-layer]');
+  if (layer) renderBrandTitleLayer(layer, currentBrand);
+}
+
+function renderAquariumPreview(allowIntro = false) {
+  const layer = element('animation-stage')?.querySelector('[data-aquarium-layer]');
+  if (layer) renderAquariumLayer(layer, currentAquarium, { allowIntro });
+}
+
 function restartPreview() {
   cancelAnimationFrame(previewFrame);
   previewFrame = requestAnimationFrame(() => {
     entityEditor?.render();
     renderAnnouncementPreview();
+    renderBrandPreview();
+    renderAquariumPreview(false);
     player?.restart(readMotionProfile(), currentEntity, checked('animation-enabled'));
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) player?.pause();
   });
@@ -43,41 +64,51 @@ function announcementFromControls() {
     position: value('animation-announcement-position'),
     speed_px_per_second: number('animation-announcement-speed'),
     font_size: number('animation-announcement-font-size'),
+    font_family: value('animation-announcement-font-family'),
+    vertical_scale: number('animation-announcement-vertical-scale'),
     text_color: value('animation-announcement-text-color'),
     background_color: value('animation-announcement-background-color'),
-    background_opacity: number('animation-announcement-opacity')
+    background_opacity: number('animation-announcement-opacity'),
+    glow_enabled: checked('animation-announcement-glow-enabled'),
+    glow_color: value('animation-announcement-glow-color'),
+    glow_strength: number('animation-announcement-glow-strength')
   });
 }
 
 function syncAnnouncementControls(announcement = currentAnnouncement) {
   const current = normaliseAnnouncement(announcement);
   const enabled = element('animation-announcement-enabled');
+  const glowEnabled = element('animation-announcement-glow-enabled');
   if (enabled) enabled.checked = current.enabled;
+  if (glowEnabled) glowEnabled.checked = current.glow_enabled;
   setValue('animation-announcement-text', current.text);
   setValue('animation-announcement-position', current.position);
   setValue('animation-announcement-speed', current.speed_px_per_second);
   setValue('animation-announcement-font-size', current.font_size);
+  setValue('animation-announcement-font-family', current.font_family);
+  setValue('animation-announcement-vertical-scale', current.vertical_scale);
   setValue('animation-announcement-text-color', current.text_color);
   setValue('animation-announcement-background-color', current.background_color);
   setValue('animation-announcement-opacity', current.background_opacity);
-  const speed = element('animation-announcement-speed-output');
-  const font = element('animation-announcement-font-output');
-  const opacity = element('animation-announcement-opacity-output');
-  if (speed) speed.textContent = `${Math.round(current.speed_px_per_second)} px/с`;
-  if (font) font.textContent = `${Math.round(current.font_size)} px`;
-  if (opacity) opacity.textContent = `${Math.round(current.background_opacity * 100)}%`;
-}
-
-function renderAnnouncementPreview() {
-  const layer = element('animation-stage')?.querySelector('[data-announcement-layer]');
-  if (layer) renderAnnouncementLayer(layer, currentAnnouncement);
+  setValue('animation-announcement-glow-color', current.glow_color);
+  setValue('animation-announcement-glow-strength', current.glow_strength);
+  const outputs = {
+    'animation-announcement-speed-output': `${Math.round(current.speed_px_per_second)} px/с`,
+    'animation-announcement-font-output': `${Math.round(current.font_size)} px`,
+    'animation-announcement-vertical-scale-output': `${current.vertical_scale.toFixed(2)}×`,
+    'animation-announcement-opacity-output': `${Math.round(current.background_opacity * 100)}%`,
+    'animation-announcement-glow-strength-output': `${Math.round(current.glow_strength)} px`
+  };
+  Object.entries(outputs).forEach(([id, text]) => { const node = element(id); if (node) node.textContent = text; });
 }
 
 function bindAnnouncementControls() {
   const ids = [
     'animation-announcement-enabled', 'animation-announcement-text', 'animation-announcement-position',
-    'animation-announcement-speed', 'animation-announcement-font-size', 'animation-announcement-text-color',
-    'animation-announcement-background-color', 'animation-announcement-opacity'
+    'animation-announcement-speed', 'animation-announcement-font-size', 'animation-announcement-font-family',
+    'animation-announcement-vertical-scale', 'animation-announcement-text-color',
+    'animation-announcement-background-color', 'animation-announcement-opacity',
+    'animation-announcement-glow-enabled', 'animation-announcement-glow-color', 'animation-announcement-glow-strength'
   ];
   ids.forEach((id) => {
     const node = element(id);
@@ -88,6 +119,148 @@ function bindAnnouncementControls() {
       syncAnnouncementControls(currentAnnouncement);
       renderAnnouncementPreview();
     });
+  });
+}
+
+function brandFromControls() {
+  return normaliseBrandTitle({
+    enabled: checked('animation-brand-enabled'),
+    text: value('animation-brand-text'),
+    x: number('animation-brand-x'),
+    y: number('animation-brand-y'),
+    font_family: value('animation-brand-font-family'),
+    font_size: number('animation-brand-font-size'),
+    vertical_scale: number('animation-brand-vertical-scale'),
+    letter_spacing: number('animation-brand-letter-spacing'),
+    text_color: value('animation-brand-text-color'),
+    glow_color: value('animation-brand-glow-color'),
+    glow_strength: number('animation-brand-glow-strength'),
+    effect: value('animation-brand-effect'),
+    cycle_seconds: number('animation-brand-cycle')
+  });
+}
+
+function syncBrandControls(brand = currentBrand) {
+  const current = normaliseBrandTitle(brand);
+  const enabled = element('animation-brand-enabled');
+  if (enabled) enabled.checked = current.enabled;
+  setValue('animation-brand-text', current.text);
+  setValue('animation-brand-x', Math.round(current.x));
+  setValue('animation-brand-y', Math.round(current.y));
+  setValue('animation-brand-font-family', current.font_family);
+  setValue('animation-brand-font-size', current.font_size);
+  setValue('animation-brand-vertical-scale', current.vertical_scale);
+  setValue('animation-brand-letter-spacing', current.letter_spacing);
+  setValue('animation-brand-text-color', current.text_color);
+  setValue('animation-brand-glow-color', current.glow_color);
+  setValue('animation-brand-glow-strength', current.glow_strength);
+  setValue('animation-brand-effect', current.effect);
+  setValue('animation-brand-cycle', current.cycle_seconds);
+  const outputs = {
+    'animation-brand-font-size-output': `${Math.round(current.font_size)} px`,
+    'animation-brand-vertical-scale-output': `${current.vertical_scale.toFixed(2)}×`,
+    'animation-brand-letter-spacing-output': `${current.letter_spacing.toFixed(1)} px`,
+    'animation-brand-glow-strength-output': `${Math.round(current.glow_strength)} px`,
+    'animation-brand-cycle-output': `${current.cycle_seconds.toFixed(1)} с`
+  };
+  Object.entries(outputs).forEach(([id, text]) => { const node = element(id); if (node) node.textContent = text; });
+}
+
+function patchBrand(patch) {
+  currentBrand = normaliseBrandTitle({ ...currentBrand, ...patch });
+  syncBrandControls(currentBrand);
+  renderBrandPreview();
+}
+
+function alignBrand(mode) {
+  const positions = {
+    'top-left': { x: 180, y: 92 },
+    top: { x: 960, y: 92 },
+    'top-right': { x: 1740, y: 92 },
+    center: { x: 960, y: 540 },
+    bottom: { x: 960, y: 990 }
+  };
+  if (positions[mode]) patchBrand(positions[mode]);
+}
+
+function bindBrandControls() {
+  const ids = [
+    'animation-brand-enabled', 'animation-brand-text', 'animation-brand-x', 'animation-brand-y',
+    'animation-brand-font-family', 'animation-brand-font-size', 'animation-brand-vertical-scale',
+    'animation-brand-letter-spacing', 'animation-brand-text-color', 'animation-brand-glow-color',
+    'animation-brand-glow-strength', 'animation-brand-effect', 'animation-brand-cycle'
+  ];
+  ids.forEach((id) => {
+    const node = element(id);
+    if (!node) return;
+    const eventName = node instanceof HTMLSelectElement || (node instanceof HTMLInputElement && node.type === 'checkbox') ? 'change' : 'input';
+    node.addEventListener(eventName, () => {
+      currentBrand = brandFromControls();
+      syncBrandControls(currentBrand);
+      renderBrandPreview();
+    });
+  });
+  document.querySelectorAll('[data-brand-align]').forEach((button) => button.addEventListener('click', () => alignBrand(button.dataset.brandAlign)));
+}
+
+function aquariumFromControls() {
+  return normaliseAquarium({
+    enabled: checked('animation-aquarium-enabled'),
+    style: value('animation-aquarium-style'),
+    intro_fill: checked('animation-aquarium-intro'),
+    intensity: number('animation-aquarium-intensity'),
+    fish_count: number('animation-aquarium-fish-count'),
+    bubble_density: number('animation-aquarium-bubbles'),
+    plant_density: number('animation-aquarium-plants'),
+    caustics: number('animation-aquarium-caustics'),
+    speed: number('animation-aquarium-speed')
+  });
+}
+
+function syncAquariumControls(aquarium = currentAquarium) {
+  const current = normaliseAquarium(aquarium);
+  const enabled = element('animation-aquarium-enabled');
+  const intro = element('animation-aquarium-intro');
+  if (enabled) enabled.checked = current.enabled;
+  if (intro) intro.checked = current.intro_fill;
+  setValue('animation-aquarium-style', current.style);
+  setValue('animation-aquarium-intensity', current.intensity);
+  setValue('animation-aquarium-fish-count', current.fish_count);
+  setValue('animation-aquarium-bubbles', current.bubble_density);
+  setValue('animation-aquarium-plants', current.plant_density);
+  setValue('animation-aquarium-caustics', current.caustics);
+  setValue('animation-aquarium-speed', current.speed);
+  const outputs = {
+    'animation-aquarium-intensity-output': `${current.intensity}%`,
+    'animation-aquarium-fish-count-output': String(current.fish_count),
+    'animation-aquarium-bubbles-output': `${current.bubble_density}%`,
+    'animation-aquarium-plants-output': `${current.plant_density}%`,
+    'animation-aquarium-caustics-output': `${current.caustics}%`,
+    'animation-aquarium-speed-output': `${current.speed}%`
+  };
+  Object.entries(outputs).forEach(([id, text]) => { const node = element(id); if (node) node.textContent = text; });
+}
+
+function bindAquariumControls() {
+  const ids = [
+    'animation-aquarium-enabled', 'animation-aquarium-style', 'animation-aquarium-intro',
+    'animation-aquarium-intensity', 'animation-aquarium-fish-count', 'animation-aquarium-bubbles',
+    'animation-aquarium-plants', 'animation-aquarium-caustics', 'animation-aquarium-speed'
+  ];
+  ids.forEach((id) => {
+    const node = element(id);
+    if (!node) return;
+    const eventName = node instanceof HTMLSelectElement || (node instanceof HTMLInputElement && node.type === 'checkbox') ? 'change' : 'input';
+    node.addEventListener(eventName, () => {
+      currentAquarium = aquariumFromControls();
+      syncAquariumControls(currentAquarium);
+      renderAquariumPreview(false);
+    });
+  });
+  element('animation-aquarium-replay')?.addEventListener('click', () => {
+    currentAquarium = aquariumFromControls();
+    resetAquariumIntro();
+    renderAquariumPreview(true);
   });
 }
 
@@ -228,6 +401,8 @@ async function loadScreenPreview(screenId) {
     renderAnimationScreenPreview(stage, bundle);
     entityEditor?.render();
     renderAnnouncementPreview();
+    renderBrandPreview();
+    renderAquariumPreview(false);
     setScreenStatus(`${bundle.screen.location_name || 'Без точки'} · ${bundle.screen.name} · ${bundle.screen.resolution}`);
     restartPreview();
   } catch (error) {
@@ -265,9 +440,15 @@ async function loadSettings() {
   if (enabled) enabled.checked = settings?.enabled === true;
   writeMotionProfile(settings?.profile || DEFAULT_LIVE_PROFILE);
   currentAnnouncement = normaliseAnnouncement(settings?.announcement);
+  currentBrand = normaliseBrandTitle(settings?.brand);
+  currentAquarium = normaliseAquarium(settings?.aquarium);
   syncAnnouncementControls(currentAnnouncement);
+  syncBrandControls(currentBrand);
+  syncAquariumControls(currentAquarium);
   applyEntity(settings?.entity);
   renderAnnouncementPreview();
+  renderBrandPreview();
+  renderAquariumPreview(false);
   restartPreview();
 }
 
@@ -276,14 +457,23 @@ async function saveSettings() {
   setPending(button, true, 'Сохраняем…');
   try {
     currentAnnouncement = announcementFromControls();
+    currentBrand = brandFromControls();
+    currentAquarium = aquariumFromControls();
     const saved = await api.put(API.animationSettings, {
-      enabled: checked('animation-enabled'), preset_id: PROFILE_ID, profile: readMotionProfile(), entity: currentEntity, announcement: currentAnnouncement
+      enabled: checked('animation-enabled'), preset_id: PROFILE_ID, profile: readMotionProfile(),
+      entity: currentEntity, announcement: currentAnnouncement, brand: currentBrand, aquarium: currentAquarium
     });
     writeMotionProfile(saved.profile);
     currentAnnouncement = normaliseAnnouncement(saved.announcement);
+    currentBrand = normaliseBrandTitle(saved.brand);
+    currentAquarium = normaliseAquarium(saved.aquarium);
     syncAnnouncementControls(currentAnnouncement);
+    syncBrandControls(currentBrand);
+    syncAquariumControls(currentAquarium);
     applyEntity(saved.entity);
     renderAnnouncementPreview();
+    renderBrandPreview();
+    renderAquariumPreview(false);
     setMessage('animation-message', 'Настройки живого меню сохранены.', 'success');
   } catch (error) { setMessage('animation-message', error.message); }
   finally { setPending(button, false, 'Сохраняем…'); }
@@ -305,10 +495,14 @@ export function initialiseAnimationStudio() {
   });
   bindMotionProfileControls(() => restartPreview());
   bindAnnouncementControls();
+  bindBrandControls();
+  bindAquariumControls();
   bindEntityControls();
   element('animation-enabled')?.addEventListener('change', () => restartPreview());
   syncEntityControls();
   syncAnnouncementControls();
+  syncBrandControls();
+  syncAquariumControls();
   element('animation-save')?.addEventListener('click', () => { void saveSettings(); });
   void Promise.all([loadSettings(), loadScreenOptions()]).catch((error) => setMessage('animation-message', error.message));
 }

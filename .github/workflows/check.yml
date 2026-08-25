@@ -92,6 +92,7 @@ jobs:
       SITE_LOGO_MAX_BYTES: '2097152'
       SITE_FAVICON_MAX_BYTES: '524288'
       SCREEN_BACKGROUND_MAX_BYTES: '20971520'
+      ENTITY_ASSET_MAX_BYTES: '104857600'
       HEALTH_READINESS_CACHE_MS: '0'
       SFTP_PUBLIC_HOST: localhost
       SFTP_PORT: '2022'
@@ -180,6 +181,7 @@ jobs:
           grep -Fx 'SCREEN_MAX_WIDTH=1920' .env.example
           grep -Fx 'SCREEN_MAX_HEIGHT=1080' .env.example
           grep -Fx 'SCREEN_BACKGROUND_MAX_BYTES=20971520' .env.example
+          grep -Fx 'ENTITY_ASSET_MAX_BYTES=104857600' .env.example
           grep -Fx 'EVENT_JOURNAL_RETENTION_DAYS=30' .env.example
           grep -Fx 'EVENT_JOURNAL_MAX_ENTRIES=5000' .env.example
           ! grep -Eq '^[A-Z0-9_]*CPU_LIMIT=' .env.example
@@ -264,7 +266,7 @@ jobs:
           if (!facadeResponse.ok || !modelResponse.ok || !svgResponse.ok) throw new Error('canonical renderer modules not served');
           if (!facadeSource.includes('renderer-model.js') || !facadeSource.includes('renderer-svg.js')) throw new Error('renderer facade contract missing');
           if (!modelSource.includes('MENU_REFERENCE') || !modelSource.includes('table_width_px')) throw new Error('renderer model contract missing');
-          if (!svgSource.includes('buildTableSvg') || !svgSource.includes('promotion-light-wave')) throw new Error('renderer SVG v1.7 contract missing');
+          if (!svgSource.includes('buildTableSvg') || !svgSource.includes('promotion-row-glow') || !svgSource.includes('row-motion-surface')) throw new Error('renderer motion-surface contract missing');
           NODE
       - name: Smoke test SFTP service
         run: docker compose --project-name menu-tv-2-ci --env-file .env exec -T sftp sftpgo ping
