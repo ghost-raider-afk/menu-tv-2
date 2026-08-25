@@ -16,7 +16,7 @@
             <div>
               <p class="eyebrow">MOTION STUDIO</p>
               <h1>Живое меню</h1>
-              <p>Непрерывная WASM-пластика строк меню. Название, характеристики и цены принадлежат одному transform owner. Фон всегда статичен.</p>
+              <p>Контент таблицы остаётся на фиксированных координатах. Движутся световые поверхности и независимые слои, поэтому буквы и цены не должны дрожать.</p>
             </div>
             <div class="animation-heading-actions">
               <label class="animation-master-toggle"><input id="animation-enabled" type="checkbox" /><span><strong>Анимация включена</strong><small>Одинаково в Preview и на телевизоре.</small></span></label>
@@ -27,7 +27,7 @@
           <p class="form-message is-hidden" id="animation-message" role="status" aria-live="polite"></p>
 
           <section class="settings-card animation-player-card animation-player-card-full" aria-label="Предпросмотр анимации">
-            <div class="card-heading"><div><p class="eyebrow">LIVE PREVIEW</p><h2>Экран предпросмотра</h2><p>Тот же Motion Engine, который работает на реальном ТВ.</p></div><span class="animation-live-badge">LIVE</span></div>
+            <div class="card-heading"><div><p class="eyebrow">LIVE PREVIEW</p><h2>Экран предпросмотра</h2><p>Тот же Motion Engine и те же overlay-слои, которые работают на реальном ТВ.</p></div><span class="animation-live-badge">LIVE</span></div>
             <div class="animation-screen-picker">
               <label class="field"><span>Экран предпросмотра</span><select id="animation-screen-select" aria-label="Экран предпросмотра"><option value="">Загрузка мониторов…</option></select></label>
               <p id="animation-screen-status">Загружаем сохранённый экран…</p>
@@ -48,20 +48,20 @@
           <section class="animation-motion-grid" aria-label="Настройки живого меню">
             <div class="settings-card animation-motion-card">
               <div class="card-heading">
-                <div><p class="eyebrow">MIRA WASM MOTION</p><h2>Основное меню</h2><p>Каждая строка движется как единый SVG-объект. Цена больше не имеет собственного transform.</p></div>
-                <span class="animation-static-background">ФОН · STATIC</span>
+                <div><p class="eyebrow">MIRA WASM MOTION</p><h2>Основное меню</h2><p>Название, характеристики и цены статичны. Эффекты работают на отдельной световой поверхности под строкой.</p></div>
+                <span class="animation-static-background">ФОН · БЕЗ ИЗМЕНЕНИЙ</span>
               </div>
               <div class="animation-control-grid">
-                <label class="field"><span>Характер</span><select id="animation-pattern"><option value="cinematic">Cinematic</option><option value="ambient">Плавный ambient</option><option value="wave">Волна</option><option value="focus">Фокус</option><option value="pulse">Пульс</option><option value="spark">Световой ритм</option><option value="parallax">Пластика глубины</option></select></label>
-                <label class="field"><span>Направление</span><select id="animation-flow-direction"><option value="alternate">Встречное</option><option value="left-to-right">Слева направо</option><option value="right-to-left">Справа налево</option><option value="top-to-bottom">Сверху вниз</option><option value="bottom-to-top">Снизу вверх</option><option value="none">Без направления</option></select></label>
+                <label class="field"><span>Характер</span><select id="animation-pattern"><option value="cinematic">Cinematic light</option><option value="ambient">Ambient Glow</option><option value="wave">Light Drift</option><option value="focus">Focus Pulse</option><option value="pulse">Soft Pulse</option><option value="spark">Neon Spark</option><option value="parallax">Depth Light</option></select></label>
+                <label class="field"><span>Направление света</span><select id="animation-flow-direction"><option value="alternate">Встречное</option><option value="left-to-right">Слева направо</option><option value="right-to-left">Справа налево</option><option value="top-to-bottom">Сверху вниз</option><option value="bottom-to-top">Снизу вверх</option><option value="none">Без направления</option></select></label>
                 <label class="field"><span>Пластика</span><select id="animation-easing"><option value="cinematic">Киношная</option><option value="smooth">Очень плавная</option><option value="standard">Стандартная</option><option value="snappy">Энергичная</option><option value="elastic">Упругая</option></select></label>
-                <label class="field"><span>Разделы</span><select id="animation-section-effect"><option value="cinematic">Cinematic</option><option value="wave">Волна</option><option value="lift">Подъём</option><option value="glow">Свечение</option><option value="pulse">Пульс</option><option value="shimmer">Блик</option><option value="none">Без движения</option></select></label>
-                <label class="field"><span>Строки продукции</span><select id="animation-item-effect"><option value="cinematic">Cinematic</option><option value="wave">Волна</option><option value="lift">Подъём</option><option value="focus">Фокус</option><option value="breathe">Дыхание</option><option value="none">Без движения</option></select></label>
+                <label class="field"><span>Разделы</span><select id="animation-section-effect"><option value="cinematic">Cinematic</option><option value="wave">Волна света</option><option value="lift">Световой подъём</option><option value="glow">Свечение</option><option value="pulse">Пульс</option><option value="shimmer">Блик</option><option value="none">Без движения</option></select></label>
+                <label class="field"><span>Строки продукции</span><select id="animation-item-effect"><option value="cinematic">Cinematic</option><option value="wave">Light Drift</option><option value="lift">Световой подъём</option><option value="focus">Focus</option><option value="breathe">Дыхание света</option><option value="none">Без движения</option></select></label>
               </div>
               <div class="animation-slider-grid">
                 <label class="field animation-range-field"><span>Общая выразительность</span><div><input id="animation-intensity" type="range" min="0" max="100" step="1" /><output id="animation-intensity-output">68%</output></div></label>
-                <label class="field animation-range-field"><span>Амплитуда движения</span><div><input id="animation-travel" type="range" min="0" max="48" step="1" /><output id="animation-travel-output">14 px</output></div></label>
-                <label class="field animation-range-field"><span>Глубина масштаба</span><div><input id="animation-scale" type="range" min="0" max="0.12" step="0.001" /><output id="animation-scale-output">2.5%</output></div></label>
+                <label class="field animation-range-field"><span>Ход световой поверхности</span><div><input id="animation-travel" type="range" min="0" max="48" step="1" /><output id="animation-travel-output">14 px</output></div></label>
+                <label class="field animation-range-field"><span>Глубина светового пятна</span><div><input id="animation-scale" type="range" min="0" max="0.12" step="0.001" /><output id="animation-scale-output">2.5%</output></div></label>
                 <label class="field animation-range-field"><span>Световой объём</span><div><input id="animation-brightness" type="range" min="0" max="0.7" step="0.01" /><output id="animation-brightness-output">18%</output></div></label>
                 <label class="field animation-range-field"><span>Период движения</span><div><input id="animation-cycle" type="range" min="4" max="30" step="0.5" /><output id="animation-cycle-output">9.0 с</output></div></label>
                 <label class="field animation-range-field"><span>Фаза между строками</span><div><input id="animation-stagger" type="range" min="0" max="600" step="10" /><output id="animation-stagger-output">140 мс</output></div></label>
@@ -70,34 +70,90 @@
             </div>
 
             <div class="settings-card animation-promotion-card">
-              <div class="card-heading"><div><p class="eyebrow">PROMO CINEMATIC WAVE</p><h2>«Акция»</h2><p>Плавное увеличение плашки, красная световая волна через всю строку, мягкое послесвечение и пауза.</p></div></div>
+              <div class="card-heading"><div><p class="eyebrow">PROMO GLOW PULSE</p><h2>«Акция»</h2><p>Никаких бегущих полос. Фон всей акционной строки мягко загорается, дышит и растворяется; плашка получает отдельный спокойный glow.</p></div></div>
               <div class="animation-control-grid animation-promotion-selects">
-                <label class="field"><span>Эффект</span><select id="animation-promotion-effect"><option value="cinematic">Cinematic wave</option><option value="none">Выключен</option></select></label>
+                <label class="field"><span>Эффект</span><select id="animation-promotion-effect"><option value="cinematic">Glow pulse</option><option value="none">Выключен</option></select></label>
                 <label class="field"><span>Пластика</span><select id="animation-promotion-easing"><option value="smooth">Плавная</option><option value="cinematic">Киношная</option></select></label>
               </div>
               <div class="animation-slider-grid animation-promotion-sliders">
-                <label class="field animation-range-field"><span>Сила акцента</span><div><input id="animation-promotion-intensity" type="range" min="0" max="100" step="1" /><output id="animation-promotion-intensity-output">92%</output></div></label>
-                <label class="field animation-range-field"><span>Масштаб плашки</span><div><input id="animation-promotion-scale" type="range" min="0.03" max="0.08" step="0.005" /><output id="animation-promotion-scale-output">6%</output></div></label>
-                <label class="field animation-range-field"><span>Яркость</span><div><input id="animation-promotion-brightness" type="range" min="0" max="0.8" step="0.01" /><output id="animation-promotion-brightness-output">35%</output></div></label>
-                <label class="field animation-range-field"><span>Свечение</span><div><input id="animation-promotion-glow" type="range" min="0" max="48" step="1" /><output id="animation-promotion-glow-output">28 px</output></div></label>
+                <label class="field animation-range-field"><span>Сила подсветки</span><div><input id="animation-promotion-intensity" type="range" min="0" max="100" step="1" /><output id="animation-promotion-intensity-output">92%</output></div></label>
+                <label class="field animation-range-field"><span>Дыхание плашки</span><div><input id="animation-promotion-scale" type="range" min="0.01" max="0.08" step="0.005" /><output id="animation-promotion-scale-output">4%</output></div></label>
+                <label class="field animation-range-field"><span>Яркость плашки</span><div><input id="animation-promotion-brightness" type="range" min="0" max="0.8" step="0.01" /><output id="animation-promotion-brightness-output">35%</output></div></label>
+                <label class="field animation-range-field"><span>Радиус glow</span><div><input id="animation-promotion-glow" type="range" min="0" max="48" step="1" /><output id="animation-promotion-glow-output">28 px</output></div></label>
                 <label class="field animation-range-field"><span>Период внимания</span><div><input id="animation-promotion-cycle" type="range" min="2" max="15" step="0.5" /><output id="animation-promotion-cycle-output">5.5 с</output></div></label>
-                <label class="field animation-range-field"><span>Волна + послесвечение</span><div><input id="animation-promotion-duration" type="range" min="700" max="4000" step="100" /><output id="animation-promotion-duration-output">1800 мс</output></div></label>
+                <label class="field animation-range-field"><span>Длительность подсветки</span><div><input id="animation-promotion-duration" type="range" min="700" max="4000" step="100" /><output id="animation-promotion-duration-output">1800 мс</output></div></label>
                 <input id="animation-promotion-travel" type="hidden" value="0" />
               </div>
             </div>
           </section>
 
           <section class="settings-card animation-announcement-card" aria-label="Бегущая строка">
-            <div class="card-heading"><div><p class="eyebrow">ОБЪЯВЛЕНИЕ</p><h2>Бегущая строка</h2><p>Независимый слой поверх меню. Не меняет геометрию таблицы и не зависит от Motion Engine.</p></div></div>
+            <div class="card-heading"><div><p class="eyebrow">ОБЪЯВЛЕНИЕ</p><h2>Бегущая строка</h2><p>Независимый слой поверх меню: собственный шрифт, вертикальные пропорции и опциональная подсветка всей строки.</p></div></div>
             <label class="animation-entity-visible"><input id="animation-announcement-enabled" type="checkbox" /><span>Показывать объявление</span></label>
             <label class="field field-full"><span>Текст объявления</span><textarea id="animation-announcement-text" rows="3" maxlength="500" placeholder="Например: Сегодня до 22:00 — скидка 10% на розлив"></textarea></label>
             <div class="animation-announcement-grid">
               <label class="field"><span>Положение</span><select id="animation-announcement-position"><option value="bottom">Снизу</option><option value="top">Сверху</option></select></label>
+              <label class="field"><span>Шрифт</span><select id="animation-announcement-font-family"><option value="inter">Inter / System</option><option value="arial">Arial</option><option value="montserrat">Montserrat</option><option value="oswald">Oswald / Narrow</option><option value="georgia">Georgia</option></select></label>
               <label class="field"><span>Скорость</span><input id="animation-announcement-speed" type="range" min="30" max="240" step="5" /><output id="animation-announcement-speed-output">90 px/с</output></label>
               <label class="field"><span>Размер текста</span><input id="animation-announcement-font-size" type="range" min="18" max="72" step="1" /><output id="animation-announcement-font-output">34 px</output></label>
+              <label class="field"><span>Растяжение по вертикали</span><input id="animation-announcement-vertical-scale" type="range" min="0.5" max="2.2" step="0.05" /><output id="animation-announcement-vertical-scale-output">1.00×</output></label>
               <label class="field"><span>Цвет текста</span><input id="animation-announcement-text-color" type="color" value="#FFFFFF" /></label>
               <label class="field"><span>Цвет фона</span><input id="animation-announcement-background-color" type="color" value="#101317" /></label>
               <label class="field"><span>Плотность фона</span><input id="animation-announcement-opacity" type="range" min="0" max="1" step="0.05" /><output id="animation-announcement-opacity-output">82%</output></label>
+              <label class="animation-entity-visible"><input id="animation-announcement-glow-enabled" type="checkbox" /><span>Подсветка строки</span></label>
+              <label class="field"><span>Цвет подсветки</span><input id="animation-announcement-glow-color" type="color" value="#35D9FF" /></label>
+              <label class="field"><span>Сила подсветки</span><input id="animation-announcement-glow-strength" type="range" min="0" max="48" step="1" /><output id="animation-announcement-glow-strength-output">12 px</output></label>
+            </div>
+          </section>
+
+          <section class="animation-overlay-grid" aria-label="Дополнительные слои">
+            <div class="settings-card animation-brand-card">
+              <div class="card-heading"><div><p class="eyebrow">BRAND ENTITY</p><h2>Название бренда</h2><p>Отдельная текстовая сущность. Не связана с таблицей: имеет собственную анимацию, неон и позицию на экране.</p></div></div>
+              <label class="animation-entity-visible"><input id="animation-brand-enabled" type="checkbox" /><span>Показывать название бренда</span></label>
+              <div class="animation-control-grid">
+                <label class="field"><span>Название</span><input id="animation-brand-text" type="text" maxlength="80" value="MIRA-TV" /></label>
+                <label class="field"><span>Шрифт</span><select id="animation-brand-font-family"><option value="inter">Inter / System</option><option value="arial">Arial</option><option value="montserrat">Montserrat</option><option value="oswald">Oswald / Narrow</option><option value="georgia">Georgia</option></select></label>
+                <label class="field"><span>Анимация</span><select id="animation-brand-effect"><option value="neon-pulse">Neon Pulse</option><option value="breathe">Breathe</option><option value="float">Float</option><option value="none">Статично</option></select></label>
+              </div>
+              <div class="animation-slider-grid">
+                <label class="field"><span>X</span><input id="animation-brand-x" type="number" min="0" max="1920" step="1" /></label>
+                <label class="field"><span>Y</span><input id="animation-brand-y" type="number" min="0" max="1080" step="1" /></label>
+                <label class="field animation-range-field"><span>Размер</span><div><input id="animation-brand-font-size" type="range" min="18" max="180" step="1" /><output id="animation-brand-font-size-output">72 px</output></div></label>
+                <label class="field animation-range-field"><span>Растяжение по вертикали</span><div><input id="animation-brand-vertical-scale" type="range" min="0.5" max="2.2" step="0.05" /><output id="animation-brand-vertical-scale-output">1.00×</output></div></label>
+                <label class="field animation-range-field"><span>Межбуквенный интервал</span><div><input id="animation-brand-letter-spacing" type="range" min="-2" max="20" step="0.5" /><output id="animation-brand-letter-spacing-output">2 px</output></div></label>
+                <label class="field"><span>Цвет текста</span><input id="animation-brand-text-color" type="color" value="#FFFFFF" /></label>
+                <label class="field"><span>Цвет glow</span><input id="animation-brand-glow-color" type="color" value="#35D9FF" /></label>
+                <label class="field animation-range-field"><span>Сила glow</span><div><input id="animation-brand-glow-strength" type="range" min="0" max="48" step="1" /><output id="animation-brand-glow-strength-output">18 px</output></div></label>
+                <label class="field animation-range-field"><span>Период анимации</span><div><input id="animation-brand-cycle" type="range" min="2" max="30" step="0.5" /><output id="animation-brand-cycle-output">5.5 с</output></div></label>
+              </div>
+              <div class="animation-entity-positioning">
+                <span>Быстрое позиционирование</span>
+                <div class="animation-entity-position-buttons">
+                  <button class="button button-secondary" type="button" data-brand-align="top-left">Слева сверху</button>
+                  <button class="button button-secondary" type="button" data-brand-align="top">Сверху</button>
+                  <button class="button button-secondary" type="button" data-brand-align="top-right">Справа сверху</button>
+                  <button class="button button-secondary" type="button" data-brand-align="center">Центр</button>
+                  <button class="button button-secondary" type="button" data-brand-align="bottom">Снизу</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-card animation-aquarium-card">
+              <div class="card-heading"><div><p class="eyebrow">AQUARIUM ENVIRONMENT</p><h2>Аквариум</h2><p>Процедурный декоративный слой поверх текущего фона и под таблицей: вода, каустики, рыбы, пузырьки и водоросли. Фон меню не заменяется.</p></div></div>
+              <label class="animation-entity-visible"><input id="animation-aquarium-enabled" type="checkbox" /><span>Включить аквариум</span></label>
+              <label class="animation-entity-visible"><input id="animation-aquarium-intro" type="checkbox" checked /><span>Интро «налив воды»</span></label>
+              <div class="animation-control-grid">
+                <label class="field"><span>Стиль</span><select id="animation-aquarium-style"><option value="premium">Premium Aquarium</option><option value="neon">Neon Aquarium</option><option value="reef">Luxury Reef</option></select></label>
+                <button class="button button-secondary animation-aquarium-replay" id="animation-aquarium-replay" type="button">↻ Повторить налив воды</button>
+              </div>
+              <div class="animation-slider-grid">
+                <label class="field animation-range-field"><span>Интенсивность среды</span><div><input id="animation-aquarium-intensity" type="range" min="0" max="100" step="1" /><output id="animation-aquarium-intensity-output">45%</output></div></label>
+                <label class="field animation-range-field"><span>Количество рыб</span><div><input id="animation-aquarium-fish-count" type="range" min="0" max="8" step="1" /><output id="animation-aquarium-fish-count-output">3</output></div></label>
+                <label class="field animation-range-field"><span>Пузырьки</span><div><input id="animation-aquarium-bubbles" type="range" min="0" max="100" step="1" /><output id="animation-aquarium-bubbles-output">35%</output></div></label>
+                <label class="field animation-range-field"><span>Водоросли по краям</span><div><input id="animation-aquarium-plants" type="range" min="0" max="100" step="1" /><output id="animation-aquarium-plants-output">45%</output></div></label>
+                <label class="field animation-range-field"><span>Световые каустики</span><div><input id="animation-aquarium-caustics" type="range" min="0" max="100" step="1" /><output id="animation-aquarium-caustics-output">50%</output></div></label>
+                <label class="field animation-range-field"><span>Скорость среды</span><div><input id="animation-aquarium-speed" type="range" min="10" max="100" step="1" /><output id="animation-aquarium-speed-output">35%</output></div></label>
+              </div>
             </div>
           </section>
 
