@@ -1,0 +1,79 @@
+name: prepare-v1.8.0
+
+on:
+  push:
+    branches:
+      - work/v1.8.0-motion-brand-aquarium
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: work/v1.8.0-motion-brand-aquarium
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Prepare v1.8.0 metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm version 1.8.0 --no-git-tag-version --allow-same-version
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('CHANGELOG.md')
+          text = path.read_text()
+          heading = '## [1.8.0] - 2026-08-26'
+          if heading not in text:
+              notes = '''## [1.8.0] - 2026-08-26
+
+### Живое меню
+- Текст, характеристики и цены строк остаются на фиксированных координатах; Motion Engine анимирует отдельные световые поверхности под контентом, устраняя дёргание букв.
+- Красная бегущая полоса «Акция» удалена и заменена мягкой пульсирующей подсветкой фона всей строки без движения текста.
+- Бегущая строка получила выбор шрифта, вертикальное растяжение и независимую настраиваемую подсветку.
+
+### Brand / Aquarium
+- Добавлена независимая сущность «Название бренда» с собственным шрифтом, вертикальным масштабом, glow-анимацией, координатами X/Y и быстрым позиционированием.
+- Добавлен процедурный Aquarium overlay поверх существующего фона и таблицы: water-fill intro, каустики, рыбы, пузырьки и боковые водоросли с режимами Premium / Neon / Reef.
+- Brand и Aquarium хранятся независимо в animation_settings, работают одинаково в Preview и TV Player и доступны офлайн.
+
+### Video Entity
+- Entity media upload отделён от лимита фоновых изображений и получил собственный env-параметр ENTITY_ASSET_MAX_BYTES (100 МиБ по умолчанию).
+- PNG/WebP/MP4/WebM загружаются потоково во временный файл без буферизации всего тела запроса в RAM; превышение лимита возвращает корректный 413 и удаляет partial upload.
+
+### Подключение ТВ
+- Pending activation сохраняется устойчиво между reload/hard reload Player и повторно используется до своего server-side expires_at, поэтому частые обновления страницы не создают новые QR-заявки.
+- Неудачное ручное обновление QR или HTTP 429 больше не удаляет действующую заявку: старый QR продолжает polling до успешной атомарной замены или истечения срока.
+- Добавлена Chromium-регрессия: шесть последовательных reload используют один activation_id и один POST /api/device/activations.
+
+### Проверки
+- Обновлены node/unit, Chromium browser/visual и clean-install smoke gates для новой архитектуры row glow, Brand/Aquarium, streaming Entity upload и reload-resilient TV pairing.
+
+'''
+              path.write_text(notes + text)
+          test_path = Path('tests/versioning.test.js')
+          test_text = test_path.read_text().replace("assert.equal(pkg.version, '1.7.0');", "assert.equal(pkg.version, '1.8.0');")
+          test_path.write_text(test_text)
+          PY
+      - name: Commit release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json CHANGELOG.md tests/versioning.test.js
+          if git diff --cached --quiet; then
+            echo 'v1.8.0 metadata already prepared'
+            exit 0
+          fi
+          git commit -m 'Prepare MIRA-TV v1.8.0'
+          git push origin HEAD:work/v1.8.0-motion-brand-aquarium
