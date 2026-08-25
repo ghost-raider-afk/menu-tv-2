@@ -1,8 +1,8 @@
-# ТВ МЕНЮ 2.0
+# MIRA-TV
 
 Веб-приложение для управления цифровыми меню торговых точек и публикации готовых экранов на телевизоры.
 
-Актуальный стабильный релиз: **`1.3.3`**. Версия установщика: **`1.3.2`**.
+Версия приложения в этой ветке: **`1.7.0`**. Независимая версия установщика: **`1.3.3`**.
 
 ## Возможности
 
@@ -37,7 +37,7 @@ Docker и необходимые системные пакеты устанав�
 ## Чистая установка
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ghost-raider-afk/menu-tv-2/installer-v1.3.2/menu-tv-2.sh -o /tmp/menu-tv-2.sh
+curl -fsSL https://raw.githubusercontent.com/ghost-raider-afk/menu-tv-2/installer-v1.3.3/menu-tv-2.sh -o /tmp/menu-tv-2.sh
 sudo bash /tmp/menu-tv-2.sh install
 ```
 

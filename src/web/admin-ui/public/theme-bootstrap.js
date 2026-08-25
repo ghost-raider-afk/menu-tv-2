@@ -7,7 +7,7 @@
     document.documentElement.dataset.themePreference = preference || 'system';
   } catch { /* The default light theme remains available when storage is disabled. */ }
 
-  if (/^ТВ МЕНЮ(?: 2)?/.test(document.title)) {
-    document.title = document.title.replace(/^ТВ МЕНЮ(?: 2)?/, 'MIRA-TV');
+  if (/^MIRA-TV(?: 2)?/.test(document.title)) {
+    document.title = document.title.replace(/^MIRA-TV(?: 2)?/, 'MIRA-TV');
   }
 })();

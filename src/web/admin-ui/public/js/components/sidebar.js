@@ -11,7 +11,7 @@ const ICONS = Object.freeze({
 });
 
 function appName() {
-  return state.site?.app_name || state.site?.application_name || state.session?.app_name || 'ТВ МЕНЮ';
+  return state.site?.app_name || state.site?.application_name || state.session?.app_name || 'MIRA-TV';
 }
 
 function railLink(route, activeSection) {

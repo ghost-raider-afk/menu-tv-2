@@ -194,7 +194,7 @@ async function pollActivation(record) {
     if (body.status === 'authorized') {
       clearActivation();
       clearPairingTimers();
-      activationStatus.textContent = 'Авторизовано. Запускаем ТВ МЕНЮ…';
+      activationStatus.textContent = 'Авторизовано. Запускаем MIRA-TV…';
       await loadPlayer();
       return;
     }
