@@ -76,31 +76,31 @@ export function compilePromotionMotionProgram(scene, context = {}) {
   const gain = clamp(Number(profile.promotion_intensity) || 0, 0, 100) / 100;
   const activeFraction = clamp((Number(profile.promotion_event_duration_ms) || 1800) / duration, 0.18, 0.72);
   const requestedScale = Math.max(0, Number(profile.promotion_scale_amount) || 0.06);
-  const scaleAmount = gain === 0 ? 0 : clamp(requestedScale * gain * 0.44, 0.03, 0.08);
+  const scaleAmount = gain === 0 ? 0 : clamp(requestedScale * gain * 0.44, 0.01, 0.06);
   const tracks = effect === 'none' ? [] : scene.nodes.flatMap((node) => {
     if (node.kind === 'promotion') return [Object.freeze({
       node,
       claims: Object.freeze(['transform', 'appearance']),
       procedural: Object.freeze({
         kind: 'promo-badge', activeFraction, scaleAmount,
-        brightnessAmount: clamp((Number(profile.promotion_brightness_amount) || 0.3) * gain, 0, 0.42),
-        glowRadius: clamp((Number(profile.promotion_glow_radius) || 18) * gain, 0, 36)
+        brightnessAmount: clamp((Number(profile.promotion_brightness_amount) || 0.3) * gain, 0, 0.34),
+        glowRadius: clamp((Number(profile.promotion_glow_radius) || 18) * gain, 0, 30)
       }),
       timing: Object.freeze({ duration, delay: 0, easing: 'linear', loop: true })
     })];
-    if (node.kind === 'promotion-wave') return [Object.freeze({
+    if (node.kind === 'promotion-glow') return [Object.freeze({
       node,
-      claims: Object.freeze(['transform', 'opacity']),
+      claims: Object.freeze(['opacity', 'appearance']),
       procedural: Object.freeze({
-        kind: 'promo-wave', activeFraction,
-        travel: Number(node.metadata?.travel) || 0,
-        opacity: gain === 0 ? 0 : clamp(0.42 + gain * 0.42, 0.42, 0.84)
+        kind: 'promo-glow', activeFraction,
+        opacity: gain === 0 ? 0 : clamp(0.18 + gain * 0.52, 0.18, 0.70),
+        glowRadius: clamp((Number(profile.promotion_glow_radius) || 18) * gain, 0, 36)
       }),
       timing: Object.freeze({ duration, delay: 0, easing: 'linear', loop: true })
     })];
     return [];
   });
-  return createSceneProgram({ id: 'promotion-motion', duration, tracks, metadata: { engine: 'mira-wasm', cinematicWave: true } });
+  return createSceneProgram({ id: 'promotion-motion', duration, tracks, metadata: { engine: 'mira-wasm', promotionStyle: 'row-glow-pulse' } });
 }
 
 export const DEFAULT_SCENE_COMPILERS = Object.freeze([compileMenuMotionProgram, compilePromotionMotionProgram]);
