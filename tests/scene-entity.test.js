@@ -19,6 +19,7 @@ test('scene entity v2 keeps canonical FullHD coordinates and image compatibility
   const entity = sceneEntityInput({
     ...DEFAULT_SCENE_ENTITY,
     asset_url: '/site-assets/entities/entity-123e4567-e89b-42d3-a456-426614174000.webp',
+    media_type: 'image/webp',
     asset_width: 560,
     asset_height: 980,
     visible: true,
@@ -56,6 +57,7 @@ test('scene entity v2 accepts MP4/WebM playback metadata and rejects media misma
   assert.equal(video.muted, true);
   assert.equal(video.playsinline, true);
   assert.throws(() => sceneEntityInput({ asset_url: video.asset_url, asset_type: 'image', media_type: 'image/png' }), /не соответствует/);
+  assert.throws(() => sceneEntityInput({ asset_url: video.asset_url, asset_type: 'video', media_type: 'video/webm' }), /расширению/);
 });
 
 test('scene entity rejects foreign assets and invalid transforms', () => {
