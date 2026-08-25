@@ -1,0 +1,49 @@
+name: publish-v1.7.0
+
+on:
+  push:
+    branches:
+      - release/v1.7.0
+    paths:
+      - .github/workflows/publish-v1.7.0.yml
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_SHA: 265022b11434ac90e0d9b0c111b541146c3f500e
+    steps:
+      - name: Publish exact release commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v1.7.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v1.7.0 already exists"
+            exit 0
+          fi
+          cat > "$RUNNER_TEMP/release-notes.md" <<'EOF'
+          # MIRA-TV v1.7.0
+
+          - C++ motion kernel compiled reproducibly to WebAssembly.
+          - Continuous row motion with one transform owner for name, metadata and prices.
+          - Cinematic promotion badge and full-row red light wave with seamless looping.
+          - Video Entity v2 with PNG/WebP/MP4/WebM, ffprobe validation and playback controls.
+          - Offline video cache with HTTP Range support.
+          - Hardened TV QR pairing scanner with BarcodeDetector → jsQR fallback and iOS/secure-context diagnostics.
+          - Public MIRA-TV branding while preserving legacy internal identifiers for upgrade compatibility.
+          - Strict CSP permits WebAssembly compilation through `wasm-unsafe-eval` without general `unsafe-eval`.
+
+          Validation: release candidate `4fb4b8c406fb1207865c2bdff27fb2f1444547e7` passed node-check, browser-visual and clean-install-smoke in GitHub Actions run 32857806967, then PR #51 was squash-merged to the target commit below.
+          EOF
+          gh release create v1.7.0 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$TARGET_SHA" \
+            --title "MIRA-TV v1.7.0" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            --verify-tag=false
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v1.7.0" --jq '.object.sha')" = "$TARGET_SHA"
+          test "$(gh release view v1.7.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease --jq '[.isDraft,.isPrerelease] | @tsv')" = $'false\tfalse'
