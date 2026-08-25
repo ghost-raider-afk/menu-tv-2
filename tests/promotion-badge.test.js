@@ -5,7 +5,7 @@ import { buildDisplayLines, buildRenderModel, buildTableSvg } from '../src/web/a
 
 const publicRoot = new URL('../src/web/admin-ui/public/', import.meta.url);
 
-test('promotion badge remains one SVG object and cinematic wave spans its row', () => {
+test('promotion badge remains one SVG object and promo uses a full-row soft glow', () => {
   const model = buildRenderModel({
     settings: {},
     rows: [
@@ -30,13 +30,13 @@ test('promotion badge remains one SVG object and cinematic wave spans its row', 
   assert.ok(badge, 'promotion-badge group must exist');
   assert.match(badge, /<path\b[^>]*fill="#D92D35"\/?>/);
   assert.match(badge, /<text\b[^>]*class="promotion"[^>]*>АКЦИЯ<\/text>/);
-  assert.match(svg, /class="promotion-light-wave"/);
-  assert.match(svg, /data-wave-travel=/);
-  assert.match(svg, /id="mira-promo-wave"/);
+  assert.match(svg, /class="promotion-row-glow"/);
+  assert.match(svg, /id="mira-promo-row-glow"/);
+  assert.doesNotMatch(svg, /promotion-light-wave|data-wave-travel|mira-promo-wave/);
   assert.ok(badgeStart > rowStart && pricesStart > rowStart && rowEnd > pricesStart, 'badge, content and prices must stay inside the same table-item row');
 });
 
-test('DOM scene graph has exactly one row transform owner and no price transform nodes', async () => {
+test('DOM scene graph animates light surfaces while row text and prices remain static', async () => {
   const [adapter, plan, driver, renderer] = await Promise.all([
     readFile(new URL('js/motion/dom-scene-adapter.js', publicRoot), 'utf8'),
     readFile(new URL('js/motion/motion-plan.js', publicRoot), 'utf8'),
@@ -44,18 +44,22 @@ test('DOM scene graph has exactly one row transform owner and no price transform
     readFile(new URL('js/editor/renderer-svg.js', publicRoot), 'utf8')
   ]);
 
-  assert.match(adapter, /g\.table-item, g\.table-packaging/);
-  assert.match(adapter, /transformOwner: 'row'/);
+  assert.match(adapter, /row-motion-surface-item/);
+  assert.match(adapter, /transformOwner: 'surface'/);
+  assert.match(adapter, /surfaceOnly: true/);
   assert.match(adapter, /g\.promotion-badge/);
-  assert.match(adapter, /g\.promotion-light-wave/);
-  assert.doesNotMatch(adapter, /table-item-content, g\.packaging-cell-content/);
-  assert.doesNotMatch(adapter, /table-item-prices, g\.packaging-cell-price/);
+  assert.match(adapter, /g\.promotion-row-glow/);
+  assert.doesNotMatch(adapter, /querySelectorAll\('g\.table-item, g\.table-packaging'\)/);
   assert.doesNotMatch(adapter, /kind: 'price'/);
   assert.doesNotMatch(adapter, /menu\.price/);
+  assert.match(plan, /menuTextStatic: true/);
   assert.match(plan, /procedural:/);
   assert.doesNotMatch(plan, /keyframes:/);
   assert.match(driver, /requestAnimationFrame/);
-  assert.match(driver, /_mira_promo_wave_progress/);
+  assert.match(driver, /spec\.surfaceOnly/);
+  assert.match(driver, /spec\.kind === 'promo-glow'/);
+  assert.doesNotMatch(driver, /_mira_promo_wave_progress/);
+  assert.match(renderer, /row-motion-surface/);
   assert.match(renderer, /<g class="table-item tone-/);
   assert.match(renderer, /<g class="table-item-prices">/);
 });
