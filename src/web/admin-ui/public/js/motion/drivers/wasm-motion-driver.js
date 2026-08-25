@@ -1,7 +1,7 @@
 import { WaapiMotionDriver } from './waapi-driver.js';
 import { loadMotionKernel } from '../wasm-motion-kernel.js';
 
-const RED_GLOW = 'rgba(255,48,48,.82)';
+const RED_GLOW = 'rgba(255,48,72,.78)';
 
 function number(value, fallback = 0) {
   const parsed = Number(value);
@@ -163,18 +163,18 @@ export class WasmMotionDriver {
     }
     const active = number(spec.activeFraction, 0.4);
     if (spec.kind === 'promo-badge') {
-      const scale = this.kernel._mira_promo_scale(phase, active, number(spec.scaleAmount, 0.06));
+      const scale = this.kernel._mira_promo_scale(phase, active, number(spec.scaleAmount, 0.04));
       const glow = this.kernel._mira_promo_glow(phase, active);
       target.style.transform = `scale(${scale.toFixed(5)})`;
-      target.style.filter = glow > 0.001 ? `brightness(${(1 + glow * number(spec.brightnessAmount, 0.18)).toFixed(4)}) drop-shadow(0 0 ${(glow * number(spec.glowRadius, 18)).toFixed(2)}px ${RED_GLOW})` : 'brightness(1)';
+      target.style.filter = glow > 0.001 ? `brightness(${(1 + glow * number(spec.brightnessAmount, 0.16)).toFixed(4)}) drop-shadow(0 0 ${(glow * number(spec.glowRadius, 16)).toFixed(2)}px ${RED_GLOW})` : 'brightness(1)';
       return;
     }
-    if (spec.kind === 'promo-wave') {
-      const progress = this.kernel._mira_promo_wave_progress(phase, active);
-      const opacity = this.kernel._mira_promo_wave_opacity(phase, active);
-      const x = number(spec.travel) * progress;
-      target.style.transform = `translate3d(${x.toFixed(3)}px, 0, 0)`;
-      target.style.opacity = (opacity * number(spec.opacity, 0.8)).toFixed(4);
+    if (spec.kind === 'promo-glow') {
+      const glow = this.kernel._mira_promo_glow(phase, active);
+      target.style.opacity = (glow * number(spec.opacity, 0.6)).toFixed(4);
+      target.style.filter = glow > 0.001 && number(spec.glowRadius) > 0
+        ? `drop-shadow(0 0 ${(glow * number(spec.glowRadius, 18)).toFixed(2)}px ${RED_GLOW})`
+        : 'none';
     }
   }
 }
