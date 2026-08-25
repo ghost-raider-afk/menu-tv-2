@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { toWaapiKeyframe, toWaapiTiming } from '../src/web/admin-ui/public/js/motion/drivers/waapi-driver.js';
 import {
@@ -19,10 +20,10 @@ function fakeScene() {
     root: { renderer: 'fake' },
     nodes: [
       { id: 'menu.section.0', kind: 'section', layer: 'menu', target: target('section'), order: 0, count: 1, depth: 0, transformOwner: 'self' },
-      { id: 'menu.item.0', kind: 'item', layer: 'menu', target: target('item'), order: 0, count: 2, depth: 0, transformOwner: 'self' },
-      { id: 'menu.promotion.0', kind: 'promotion', layer: 'menu', target: target('promotion'), order: 0, count: 2, depth: 1, transformOwner: 'promotion-motion' },
-      { id: 'menu.item.1', kind: 'item', layer: 'menu', target: target('item2'), order: 1, count: 2, depth: 0, transformOwner: 'self' },
-      { id: 'menu.price.0', kind: 'price', layer: 'menu', target: target('price'), order: 0, count: 1, depth: 1, transformOwner: 'self' },
+      { id: 'menu.item.0', kind: 'item', layer: 'menu', target: target('row-0'), order: 0, count: 2, depth: 0, transformOwner: 'row' },
+      { id: 'menu.promotion.0', kind: 'promotion', layer: 'menu', target: target('promotion'), order: 0, count: 1, depth: 2, transformOwner: 'promotion-badge' },
+      { id: 'menu.promotion-wave.0', kind: 'promotion-wave', layer: 'menu', target: target('promotion-wave'), order: 0, count: 1, depth: 1, transformOwner: 'promotion-overlay', metadata: { travel: 2200 } },
+      { id: 'menu.item.1', kind: 'item', layer: 'menu', target: target('row-1'), order: 1, count: 2, depth: 0, transformOwner: 'row' },
       { id: 'entity.future.0', kind: 'entity', layer: 'entity', target: target('future-entity'), order: 0, count: 1, depth: 20, transformOwner: 'entity-runtime' }
     ]
   });
@@ -57,16 +58,18 @@ function fakeDriver() {
   };
 }
 
-test('scene graph reserves entity layer while background is outside Motion Engine', () => {
+test('scene graph reserves entity layer while background stays outside Motion Engine', () => {
   const scene = fakeScene();
   assert.equal(scene.version, 3);
   assert.ok(scene.layers.includes(MOTION_LAYERS.ENTITY));
   assert.equal(scene.nodes.some((node) => node.kind === 'background'), false);
-  assert.equal(scene.node('menu.promotion.0').transformOwner, 'promotion-motion');
-  assert.equal(scene.node('entity.future.0').transformOwner, 'entity-runtime');
+  assert.equal(scene.nodes.some((node) => node.kind === 'price'), false);
+  assert.equal(scene.node('menu.item.0').transformOwner, 'row');
+  assert.equal(scene.node('menu.promotion.0').transformOwner, 'promotion-badge');
+  assert.equal(scene.node('menu.promotion-wave.0').transformOwner, 'promotion-overlay');
 });
 
-test('Motion Engine composes cinematic menu and independent promotion channels', () => {
+test('Motion Engine compiles continuous WASM row tracks and independent cinematic promo overlay', () => {
   const scene = fakeScene();
   const profile = activeProfile();
   const menuDuration = profile.cycle_seconds * 1000;
@@ -77,24 +80,29 @@ test('Motion Engine composes cinematic menu and independent promotion channels',
   assert.equal(plan.duration, Math.max(menuDuration, promotionDuration));
   assert.deepEqual(plan.programs.map((program) => program.id), ['menu-motion', 'promotion-motion']);
   assert.equal(plan.tracks.some((track) => track.node.kind === 'background'), false);
+  assert.equal(plan.tracks.some((track) => track.node.kind === 'price'), false);
   assert.equal(plan.tracks.some((track) => track.node.kind === 'entity'), false);
 
   const item = plan.tracks.find((track) => track.node.id === 'menu.item.0');
   const promotion = plan.tracks.find((track) => track.node.id === 'menu.promotion.0');
-  const price = plan.tracks.find((track) => track.node.id === 'menu.price.0');
+  const wave = plan.tracks.find((track) => track.node.id === 'menu.promotion-wave.0');
   assert.ok(item);
   assert.ok(promotion);
-  assert.ok(price);
+  assert.ok(wave);
   assert.equal(item.programId, 'menu-motion');
   assert.equal(promotion.programId, 'promotion-motion');
+  assert.equal(item.procedural.kind, 'row');
+  assert.equal(promotion.procedural.kind, 'promo-badge');
+  assert.equal(wave.procedural.kind, 'promo-wave');
   assert.deepEqual(item.claims, ['transform', 'appearance']);
   assert.deepEqual(promotion.claims, ['transform', 'appearance']);
-  assert.equal(item.timing.duration, menuDuration);
-  assert.equal(promotion.timing.duration, promotionDuration);
-  assert.equal(promotion.timing.easing, profile.promotion_easing);
-  assert.ok(promotion.keyframes.some((frame) => frame.transform.scale > 1.1));
-  assert.ok(promotion.keyframes.some((frame) => frame.appearance.glowRadius >= 20));
-  assert.notDeepEqual(item.keyframes, promotion.keyframes);
+  assert.deepEqual(wave.claims, ['transform', 'opacity']);
+  assert.equal(item.timing.easing, 'linear');
+  assert.equal(promotion.timing.easing, 'linear');
+  assert.ok(promotion.procedural.scaleAmount >= 0.03 && promotion.procedural.scaleAmount <= 0.08);
+  assert.equal(wave.procedural.travel, 2200);
+  assert.equal('keyframes' in item, false);
+  assert.equal('keyframes' in promotion, false);
 });
 
 test('menu and promotion compilers remain independently callable', () => {
@@ -105,15 +113,24 @@ test('menu and promotion compilers remain independently callable', () => {
   assert.equal(menu.id, 'menu-motion');
   assert.equal(promotion.id, 'promotion-motion');
   assert.equal(menu.tracks.some((track) => track.node.kind === 'promotion'), false);
-  assert.equal(promotion.tracks.every((track) => track.node.kind === 'promotion'), true);
+  assert.deepEqual(new Set(promotion.tracks.map((track) => track.node.kind)), new Set(['promotion', 'promotion-wave']));
   assert.equal(DEFAULT_SCENE_COMPILERS.length, 2);
+});
+
+test('C++ motion kernel is mathematically periodic and owns promo envelope math', async () => {
+  const source = await readFile(new URL('../native/motion-kernel/motion_kernel.cpp', import.meta.url), 'utf8');
+  assert.match(source, /std::sin\(TAU \* wrap01\(phase \+ phase_offset\)\)/);
+  assert.match(source, /std::cos\(TAU \* wrap01\(phase \+ phase_offset\)\)/);
+  assert.match(source, /std::sin\(PI \* u\)/);
+  assert.match(source, /if \(p >= active\) return 0\.0;/);
+  assert.match(source, /mira_promo_wave_progress/);
 });
 
 test('scene composer rejects competing ownership and allows independent channels on one node', () => {
   const scene = fakeScene();
   const node = scene.node('menu.item.0');
   const duration = DEFAULT_ANIMATION_PROFILE.cycle_seconds * 1000;
-  const timing = { duration, delay: 0, easing: 'cinematic', loop: true };
+  const timing = { duration, delay: 0, easing: 'linear', loop: true };
   const keyframes = [{ offset: 0 }, { offset: 1 }];
   const transformProgram = createSceneProgram({ id: 'transform-owner', duration, tracks: [{ node, claims: ['transform'], keyframes, timing }] });
   const appearanceProgram = createSceneProgram({ id: 'appearance-owner', duration, tracks: [{ node, claims: ['appearance'], keyframes, timing }] });
@@ -123,7 +140,7 @@ test('scene composer rejects competing ownership and allows independent channels
   assert.throws(() => composeScenePrograms(scene, [transformProgram, conflictingProgram]), /Scene ownership conflict/);
 });
 
-test('WAAPI driver converts canonical channels into browser CSS', () => {
+test('WAAPI driver remains available only for non-row legacy/entity tracks', () => {
   const state = {
     offset: 0.5,
     opacity: 1,
@@ -133,9 +150,8 @@ test('WAAPI driver converts canonical channels into browser CSS', () => {
   const keyframe = toWaapiKeyframe(state, ['transform', 'appearance']);
   assert.equal(keyframe.transform, 'translate3d(12.50px, -4.00px, 0.00px) scale(1.0400)');
   assert.equal(keyframe.filter, 'brightness(1.120) drop-shadow(0 0 8.5px rgba(1,2,3,.5))');
-  const duration = DEFAULT_ANIMATION_PROFILE.promotion_cycle_seconds * 1000;
-  const timing = toWaapiTiming({ duration, delay: 120, easing: 'elastic', loop: true });
-  assert.equal(timing.duration, duration);
+  const timing = toWaapiTiming({ duration: 4800, delay: 120, easing: 'smooth', loop: true });
+  assert.equal(timing.duration, 4800);
   assert.equal(timing.iterations, Infinity);
 });
 
@@ -157,7 +173,7 @@ test('SceneRuntime owns one master timeline independently from renderer', () => 
 test('MotionTimeline remains renderer-neutral', () => {
   const driver = fakeDriver();
   const duration = DEFAULT_ANIMATION_PROFILE.cycle_seconds * 1000;
-  const plan = { duration, tracks: [{ node: { id: 'x' }, claims: ['transform'], keyframes: [], timing: {} }], clock: { duration, loop: true } };
+  const plan = { duration, tracks: [{ node: { id: 'x' }, claims: ['transform'], procedural: { kind: 'row' }, timing: {} }], clock: { duration, loop: true } };
   const root = { renderer: 'future-gpu-driver' };
   const timeline = new MotionTimeline({ root, driver }).load(plan);
   assert.equal(timeline.duration, duration);
