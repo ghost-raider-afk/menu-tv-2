@@ -295,6 +295,17 @@ export function initialiseConnectTv() {
   codeInput?.addEventListener('input', normalizeReserveCode);
   codeButton?.addEventListener('click', () => { const code = normalizeReserveCode(); if (code.length !== 6) { setMessage('Введите все 6 цифр резервного кода.', true); return; } void resolveActivation({ reserve_code: code }); });
   authorizeButton?.addEventListener('click', () => void authorize());
-  window.addEventListener('pagehide', stopCamera, { once: true });
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') stopCamera(); });
+
+  const onPageHide = () => stopCamera();
+  const onVisibilityChange = () => { if (document.visibilityState === 'hidden') stopCamera(); };
+  window.addEventListener('pagehide', onPageHide);
+  document.addEventListener('visibilitychange', onVisibilityChange);
+
+  return {
+    dispose() {
+      window.removeEventListener('pagehide', onPageHide);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      stopCamera();
+    }
+  };
 }
