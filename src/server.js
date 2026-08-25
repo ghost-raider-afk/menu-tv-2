@@ -69,10 +69,10 @@ async function cleanupEvents(store, config) {
       retentionDays: config.eventJournalRetentionDays,
       maxEntries: config.eventJournalMaxEntries
     });
-    if (removed) logger.info('Expired event journal records removed', { removed });
+    if (removed) logger.info('Expired event journal entries removed', { removed });
     return removed;
   } catch (error) {
-    logger.warn('Event journal retention cleanup could not complete', { error });
+    logger.warn('Expired event journal entries could not be removed', { error });
     return 0;
   }
 }
@@ -106,7 +106,7 @@ function configureSecurity(app, config) {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'"],
         fontSrc: ["'self'", 'data:'],
-        scriptSrc: ["'self'"],
+        scriptSrc: ["'self'", "'wasm-unsafe-eval'"],
         imgSrc: ["'self'", 'data:', 'blob:']
       }
     }
