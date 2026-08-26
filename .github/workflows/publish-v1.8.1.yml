@@ -1,0 +1,36 @@
+name: Publish MIRA-TV v1.8.1
+
+on:
+  push:
+    branches:
+      - fix/v1.8.1-player-pairing-mobile-qr
+    paths:
+      - .github/workflows/publish-v1.8.1.yml
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify release target and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: d43c69d3b22ca1b8fd58484b9d8d5d4328d599f8
+        run: |
+          set -euo pipefail
+          MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq '.sha')"
+          test "$MAIN_SHA" = "$TARGET_SHA"
+          VERSION="$(gh api "repos/${GITHUB_REPOSITORY}/contents/package.json?ref=${TARGET_SHA}" --jq '.content' | base64 -d | jq -r '.version')"
+          test "$VERSION" = "1.8.1"
+          if gh release view v1.8.1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'v1.8.1 already exists' >&2
+            exit 1
+          fi
+          gh release create v1.8.1 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$TARGET_SHA" \
+            --title "MIRA-TV v1.8.1" \
+            --notes $'Patch release focused on TV pairing resilience and mobile QR scanning.\n\n- pairing UI fits common TV viewports without clipping\n- persisted activation is checked before pairing UI is revealed\n- Service Worker setup no longer blocks Player bootstrap\n- temporary server/network failures keep cached Player output instead of opening pairing\n- activation is retained until Player starts successfully\n- repeated SPA visits to Connect TV rebind fresh DOM nodes\n- local jsQR loads reliably after mobile SPA navigation\n- absent Entity settings are safe in cached/offline Player\n- Chromium regressions cover repeated reloads, approval recovery, 503 fallback and 1280x720 / 1648x928 layouts\n\nFinal release-candidate CI: 32967906307 (3/3 green).'
