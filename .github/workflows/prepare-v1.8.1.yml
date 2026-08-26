@@ -1,0 +1,76 @@
+name: Prepare MIRA-TV v1.8.1
+
+on:
+  push:
+    branches:
+      - fix/v1.8.1-player-pairing-mobile-qr
+    paths:
+      - .github/workflows/prepare-v1.8.1.yml
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/v1.8.1-player-pairing-mobile-qr
+          fetch-depth: 0
+      - name: Prepare patch release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          package = Path('package.json')
+          text = package.read_text()
+          if '"version": "1.8.0"' not in text:
+              raise SystemExit('package.json version 1.8.0 not found')
+          package.write_text(text.replace('"version": "1.8.0"', '"version": "1.8.1"', 1))
+
+          lock = Path('package-lock.json')
+          text = lock.read_text()
+          if text.count('"version": "1.8.0"') < 2:
+              raise SystemExit('package-lock root versions not found')
+          lock.write_text(text.replace('"version": "1.8.0"', '"version": "1.8.1"', 2))
+
+          version_test = Path('tests/versioning.test.js')
+          text = version_test.read_text()
+          if "assert.equal(pkg.version, '1.8.0');" not in text:
+              raise SystemExit('version test 1.8.0 assertion not found')
+          version_test.write_text(text.replace("assert.equal(pkg.version, '1.8.0');", "assert.equal(pkg.version, '1.8.1');", 1))
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text()
+          heading = '## [1.8.1] - 2026-08-26'
+          if heading not in text:
+              notes = '''## [1.8.1] - 2026-08-26
+
+### Подключение ТВ
+- Экран подключения теперь всегда укладывается в высоту телевизора, включая 1648×928 и 1280×720: QR, резервный код и статус больше не уходят ниже viewport.
+- Player начинает загрузку с нейтрального скрытого состояния и не показывает pairing-карточку до проверки Device Session.
+- Сохранённая pending activation после reload проверяется немедленно; если администратор уже подтвердил ТВ, Player получает Device Session и открывает меню без промежуточного показа QR.
+
+### Мобильный QR-сканер
+- Локальный jsQR перенесён из статического `<head>` в lifecycle модуля `connect-tv`, поэтому fallback гарантированно загружается и при прямом открытии, и после SPA-навигации на телефоне.
+- BarcodeDetector остаётся приоритетным decoder, jsQR используется как локальный fallback без внешнего CDN.
+
+### Проверки
+- Добавлены Chromium-регрессии на загрузку jsQR после SPA-перехода, отсутствие pairing flash при одобренной pending activation и полное попадание карточки в TV viewport.
+
+'''
+              changelog.write_text(notes + text)
+          PY
+
+          rm .github/workflows/prepare-v1.8.1.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json tests/versioning.test.js CHANGELOG.md
+          git add -u .github/workflows/prepare-v1.8.1.yml
+          git commit -m 'Prepare MIRA-TV v1.8.1'
+          git push origin HEAD:fix/v1.8.1-player-pairing-mobile-qr
