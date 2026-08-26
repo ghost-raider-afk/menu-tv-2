@@ -1,0 +1,265 @@
+name: Apply v1.8.1 pairing and mobile QR fixes
+
+on:
+  push:
+    branches:
+      - fix/v1.8.1-player-pairing-mobile-qr
+    paths:
+      - .github/workflows/apply-v1.8.1-fixes.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout fix branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/v1.8.1-player-pairing-mobile-qr
+          fetch-depth: 0
+      - name: Apply root-cause fixes and regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'pattern not found in {path}: {old[:120]!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          replace_exact(
+              'src/web/admin-ui/public/connect-tv.html',
+              '    <script src="/vendor/jsQR.js" defer></script>\n',
+              ''
+          )
+
+          connect = Path('src/web/admin-ui/public/js/pages/connect-tv.js')
+          text = connect.read_text()
+          text = text.replace(
+              'let scanFrame = 0;\nlet lastScanAt = 0;\n',
+              "let scanFrame = 0;\nlet lastScanAt = 0;\nlet jsQrLoadPromise = null;\nconst JS_QR_SRC = '/vendor/jsQR.js';\n",
+              1
+          )
+          old_wait = '''async function waitForJsQr(timeoutMs = 2500) {
+            const deadline = performance.now() + timeoutMs;
+            while (performance.now() < deadline) {
+              const detector = jsQrDetector();
+              if (detector) return detector;
+              await new Promise((resolve) => setTimeout(resolve, 50));
+            }
+            return null;
+          }
+          '''
+          new_wait = '''async function ensureJsQr(timeoutMs = 5000) {
+            if (typeof window.jsQR === 'function') return true;
+            if (!jsQrLoadPromise) {
+              jsQrLoadPromise = new Promise((resolve) => {
+                const script = document.createElement('script');
+                script.src = JS_QR_SRC;
+                script.async = true;
+                script.dataset.miraJsqr = '1';
+                script.addEventListener('load', () => resolve(typeof window.jsQR === 'function'), { once: true });
+                script.addEventListener('error', () => resolve(false), { once: true });
+                document.head.append(script);
+              }).finally(() => {
+                if (typeof window.jsQR !== 'function') jsQrLoadPromise = null;
+              });
+            }
+            const timeout = new Promise((resolve) => setTimeout(() => resolve(typeof window.jsQR === 'function'), timeoutMs));
+            return Boolean(await Promise.race([jsQrLoadPromise, timeout]));
+          }
+          '''
+          if old_wait not in text:
+              raise SystemExit('waitForJsQr block not found')
+          text = text.replace(old_wait, new_wait, 1)
+          text = text.replace(
+              "  if (error?.message === 'decoder-unavailable') return 'QR decoder не загрузился: BarcodeDetector и window.jsQR недоступны.';",
+              "  if (error?.message === 'decoder-unavailable') return 'QR decoder не загрузился. Локальный jsQR недоступен, а BarcodeDetector не поддерживается браузером.';",
+              1
+          )
+          text = text.replace(
+              '    scanDetector = await nativeDetector() || await waitForJsQr();\n    if (!scanDetector) throw new Error(\'decoder-unavailable\');',
+              "    scanDetector = await nativeDetector();\n    if (!scanDetector && await ensureJsQr()) scanDetector = jsQrDetector();\n    if (!scanDetector) throw new Error('decoder-unavailable');",
+              1
+          )
+          text = text.replace(
+              'export function initialiseConnectTv() {\n  resetSelection();',
+              "export function initialiseConnectTv() {\n  resetSelection();\n  void ensureJsQr().catch((error) => console.warn('MIRA-TV local QR decoder preload failed', error));",
+              1
+          )
+          connect.write_text(text)
+
+          replace_exact(
+              'src/web/admin-ui/public/player.html',
+              '      <section class="activation-view" data-activation-view>\n',
+              '      <section class="activation-view is-hidden" data-activation-view>\n'
+          )
+
+          player = Path('src/web/admin-ui/public/js/player/player.js')
+          text = player.read_text()
+          text = text.replace(
+              'async function pollActivation(record) {\n',
+              'async function pollActivation(record, { revealPending = true } = {}) {\n',
+              1
+          )
+          text = text.replace(
+              "    activationStatus.textContent = 'Ожидание авторизации…';\n  } catch {\n    activationStatus.textContent = 'Нет связи с сервером. QR действует до окончания таймера.';\n  }\n  if (Date.parse(record.expires_at) > Date.now()) schedulePoll(record);",
+              "    if (!revealPending) showPairing(record);\n    else activationStatus.textContent = 'Ожидание авторизации…';\n  } catch {\n    if (!revealPending) showPairing(record);\n    activationStatus.textContent = 'Нет связи с сервером. QR действует до окончания таймера.';\n  }\n  if (Date.parse(record.expires_at) > Date.now()) schedulePoll(record);",
+              1
+          )
+          text = text.replace(
+              "  if (pending) {\n    rememberDeviceKey(pending.device_key);\n    showPairing(pending);\n    schedulePoll(pending);\n  } else {",
+              "  if (pending) {\n    rememberDeviceKey(pending.device_key);\n    await pollActivation(pending, { revealPending: false });\n  } else {",
+              1
+          )
+          player.write_text(text)
+
+          css = Path('src/web/admin-ui/public/css/player.css')
+          text = css.read_text()
+          text = text.replace(
+              '''.activation-view {
+            display: grid;
+            place-items: center;
+            padding: clamp(24px, 4vw, 64px);
+            background: radial-gradient(circle at 50% 15%, rgba(246, 201, 14, 0.11), transparent 30%), #090d14;
+          }
+
+          .activation-card {
+            width: min(92vw, 760px);
+            padding: clamp(28px, 4vw, 54px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 28px;
+            background: rgba(16, 24, 40, 0.94);
+            text-align: center;
+            box-shadow: 0 30px 90px rgba(0, 0, 0, 0.35);
+          }
+
+          .activation-eyebrow { margin: 0 0 10px; color: #f6c90e; font-size: clamp(15px, 1.7vw, 22px); font-weight: 800; letter-spacing: 0.18em; }
+          .activation-card h1 { margin: 0; font-size: clamp(32px, 4.2vw, 58px); line-height: 1.05; }
+          .activation-lead { margin: 18px 0 30px; color: #b8c0cc; font-size: clamp(17px, 2vw, 25px); }
+          .activation-button { min-width: min(100%, 320px); padding: 16px 26px; border: 0; border-radius: 14px; background: #f6c90e; color: #101317; font-weight: 800; cursor: pointer; }
+          .activation-button:focus-visible { outline: 4px solid rgba(246, 201, 14, 0.35); outline-offset: 4px; }
+          .activation-pairing { display: grid; justify-items: center; gap: 18px; margin-top: 26px; }
+          .activation-qr { width: min(50vh, 390px); aspect-ratio: 1; padding: 12px; border-radius: 18px; background: #fff; }
+          ''',
+              '''.activation-view {
+            display: grid;
+            place-items: center;
+            padding: clamp(10px, 2vh, 28px) clamp(14px, 3vw, 48px);
+            background: radial-gradient(circle at 50% 15%, rgba(246, 201, 14, 0.11), transparent 30%), #090d14;
+          }
+
+          .activation-card {
+            width: min(92vw, 760px);
+            max-height: calc(100dvh - clamp(20px, 4vh, 56px));
+            padding: clamp(18px, 2.8vh, 34px) clamp(24px, 3vw, 44px);
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 28px;
+            background: rgba(16, 24, 40, 0.94);
+            text-align: center;
+            box-shadow: 0 30px 90px rgba(0, 0, 0, 0.35);
+          }
+
+          .activation-eyebrow { margin: 0 0 clamp(4px, .8vh, 10px); color: #f6c90e; font-size: clamp(15px, 1.7vw, 22px); font-weight: 800; letter-spacing: 0.18em; }
+          .activation-card h1 { margin: 0; font-size: clamp(28px, 4vw, 50px); line-height: 1.04; }
+          .activation-lead { margin: clamp(8px, 1.5vh, 16px) 0 clamp(12px, 2vh, 22px); color: #b8c0cc; font-size: clamp(16px, 1.8vw, 23px); }
+          .activation-button { min-width: min(100%, 320px); padding: 13px 24px; border: 0; border-radius: 14px; background: #f6c90e; color: #101317; font-weight: 800; cursor: pointer; }
+          .activation-button:focus-visible { outline: 4px solid rgba(246, 201, 14, 0.35); outline-offset: 4px; }
+          .activation-pairing { display: grid; justify-items: center; gap: clamp(8px, 1.15vh, 14px); margin-top: clamp(12px, 1.8vh, 20px); }
+          .activation-qr { width: min(30vh, 320px, 58vw); aspect-ratio: 1; padding: 10px; border-radius: 18px; background: #fff; }
+          ''',
+              1
+          )
+          css.write_text(text)
+
+          mobile = Path('tests/browser/connect-tv-mobile.spec.js')
+          text = mobile.read_text()
+          text = text.replace(
+              "  await expect(page.locator('.ui-context')).toHaveClass(/is-collapsed/);\n\n  const scanStep",
+              "  await expect(page.locator('.ui-context')).toHaveClass(/is-collapsed/);\n  await expect.poll(() => page.evaluate(() => typeof window.jsQR)).toBe('function');\n  await expect(page.locator('script[data-mira-jsqr=\"1\"]')).toHaveCount(1);\n\n  const scanStep",
+              1
+          )
+          mobile.write_text(text)
+
+          resilience = Path('tests/browser/player-refresh-resilience.spec.js')
+          text = resilience.read_text()
+          text += '''
+
+          test('pending approval is probed before pairing UI can flash during player bootstrap', async ({ page }) => {
+            const activationId = '11111111-1111-4111-8111-111111111111';
+            await page.addInitScript(({ activationId }) => {
+              localStorage.setItem('tv-menu.device-activation.v2', JSON.stringify({
+                activation_id: activationId,
+                poll_secret: 'x'.repeat(40),
+                expires_at: new Date(Date.now() + 120000).toISOString(),
+                poll_interval_ms: 2000,
+                reserve_code: '123456',
+                qr_svg: '<svg viewBox="0 0 10 10"></svg>',
+                device_key: 'device-key-1234567890'
+              }));
+            }, { activationId });
+
+            await page.route('**/api/device/session', (route) => route.fulfill({
+              status: 401,
+              contentType: 'application/json',
+              body: JSON.stringify({ authorized: false })
+            }));
+            await page.route(`**/api/device/activations/${activationId}/status`, async (route) => {
+              await new Promise((resolve) => setTimeout(resolve, 450));
+              await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({ status: 'authorized', screen: { id: 1, name: 'ТВ 1' } })
+              });
+            });
+            await page.route('**/api/device/player-context', (route) => route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                screen: { id: 1, name: 'ТВ 1', resolution: '1920x1080', location_id: 1, location_name: 'Точка 1', location_number: 1 },
+                draft: { rows: [], settings: {}, revision: 1 },
+                products: [], packaging: [], animation: { enabled: false, profile: null }, entity: null, announcement: null,
+                refresh_interval_ms: 60000
+              })
+            }));
+
+            await page.goto('/player.html');
+            await page.waitForTimeout(180);
+            await expect(page.locator('[data-activation-view]')).toBeHidden();
+            await expect(page.locator('[data-tv-player]')).toBeVisible({ timeout: 3000 });
+            await expect(page.locator('[data-activation-view]')).toBeHidden();
+          });
+
+          test('pairing card stays fully inside common TV viewports', async ({ page }) => {
+            for (const viewport of [{ width: 1648, height: 928 }, { width: 1280, height: 720 }]) {
+              await page.setViewportSize(viewport);
+              await page.goto('/player.html');
+              await page.locator('[data-show-activation]').click();
+              await expect(page.locator('[data-activation-pairing]')).toBeVisible();
+              const box = await page.locator('.activation-card').boundingBox();
+              expect(box).toBeTruthy();
+              expect(box.y).toBeGreaterThanOrEqual(0);
+              expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
+              expect(box.x).toBeGreaterThanOrEqual(0);
+              expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
+            }
+          });
+          '''
+          resilience.write_text(text)
+          PY
+
+          rm .github/workflows/apply-v1.8.1-fixes.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/web/admin-ui/public/connect-tv.html src/web/admin-ui/public/js/pages/connect-tv.js src/web/admin-ui/public/player.html src/web/admin-ui/public/js/player/player.js src/web/admin-ui/public/css/player.css tests/browser/connect-tv-mobile.spec.js tests/browser/player-refresh-resilience.spec.js
+          git add -u .github/workflows/apply-v1.8.1-fixes.yml
+          git commit -m 'Fix player pairing bootstrap and mobile QR decoder'
+          git push origin HEAD:fix/v1.8.1-player-pairing-mobile-qr
