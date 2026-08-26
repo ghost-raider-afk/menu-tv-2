@@ -46,9 +46,14 @@ test('mobile TV pairing is styled after SPA navigation and keeps one active step
   const decoder = await page.request.get('/vendor/jsQR.js');
   expect(decoder.ok()).toBeTruthy();
 
-  await page.locator('.ui-context-body .app-route-link[href="/screens.html"]').click({ force: true });
+  await sectionTrigger.click();
+  await expect(sectionTrigger).toHaveAttribute('aria-expanded', 'true');
+  await page.locator('.ui-context-body .app-route-link[href="/screens.html"]').click();
   await expect(page).toHaveURL(/\/screens\.html$/);
-  await page.locator('.ui-context-body .app-route-link[href="/connect-tv.html"]').click({ force: true });
+  const returnTrigger = page.locator('[data-mobile-context-trigger]');
+  await returnTrigger.click();
+  await expect(returnTrigger).toHaveAttribute('aria-expanded', 'true');
+  await page.locator('.ui-context-body .app-route-link[href="/connect-tv.html"]').click();
   await expect(page).toHaveURL(/\/connect-tv\.html$/);
   await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
   await page.getByRole('button', { name: /ввести код/i }).first().click();

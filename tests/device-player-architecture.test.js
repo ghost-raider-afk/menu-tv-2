@@ -54,6 +54,12 @@ test('real TV player runs the continuous WASM Motion Engine and keeps it availab
   assert.match(player, /serviceWorker\.register\('\/player-sw\.js'/);
   assert.match(player, /void registerOfflinePlayer\(\)/);
   assert.doesNotMatch(player, /await registerOfflinePlayer\(\)/);
+  assert.match(player, /function keepNeutralBoot\(\)/);
+});
+
+test('scene entity normalization accepts an absent entity from player context', async () => {
+  const source = await read('src/web/admin-ui/public/js/motion/entity-editor.js');
+  assert.ok(source.includes("value = value && typeof value === 'object' ? value : {};"));
 });
 
 test('offline player caches Video Entity fully and serves byte ranges from cache', async () => {

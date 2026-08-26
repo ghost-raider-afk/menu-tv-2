@@ -196,6 +196,14 @@ function showPairingIntro() {
   setHidden(pairing, true);
 }
 
+function keepNeutralBoot() {
+  clearPairingTimers();
+  clearBootstrapRetry();
+  setHidden(activationView, true);
+  setHidden(player, true);
+  setHidden(playerMessage, true);
+}
+
 function showBootstrapUnavailable(text = 'Связь с сервером временно недоступна. Повторяем проверку…') {
   showActivationScreen();
   setActivationLead(text);
@@ -433,7 +441,7 @@ async function fetchPlayerContext(timeoutMs = 5000) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch('/api/device/player-context', { cache: 'no-store', signal: controller.signal });
-    if (response.status === 401) {
+    if (response.status === 401 || response.status === 403) {
       clearPlayerContext();
       return { unauthorized: true };
     }
@@ -540,7 +548,7 @@ async function bootstrapPlayer() {
     const pending = activationFromStorage();
     if (pending) {
       rememberDeviceKey(pending.device_key);
-      showBootstrapUnavailable('Проверяем ранее созданный код подключения…');
+      keepNeutralBoot();
       await pollActivation(pending, { revealPending: false });
       return;
     }
@@ -552,7 +560,7 @@ async function bootstrapPlayer() {
   const pending = activationFromStorage();
   if (pending) {
     rememberDeviceKey(pending.device_key);
-    showBootstrapUnavailable('Проверяем сохранённый код подключения…');
+    keepNeutralBoot();
     await pollActivation(pending, { revealPending: false });
     return;
   }
