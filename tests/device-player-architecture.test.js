@@ -104,13 +104,16 @@ test('admin connection flow is mobile-first and diagnoses iOS camera/decoder fai
   assert.match(page, /API\.deviceAuthorize/);
   assert.match(page, /BarcodeDetector/);
   assert.match(page, /window\.jsQR/);
+  assert.match(page, /const JS_QR_SRC = '\/vendor\/jsQR\.js'/);
+  assert.match(page, /ensureJsQr/);
+  assert.match(page, /document\.head\.append\(script\)/);
+  assert.doesNotMatch(html, /\/vendor\/jsQR\.js/);
   assert.match(page, /window\.isSecureContext/);
   assert.match(page, /facingMode:\s*\{ ideal: 'environment' \}/);
   assert.match(page, /video\.videoWidth/);
   assert.match(page, /requestAnimationFrame/);
   assert.match(page, /NotAllowedError/);
   assert.match(html, /data-scanner role="dialog" aria-modal="true"/);
-  assert.match(html, /\/vendor\/jsQR\.js/);
   assert.match(css, /\.connect-tv-scanner\{[\s\S]*position:fixed;[\s\S]*inset:0/);
 });
 
