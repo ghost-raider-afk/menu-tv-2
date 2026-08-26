@@ -1,26 +1,56 @@
 import { api } from '../core/api.js';
 import { API } from '../core/config.js';
 
-const message = document.querySelector('#connect-tv-message');
-const scanButton = document.querySelector('[data-start-scan]');
-const scanner = document.querySelector('[data-scanner]');
-const scannerClose = document.querySelector('[data-scanner-close]');
-const scannerCode = document.querySelector('[data-scanner-code]');
-const scannerStatus = document.querySelector('[data-scanner-status]');
-const video = document.querySelector('[data-camera]');
-const scanCanvas = document.querySelector('[data-scan-canvas]');
-const codeToggle = document.querySelector('[data-code-toggle]');
-const codePanel = document.querySelector('[data-code-panel]');
-const codeInput = document.querySelector('#connect-tv-code');
-const codeButton = document.querySelector('[data-use-code]');
-const deviceFound = document.querySelector('[data-device-found]');
-const locationStep = document.querySelector('[data-connect-step="location"]');
-const screenStep = document.querySelector('[data-connect-step="screen"]');
-const locationOptions = document.querySelector('[data-location-options]');
-const screenOptions = document.querySelector('[data-screen-options]');
-const authorizeButton = document.querySelector('[data-authorize]');
-const success = document.querySelector('[data-connect-success]');
-const successText = document.querySelector('[data-connect-success-text]');
+let message;
+let scanButton;
+let scanner;
+let scannerClose;
+let scannerCode;
+let scannerStatus;
+let video;
+let scanCanvas;
+let codeToggle;
+let codePanel;
+let codeInput;
+let codeButton;
+let deviceFound;
+let locationStep;
+let screenStep;
+let locationOptions;
+let screenOptions;
+let authorizeButton;
+let success;
+let successText;
+
+function bindDom() {
+  message = document.querySelector('#connect-tv-message');
+  scanButton = document.querySelector('[data-start-scan]');
+  scanner = document.querySelector('[data-scanner]');
+  scannerClose = document.querySelector('[data-scanner-close]');
+  scannerCode = document.querySelector('[data-scanner-code]');
+  scannerStatus = document.querySelector('[data-scanner-status]');
+  video = document.querySelector('[data-camera]');
+  scanCanvas = document.querySelector('[data-scan-canvas]');
+  codeToggle = document.querySelector('[data-code-toggle]');
+  codePanel = document.querySelector('[data-code-panel]');
+  codeInput = document.querySelector('#connect-tv-code');
+  codeButton = document.querySelector('[data-use-code]');
+  deviceFound = document.querySelector('[data-device-found]');
+  locationStep = document.querySelector('[data-connect-step="location"]');
+  screenStep = document.querySelector('[data-connect-step="screen"]');
+  locationOptions = document.querySelector('[data-location-options]');
+  screenOptions = document.querySelector('[data-screen-options]');
+  authorizeButton = document.querySelector('[data-authorize]');
+  success = document.querySelector('[data-connect-success]');
+  successText = document.querySelector('[data-connect-success-text]');
+}
+
+function releaseDom() {
+  message = scanButton = scanner = scannerClose = scannerCode = scannerStatus = null;
+  video = scanCanvas = codeToggle = codePanel = codeInput = codeButton = null;
+  deviceFound = locationStep = screenStep = locationOptions = screenOptions = null;
+  authorizeButton = success = successText = null;
+}
 
 let activationId = null;
 let locations = [];
@@ -33,6 +63,8 @@ let scannerRunning = false;
 let scanDetector = null;
 let scanFrame = 0;
 let lastScanAt = 0;
+let jsQrLoadPromise = null;
+const JS_QR_SRC = '/vendor/jsQR.js';
 
 function setMessage(text = '', error = false) {
   if (!message) return;
@@ -172,14 +204,23 @@ function jsQrDetector() {
   };
 }
 
-async function waitForJsQr(timeoutMs = 2500) {
-  const deadline = performance.now() + timeoutMs;
-  while (performance.now() < deadline) {
-    const detector = jsQrDetector();
-    if (detector) return detector;
-    await new Promise((resolve) => setTimeout(resolve, 50));
+async function ensureJsQr(timeoutMs = 5000) {
+  if (typeof window.jsQR === 'function') return true;
+  if (!jsQrLoadPromise) {
+    jsQrLoadPromise = new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = JS_QR_SRC;
+      script.async = true;
+      script.dataset.miraJsqr = '1';
+      script.addEventListener('load', () => resolve(typeof window.jsQR === 'function'), { once: true });
+      script.addEventListener('error', () => resolve(false), { once: true });
+      document.head.append(script);
+    }).finally(() => {
+      if (typeof window.jsQR !== 'function') jsQrLoadPromise = null;
+    });
   }
-  return null;
+  const timeout = new Promise((resolve) => setTimeout(() => resolve(typeof window.jsQR === 'function'), timeoutMs));
+  return Boolean(await Promise.race([jsQrLoadPromise, timeout]));
 }
 
 async function waitForVideoFrame(timeoutMs = 5000) {
@@ -205,7 +246,7 @@ async function openCamera() {
 }
 
 function scannerErrorText(error) {
-  if (error?.message === 'decoder-unavailable') return 'QR decoder не загрузился: BarcodeDetector и window.jsQR недоступны.';
+  if (error?.message === 'decoder-unavailable') return 'QR decoder не загрузился. Локальный jsQR недоступен, а BarcodeDetector не поддерживается браузером.';
   if (error?.message === 'video-not-ready') return 'Камера открыта, но Safari не выдал видеокадр для распознавания.';
   if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') return 'Доступ к камере запрещён. Разрешите камеру для MIRA-TV в настройках Safari.';
   if (error?.name === 'NotReadableError') return 'Камера занята другим приложением или вкладкой.';
@@ -243,7 +284,8 @@ async function startScanner() {
     video.srcObject = mediaStream;
     await video.play();
     await waitForVideoFrame();
-    scanDetector = await nativeDetector() || await waitForJsQr();
+    scanDetector = await nativeDetector();
+    if (!scanDetector && await ensureJsQr()) scanDetector = jsQrDetector();
     if (!scanDetector) throw new Error('decoder-unavailable');
     scannerRunning = true; lastScanAt = 0;
     const settings = mediaStream.getVideoTracks?.()[0]?.getSettings?.() || {};
@@ -287,7 +329,9 @@ async function authorize() {
 }
 
 export function initialiseConnectTv() {
+  bindDom();
   resetSelection();
+  void ensureJsQr().catch((error) => console.warn('MIRA-TV local QR decoder preload failed', error));
   scanButton?.addEventListener('click', () => void startScanner());
   scannerClose?.addEventListener('click', stopCamera);
   scannerCode?.addEventListener('click', () => { stopCamera(); codePanel?.classList.remove('is-hidden'); codeInput?.focus(); });
@@ -306,6 +350,7 @@ export function initialiseConnectTv() {
       window.removeEventListener('pagehide', onPageHide);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       stopCamera();
+      releaseDom();
     }
   };
 }

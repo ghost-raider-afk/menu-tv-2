@@ -11,7 +11,8 @@ function finite(value, fallback) { const number = Number(value); return Number.i
 function inferredAssetType(value) { return value?.asset_type === 'video' || /\.(?:mp4|webm)(?:$|\?)/i.test(value?.asset_url || '') ? 'video' : 'image'; }
 
 export function normaliseSceneEntity(value = {}) {
-  const transform = value?.transform || {};
+  value = value && typeof value === 'object' ? value : {};
+  const transform = value.transform || {};
   const assetType = inferredAssetType(value);
   const width = Math.max(0, Math.round(finite(value.width ?? value.asset_width, 0)));
   const height = Math.max(0, Math.round(finite(value.height ?? value.asset_height, 0)));

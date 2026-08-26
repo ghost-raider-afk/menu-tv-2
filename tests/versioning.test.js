@@ -15,7 +15,7 @@ test('MIRA-TV v1.8.0 release metadata is synchronized while legacy package ident
   const scriptVersion = installer.match(/^SCRIPT_VERSION="(\d+\.\d+\.\d+)"$/m)?.[1];
 
   assert.equal(pkg.name, 'menu-tv-2');
-  assert.equal(pkg.version, '1.8.0');
+  assert.equal(pkg.version, '1.8.1');
   assert.match(pkg.description, /MIRA-TV/);
   assert.equal(lock.version, pkg.version);
   assert.equal(lock.packages?.['']?.version, pkg.version);

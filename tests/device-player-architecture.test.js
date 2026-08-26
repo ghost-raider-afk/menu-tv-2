@@ -52,6 +52,14 @@ test('real TV player runs the continuous WASM Motion Engine and keeps it availab
   assert.match(playerCss, /transform-box:\s*fill-box/);
   assert.match(player, /showCachedPlayer/);
   assert.match(player, /serviceWorker\.register\('\/player-sw\.js'/);
+  assert.match(player, /void registerOfflinePlayer\(\)/);
+  assert.doesNotMatch(player, /await registerOfflinePlayer\(\)/);
+  assert.match(player, /function keepNeutralBoot\(\)/);
+});
+
+test('scene entity normalization accepts an absent entity from player context', async () => {
+  const source = await read('src/web/admin-ui/public/js/motion/entity-editor.js');
+  assert.ok(source.includes("value = value && typeof value === 'object' ? value : {};"));
 });
 
 test('offline player caches Video Entity fully and serves byte ranges from cache', async () => {
@@ -104,13 +112,19 @@ test('admin connection flow is mobile-first and diagnoses iOS camera/decoder fai
   assert.match(page, /API\.deviceAuthorize/);
   assert.match(page, /BarcodeDetector/);
   assert.match(page, /window\.jsQR/);
+  assert.match(page, /const JS_QR_SRC = '\/vendor\/jsQR\.js'/);
+  assert.match(page, /ensureJsQr/);
+  assert.match(page, /document\.head\.append\(script\)/);
+  assert.match(page, /function bindDom\(\)/);
+  assert.match(page, /function releaseDom\(\)/);
+  assert.doesNotMatch(page, /const scanButton = document\.querySelector/);
+  assert.doesNotMatch(html, /\/vendor\/jsQR\.js/);
   assert.match(page, /window\.isSecureContext/);
   assert.match(page, /facingMode:\s*\{ ideal: 'environment' \}/);
   assert.match(page, /video\.videoWidth/);
   assert.match(page, /requestAnimationFrame/);
   assert.match(page, /NotAllowedError/);
   assert.match(html, /data-scanner role="dialog" aria-modal="true"/);
-  assert.match(html, /\/vendor\/jsQR\.js/);
   assert.match(css, /\.connect-tv-scanner\{[\s\S]*position:fixed;[\s\S]*inset:0/);
 });
 

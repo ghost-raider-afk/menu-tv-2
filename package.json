@@ -1,6 +1,6 @@
 {
   "name": "menu-tv-2",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "private": true,
   "description": "MIRA-TV administration and TV player application",
   "type": "module",
