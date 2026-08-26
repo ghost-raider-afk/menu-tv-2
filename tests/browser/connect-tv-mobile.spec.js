@@ -46,6 +46,14 @@ test('mobile TV pairing is styled after SPA navigation and keeps one active step
   const decoder = await page.request.get('/vendor/jsQR.js');
   expect(decoder.ok()).toBeTruthy();
 
+  await page.locator('.ui-context-body .app-route-link[href="/screens.html"]').click({ force: true });
+  await expect(page).toHaveURL(/\/screens\.html$/);
+  await page.locator('.ui-context-body .app-route-link[href="/connect-tv.html"]').click({ force: true });
+  await expect(page).toHaveURL(/\/connect-tv\.html$/);
+  await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
+  await page.getByRole('button', { name: /ввести код/i }).first().click();
+  await expect(page.getByLabel('6-значный резервный код')).toBeVisible();
+
   const scanner = page.locator('[data-scanner]');
   await scanner.evaluate((element) => element.classList.remove('is-hidden'));
   await expect(scanner).toBeVisible();

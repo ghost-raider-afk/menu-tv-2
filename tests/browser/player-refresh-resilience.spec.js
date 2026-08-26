@@ -88,6 +88,36 @@ test('pending approval is probed before pairing UI can flash during player boots
   }
 });
 
+test('temporary session server errors keep cached Player visible instead of revealing pairing', async ({ browser }) => {
+  const context = await browser.newContext({ baseURL, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  try {
+    await page.addInitScript(() => {
+      localStorage.setItem('tv-menu.player-context.v1', JSON.stringify({
+        saved_at: new Date().toISOString(),
+        context: {
+          screen: { id: 1, name: 'ТВ 1', resolution: '1920x1080', location_id: 1, location_name: 'Точка 1', location_number: 1 },
+          draft: { rows: [], settings: {}, revision: 1 },
+          products: [], packaging: [], animation: { enabled: false, profile: null },
+          entity: null, announcement: null, brand: null, aquarium: null,
+          refresh_interval_ms: 60000
+        }
+      }));
+    });
+    await page.route('**/api/device/session', (route) => route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'temporary' })
+    }));
+    await page.goto('/player.html');
+    await expect(page.locator('[data-tv-player]')).toBeVisible();
+    await expect(page.locator('[data-activation-view]')).toBeHidden();
+    await expect(page.locator('[data-player-message]')).toContainText('последней сохранённой версии');
+  } finally {
+    await context.close();
+  }
+});
+
 test('pairing card stays fully inside common TV viewports', async ({ browser }) => {
   for (const viewport of [{ width: 1648, height: 928 }, { width: 1280, height: 720 }]) {
     const context = await browser.newContext({ baseURL, viewport, serviceWorkers: 'block' });
@@ -110,12 +140,24 @@ test('pairing card stays fully inside common TV viewports', async ({ browser }) 
         if (code) code.textContent = '911 487';
       });
       await expect(page.locator('[data-activation-pairing]')).toBeVisible();
-      const box = await page.locator('.activation-card').boundingBox();
-      expect(box).toBeTruthy();
-      expect(box.y).toBeGreaterThanOrEqual(0);
-      expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
-      expect(box.x).toBeGreaterThanOrEqual(0);
-      expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
+      for (const selector of [
+        '.activation-card',
+        '[data-show-activation]',
+        '[data-activation-qr]',
+        '[data-reserve-code]',
+        '[data-activation-expiry]',
+        '[data-activation-status]',
+        '.activation-hint'
+      ]) {
+        const locator = page.locator(selector);
+        await expect(locator).toBeVisible();
+        const box = await locator.boundingBox();
+        expect(box, selector).toBeTruthy();
+        expect(box.y, selector).toBeGreaterThanOrEqual(0);
+        expect(box.y + box.height, selector).toBeLessThanOrEqual(viewport.height + 1);
+        expect(box.x, selector).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width, selector).toBeLessThanOrEqual(viewport.width + 1);
+      }
     } finally {
       await context.close();
     }

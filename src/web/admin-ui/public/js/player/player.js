@@ -19,6 +19,7 @@ const qrContainer = document.querySelector('[data-activation-qr]');
 const reserveCode = document.querySelector('[data-reserve-code]');
 const activationExpiry = document.querySelector('[data-activation-expiry]');
 const activationStatus = document.querySelector('[data-activation-status]');
+const activationLead = document.querySelector('.activation-lead');
 const player = document.querySelector('[data-tv-player]');
 const playerStage = document.querySelector('[data-player-stage]');
 const playerMessage = document.querySelector('[data-player-message]');
@@ -31,6 +32,7 @@ let refreshTimer = null;
 let wakeLock = null;
 let playerRefreshMs = 5000;
 let activationRequestInFlight = false;
+let bootstrapRetryTimer = null;
 
 function setHidden(element, hidden) {
   element?.classList.toggle('is-hidden', hidden);
@@ -130,6 +132,15 @@ function clearPairingTimers() {
   rotationRetryTimer = null;
 }
 
+function clearBootstrapRetry() {
+  if (bootstrapRetryTimer) clearTimeout(bootstrapRetryTimer);
+  bootstrapRetryTimer = null;
+}
+
+function setActivationLead(text) {
+  if (activationLead) activationLead.textContent = text;
+}
+
 function invalidatePairing(text = 'Обновляем код подключения…') {
   qrContainer.innerHTML = '';
   reserveCode.textContent = '—— ——';
@@ -174,6 +185,29 @@ function showActivationScreen() {
   setHidden(playerMessage, true);
 }
 
+function showPairingIntro() {
+  clearPairingTimers();
+  clearBootstrapRetry();
+  showActivationScreen();
+  setActivationLead('Этот телевизор ещё не авторизован.');
+  showActivationButton.textContent = 'Показать QR-код';
+  showActivationButton.disabled = false;
+  setHidden(showActivationButton, false);
+  setHidden(pairing, true);
+}
+
+function showBootstrapUnavailable(text = 'Связь с сервером временно недоступна. Повторяем проверку…') {
+  showActivationScreen();
+  setActivationLead(text);
+  setHidden(pairing, true);
+  setHidden(showActivationButton, true);
+}
+
+function scheduleBootstrapRetry(delay = 3000) {
+  clearBootstrapRetry();
+  bootstrapRetryTimer = setTimeout(() => void bootstrapPlayer(), delay);
+}
+
 function startExpiryCountdown(record) {
   if (expiryTimer) clearInterval(expiryTimer);
   let rotationStarted = false;
@@ -196,7 +230,10 @@ function startExpiryCountdown(record) {
 }
 
 function showPairing(record) {
+  clearBootstrapRetry();
   showActivationScreen();
+  setActivationLead('Этот телевизор ещё не авторизован.');
+  setHidden(showActivationButton, false);
   qrContainer.innerHTML = record.qr_svg;
   reserveCode.textContent = formatReserveCode(record.reserve_code);
   activationStatus.textContent = 'Ожидание авторизации…';
@@ -205,10 +242,10 @@ function showPairing(record) {
   startExpiryCountdown(record);
 }
 
-function schedulePoll(record) {
+function schedulePoll(record, options = {}) {
   if (pollTimer) clearTimeout(pollTimer);
   const delay = Math.max(1000, Number(record.poll_interval_ms) || 2000);
-  pollTimer = setTimeout(() => void pollActivation(record), delay);
+  pollTimer = setTimeout(() => void pollActivation(record, options), delay);
 }
 
 async function pollActivation(record, { revealPending = true } = {}) {
@@ -220,30 +257,44 @@ async function pollActivation(record, { revealPending = true } = {}) {
     });
     if (response.status === 410 || response.status === 404) {
       clearActivation();
-      invalidatePairing();
+      if (revealPending) invalidatePairing();
+      else showBootstrapUnavailable('Код подключения истёк. Создаём новый…');
       await createActivation({ automatic: true });
       return;
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const body = await response.json();
     if (body.status === 'authorized') {
-      clearActivation();
       clearPairingTimers();
       activationStatus.textContent = 'Авторизовано. Запускаем MIRA-TV…';
-      await loadPlayer();
+      const started = await loadPlayer({ fallbackToActivation: false });
+      if (started) {
+        clearActivation();
+        clearBootstrapRetry();
+        return;
+      }
+      showBootstrapUnavailable('Авторизация получена. Завершаем подключение…');
+      schedulePoll(record, { revealPending: false });
       return;
     }
     if (!revealPending) showPairing(record);
     else activationStatus.textContent = 'Ожидание авторизации…';
-  } catch {
-    if (!revealPending) showPairing(record);
-    activationStatus.textContent = 'Нет связи с сервером. QR действует до окончания таймера.';
+  } catch (error) {
+    console.warn('TV activation poll failed', error);
+    if (revealPending) {
+      activationStatus.textContent = 'Нет связи с сервером. QR действует до окончания таймера.';
+    } else {
+      showBootstrapUnavailable('Проверяем сохранённое подключение…');
+    }
   }
-  if (Date.parse(record.expires_at) > Date.now()) schedulePoll(record);
+  if (Date.parse(record.expires_at) > Date.now()) schedulePoll(record, { revealPending });
 }
 
 async function createActivation({ automatic = false } = {}) {
   if (activationRequestInFlight) return;
+  clearBootstrapRetry();
+  setActivationLead('Этот телевизор ещё не авторизован.');
+  setHidden(showActivationButton, false);
   const previous = activationFromStorage();
   activationRequestInFlight = true;
   if (pollTimer) clearTimeout(pollTimer);
@@ -282,6 +333,8 @@ async function createActivation({ automatic = false } = {}) {
       return;
     }
 
+    showActivationScreen();
+    setHidden(showActivationButton, false);
     setHidden(pairing, false);
     if (error?.status === 429) {
       const delay = Math.max(1, Number(error.retryAfterSeconds) || 5);
@@ -362,6 +415,19 @@ function schedulePlayerRefresh() {
   refreshTimer = setTimeout(() => void refreshPlayer(), playerRefreshMs);
 }
 
+async function fetchDeviceSession(timeoutMs = 3500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch('/api/device/session', { cache: 'no-store', signal: controller.signal });
+    if (response.status === 401 || response.status === 403) return { unauthorized: true };
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return { session: await response.json().catch(() => null) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchPlayerContext(timeoutMs = 5000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -398,9 +464,7 @@ async function refreshPlayer() {
     const result = await fetchPlayerContext();
     if (result.unauthorized) {
       clearActivation();
-      showActivationScreen();
-      setHidden(pairing, true);
-      showActivationButton.textContent = 'Показать QR-код';
+      showPairingIntro();
       return;
     }
     renderPlayerContext(result.context);
@@ -413,12 +477,12 @@ async function refreshPlayer() {
   schedulePlayerRefresh();
 }
 
-async function loadPlayer() {
+async function loadPlayer({ fallbackToActivation = true } = {}) {
   clearPairingTimers();
   try {
     const result = await fetchPlayerContext();
     if (result.unauthorized) {
-      showActivationScreen();
+      if (fallbackToActivation) showPairingIntro();
       return false;
     }
     renderPlayerContext(result.context);
@@ -432,7 +496,7 @@ async function loadPlayer() {
     console.error('TV player could not start online', error);
     const cached = cachedPlayerContext();
     if (showCachedPlayer(cached)) return true;
-    showActivationScreen();
+    if (fallbackToActivation) showPairingIntro();
     return false;
   }
 }
@@ -447,32 +511,61 @@ async function registerOfflinePlayer() {
   }
 }
 
+async function bootstrapPlayer() {
+  clearBootstrapRetry();
+  try {
+    const result = await fetchDeviceSession();
+    if (!result.unauthorized) {
+      rememberDeviceKey(result.session?.device_key);
+      const started = await loadPlayer({ fallbackToActivation: false });
+      if (started) {
+        clearActivation();
+        return;
+      }
+      const pending = activationFromStorage();
+      if (pending) {
+        rememberDeviceKey(pending.device_key);
+        showBootstrapUnavailable('Завершаем авторизацию телевизора…');
+        await pollActivation(pending, { revealPending: false });
+        return;
+      }
+      showBootstrapUnavailable('Проверяем привязку телевизора…');
+      scheduleBootstrapRetry();
+      return;
+    }
+    clearPlayerContext();
+  } catch (error) {
+    console.warn('TV session bootstrap failed', error);
+    if (showCachedPlayer(cachedPlayerContext())) return;
+    const pending = activationFromStorage();
+    if (pending) {
+      rememberDeviceKey(pending.device_key);
+      showBootstrapUnavailable('Проверяем ранее созданный код подключения…');
+      await pollActivation(pending, { revealPending: false });
+      return;
+    }
+    showBootstrapUnavailable();
+    scheduleBootstrapRetry();
+    return;
+  }
+
+  const pending = activationFromStorage();
+  if (pending) {
+    rememberDeviceKey(pending.device_key);
+    showBootstrapUnavailable('Проверяем сохранённый код подключения…');
+    await pollActivation(pending, { revealPending: false });
+    return;
+  }
+  showPairingIntro();
+}
+
 async function initialisePlayer() {
   showActivationButton.addEventListener('click', () => void createActivation());
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') void requestWakeLock();
   });
-  await registerOfflinePlayer();
-  try {
-    const response = await fetch('/api/device/session', { cache: 'no-store' });
-    if (response.ok) {
-      const session = await response.json().catch(() => null);
-      rememberDeviceKey(session?.device_key);
-      await loadPlayer();
-      return;
-    }
-    if (response.status === 401) clearPlayerContext();
-  } catch {
-    if (showCachedPlayer(cachedPlayerContext())) return;
-  }
-  const pending = activationFromStorage();
-  if (pending) {
-    rememberDeviceKey(pending.device_key);
-    await pollActivation(pending, { revealPending: false });
-  } else {
-    showActivationScreen();
-    setHidden(pairing, true);
-  }
+  void registerOfflinePlayer();
+  await bootstrapPlayer();
 }
 
 void initialisePlayer();

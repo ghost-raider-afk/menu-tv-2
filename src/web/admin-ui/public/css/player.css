@@ -26,9 +26,9 @@ button { font: inherit; }
 
 .activation-card {
   width: min(92vw, 760px);
+  max-height: calc(100vh - clamp(20px, 4vh, 56px));
   max-height: calc(100dvh - clamp(20px, 4vh, 56px));
   padding: clamp(18px, 2.8vh, 34px) clamp(24px, 3vw, 44px);
-  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 28px;
   background: rgba(16, 24, 40, 0.94);

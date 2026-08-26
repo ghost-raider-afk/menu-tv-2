@@ -52,6 +52,8 @@ test('real TV player runs the continuous WASM Motion Engine and keeps it availab
   assert.match(playerCss, /transform-box:\s*fill-box/);
   assert.match(player, /showCachedPlayer/);
   assert.match(player, /serviceWorker\.register\('\/player-sw\.js'/);
+  assert.match(player, /void registerOfflinePlayer\(\)/);
+  assert.doesNotMatch(player, /await registerOfflinePlayer\(\)/);
 });
 
 test('offline player caches Video Entity fully and serves byte ranges from cache', async () => {
@@ -107,6 +109,9 @@ test('admin connection flow is mobile-first and diagnoses iOS camera/decoder fai
   assert.match(page, /const JS_QR_SRC = '\/vendor\/jsQR\.js'/);
   assert.match(page, /ensureJsQr/);
   assert.match(page, /document\.head\.append\(script\)/);
+  assert.match(page, /function bindDom\(\)/);
+  assert.match(page, /function releaseDom\(\)/);
+  assert.doesNotMatch(page, /const scanButton = document\.querySelector/);
   assert.doesNotMatch(html, /\/vendor\/jsQR\.js/);
   assert.match(page, /window\.isSecureContext/);
   assert.match(page, /facingMode:\s*\{ ideal: 'environment' \}/);

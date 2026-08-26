@@ -1,26 +1,56 @@
 import { api } from '../core/api.js';
 import { API } from '../core/config.js';
 
-const message = document.querySelector('#connect-tv-message');
-const scanButton = document.querySelector('[data-start-scan]');
-const scanner = document.querySelector('[data-scanner]');
-const scannerClose = document.querySelector('[data-scanner-close]');
-const scannerCode = document.querySelector('[data-scanner-code]');
-const scannerStatus = document.querySelector('[data-scanner-status]');
-const video = document.querySelector('[data-camera]');
-const scanCanvas = document.querySelector('[data-scan-canvas]');
-const codeToggle = document.querySelector('[data-code-toggle]');
-const codePanel = document.querySelector('[data-code-panel]');
-const codeInput = document.querySelector('#connect-tv-code');
-const codeButton = document.querySelector('[data-use-code]');
-const deviceFound = document.querySelector('[data-device-found]');
-const locationStep = document.querySelector('[data-connect-step="location"]');
-const screenStep = document.querySelector('[data-connect-step="screen"]');
-const locationOptions = document.querySelector('[data-location-options]');
-const screenOptions = document.querySelector('[data-screen-options]');
-const authorizeButton = document.querySelector('[data-authorize]');
-const success = document.querySelector('[data-connect-success]');
-const successText = document.querySelector('[data-connect-success-text]');
+let message;
+let scanButton;
+let scanner;
+let scannerClose;
+let scannerCode;
+let scannerStatus;
+let video;
+let scanCanvas;
+let codeToggle;
+let codePanel;
+let codeInput;
+let codeButton;
+let deviceFound;
+let locationStep;
+let screenStep;
+let locationOptions;
+let screenOptions;
+let authorizeButton;
+let success;
+let successText;
+
+function bindDom() {
+  message = document.querySelector('#connect-tv-message');
+  scanButton = document.querySelector('[data-start-scan]');
+  scanner = document.querySelector('[data-scanner]');
+  scannerClose = document.querySelector('[data-scanner-close]');
+  scannerCode = document.querySelector('[data-scanner-code]');
+  scannerStatus = document.querySelector('[data-scanner-status]');
+  video = document.querySelector('[data-camera]');
+  scanCanvas = document.querySelector('[data-scan-canvas]');
+  codeToggle = document.querySelector('[data-code-toggle]');
+  codePanel = document.querySelector('[data-code-panel]');
+  codeInput = document.querySelector('#connect-tv-code');
+  codeButton = document.querySelector('[data-use-code]');
+  deviceFound = document.querySelector('[data-device-found]');
+  locationStep = document.querySelector('[data-connect-step="location"]');
+  screenStep = document.querySelector('[data-connect-step="screen"]');
+  locationOptions = document.querySelector('[data-location-options]');
+  screenOptions = document.querySelector('[data-screen-options]');
+  authorizeButton = document.querySelector('[data-authorize]');
+  success = document.querySelector('[data-connect-success]');
+  successText = document.querySelector('[data-connect-success-text]');
+}
+
+function releaseDom() {
+  message = scanButton = scanner = scannerClose = scannerCode = scannerStatus = null;
+  video = scanCanvas = codeToggle = codePanel = codeInput = codeButton = null;
+  deviceFound = locationStep = screenStep = locationOptions = screenOptions = null;
+  authorizeButton = success = successText = null;
+}
 
 let activationId = null;
 let locations = [];
@@ -299,6 +329,7 @@ async function authorize() {
 }
 
 export function initialiseConnectTv() {
+  bindDom();
   resetSelection();
   void ensureJsQr().catch((error) => console.warn('MIRA-TV local QR decoder preload failed', error));
   scanButton?.addEventListener('click', () => void startScanner());
@@ -319,6 +350,7 @@ export function initialiseConnectTv() {
       window.removeEventListener('pagehide', onPageHide);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       stopCamera();
+      releaseDom();
     }
   };
 }
