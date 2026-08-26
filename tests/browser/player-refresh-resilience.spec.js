@@ -29,63 +29,104 @@ test('pending TV pairing survives repeated player reloads without creating new a
   expect(activationPosts).toBe(1);
 });
 
-
-test('pending approval is probed before pairing UI can flash during player bootstrap', async ({ page }) => {
+test('pending approval is probed before pairing UI can flash during player bootstrap', async ({ browser }) => {
   const activationId = '11111111-1111-4111-8111-111111111111';
-  await page.addInitScript(({ activationId }) => {
-    localStorage.setItem('tv-menu.device-activation.v2', JSON.stringify({
-      activation_id: activationId,
-      poll_secret: 'x'.repeat(40),
-      expires_at: new Date(Date.now() + 120000).toISOString(),
-      poll_interval_ms: 2000,
-      reserve_code: '123456',
-      qr_svg: '<svg viewBox="0 0 10 10"></svg>',
-      device_key: 'device-key-1234567890'
-    }));
-  }, { activationId });
+  const context = await browser.newContext({ serviceWorkers: 'block' });
+  const page = await context.newPage();
+  try {
+    await page.addInitScript(({ activationId }) => {
+      localStorage.setItem('tv-menu.device-activation.v2', JSON.stringify({
+        activation_id: activationId,
+        poll_secret: 'x'.repeat(40),
+        expires_at: new Date(Date.now() + 120000).toISOString(),
+        poll_interval_ms: 2000,
+        reserve_code: '123456',
+        qr_svg: '<svg viewBox="0 0 10 10"></svg>',
+        device_key: 'device-key-1234567890'
+      }));
+    }, { activationId });
 
-  await page.route('**/api/device/session', (route) => route.fulfill({
-    status: 401,
-    contentType: 'application/json',
-    body: JSON.stringify({ authorized: false })
-  }));
-  await page.route(`**/api/device/activations/${activationId}/status`, async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 450));
-    await route.fulfill({
+    await page.route('**/api/device/session', (route) => route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({ authorized: false })
+    }));
+    await page.route(`**/api/device/activations/${activationId}/status`, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'authorized', screen: { id: 1, name: 'ТВ 1' } })
+      });
+    });
+    await page.route('**/api/device/player-context', (route) => route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ status: 'authorized', screen: { id: 1, name: 'ТВ 1' } })
-    });
-  });
-  await page.route('**/api/device/player-context', (route) => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({
-      screen: { id: 1, name: 'ТВ 1', resolution: '1920x1080', location_id: 1, location_name: 'Точка 1', location_number: 1 },
-      draft: { rows: [], settings: {}, revision: 1 },
-      products: [], packaging: [], animation: { enabled: false, profile: null }, entity: null, announcement: null,
-      refresh_interval_ms: 60000
-    })
-  }));
+      body: JSON.stringify({
+        screen: { id: 1, name: 'ТВ 1', resolution: '1920x1080', location_id: 1, location_name: 'Точка 1', location_number: 1 },
+        draft: { rows: [], settings: {}, revision: 1 },
+        products: [],
+        packaging: [],
+        animation: { enabled: false, profile: null },
+        entity: null,
+        announcement: null,
+        brand: null,
+        aquarium: null,
+        refresh_interval_ms: 60000
+      })
+    }));
 
-  await page.goto('/player.html');
-  await page.waitForTimeout(180);
-  await expect(page.locator('[data-activation-view]')).toBeHidden();
-  await expect(page.locator('[data-tv-player]')).toBeVisible({ timeout: 3000 });
-  await expect(page.locator('[data-activation-view]')).toBeHidden();
+    await page.goto('/player.html');
+    await page.waitForTimeout(180);
+    await expect(page.locator('[data-activation-view]')).toBeHidden();
+    await expect(page.locator('[data-tv-player]')).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('[data-activation-view]')).toBeHidden();
+  } finally {
+    await context.close();
+  }
 });
 
-test('pairing card stays fully inside common TV viewports', async ({ page }) => {
+test('pairing card stays fully inside common TV viewports', async ({ browser }) => {
   for (const viewport of [{ width: 1648, height: 928 }, { width: 1280, height: 720 }]) {
-    await page.setViewportSize(viewport);
-    await page.goto('/player.html');
-    await page.locator('[data-show-activation]').click();
-    await expect(page.locator('[data-activation-pairing]')).toBeVisible();
-    const box = await page.locator('.activation-card').boundingBox();
-    expect(box).toBeTruthy();
-    expect(box.y).toBeGreaterThanOrEqual(0);
-    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
-    expect(box.x).toBeGreaterThanOrEqual(0);
-    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
+    const context = await browser.newContext({ viewport, serviceWorkers: 'block' });
+    const page = await context.newPage();
+    try {
+      const activation = {
+        activation_id: `11111111-1111-4111-8111-${String(viewport.width).padStart(12, '0')}`,
+        poll_secret: 'x'.repeat(40),
+        expires_at: new Date(Date.now() + 120000).toISOString(),
+        poll_interval_ms: 60000,
+        reserve_code: '911487',
+        qr_svg: '<svg viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10" fill="white"/><rect x="1" y="1" width="8" height="8" fill="black"/></svg>',
+        device_key: 'device-key-viewport-test'
+      };
+      await page.route('**/api/device/session', (route) => route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ authorized: false })
+      }));
+      await page.route('**/api/device/activations', (route) => route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(activation)
+      }));
+      await page.route(`**/api/device/activations/${activation.activation_id}/status`, (route) => route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'pending', expires_at: activation.expires_at })
+      }));
+
+      await page.goto('/player.html');
+      await page.locator('[data-show-activation]').click();
+      await expect(page.locator('[data-activation-pairing]')).toBeVisible();
+      const box = await page.locator('.activation-card').boundingBox();
+      expect(box).toBeTruthy();
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
+    } finally {
+      await context.close();
+    }
   }
 });
