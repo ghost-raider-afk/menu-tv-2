@@ -211,7 +211,7 @@ function schedulePoll(record) {
   pollTimer = setTimeout(() => void pollActivation(record), delay);
 }
 
-async function pollActivation(record) {
+async function pollActivation(record, { revealPending = true } = {}) {
   if (Date.parse(record.expires_at) <= Date.now()) return;
   try {
     const response = await fetch(`/api/device/activations/${encodeURIComponent(record.activation_id)}/status`, {
@@ -233,8 +233,10 @@ async function pollActivation(record) {
       await loadPlayer();
       return;
     }
-    activationStatus.textContent = 'Ожидание авторизации…';
+    if (!revealPending) showPairing(record);
+    else activationStatus.textContent = 'Ожидание авторизации…';
   } catch {
+    if (!revealPending) showPairing(record);
     activationStatus.textContent = 'Нет связи с сервером. QR действует до окончания таймера.';
   }
   if (Date.parse(record.expires_at) > Date.now()) schedulePoll(record);
@@ -466,8 +468,7 @@ async function initialisePlayer() {
   const pending = activationFromStorage();
   if (pending) {
     rememberDeviceKey(pending.device_key);
-    showPairing(pending);
-    schedulePoll(pending);
+    await pollActivation(pending, { revealPending: false });
   } else {
     showActivationScreen();
     setHidden(pairing, true);

@@ -26,6 +26,8 @@ test('mobile TV pairing is styled after SPA navigation and keeps one active step
   await expect(page).toHaveURL(/\/connect-tv\.html$/);
   await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
   await expect(page.locator('.ui-context')).toHaveClass(/is-collapsed/);
+  await expect.poll(() => page.evaluate(() => typeof window.jsQR)).toBe('function');
+  await expect(page.locator('script[data-mira-jsqr="1"]')).toHaveCount(1);
 
   const scanStep = page.locator('[data-connect-step="scan"]');
   const locationStep = page.locator('[data-connect-step="location"]');

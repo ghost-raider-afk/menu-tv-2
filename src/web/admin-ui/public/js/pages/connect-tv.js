@@ -33,6 +33,8 @@ let scannerRunning = false;
 let scanDetector = null;
 let scanFrame = 0;
 let lastScanAt = 0;
+let jsQrLoadPromise = null;
+const JS_QR_SRC = '/vendor/jsQR.js';
 
 function setMessage(text = '', error = false) {
   if (!message) return;
@@ -172,14 +174,23 @@ function jsQrDetector() {
   };
 }
 
-async function waitForJsQr(timeoutMs = 2500) {
-  const deadline = performance.now() + timeoutMs;
-  while (performance.now() < deadline) {
-    const detector = jsQrDetector();
-    if (detector) return detector;
-    await new Promise((resolve) => setTimeout(resolve, 50));
+async function ensureJsQr(timeoutMs = 5000) {
+  if (typeof window.jsQR === 'function') return true;
+  if (!jsQrLoadPromise) {
+    jsQrLoadPromise = new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = JS_QR_SRC;
+      script.async = true;
+      script.dataset.miraJsqr = '1';
+      script.addEventListener('load', () => resolve(typeof window.jsQR === 'function'), { once: true });
+      script.addEventListener('error', () => resolve(false), { once: true });
+      document.head.append(script);
+    }).finally(() => {
+      if (typeof window.jsQR !== 'function') jsQrLoadPromise = null;
+    });
   }
-  return null;
+  const timeout = new Promise((resolve) => setTimeout(() => resolve(typeof window.jsQR === 'function'), timeoutMs));
+  return Boolean(await Promise.race([jsQrLoadPromise, timeout]));
 }
 
 async function waitForVideoFrame(timeoutMs = 5000) {
@@ -205,7 +216,7 @@ async function openCamera() {
 }
 
 function scannerErrorText(error) {
-  if (error?.message === 'decoder-unavailable') return 'QR decoder не загрузился: BarcodeDetector и window.jsQR недоступны.';
+  if (error?.message === 'decoder-unavailable') return 'QR decoder не загрузился. Локальный jsQR недоступен, а BarcodeDetector не поддерживается браузером.';
   if (error?.message === 'video-not-ready') return 'Камера открыта, но Safari не выдал видеокадр для распознавания.';
   if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') return 'Доступ к камере запрещён. Разрешите камеру для MIRA-TV в настройках Safari.';
   if (error?.name === 'NotReadableError') return 'Камера занята другим приложением или вкладкой.';
@@ -243,7 +254,8 @@ async function startScanner() {
     video.srcObject = mediaStream;
     await video.play();
     await waitForVideoFrame();
-    scanDetector = await nativeDetector() || await waitForJsQr();
+    scanDetector = await nativeDetector();
+    if (!scanDetector && await ensureJsQr()) scanDetector = jsQrDetector();
     if (!scanDetector) throw new Error('decoder-unavailable');
     scannerRunning = true; lastScanAt = 0;
     const settings = mediaStream.getVideoTracks?.()[0]?.getSettings?.() || {};
@@ -288,6 +300,7 @@ async function authorize() {
 
 export function initialiseConnectTv() {
   resetSelection();
+  void ensureJsQr().catch((error) => console.warn('MIRA-TV local QR decoder preload failed', error));
   scanButton?.addEventListener('click', () => void startScanner());
   scannerClose?.addEventListener('click', stopCamera);
   scannerCode?.addEventListener('click', () => { stopCamera(); codePanel?.classList.remove('is-hidden'); codeInput?.focus(); });
