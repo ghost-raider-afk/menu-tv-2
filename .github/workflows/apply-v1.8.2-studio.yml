@@ -1,4 +1,4 @@
-name: Apply final v1.8.2 regression patch
+name: Finalize v1.8.2 branch
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  apply:
+  finalize:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
@@ -23,10 +23,11 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-      - name: Apply final regression fixes
+      - name: Finalize release metadata, visual regression and cleanup
         shell: bash
         run: |
           set -euo pipefail
+          npm version 1.8.2 --no-git-tag-version
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
 
@@ -36,69 +37,50 @@ jobs:
             fs.writeFileSync(path, source.replace(before, after));
           }
 
-          const settingsPath = 'src/db/settings.js';
+          const versioningPath = 'tests/versioning.test.js';
           replaceExact(
-            settingsPath,
-            `      const applied = [];\n      const now = isoNow();\n      const values = animationValues(settings);`,
-            `      const applied = [];\n      const values = animationValues(settings);`
+            versioningPath,
+            `test('MIRA-TV v1.8.0 release metadata is synchronized while legacy package identity remains compatible', async () => {`,
+            `test('MIRA-TV v1.8.2 release metadata is synchronized while legacy package identity remains compatible', async () => {`
           );
-          replaceExact(
-            settingsPath,
-            `           SELECT s.id, $2, $3, $4, $5, $6, $7, $8, $9, $10\n           FROM screens s WHERE s.id = $1`,
-            `           SELECT s.id, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP\n           FROM screens s WHERE s.id = $1`
-          );
-          replaceExact(
-            settingsPath,
-            `          [screenId, ...values, updatedBy, now]\n        );`,
-            `          [screenId, ...values, updatedBy]\n        );`
-          );
+          replaceExact(versioningPath, `assert.equal(pkg.version, '1.8.1');`, `assert.equal(pkg.version, '1.8.2');`);
 
-          const playerPath = 'src/web/admin-ui/public/js/player/player.js';
-          replaceExact(
-            playerPath,
-            `async function warmPlayerAssetCache(context) {\n  const assets = [\n    sameOriginAsset(context?.draft?.settings?.background_image_url),\n    sameOriginAsset(context?.entity?.asset_url)\n  ].filter(Boolean);\n  await Promise.all(assets.map((asset) => fetch(asset, { cache: 'reload' }).catch(() => undefined)));\n}\n\nfunction renderPlayerContext(context) {`,
-            `async function warmPlayerAssetCache(context) {\n  const assets = [\n    sameOriginAsset(context?.draft?.settings?.background_image_url),\n    sameOriginAsset(context?.entity?.asset_url)\n  ].filter(Boolean);\n  await Promise.all(assets.map((asset) => fetch(asset, { cache: 'reload' }).catch(() => undefined)));\n}\n\nfunction ensurePlayerLayer(className, attribute) {\n  let layer = playerStage.querySelector(\`[\${attribute}]\`);\n  if (layer instanceof HTMLElement) {\n    layer.classList.add(className);\n    return layer;\n  }\n  layer = document.createElement('div');\n  layer.className = className;\n  layer.setAttribute(attribute, '');\n  playerStage.append(layer);\n  return layer;\n}\n\nfunction renderPlayerContext(context) {`
-          );
-          replaceExact(
-            playerPath,
-            `  const layout = buildRenderLayout(model, lines);\n  playerStage.innerHTML = \`\n    <div class="tv-player-menu-layer">\${buildTableSvg(model, lines, layout)}</div>\n    <div class="tv-player-entity-layer" data-motion-entity-layer aria-hidden="true"></div>\n    <div class="tv-player-announcement-layer" data-announcement-layer aria-label="Объявление"></div>\`;\n  playerStage.style.backgroundColor = model.settings.background_color || '#101828';`,
-            `  const layout = buildRenderLayout(model, lines);\n  const menuLayer = ensurePlayerLayer('tv-player-menu-layer', 'data-player-menu-layer');\n  const entityLayer = ensurePlayerLayer('tv-player-entity-layer', 'data-motion-entity-layer');\n  const announcementLayer = ensurePlayerLayer('tv-player-announcement-layer', 'data-announcement-layer');\n  entityLayer.setAttribute('aria-hidden', 'true');\n  announcementLayer.setAttribute('aria-label', 'Объявление');\n  menuLayer.innerHTML = buildTableSvg(model, lines, layout);\n  playerStage.style.backgroundColor = model.settings.background_color || '#101828';`
-          );
-          replaceExact(
-            playerPath,
-            `  renderSceneEntity(playerStage, context.entity, { editable: false });\n  renderAnnouncementLayer(playerStage.querySelector('[data-announcement-layer]'), context.announcement);`,
-            `  renderSceneEntity(playerStage, context.entity, { editable: false });\n  renderAnnouncementLayer(announcementLayer, context.announcement);`
-          );
+          const changelogPath = 'CHANGELOG.md';
+          const changelog = fs.readFileSync(changelogPath, 'utf8');
+          if (!changelog.startsWith('## [1.8.1] - 2026-08-26')) throw new Error('Unexpected CHANGELOG head');
+          const releaseNotes = `## [1.8.2] - 2026-08-27\n\n### Motion Studio\n- Страница «Анимация» переработана в отдельный основной раздел: live-preview расположен слева, компактный inspector справа, настройки разделены на «Меню», «Текст» и «Сцена».\n- Рабочий Studio-пресет отделён от live-настроек телевизоров: «Сохранить пресет» не меняет работающие экраны, а «Применить к выбранным» обновляет только выбранные мониторы.\n- Добавлено массовое применение к отдельным мониторам или ко всем выбранным экранам; каждый монитор хранит собственный snapshot в screen_animation_settings.\n\n### Brand / Player\n- MIRA-TV остаётся названием приложения, но больше не навязывается как пользовательский Brand; Brand можно очистить или заменить произвольным названием.\n- Brand рендерится отдельными glyph-элементами и получил entrance, loop и exit эффекты со stagger, amplitude, overshoot и независимыми длительностями.\n- Player сохраняет overlay DOM между периодическими refresh, поэтому entrance-анимация неизменившегося Brand больше не запускается заново.\n\n### Совместимость и данные\n- TV Player читает per-monitor animation snapshot; новые мониторы получают текущий Studio-пресет, а клонирование монитора или торговой точки сохраняет snapshot исходного экрана.\n- При обновлении существующей установки прежняя глобальная анимация переносится в существующие мониторы; NULL brand_json / aquarium_json канонизируются в пустые объекты.\n- Entity assets не удаляются, пока остаются связанными хотя бы с одним монитором; сохранена совместимость со старыми TV-браузерами и prefers-reduced-motion.\n- Исправлена запись updated_at в screen_animation_settings: timestamp формируется базой данных как timestamptz вместо передачи нетипизированной строки.\n\n### Проверки\n- Добавлены регрессии на независимость Save/Apply, выборочное применение, сохранение animation snapshot при клонировании, per-monitor Player и отсутствие повторного Brand entrance при обычном refresh.\n- Browser gate дополнительно фиксирует двухколоночную компоновку Motion Studio и расположение действий внутри inspector.\n\n`;
+          fs.writeFileSync(changelogPath, releaseNotes + changelog);
 
-          const architecturePath = 'tests/device-player-architecture.test.js';
+          const browserPath = 'tests/browser/animation-studio.spec.js';
           replaceExact(
-            architecturePath,
-            `  assert.match(publicRoutes, /animation:\\s*\\{/);\n  assert.match(publicRoutes, /enabled: animationSettings\\?\\.enabled === true/);`,
-            `  assert.match(publicRoutes, /animation:\\s*\\{/);\n  assert.match(publicRoutes, /store\\.getScreenAnimationSettings\\(session\\.screen_id\\)/);\n  assert.doesNotMatch(publicRoutes, /store\\.getAnimationSettings\\(\\)/);\n  assert.match(publicRoutes, /enabled: animationSettings\\?\\.enabled === true/);`
+            browserPath,
+            `    await page.goto(\`/animation.html?screen=\${fixture.screenId}\`);\n    await expect(page.getByRole('heading', { name: 'Живое меню' })).toBeVisible();`,
+            `    await page.goto(\`/animation.html?screen=\${fixture.screenId}\`);\n    const previewPane = page.locator('.animation-preview-pane');\n    const inspector = page.locator('.animation-inspector');\n    const [previewBox, inspectorBox] = await Promise.all([previewPane.boundingBox(), inspector.boundingBox()]);\n    expect(previewBox).not.toBeNull();\n    expect(inspectorBox).not.toBeNull();\n    expect(previewBox.x).toBeLessThan(inspectorBox.x);\n    await expect(inspector.locator('.animation-inspector-tabs')).toContainText(['Меню', 'Текст', 'Сцена']);\n    await expect(inspector.locator('.animation-inspector-actions #animation-save')).toBeVisible();\n    await expect(inspector.locator('.animation-inspector-actions #animation-apply')).toBeVisible();\n    await expect(page.getByRole('heading', { name: 'Живое меню' })).toBeVisible();`
           );
-
-          const apiPath = 'tests/api.test.js';
-          const apiAnchor = `test('monitor draft, background, geometry and clone are independent per monitor', async () => {`;
-          const apiRegression = `test('animation preset save is isolated and apply changes only selected monitor snapshots', async () => {\n  const cookie = await adminCookie();\n  const original = await store.getAnimationSettings();\n  const location = await createLocation(cookie, 'Точка анимации');\n  const screenA = await createScreen(cookie, location.id);\n  const screenB = await createScreen(cookie, location.id);\n  const screenC = await createScreen(cookie, location.id);\n  const beforeB = await store.getScreenAnimationSettings(screenB.id);\n  const payload = (text) => ({\n    enabled: true, preset_id: original.preset_id, profile: original.profile, entity: original.entity,\n    announcement: original.announcement, brand: { ...original.brand, enabled: true, text }, aquarium: original.aquarium\n  });\n  try {\n    const saveResponse = await fetch(baseUrl + '/api/settings/animation', {\n      method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify(payload('SAVE ONLY'))\n    });\n    assert.equal(saveResponse.status, 200);\n    for (const screen of [screenA, screenB, screenC]) {\n      const live = await store.getScreenAnimationSettings(screen.id);\n      assert.notEqual(live.brand.text, 'SAVE ONLY');\n    }\n\n    const applyResponse = await fetch(baseUrl + '/api/settings/animation/apply', {\n      method: 'PUT', headers: jsonHeaders(cookie),\n      body: JSON.stringify({ screen_ids: [screenA.id, screenC.id], settings: payload('APPLIED SELECTED') })\n    });\n    assert.equal(applyResponse.status, 200);\n    const applied = await applyResponse.json();\n    assert.deepEqual([...applied.applied_screen_ids].sort((a, b) => a - b), [screenA.id, screenC.id].sort((a, b) => a - b));\n    const [liveA, liveB, liveC] = await Promise.all([\n      store.getScreenAnimationSettings(screenA.id), store.getScreenAnimationSettings(screenB.id), store.getScreenAnimationSettings(screenC.id)\n    ]);\n    assert.equal(liveA.brand.text, 'APPLIED SELECTED');\n    assert.equal(liveC.brand.text, 'APPLIED SELECTED');\n    assert.deepEqual(liveB.brand, beforeB.brand);\n  } finally {\n    await store.updateAnimationSettings({ ...original, updated_by: 'test' });\n  }\n});\n\ntest('monitor clone keeps source animation snapshot instead of current Studio preset', async () => {\n  const cookie = await adminCookie();\n  const original = await store.getAnimationSettings();\n  const location = await createLocation(cookie, 'Точка клона анимации');\n  const source = await createScreen(cookie, location.id);\n  const sourceSnapshot = { ...original, enabled: true, brand: { ...original.brand, enabled: true, text: 'SOURCE SNAPSHOT' } };\n  try {\n    await store.applyAnimationSettingsToScreens([source.id], sourceSnapshot, 'test');\n    await store.updateAnimationSettings({\n      ...original, enabled: true, brand: { ...original.brand, enabled: true, text: 'CURRENT STUDIO' }, updated_by: 'test'\n    });\n    const clone = await createScreen(cookie, location.id, source.id);\n    const clonedAnimation = await store.getScreenAnimationSettings(clone.id);\n    assert.equal(clonedAnimation.brand.text, 'SOURCE SNAPSHOT');\n    assert.notEqual(clonedAnimation.brand.text, 'CURRENT STUDIO');\n  } finally {\n    await store.updateAnimationSettings({ ...original, updated_by: 'test' });\n  }\n});\n\ntest('location clone keeps each source monitor animation snapshot', async () => {\n  const cookie = await adminCookie();\n  const original = await store.getAnimationSettings();\n  const sourceLocation = await createLocation(cookie, 'Точка клона snapshots');\n  const sourceA = await createScreen(cookie, sourceLocation.id);\n  const sourceB = await createScreen(cookie, sourceLocation.id);\n  try {\n    await store.applyAnimationSettingsToScreens([sourceA.id], {\n      ...original, enabled: true, brand: { ...original.brand, enabled: true, text: 'SOURCE A' }\n    }, 'test');\n    await store.applyAnimationSettingsToScreens([sourceB.id], {\n      ...original, enabled: true, brand: { ...original.brand, enabled: true, text: 'SOURCE B' }\n    }, 'test');\n    await store.updateAnimationSettings({\n      ...original, enabled: true, brand: { ...original.brand, enabled: true, text: 'CURRENT STUDIO' }, updated_by: 'test'\n    });\n    const response = await fetch(baseUrl + '/api/locations/' + sourceLocation.id + '/clone', {\n      method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'Копия snapshots', address: '', active: true })\n    });\n    assert.equal(response.status, 201);\n    const clonedLocation = await response.json();\n    const allScreens = await store.listScreensByLocation(clonedLocation.id);\n    assert.equal(allScreens.length, 2);\n    const byNumber = new Map(allScreens.map((screen) => [Number(screen.location_number), screen]));\n    const clonedA = await store.getScreenAnimationSettings(byNumber.get(Number(sourceA.location_number)).id);\n    const clonedB = await store.getScreenAnimationSettings(byNumber.get(Number(sourceB.location_number)).id);\n    assert.equal(clonedA.brand.text, 'SOURCE A');\n    assert.equal(clonedB.brand.text, 'SOURCE B');\n  } finally {\n    await store.updateAnimationSettings({ ...original, updated_by: 'test' });\n  }\n});\n\n`;
-          replaceExact(apiPath, apiAnchor, apiRegression + apiAnchor);
-
-          const browserPath = 'tests/browser/player-refresh-resilience.spec.js';
-          const browserSource = fs.readFileSync(browserPath, 'utf8');
-          if (browserSource.includes("unchanged Brand keeps the same DOM across periodic Player refresh")) {
-            throw new Error('Brand refresh regression test already exists');
-          }
-          fs.writeFileSync(browserPath, browserSource + `\n\ntest('unchanged Brand keeps the same DOM across periodic Player refresh', async ({ browser }) => {\n  const context = await browser.newContext({ baseURL, serviceWorkers: 'block' });\n  const page = await context.newPage();\n  let playerContextRequests = 0;\n  try {\n    await page.route('**/api/device/session', (route) => route.fulfill({\n      status: 200, contentType: 'application/json',\n      body: JSON.stringify({\n        authorized: true, device_id: 1, device_key: 'device-key-refresh-123456',\n        session_expires_at: new Date(Date.now() + 86400000).toISOString(),\n        screen: { id: 1, name: 'ТВ 1', resolution: '1920x1080', location_id: 1, location_name: 'Точка 1', location_number: 1 }\n      })\n    }));\n    await page.route('**/api/device/player-context', (route) => {\n      playerContextRequests += 1;\n      return route.fulfill({\n        status: 200, contentType: 'application/json',\n        body: JSON.stringify({\n          screen: { id: 1, name: 'ТВ 1', resolution: '1920x1080', location_id: 1, location_name: 'Точка 1', location_number: 1 },\n          draft: { rows: [], settings: {}, revision: 1 }, products: [], packaging: [],\n          animation: { enabled: false, profile: null }, entity: null, announcement: null,\n          brand: { enabled: true, text: 'MIRA REFRESH', entrance_effect: 'blur-reveal', loop_effect: 'none', exit_effect: 'none' },\n          aquarium: null, refresh_interval_ms: 2000\n        })\n      });\n    });\n\n    await page.goto('/player.html');\n    const brand = page.locator('[data-brand-layer] .scene-brand-title');\n    await expect(brand).toBeVisible();\n    await brand.evaluate((node) => { node.dataset.refreshIdentity = 'preserved'; });\n    await expect.poll(() => playerContextRequests, { timeout: 5000 }).toBeGreaterThanOrEqual(2);\n    await expect(brand).toHaveAttribute('data-refresh-identity', 'preserved');\n  } finally {\n    await context.close();\n  }\n});\n`);
           NODE
-      - name: Validate syntax and unit tests
+
+          rm -f \
+            .github/workflows/apply-brand-entity-decoupling.yml \
+            scripts/apply-brand-entity-decoupling.mjs \
+            scripts/apply-v1.8.2-studio.mjs \
+            scripts/fix-v1.8.2-screen-animation-seed.mjs \
+            .github/workflows/apply-v1.8.2-studio.yml
+
+          test ! -e .github/workflows/apply-brand-entity-decoupling.yml
+          test ! -e .github/workflows/apply-v1.8.2-studio.yml
+          test ! -e scripts/apply-brand-entity-decoupling.mjs
+          test ! -e scripts/apply-v1.8.2-studio.mjs
+          test ! -e scripts/fix-v1.8.2-screen-animation-seed.mjs
+      - name: Validate final branch
         run: |
           npm ci
           npm run check
           git diff --check
-      - name: Commit final regression patch
+      - name: Commit release preparation
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src tests
+          git add -A
           git diff --cached --quiet && exit 0
-          git commit -m 'Fix per-screen animation runtime regressions'
+          git commit -m 'Prepare MIRA-TV v1.8.2 release'
           git push origin HEAD:fix/v1.8.2-brand-entity-decoupling
