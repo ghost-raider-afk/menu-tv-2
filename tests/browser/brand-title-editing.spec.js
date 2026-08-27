@@ -52,7 +52,7 @@ test('Brand Entity is user-owned and can be cleared, replaced and persisted inde
     const saved = await getSettings(page);
     expect(saved.brand.text).toBe('БАР СЕВЕР');
     expect(saved.brand.enabled).toBe(true);
-    await expect(page).toHaveTitle('MIRA-TV');
+    await expect(page).toHaveTitle('MIRA-TV — Анимация');
   } finally {
     await putSettings(page, {
       enabled: original.enabled,

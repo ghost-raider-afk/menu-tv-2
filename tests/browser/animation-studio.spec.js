@@ -141,6 +141,9 @@ test('animation studio keeps glyphs fixed while light surfaces, promo glow and o
     expect(Math.abs((after?.x || 0) - (before?.x || 0))).toBeLessThan(0.1);
     expect(Math.abs((after?.y || 0) - (before?.y || 0))).toBeLessThan(0.1);
 
+    const textTab = inspector.locator('[data-animation-inspector-tab="text"]');
+    await textTab.click();
+    await expect(textTab).toHaveClass(/active/);
     await page.locator('#animation-announcement-enabled').check();
     await page.locator('#animation-announcement-text').fill('Сегодня специальное предложение до 22:00');
     await page.locator('#animation-announcement-font-family').selectOption('oswald');
@@ -156,6 +159,9 @@ test('animation studio keeps glyphs fixed while light surfaces, promo glow and o
     await page.locator('#animation-brand-effect').selectOption('neon-pulse');
     await expect(page.locator('#animation-stage .scene-brand-title-glyphs')).toHaveText('БАР МАЯК');
 
+    const sceneTab = inspector.locator('[data-animation-inspector-tab="scene"]');
+    await sceneTab.click();
+    await expect(sceneTab).toHaveClass(/active/);
     await page.locator('#animation-aquarium-enabled').check();
     await page.locator('#animation-aquarium-style').selectOption('neon');
     await page.locator('#animation-aquarium-fish-count').fill('4');
