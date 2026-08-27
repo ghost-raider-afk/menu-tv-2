@@ -52,7 +52,7 @@ export function normaliseBrandTitle(value = {}) {
   const loopEffect = enumValue(source.loop_effect, LOOP_EFFECTS, legacyLoop);
   return {
     enabled: source.enabled === true,
-    text: String(source.text ?? DEFAULT_BRAND_TITLE.text).trim().slice(0, 80),
+    text: String(source.text ?? DEFAULT_BRAND_TITLE.text).replace(/\r\n?/g, '\n').trim().slice(0, 80),
     x: clamp(source.x, DEFAULT_BRAND_TITLE.x, 0, 1920),
     y: clamp(source.y, DEFAULT_BRAND_TITLE.y, 0, 1080),
     font_family: BRAND_FONT_STACKS[source.font_family] ? source.font_family : DEFAULT_BRAND_TITLE.font_family,
@@ -149,22 +149,31 @@ export function renderBrandTitleLayer(layer, value) {
   const glyphs = document.createElement('span');
   glyphs.className = 'scene-brand-title-glyphs';
   glyphs.setAttribute('aria-hidden', 'true');
-  const characters = [...brand.text];
-  const center = (characters.length - 1) / 2;
-  characters.forEach((character, index) => {
-    const shell = document.createElement('span');
-    shell.className = 'scene-brand-glyph';
-    shell.style.setProperty('--brand-delay', `${Math.round(index * brand.letter_stagger_ms)}ms`);
-    shell.style.setProperty('--brand-loop-delay', `${Math.round(brand.entrance_duration_ms + index * brand.letter_stagger_ms + 90)}ms`);
-    shell.style.setProperty('--brand-track-offset', `${((index - center) * Math.max(4, brand.amplitude_px) / 19.2).toFixed(4)}cqw`);
-    const loop = document.createElement('span');
-    loop.className = 'scene-brand-glyph-loop';
-    const char = document.createElement('span');
-    char.className = 'scene-brand-glyph-char';
-    char.textContent = character === ' ' ? '\u00a0' : character;
-    loop.append(char);
-    shell.append(loop);
-    glyphs.append(shell);
+  let glyphIndex = 0;
+  brand.text.split('\n').forEach((lineText, lineIndex) => {
+    const line = document.createElement('span');
+    line.className = 'scene-brand-title-line';
+    line.dataset.brandLine = String(lineIndex + 1);
+    const characters = [...lineText];
+    const center = (characters.length - 1) / 2;
+    if (!characters.length) line.classList.add('is-empty');
+    characters.forEach((character, index) => {
+      const sequenceIndex = glyphIndex++;
+      const shell = document.createElement('span');
+      shell.className = 'scene-brand-glyph';
+      shell.style.setProperty('--brand-delay', `${Math.round(sequenceIndex * brand.letter_stagger_ms)}ms`);
+      shell.style.setProperty('--brand-loop-delay', `${Math.round(brand.entrance_duration_ms + sequenceIndex * brand.letter_stagger_ms + 90)}ms`);
+      shell.style.setProperty('--brand-track-offset', `${((index - center) * Math.max(4, brand.amplitude_px) / 19.2).toFixed(4)}cqw`);
+      const loop = document.createElement('span');
+      loop.className = 'scene-brand-glyph-loop';
+      const char = document.createElement('span');
+      char.className = 'scene-brand-glyph-char';
+      char.textContent = character === ' ' ? '\u00a0' : character;
+      loop.append(char);
+      shell.append(loop);
+      line.append(shell);
+    });
+    glyphs.append(line);
   });
   motion.append(glyphs);
   root.append(motion);

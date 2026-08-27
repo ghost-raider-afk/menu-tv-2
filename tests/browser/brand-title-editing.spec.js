@@ -38,11 +38,16 @@ test('Brand Entity is user-owned and can be cleared, replaced and persisted inde
     await expect(textTab).toHaveClass(/active/);
     const input = page.locator('#animation-brand-text');
     await expect(input).toBeVisible();
+    await expect(input).toHaveJSProperty('tagName', 'TEXTAREA');
 
     await input.fill('');
     await expect(input).toHaveValue('');
-    await input.fill('БАР СЕВЕР');
-    await expect(input).toHaveValue('БАР СЕВЕР');
+    await input.fill('БАР\nСЕВЕР');
+    await expect(input).toHaveValue('БАР\nСЕВЕР');
+    const lines = page.locator('#animation-stage .scene-brand-title-line');
+    await expect(lines).toHaveCount(2);
+    await expect(lines.nth(0)).toHaveText('БАР');
+    await expect(lines.nth(1)).toHaveText('СЕВЕР');
 
     if (!(await page.locator('#animation-brand-enabled').isChecked())) await page.locator('#animation-brand-enabled').check();
     const responsePromise = page.waitForResponse((response) => response.url().endsWith('/api/settings/animation') && response.request().method() === 'PUT');
@@ -50,7 +55,7 @@ test('Brand Entity is user-owned and can be cleared, replaced and persisted inde
     expect((await responsePromise).ok()).toBeTruthy();
 
     const saved = await getSettings(page);
-    expect(saved.brand.text).toBe('БАР СЕВЕР');
+    expect(saved.brand.text).toBe('БАР\nСЕВЕР');
     expect(saved.brand.enabled).toBe(true);
     await expect(page).toHaveTitle('MIRA-TV — Анимация');
   } finally {
