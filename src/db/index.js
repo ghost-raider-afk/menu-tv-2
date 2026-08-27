@@ -12,6 +12,7 @@ import { migrateAnnouncementTicker } from './migrations/announcement-ticker.js';
 import { migrateDeviceBindings } from './migrations/device-bindings.js';
 import { migrateMotionProfileV3 } from './migrations/motion-profile-v3.js';
 import { migrateAnimationOverlays } from './migrations/animation-overlays.js';
+import { migrateScreenAnimationSettings } from './migrations/screen-animation-settings.js';
 import { runMigrations } from './migrations/runner.js';
 import { seedDemoData } from './migrations/seed.js';
 import { createOverviewRepository } from './overview.js';
@@ -38,7 +39,8 @@ const MIGRATIONS = Object.freeze([
   { name: '010-announcement-ticker', run: migrateAnnouncementTicker },
   { name: '011-device-bindings', run: migrateDeviceBindings },
   { name: '012-motion-profile-v3', run: migrateMotionProfileV3 },
-  { name: '013-animation-overlays', run: migrateAnimationOverlays }
+  { name: '013-animation-overlays', run: migrateAnimationOverlays },
+  { name: '014-screen-animation-settings', run: migrateScreenAnimationSettings }
 ]);
 
 function createRepositories(queryable) {
