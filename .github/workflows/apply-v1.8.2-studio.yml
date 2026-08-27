@@ -23,7 +23,9 @@ jobs:
         with:
           node-version: '24'
       - name: Apply studio patch
-        run: node scripts/apply-v1.8.2-studio.mjs
+        run: |
+          sed -i 's/${ENTITY_DIR}\/${previousFile}/\\${ENTITY_DIR}\/\\${previousFile}/' scripts/apply-v1.8.2-studio.mjs
+          node scripts/apply-v1.8.2-studio.mjs
       - name: Validate syntax and unit tests
         run: |
           npm ci
