@@ -13,13 +13,33 @@ export async function migrateScreenAnimationSettings(pool) {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
-  await pool.query(`
-    INSERT INTO screen_animation_settings (
-      screen_id, enabled, preset_id, profile_json, entity_json, announcement_json, brand_json, aquarium_json, updated_by, updated_at
-    )
-    SELECT s.id, a.enabled, a.preset_id, a.profile_json, a.entity_json, a.announcement_json, a.brand_json, a.aquarium_json, a.updated_by, a.updated_at
-    FROM screens s CROSS JOIN animation_settings a
-    WHERE a.id = 1
-    ON CONFLICT (screen_id) DO NOTHING
+
+  const animationResult = await pool.query(`
+    SELECT enabled, preset_id, profile_json, entity_json, announcement_json, brand_json, aquarium_json, updated_by, updated_at
+    FROM animation_settings WHERE id = 1
   `);
+  const animation = animationResult.rows[0];
+  if (!animation) return;
+
+  const screenResult = await pool.query('SELECT id FROM screens ORDER BY id');
+  for (const screen of screenResult.rows) {
+    await pool.query(
+      `INSERT INTO screen_animation_settings (
+         screen_id, enabled, preset_id, profile_json, entity_json, announcement_json, brand_json, aquarium_json, updated_by, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (screen_id) DO NOTHING`,
+      [
+        screen.id,
+        animation.enabled,
+        animation.preset_id,
+        animation.profile_json,
+        animation.entity_json,
+        animation.announcement_json,
+        animation.brand_json,
+        animation.aquarium_json,
+        animation.updated_by,
+        animation.updated_at
+      ]
+    );
+  }
 }
