@@ -36,6 +36,23 @@ jobs:
             fs.writeFileSync(path, source.replace(before, after));
           }
 
+          const settingsPath = 'src/db/settings.js';
+          replaceExact(
+            settingsPath,
+            `      const applied = [];\n      const now = isoNow();\n      const values = animationValues(settings);`,
+            `      const applied = [];\n      const values = animationValues(settings);`
+          );
+          replaceExact(
+            settingsPath,
+            `           SELECT s.id, $2, $3, $4, $5, $6, $7, $8, $9, $10\n           FROM screens s WHERE s.id = $1`,
+            `           SELECT s.id, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP\n           FROM screens s WHERE s.id = $1`
+          );
+          replaceExact(
+            settingsPath,
+            `          [screenId, ...values, updatedBy, now]\n        );`,
+            `          [screenId, ...values, updatedBy]\n        );`
+          );
+
           const playerPath = 'src/web/admin-ui/public/js/player/player.js';
           replaceExact(
             playerPath,
@@ -83,5 +100,5 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src tests
           git diff --cached --quiet && exit 0
-          git commit -m 'Preserve Brand runtime across player refreshes'
+          git commit -m 'Fix per-screen animation runtime regressions'
           git push origin HEAD:fix/v1.8.2-brand-entity-decoupling
