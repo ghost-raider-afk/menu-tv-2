@@ -169,6 +169,99 @@ test('catalog duplicate conflicts identify the exact entity and submitted name',
   assert.deepEqual(await duplicatePackagingResponse.json(), { error: 'Тара «Точный дубликат тары» уже существует.' });
 });
 
+test('animation preset save is isolated and apply changes only selected monitor snapshots', async () => {
+  const cookie = await adminCookie();
+  const original = await store.getAnimationSettings();
+  const location = await createLocation(cookie, 'Точка анимации');
+  const screenA = await createScreen(cookie, location.id);
+  const screenB = await createScreen(cookie, location.id);
+  const screenC = await createScreen(cookie, location.id);
+  const beforeB = await store.getScreenAnimationSettings(screenB.id);
+  const payload = (text) => ({
+    enabled: true, preset_id: original.preset_id, profile: original.profile, entity: original.entity,
+    announcement: original.announcement, brand: { ...original.brand, enabled: true, text }, aquarium: original.aquarium
+  });
+  try {
+    const saveResponse = await fetch(baseUrl + '/api/settings/animation', {
+      method: 'PUT', headers: jsonHeaders(cookie), body: JSON.stringify(payload('SAVE ONLY'))
+    });
+    assert.equal(saveResponse.status, 200);
+    for (const screen of [screenA, screenB, screenC]) {
+      const live = await store.getScreenAnimationSettings(screen.id);
+      assert.notEqual(live.brand.text, 'SAVE ONLY');
+    }
+
+    const applyResponse = await fetch(baseUrl + '/api/settings/animation/apply', {
+      method: 'PUT', headers: jsonHeaders(cookie),
+      body: JSON.stringify({ screen_ids: [screenA.id, screenC.id], settings: payload('APPLIED SELECTED') })
+    });
+    assert.equal(applyResponse.status, 200);
+    const applied = await applyResponse.json();
+    assert.deepEqual([...applied.applied_screen_ids].sort((a, b) => a - b), [screenA.id, screenC.id].sort((a, b) => a - b));
+    const [liveA, liveB, liveC] = await Promise.all([
+      store.getScreenAnimationSettings(screenA.id), store.getScreenAnimationSettings(screenB.id), store.getScreenAnimationSettings(screenC.id)
+    ]);
+    assert.equal(liveA.brand.text, 'APPLIED SELECTED');
+    assert.equal(liveC.brand.text, 'APPLIED SELECTED');
+    assert.deepEqual(liveB.brand, beforeB.brand);
+  } finally {
+    await store.updateAnimationSettings({ ...original, updated_by: 'test' });
+  }
+});
+
+test('monitor clone keeps source animation snapshot instead of current Studio preset', async () => {
+  const cookie = await adminCookie();
+  const original = await store.getAnimationSettings();
+  const location = await createLocation(cookie, 'Точка клона анимации');
+  const source = await createScreen(cookie, location.id);
+  const sourceSnapshot = { ...original, enabled: true, brand: { ...original.brand, enabled: true, text: 'SOURCE SNAPSHOT' } };
+  try {
+    await store.applyAnimationSettingsToScreens([source.id], sourceSnapshot, 'test');
+    await store.updateAnimationSettings({
+      ...original, enabled: true, brand: { ...original.brand, enabled: true, text: 'CURRENT STUDIO' }, updated_by: 'test'
+    });
+    const clone = await createScreen(cookie, location.id, source.id);
+    const clonedAnimation = await store.getScreenAnimationSettings(clone.id);
+    assert.equal(clonedAnimation.brand.text, 'SOURCE SNAPSHOT');
+    assert.notEqual(clonedAnimation.brand.text, 'CURRENT STUDIO');
+  } finally {
+    await store.updateAnimationSettings({ ...original, updated_by: 'test' });
+  }
+});
+
+test('location clone keeps each source monitor animation snapshot', async () => {
+  const cookie = await adminCookie();
+  const original = await store.getAnimationSettings();
+  const sourceLocation = await createLocation(cookie, 'Точка клона snapshots');
+  const sourceA = await createScreen(cookie, sourceLocation.id);
+  const sourceB = await createScreen(cookie, sourceLocation.id);
+  try {
+    await store.applyAnimationSettingsToScreens([sourceA.id], {
+      ...original, enabled: true, brand: { ...original.brand, enabled: true, text: 'SOURCE A' }
+    }, 'test');
+    await store.applyAnimationSettingsToScreens([sourceB.id], {
+      ...original, enabled: true, brand: { ...original.brand, enabled: true, text: 'SOURCE B' }
+    }, 'test');
+    await store.updateAnimationSettings({
+      ...original, enabled: true, brand: { ...original.brand, enabled: true, text: 'CURRENT STUDIO' }, updated_by: 'test'
+    });
+    const response = await fetch(baseUrl + '/api/locations/' + sourceLocation.id + '/clone', {
+      method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({ name: 'Копия snapshots', address: '', active: true })
+    });
+    assert.equal(response.status, 201);
+    const clonedLocation = await response.json();
+    const allScreens = await store.listScreensByLocation(clonedLocation.id);
+    assert.equal(allScreens.length, 2);
+    const byNumber = new Map(allScreens.map((screen) => [Number(screen.location_number), screen]));
+    const clonedA = await store.getScreenAnimationSettings(byNumber.get(Number(sourceA.location_number)).id);
+    const clonedB = await store.getScreenAnimationSettings(byNumber.get(Number(sourceB.location_number)).id);
+    assert.equal(clonedA.brand.text, 'SOURCE A');
+    assert.equal(clonedB.brand.text, 'SOURCE B');
+  } finally {
+    await store.updateAnimationSettings({ ...original, updated_by: 'test' });
+  }
+});
+
 test('monitor draft, background, geometry and clone are independent per monitor', async () => {
   const cookie = await adminCookie();
   const productResponse = await fetch(`${baseUrl}/api/catalog/products`, { method: 'POST', headers: jsonHeaders(cookie), body: JSON.stringify({

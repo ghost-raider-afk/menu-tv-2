@@ -88,14 +88,13 @@ export function createSettingsRepository(pool) {
 
     async applyAnimationSettingsToScreens(screenIds, settings, updatedBy) {
       const applied = [];
-      const now = isoNow();
       const values = animationValues(settings);
       for (const screenId of screenIds) {
         const { rows } = await pool.query(
           `INSERT INTO screen_animation_settings (
              screen_id, enabled, preset_id, profile_json, entity_json, announcement_json, brand_json, aquarium_json, updated_by, updated_at
            )
-           SELECT s.id, $2, $3, $4, $5, $6, $7, $8, $9, $10
+           SELECT s.id, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP
            FROM screens s WHERE s.id = $1
            ON CONFLICT (screen_id) DO UPDATE SET
              enabled = EXCLUDED.enabled, preset_id = EXCLUDED.preset_id, profile_json = EXCLUDED.profile_json,
@@ -103,7 +102,7 @@ export function createSettingsRepository(pool) {
              brand_json = EXCLUDED.brand_json, aquarium_json = EXCLUDED.aquarium_json,
              updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at
            RETURNING screen_id`,
-          [screenId, ...values, updatedBy, now]
+          [screenId, ...values, updatedBy]
         );
         if (rows[0]) applied.push(Number(rows[0].screen_id));
       }
