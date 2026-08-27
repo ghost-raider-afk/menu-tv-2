@@ -1,6 +1,7 @@
 import express from 'express';
 import { siteSettingsInput, userPreferencesInput } from '../../contracts/input.js';
-import { animationSettingsInput } from '../../contracts/animation.js';
+import { animationSettingsInput, animationTargetScreenIds } from '../../contracts/animation.js';
+import { ValidationError } from '../../shared/errors.js';
 import { activity, notFound } from '../helpers.js';
 import { hashPassword, passwordChangeInput, verifyPassword } from '../../services/password-service.js';
 import { issueSession, sessionCookie, themeCookie } from '../../services/session-service.js';
@@ -32,7 +33,22 @@ export function createSettingsRouter({ store, config }) {
   router.get('/animation', async (_request, response) => { response.json(await store.getAnimationSettings()); });
   router.put('/animation', async (request, response) => {
     const settings = await store.updateAnimationSettings({ ...animationSettingsInput(request.body), updated_by: request.session.sub });
-    await activity(store, request, { action: 'settings.animation.updated', entity_type: 'animation_settings', entity_id: settings.id, message: 'Обновлены настройки анимации экранов.' }); response.json(settings);
+    await activity(store, request, { action: 'settings.animation.updated', entity_type: 'animation_settings', entity_id: settings.id, message: 'Сохранён рабочий пресет анимации.' }); response.json(settings);
+  });
+  router.put('/animation/apply', async (request, response) => {
+    const screenIds = animationTargetScreenIds(request.body?.screen_ids);
+    const input = animationSettingsInput(request.body?.settings);
+    const result = await store.transaction(async (tx) => {
+      const settings = await tx.updateAnimationSettings({ ...input, updated_by: request.session.sub });
+      const appliedScreenIds = await tx.applyAnimationSettingsToScreens(screenIds, settings, request.session.sub);
+      if (appliedScreenIds.length !== screenIds.length) throw new ValidationError('Один или несколько выбранных мониторов больше не существуют. Обновите список и повторите применение.');
+      return { settings, applied_screen_ids: appliedScreenIds };
+    });
+    await activity(store, request, {
+      action: 'settings.animation.applied', entity_type: 'screen_animation_settings', entity_id: result.applied_screen_ids.join(','),
+      message: `Анимация применена к мониторам: ${result.applied_screen_ids.join(', ')}.`
+    });
+    response.json(result);
   });
   router.put('/animation/entity-asset', async (request, response) => {
     const settings = await replaceEntityAssetStream({
