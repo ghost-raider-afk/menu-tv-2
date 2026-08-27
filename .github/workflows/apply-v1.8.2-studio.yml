@@ -24,9 +24,9 @@ jobs:
           node-version: '24'
       - name: Apply studio patch
         run: |
-          # Escape target-source template placeholders so the helper writes them literally.
           sed -i 's/${ENTITY_DIR}\/${previousFile}/\\${ENTITY_DIR}\/\\${previousFile}/' scripts/apply-v1.8.2-studio.mjs
           node scripts/apply-v1.8.2-studio.mjs
+          node scripts/fix-v1.8.2-screen-animation-seed.mjs
       - name: Validate syntax and unit tests
         run: |
           npm ci
