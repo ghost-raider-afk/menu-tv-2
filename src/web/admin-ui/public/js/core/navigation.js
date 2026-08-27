@@ -7,9 +7,9 @@ export const ROUTE_DEFINITIONS = Object.freeze([
   Object.freeze({ path: '/connect-tv.html', page: 'connect-tv', section: 'monitors', title: 'Подключить ТВ', prefetch: true }),
   Object.freeze({ path: '/screen-editor.html', page: 'screen-editor', section: 'monitors', title: 'Редактор меню', prefetch: true }),
   Object.freeze({ path: '/catalog.html', page: 'catalog', section: 'catalog', title: 'Каталог', prefetch: true }),
+  Object.freeze({ path: '/animation.html', page: 'animation', section: 'animation', title: 'Анимация', prefetch: true }),
   Object.freeze({ path: '/settings.html', page: 'settings', section: 'settings', title: 'Настройки сайта', prefetch: true }),
   Object.freeze({ path: '/sftp-settings.html', page: 'sftp-settings', section: 'settings', title: 'SFTP', prefetch: true }),
-  Object.freeze({ path: '/animation.html', page: 'animation', section: 'settings', title: 'Анимация', prefetch: true }),
   Object.freeze({ path: '/events.html', page: 'events', section: 'settings', title: 'Журнал событий', prefetch: true }),
   Object.freeze({ path: '/profile.html', page: 'profile', section: 'settings', title: 'Профиль', prefetch: true })
 ]);
@@ -31,12 +31,14 @@ const CONTEXT_LINKS = Object.freeze({
   overview: Object.freeze([['Обзор', '/']]),
   monitors: Object.freeze([['Торговые точки', '/locations.html'], ['Мониторы', '/screens.html'], ['Подключить ТВ', '/connect-tv.html']]),
   catalog: Object.freeze([['Продукция', '/catalog.html']]),
-  settings: Object.freeze([['Настройки сайта', '/settings.html'], ['SFTP', '/sftp-settings.html'], ['Анимация', '/animation.html'], ['Журнал событий', '/events.html'], ['Профиль', '/profile.html']])
+  animation: Object.freeze([['Анимация', '/animation.html']]),
+  settings: Object.freeze([['Настройки сайта', '/settings.html'], ['SFTP', '/sftp-settings.html'], ['Журнал событий', '/events.html'], ['Профиль', '/profile.html']])
 });
 
 export const PRIMARY_ROUTES = Object.freeze([
   Object.freeze({ key: 'monitors', label: 'Мониторы', href: '/screens.html', icon: 'monitor' }),
   Object.freeze({ key: 'catalog', label: 'Каталог', href: '/catalog.html', icon: 'catalog' }),
+  Object.freeze({ key: 'animation', label: 'Анимация', href: '/animation.html', icon: 'motion' }),
   Object.freeze({ key: 'settings', label: 'Настройки', href: '/settings.html', icon: 'settings' })
 ]);
 
