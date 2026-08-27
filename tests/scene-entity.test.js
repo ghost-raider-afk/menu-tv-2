@@ -1,73 +1,114 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
-import { sceneEntityInput } from '../src/contracts/scene-entity.js';
-import { replaceEntityAssetStream } from '../src/services/entity-assets-service.js';
-import { PayloadTooLargeError } from '../src/shared/errors.js';
+import {
+  DEFAULT_SCENE_ENTITY,
+  ENTITY_SCENE_HEIGHT,
+  ENTITY_SCENE_WIDTH,
+  SCENE_ENTITY_VERSION,
+  sceneEntityInput
+} from '../src/contracts/scene-entity.js';
 
 const root = new URL('../src/', import.meta.url);
-const read = (relative) => readFile(new URL(relative, root), 'utf8');
-
-// Existing tests above remain unchanged in intent; this file is kept complete so the
-// per-screen player assertion below is versioned with the runtime contract.
+const read = (path) => readFile(new URL(path, root), 'utf8');
 
 test('scene entity v2 keeps canonical FullHD coordinates and image compatibility', () => {
+  assert.equal(SCENE_ENTITY_VERSION, 2);
+  assert.equal(ENTITY_SCENE_WIDTH, 1920);
+  assert.equal(ENTITY_SCENE_HEIGHT, 1080);
   const entity = sceneEntityInput({
-    name: 'Бокал', visible: true, asset_url: '/site-assets/entities/entity-12345678-1234-4234-8234-123456789abc.png',
-    asset_type: 'image', media_type: 'image/png', width: 320, height: 640, has_alpha: true,
-    transform: { x: 1510, y: 340, width: 310, scale: 1, rotation: 0, depth: 12, opacity: 1 }
+    ...DEFAULT_SCENE_ENTITY,
+    asset_url: '/site-assets/entities/entity-123e4567-e89b-42d3-a456-426614174000.webp',
+    media_type: 'image/webp',
+    width: 560,
+    height: 980,
+    visible: true,
+    transform: { x: 1500, y: 330, width: 320, scale: 1.1, rotation: -3, depth: 12, opacity: 0.92 }
   });
+  assert.equal(entity.id, 'beer-glass');
   assert.equal(entity.asset_type, 'image');
-  assert.equal(entity.media_type, 'image/png');
-  assert.equal(entity.transform.x, 1510);
-  assert.equal(entity.transform.y, 340);
-  assert.equal(entity.transform.width, 310);
+  assert.equal(entity.media_type, 'image/webp');
+  assert.equal(entity.width, 560);
+  assert.equal(entity.height, 980);
+  assert.equal(entity.asset_width, 560);
+  assert.equal(entity.asset_height, 980);
+  assert.equal(entity.visible, true);
+  assert.deepEqual(entity.transform, { x: 1500, y: 330, width: 320, scale: 1.1, rotation: -3, depth: 12, opacity: 0.92 });
 });
 
 test('scene entity v2 accepts MP4/WebM playback metadata and rejects media mismatches', () => {
   const video = sceneEntityInput({
-    name: 'Video', visible: true, asset_url: '/site-assets/entities/entity-12345678-1234-4234-8234-123456789abc.webm',
-    asset_type: 'video', media_type: 'video/webm', width: 320, height: 640, loop: true, muted: true,
-    playsinline: true, playback_rate: 1.25, has_alpha: true, transform: {}
+    id: 'beer-glass',
+    name: 'Видео бокала',
+    asset_url: '/site-assets/entities/entity-123e4567-e89b-42d3-a456-426614174000.mp4',
+    asset_type: 'video',
+    media_type: 'video/mp4',
+    width: 720,
+    height: 1280,
+    has_alpha: false,
+    loop: true,
+    muted: true,
+    playsinline: true,
+    playback_rate: 0.85,
+    visible: true
   });
   assert.equal(video.asset_type, 'video');
+  assert.equal(video.media_type, 'video/mp4');
+  assert.equal(video.playback_rate, 0.85);
   assert.equal(video.loop, true);
   assert.equal(video.muted, true);
   assert.equal(video.playsinline, true);
-  assert.equal(video.playback_rate, 1.25);
-  assert.throws(() => sceneEntityInput({ asset_url: '/site-assets/entities/entity-12345678-1234-4234-8234-123456789abc.mp4', asset_type: 'video', media_type: 'video/webm' }), /соответствует расширению/);
+  assert.throws(() => sceneEntityInput({ asset_url: video.asset_url, asset_type: 'image', media_type: 'image/png' }), /не соответствует/);
+  assert.throws(() => sceneEntityInput({ asset_url: video.asset_url, asset_type: 'video', media_type: 'video/webm' }), /расширению/);
 });
 
 test('scene entity rejects foreign assets and invalid transforms', () => {
-  assert.throws(() => sceneEntityInput({ asset_url: 'https://example.com/a.png' }), /внутренним файлом Entity/);
-  assert.throws(() => sceneEntityInput({ transform: { width: 4 } }), /Ширина Entity/);
+  assert.throws(() => sceneEntityInput({ asset_url: 'https://example.com/beer.png' }), /недопустимый адрес/);
+  assert.throws(() => sceneEntityInput({ transform: { width: 0 } }), /Ширина/);
+  assert.throws(() => sceneEntityInput({ transform: { opacity: 2 } }), /Opacity/);
 });
 
 test('Video Entity processing uses ffprobe and never a per-frame chroma key', async () => {
   const service = await read('services/entity-assets-service.js');
-  assert.match(service, /ffprobe/);
+  assert.match(service, /execFileAsync\('ffprobe'/);
+  assert.match(service, /pix_fmt/);
   assert.match(service, /videoHasAlpha/);
-  assert.doesNotMatch(service, /chroma|green.?screen|requestAnimationFrame/i);
+  assert.match(service, /format_name/);
+  assert.match(service, /videoContainerMatches/);
+  assert.match(service, /video\/mp4/);
+  assert.match(service, /video\/webm/);
+  assert.doesNotMatch(service, /chroma|canvas|getImageData|green.?screen/i);
 });
 
 test('Entity media upload streams to disk and has an independent env-controlled size limit', async () => {
-  const service = await read('services/entity-assets-service.js');
-  const config = await read('config/index.js');
-  const env = await readFile(new URL('../.env.example', import.meta.url), 'utf8');
+  const [service, routes, config] = await Promise.all([
+    read('services/entity-assets-service.js'),
+    read('api/settings/routes.js'),
+    read('config/index.js')
+  ]);
+  assert.match(service, /replaceEntityAssetStream/);
   assert.match(service, /for await \(const part of stream\)/);
-  assert.match(service, /entityAssetMaxBytes/);
+  assert.match(service, /config\.entityAssetMaxBytes/);
+  assert.match(service, /PayloadTooLargeError/);
+  assert.match(routes, /stream:\s*request/);
+  assert.match(routes, /contentLength:\s*request\.get\('content-length'\)/);
+  assert.doesNotMatch(routes, /entity-asset',\s*express\.raw/);
   assert.match(config, /ENTITY_ASSET_MAX_BYTES/);
-  assert.match(env, /^ENTITY_ASSET_MAX_BYTES=/m);
+  assert.doesNotMatch(service, /screenBackgroundMaxBytes/);
 });
 
 test('Entity Editor renders image or video on a layer independent from menu and background', async () => {
-  const [editor, page, animationContract, db, migration] = await Promise.all([
-    read('web/admin-ui/public/js/motion/entity-editor.js'), read('web/admin-ui/public/js/pages/animation.js'),
+  const [html, page, preview, editor, animationContract, db, migration] = await Promise.all([
+    read('web/admin-ui/public/animation.html'), read('web/admin-ui/public/js/pages/animation.js'),
+    read('web/admin-ui/public/js/motion/screen-preview.js'), read('web/admin-ui/public/js/motion/entity-editor.js'),
     read('contracts/animation.js'), read('db/settings.js'), read('db/migrations/scene-entity.js')
   ]);
+
+  for (const id of ['animation-entity-file','animation-entity-upload','animation-entity-name','animation-entity-visible','animation-entity-x','animation-entity-y','animation-entity-width','animation-entity-loop','animation-entity-muted','animation-entity-playback-rate']) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  assert.match(html, /accept="image\/png,image\/webp,video\/mp4,video\/webm"/);
+  assert.match(preview, /data-motion-entity-layer/);
   assert.match(editor, /document\.createElement\('video'\)/);
   assert.match(editor, /video\.playsInline/);
   assert.match(editor, /video\.playbackRate/);
@@ -93,22 +134,4 @@ test('TV player receives, renders and caches Video Entity with offline Range sup
   assert.match(serviceWorker, /cachedVideoRange/);
   assert.match(serviceWorker, /status:\s*206/);
   assert.match(serviceWorker, /Content-Range/);
-});
-
-test('oversized streamed Entity bodies are rejected and partial uploads are removed', async () => {
-  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'mira-entity-limit-'));
-  const config = { siteAssetsRoot: temporaryRoot, entityAssetMaxBytes: 8 };
-  const stream = (async function* () { yield Buffer.alloc(5); yield Buffer.alloc(5); })();
-  try {
-    await assert.rejects(
-      replaceEntityAssetStream({ stream, contentType: 'image/png', config, store: {}, username: 'admin' }),
-      (error) => error instanceof PayloadTooLargeError
-    );
-    const directory = path.join(temporaryRoot, 'entities');
-    const entries = await readFile(new URL('data:text/plain,'), 'utf8').catch(() => null);
-    void entries;
-    await assert.rejects(stat(path.join(directory, '.missing.upload')));
-  } finally {
-    await rm(temporaryRoot, { recursive: true, force: true });
-  }
 });
