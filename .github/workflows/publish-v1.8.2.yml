@@ -1,0 +1,91 @@
+name: publish-v1.8.2
+
+on:
+  push:
+    branches:
+      - fix/v1.8.2-brand-entity-decoupling
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/v1.8.2-brand-entity-decoupling
+          fetch-depth: 0
+      - name: Verify release target
+        shell: bash
+        env:
+          EXPECTED_MAIN_SHA: babeced67fdc590bcc64e8bfedabef5dfe4ab3f7
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          actual_main_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$actual_main_sha" = "$EXPECTED_MAIN_SHA"
+          test -z "$(git ls-remote origin refs/tags/v1.8.2)"
+          if gh release view v1.8.2 --repo ghost-raider-afk/menu-tv-2 >/dev/null 2>&1; then
+            echo "v1.8.2 release already exists" >&2
+            exit 1
+          fi
+      - name: Publish v1.8.2
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_MAIN_SHA: babeced67fdc590bcc64e8bfedabef5dfe4ab3f7
+        run: |
+          set -euo pipefail
+          cat > /tmp/v1.8.2-notes.md <<'EOF'
+          ## MIRA-TV v1.8.2
+
+          ### Motion Studio
+          - Переработан интерфейс: preview слева, компактный inspector справа, вкладки «Меню», «Текст», «Сцена».
+          - Рабочий Studio-пресет отделён от live animation snapshot каждого монитора.
+          - «Сохранить пресет» не изменяет работающие телевизоры; «Применить к выбранным» обновляет только выбранные мониторы.
+          - Новый монитор получает текущий Studio-пресет, а клонирование монитора/торговой точки сохраняет animation snapshot источника.
+
+          ### TV Player и Brand
+          - TV Player использует per-monitor `getScreenAnimationSettings(screen_id)`.
+          - Brand Entity отделён от имени приложения MIRA-TV и может иметь любое пользовательское название, включая пустое.
+          - Добавлены glyph-based entrance / loop / exit анимации Brand.
+          - Устранён повторный entrance Brand при периодическом refresh Player: overlay DOM сохраняется между обновлениями.
+          - Сохранена совместимость со старыми TV-браузерами и `prefers-reduced-motion`.
+
+          ### Надёжность и миграции
+          - Старые глобальные animation settings мигрируют в существующие мониторы без неожиданного изменения внешнего вида.
+          - Entity assets не удаляются, пока используются хотя бы одним монитором.
+          - Старые `NULL` значения `brand_json` / `aquarium_json` канонизируются в `{}`.
+          - Исправлена запись `screen_animation_settings.updated_at` как типизированного PostgreSQL timestamp.
+          - Устранена гонка гидрации формы настроек: поля недоступны для ввода до завершения загрузки текущих значений.
+
+          ### Проверки релиза
+          Финальный gate перед merge: `node-check`, `browser-visual`, `clean-install-smoke` — **3/3 green**.
+          EOF
+          gh release create v1.8.2 \
+            --repo ghost-raider-afk/menu-tv-2 \
+            --target "$EXPECTED_MAIN_SHA" \
+            --title "MIRA-TV v1.8.2" \
+            --notes-file /tmp/v1.8.2-notes.md
+      - name: Verify published release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_MAIN_SHA: babeced67fdc590bcc64e8bfedabef5dfe4ab3f7
+        run: |
+          set -euo pipefail
+          tag_sha="$(git ls-remote origin refs/tags/v1.8.2 | awk '{print $1}')"
+          test "$tag_sha" = "$EXPECTED_MAIN_SHA"
+          gh release view v1.8.2 --repo ghost-raider-afk/menu-tv-2 --json tagName,isDraft,isPrerelease,url >/tmp/release.json
+          node -e 'const r=require("/tmp/release.json"); if(r.tagName!=="v1.8.2"||r.isDraft||r.isPrerelease) process.exit(1)'
+      - name: Remove publication helper
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/publish-v1.8.2.yml
+          git commit -m "Remove v1.8.2 publication helper"
+          git push origin HEAD:fix/v1.8.2-brand-entity-decoupling
