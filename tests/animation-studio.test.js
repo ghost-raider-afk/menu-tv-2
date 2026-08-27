@@ -27,7 +27,7 @@ test('canonical profile keeps static menu text, static background and smooth pro
   assert.equal(parsed.preset_id, 'cinematic-live-menu');
   assert.equal(parsed.profile.price_effect, 'none');
   assert.equal(parsed.profile.promotion_easing, 'smooth');
-  assert.equal(parsed.brand.text, 'MIRA-TV');
+  assert.equal(parsed.brand.text, '');
   assert.equal(parsed.aquarium.enabled, false);
 });
 
@@ -52,6 +52,9 @@ test('brand title and aquarium are independent validated scene overlays', () => 
   assert.equal(brand.x, 240);
   assert.equal(brand.vertical_scale, 1.2);
   assert.equal(brand.effect, 'neon-pulse');
+  assert.equal(brandTitleInput({}).text, '');
+  assert.throws(() => brandTitleInput({ enabled: true, text: '' }), /Введите название бренда/);
+  assert.equal(brandTitleInput({ enabled: true, text: 'MIRA-TV' }).text, 'MIRA-TV');
   const aquarium = aquariumInput({ enabled: true, style: 'neon', intro_fill: true, fish_count: 4, bubble_density: 50, plant_density: 30, caustics: 60, speed: 40 });
   assert.equal(aquarium.enabled, true);
   assert.equal(aquarium.style, 'neon');

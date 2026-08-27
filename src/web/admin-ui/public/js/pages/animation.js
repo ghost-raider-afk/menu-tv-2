@@ -196,7 +196,9 @@ function bindBrandControls() {
     const eventName = node instanceof HTMLSelectElement || (node instanceof HTMLInputElement && node.type === 'checkbox') ? 'change' : 'input';
     node.addEventListener(eventName, () => {
       currentBrand = brandFromControls();
-      syncBrandControls(currentBrand);
+      // Text is an editable draft: do not rewrite the input on every keystroke.
+      // Re-syncing it here used to restore the product-brand fallback and move the caret.
+      if (id !== 'animation-brand-text') syncBrandControls(currentBrand);
       renderBrandPreview();
     });
   });
