@@ -5,37 +5,40 @@ import { completeAnnouncement } from '../contracts/announcement.js';
 import { completeBrandTitle } from '../contracts/brand-title.js';
 import { completeAquarium } from '../contracts/aquarium.js';
 
+function parseJson(value) {
+  try { return JSON.parse(value || '{}'); }
+  catch { return {}; }
+}
+
 function normaliseAnimationSettings(row) {
   const value = normaliseRow(row);
   if (!value) return null;
-  let profile = {};
-  let entity = {};
-  let announcement = {};
-  let brand = {};
-  let aquarium = {};
-  try { profile = JSON.parse(value.profile_json || '{}'); }
-  catch { profile = {}; }
-  try { entity = JSON.parse(value.entity_json || '{}'); }
-  catch { entity = {}; }
-  try { announcement = JSON.parse(value.announcement_json || '{}'); }
-  catch { announcement = {}; }
-  try { brand = JSON.parse(value.brand_json || '{}'); }
-  catch { brand = {}; }
-  try { aquarium = JSON.parse(value.aquarium_json || '{}'); }
-  catch { aquarium = {}; }
   return {
     id: value.id,
+    screen_id: value.screen_id === undefined ? undefined : Number(value.screen_id),
     enabled: value.enabled === true,
     preset_id: value.preset_id || 'cinematic-live-menu',
-    profile: completeAnimationProfile(profile),
-    entity: completeSceneEntity(entity),
-    announcement: completeAnnouncement(announcement),
-    brand: completeBrandTitle(brand),
-    aquarium: completeAquarium(aquarium),
+    profile: completeAnimationProfile(parseJson(value.profile_json)),
+    entity: completeSceneEntity(parseJson(value.entity_json)),
+    announcement: completeAnnouncement(parseJson(value.announcement_json)),
+    brand: completeBrandTitle(parseJson(value.brand_json)),
+    aquarium: completeAquarium(parseJson(value.aquarium_json)),
     updated_by: value.updated_by || '',
     created_at: value.created_at,
     updated_at: value.updated_at
   };
+}
+
+function animationValues(settings) {
+  return [
+    settings.enabled === true,
+    settings.preset_id || 'cinematic-live-menu',
+    JSON.stringify(settings.profile || {}),
+    JSON.stringify(settings.entity || {}),
+    JSON.stringify(settings.announcement || {}),
+    JSON.stringify(settings.brand || {}),
+    JSON.stringify(settings.aquarium || {})
+  ];
 }
 
 export function createSettingsRepository(pool) {
@@ -68,6 +71,11 @@ export function createSettingsRepository(pool) {
       return normaliseAnimationSettings(rows[0]);
     },
 
+    async getScreenAnimationSettings(screenId) {
+      const { rows } = await pool.query('SELECT * FROM screen_animation_settings WHERE screen_id = $1', [screenId]);
+      return normaliseAnimationSettings(rows[0]);
+    },
+
     async updateAnimationSettings({ enabled, preset_id, profile, entity, announcement, brand, aquarium, updated_by }) {
       const { rows } = await pool.query(
         `UPDATE animation_settings SET enabled = $1, preset_id = $2, profile_json = $3, entity_json = $4,
@@ -78,6 +86,30 @@ export function createSettingsRepository(pool) {
       return normaliseAnimationSettings(rows[0]);
     },
 
+    async applyAnimationSettingsToScreens(screenIds, settings, updatedBy) {
+      const applied = [];
+      const now = isoNow();
+      const values = animationValues(settings);
+      for (const screenId of screenIds) {
+        const { rows } = await pool.query(
+          `INSERT INTO screen_animation_settings (
+             screen_id, enabled, preset_id, profile_json, entity_json, announcement_json, brand_json, aquarium_json, updated_by, updated_at
+           )
+           SELECT s.id, $2, $3, $4, $5, $6, $7, $8, $9, $10
+           FROM screens s WHERE s.id = $1
+           ON CONFLICT (screen_id) DO UPDATE SET
+             enabled = EXCLUDED.enabled, preset_id = EXCLUDED.preset_id, profile_json = EXCLUDED.profile_json,
+             entity_json = EXCLUDED.entity_json, announcement_json = EXCLUDED.announcement_json,
+             brand_json = EXCLUDED.brand_json, aquarium_json = EXCLUDED.aquarium_json,
+             updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at
+           RETURNING screen_id`,
+          [screenId, ...values, updatedBy, now]
+        );
+        if (rows[0]) applied.push(Number(rows[0].screen_id));
+      }
+      return applied;
+    },
+
     async updateAnimationEntity(entity, updated_by) {
       const { rows } = await pool.query(
         `UPDATE animation_settings SET entity_json = $1, updated_by = $2, updated_at = $3
@@ -85,6 +117,15 @@ export function createSettingsRepository(pool) {
         [JSON.stringify(entity), updated_by, isoNow()]
       );
       return normaliseAnimationSettings(rows[0]);
+    },
+
+    async isAnimationEntityAssetReferenced(assetUrl) {
+      const pattern = `%${String(assetUrl || '').replaceAll('%', '\\%').replaceAll('_', '\\_')}%`;
+      const { rowCount } = await pool.query(
+        `SELECT 1 FROM screen_animation_settings WHERE entity_json LIKE $1 ESCAPE '\\' LIMIT 1`,
+        [pattern]
+      );
+      return rowCount > 0;
     },
 
     async setSiteAsset(kind, filename, updatedBy) {
