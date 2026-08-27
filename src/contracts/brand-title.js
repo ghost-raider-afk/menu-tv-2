@@ -5,7 +5,7 @@ export const BRAND_EFFECTS = Object.freeze(['none', 'neon-pulse', 'breathe', 'fl
 
 export const DEFAULT_BRAND_TITLE = Object.freeze({
   enabled: false,
-  text: 'MIRA-TV',
+  text: '',
   x: 960,
   y: 96,
   font_family: 'inter',
@@ -37,7 +37,7 @@ export function completeBrandTitle(value = {}) {
   const source = sourceObject(value);
   return {
     enabled: source.enabled === true,
-    text: String(source.text ?? DEFAULT_BRAND_TITLE.text).trim().slice(0, 80) || DEFAULT_BRAND_TITLE.text,
+    text: String(source.text ?? DEFAULT_BRAND_TITLE.text).trim().slice(0, 80),
     x: clamp(source.x, DEFAULT_BRAND_TITLE.x, 0, 1920),
     y: clamp(source.y, DEFAULT_BRAND_TITLE.y, 0, 1080),
     font_family: BRAND_FONTS.includes(source.font_family) ? source.font_family : DEFAULT_BRAND_TITLE.font_family,
