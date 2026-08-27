@@ -91,6 +91,15 @@ test('animation studio keeps glyphs fixed while light surfaces, promo glow and o
   const original = await animationSettings(page);
   try {
     await page.goto(`/animation.html?screen=${fixture.screenId}`);
+    const previewPane = page.locator('.animation-preview-pane');
+    const inspector = page.locator('.animation-inspector');
+    const [previewBox, inspectorBox] = await Promise.all([previewPane.boundingBox(), inspector.boundingBox()]);
+    expect(previewBox).not.toBeNull();
+    expect(inspectorBox).not.toBeNull();
+    expect(previewBox.x).toBeLessThan(inspectorBox.x);
+    await expect(inspector.locator('.animation-inspector-tabs')).toContainText(['Меню', 'Текст', 'Сцена']);
+    await expect(inspector.locator('.animation-inspector-actions #animation-save')).toBeVisible();
+    await expect(inspector.locator('.animation-inspector-actions #animation-apply')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Живое меню' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '«Акция»' })).toBeVisible();
     await expect(page.getByText('ФОН · БЕЗ ИЗМЕНЕНИЙ')).toBeVisible();
