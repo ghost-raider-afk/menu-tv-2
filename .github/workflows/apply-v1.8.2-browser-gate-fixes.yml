@@ -62,13 +62,13 @@ jobs:
           html = Path('src/web/admin-ui/public/settings.html')
           text = html.read_text()
           replacements = {
-              'maxlength="80" required />': 'maxlength="80" required disabled />',
-              'type="color" value="#F4C915" required />': 'type="color" value="#F4C915" required disabled />',
+              'id="site-app-name" name="application_name" type="text" maxlength="80" required />': 'id="site-app-name" name="application_name" type="text" maxlength="80" required disabled />',
+              'id="site-accent-color" name="accent_color" type="color" value="#F4C915" required />': 'id="site-accent-color" name="accent_color" type="color" value="#F4C915" required disabled />',
               '<select id="site-signin-logo-size" name="signin_logo_size">': '<select id="site-signin-logo-size" name="signin_logo_size" disabled>',
-              'list="timezone-options" maxlength="80" required />': 'list="timezone-options" maxlength="80" required disabled />',
+              'id="site-timezone" name="timezone" type="text" list="timezone-options" maxlength="80" required />': 'id="site-timezone" name="timezone" type="text" list="timezone-options" maxlength="80" required disabled />',
               '<select id="site-date-format" name="date_format">': '<select id="site-date-format" name="date_format" disabled>',
-              'name="dashboard_refresh_seconds" type="number" step="1" required />': 'name="dashboard_refresh_seconds" type="number" step="1" required disabled />',
-              'name="default_screen_resolution" type="text" maxlength="32" required />': 'name="default_screen_resolution" type="text" maxlength="32" required disabled />',
+              'id="site-refresh-seconds" name="dashboard_refresh_seconds" type="number" step="1" required />': 'id="site-refresh-seconds" name="dashboard_refresh_seconds" type="number" step="1" required disabled />',
+              'id="site-default-resolution" name="default_screen_resolution" type="text" maxlength="32" required />': 'id="site-default-resolution" name="default_screen_resolution" type="text" maxlength="32" required disabled />',
               'id="site-settings-submit" type="submit">': 'id="site-settings-submit" type="submit" disabled>'
           }
           for old, new in replacements.items():
