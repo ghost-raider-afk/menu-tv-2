@@ -87,6 +87,7 @@ function exitExistingBrand(layer, brand) {
     layer.replaceChildren();
     return;
   }
+  if (existing.classList.contains('is-exiting')) return;
   const exitEffect = existing.dataset.exitEffect || 'none';
   const duration = Number(existing.dataset.exitDuration || brand.exit_duration_ms || 0);
   if (exitEffect === 'none' || duration <= 0 || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
@@ -105,14 +106,21 @@ function exitExistingBrand(layer, brand) {
 export function renderBrandTitleLayer(layer, value) {
   if (!(layer instanceof Element)) return null;
   const brand = normaliseBrandTitle(value);
+  const signature = JSON.stringify(brand);
+  const existing = layer.querySelector('.scene-brand-title');
   layer.classList.toggle('is-enabled', brand.enabled);
   if (!brand.enabled || !brand.text) {
+    layer.dataset.brandSignature = '';
     exitExistingBrand(layer, brand);
+    return brand;
+  }
+  if (layer.dataset.brandSignature === signature && existing instanceof HTMLElement && !existing.classList.contains('is-exiting')) {
     return brand;
   }
 
   clearExitTimer(layer);
   layer.replaceChildren();
+  layer.dataset.brandSignature = signature;
   const root = document.createElement('div');
   root.className = 'scene-brand-title';
   root.dataset.brandTitle = 'true';
@@ -120,6 +128,7 @@ export function renderBrandTitleLayer(layer, value) {
   root.dataset.loopEffect = brand.loop_effect;
   root.dataset.exitEffect = brand.exit_effect;
   root.dataset.exitDuration = String(brand.exit_duration_ms);
+  root.setAttribute('aria-label', brand.text);
   root.style.left = `${(brand.x / 19.2).toFixed(4)}cqw`;
   root.style.top = `${(brand.y / 19.2).toFixed(4)}cqw`;
   root.style.setProperty('--brand-font-family', BRAND_FONT_STACKS[brand.font_family]);
@@ -139,6 +148,7 @@ export function renderBrandTitleLayer(layer, value) {
   motion.className = 'scene-brand-title-motion';
   const glyphs = document.createElement('span');
   glyphs.className = 'scene-brand-title-glyphs';
+  glyphs.setAttribute('aria-hidden', 'true');
   const characters = [...brand.text];
   const center = (characters.length - 1) / 2;
   characters.forEach((character, index) => {
