@@ -24,6 +24,8 @@ let player = null;
 let entityEditor = null;
 let previewFrame = null;
 let screenLoadSequence = 0;
+let availableScreens = [];
+const selectedTargetScreenIds = new Set();
 
 function number(id) { return Number(element(id)?.value ?? 0); }
 function checked(id) { return element(id)?.checked === true; }
@@ -135,7 +137,15 @@ function brandFromControls() {
     text_color: value('animation-brand-text-color'),
     glow_color: value('animation-brand-glow-color'),
     glow_strength: number('animation-brand-glow-strength'),
+    entrance_effect: value('animation-brand-entrance-effect'),
+    loop_effect: value('animation-brand-effect'),
     effect: value('animation-brand-effect'),
+    exit_effect: value('animation-brand-exit-effect'),
+    entrance_duration_ms: number('animation-brand-entrance-duration'),
+    exit_duration_ms: number('animation-brand-exit-duration'),
+    letter_stagger_ms: number('animation-brand-stagger'),
+    amplitude_px: number('animation-brand-amplitude'),
+    overshoot: number('animation-brand-overshoot'),
     cycle_seconds: number('animation-brand-cycle')
   });
 }
@@ -154,13 +164,25 @@ function syncBrandControls(brand = currentBrand) {
   setValue('animation-brand-text-color', current.text_color);
   setValue('animation-brand-glow-color', current.glow_color);
   setValue('animation-brand-glow-strength', current.glow_strength);
-  setValue('animation-brand-effect', current.effect);
+  setValue('animation-brand-entrance-effect', current.entrance_effect);
+  setValue('animation-brand-effect', current.loop_effect || current.effect);
+  setValue('animation-brand-exit-effect', current.exit_effect);
+  setValue('animation-brand-entrance-duration', current.entrance_duration_ms);
+  setValue('animation-brand-exit-duration', current.exit_duration_ms);
+  setValue('animation-brand-stagger', current.letter_stagger_ms);
+  setValue('animation-brand-amplitude', current.amplitude_px);
+  setValue('animation-brand-overshoot', current.overshoot);
   setValue('animation-brand-cycle', current.cycle_seconds);
   const outputs = {
     'animation-brand-font-size-output': `${Math.round(current.font_size)} px`,
     'animation-brand-vertical-scale-output': `${current.vertical_scale.toFixed(2)}×`,
     'animation-brand-letter-spacing-output': `${current.letter_spacing.toFixed(1)} px`,
     'animation-brand-glow-strength-output': `${Math.round(current.glow_strength)} px`,
+    'animation-brand-entrance-duration-output': `${Math.round(current.entrance_duration_ms)} мс`,
+    'animation-brand-exit-duration-output': `${Math.round(current.exit_duration_ms)} мс`,
+    'animation-brand-stagger-output': `${Math.round(current.letter_stagger_ms)} мс`,
+    'animation-brand-amplitude-output': `${Math.round(current.amplitude_px)} px`,
+    'animation-brand-overshoot-output': `${Math.round(current.overshoot * 100)}%`,
     'animation-brand-cycle-output': `${current.cycle_seconds.toFixed(1)} с`
   };
   Object.entries(outputs).forEach(([id, text]) => { const node = element(id); if (node) node.textContent = text; });
@@ -188,7 +210,9 @@ function bindBrandControls() {
     'animation-brand-enabled', 'animation-brand-text', 'animation-brand-x', 'animation-brand-y',
     'animation-brand-font-family', 'animation-brand-font-size', 'animation-brand-vertical-scale',
     'animation-brand-letter-spacing', 'animation-brand-text-color', 'animation-brand-glow-color',
-    'animation-brand-glow-strength', 'animation-brand-effect', 'animation-brand-cycle'
+    'animation-brand-glow-strength', 'animation-brand-entrance-effect', 'animation-brand-effect', 'animation-brand-exit-effect',
+    'animation-brand-entrance-duration', 'animation-brand-exit-duration', 'animation-brand-stagger',
+    'animation-brand-amplitude', 'animation-brand-overshoot', 'animation-brand-cycle'
   ];
   ids.forEach((id) => {
     const node = element(id);
@@ -421,6 +445,7 @@ async function loadScreenOptions() {
   const select = element('animation-screen-select');
   if (!stage || !(select instanceof HTMLSelectElement)) return;
   const screens = await api.get(API.screens);
+  availableScreens = Array.isArray(screens) ? screens : [];
   if (!Array.isArray(screens) || screens.length === 0) {
     select.innerHTML = '<option value="">Нет мониторов</option>';
     select.disabled = true;
@@ -431,9 +456,157 @@ async function loadScreenOptions() {
   }
   select.innerHTML = screens.map((screen) => `<option value="${screen.id}">${screenLabel(screen)}</option>`).join('');
   const selected = screenFromUrl(screens);
+  if (selectedTargetScreenIds.size === 0 && selected?.id) selectedTargetScreenIds.add(Number(selected.id));
+  renderTargetScreens();
   select.value = String(selected.id);
   select.addEventListener('change', () => { const id = Number(select.value); if (!id) return; rememberSelectedScreen(id); void loadScreenPreview(id); });
   await loadScreenPreview(selected.id);
+}
+
+
+function setInspectorTab(name) {
+  document.querySelectorAll('[data-animation-inspector-tab]').forEach((button) => button.classList.toggle('active', button.dataset.animationInspectorTab === name));
+  document.querySelectorAll('[data-animation-inspector-panel]').forEach((panel) => { panel.hidden = panel.dataset.animationInspectorPanel !== name; });
+}
+
+function targetScreenIds() {
+  return [...selectedTargetScreenIds].filter((id) => availableScreens.some((screen) => Number(screen.id) === id));
+}
+
+function updateTargetSummary() {
+  const ids = targetScreenIds();
+  const node = element('animation-target-summary');
+  if (node) node.textContent = ids.length ? `${ids.length} ${ids.length === 1 ? 'монитор' : ids.length < 5 ? 'монитора' : 'мониторов'}` : 'Мониторы не выбраны';
+  const apply = element('animation-apply-screens');
+  if (apply) apply.disabled = ids.length === 0;
+}
+
+function renderTargetScreens() {
+  const list = element('animation-target-list');
+  if (!list) return;
+  list.replaceChildren();
+  for (const screen of availableScreens) {
+    const label = document.createElement('label');
+    label.className = 'animation-target-item';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = String(screen.id);
+    checkbox.checked = selectedTargetScreenIds.has(Number(screen.id));
+    checkbox.addEventListener('change', () => {
+      const id = Number(screen.id);
+      if (checkbox.checked) selectedTargetScreenIds.add(id); else selectedTargetScreenIds.delete(id);
+      updateTargetSummary();
+    });
+    const text = document.createElement('span');
+    text.innerHTML = `<strong>${screen.name}</strong><small>${screen.location_name || 'Без точки'}</small>`;
+    label.append(checkbox, text);
+    list.append(label);
+  }
+  updateTargetSummary();
+}
+
+function buildStudioWorkspace() {
+  const content = document.querySelector('.animation-content');
+  const previewCard = content?.querySelector('.animation-player-card-full');
+  if (!(content instanceof HTMLElement) || !(previewCard instanceof HTMLElement) || content.querySelector('.animation-studio-workspace')) return;
+
+  const workspace = document.createElement('section');
+  workspace.className = 'animation-studio-workspace';
+  const previewPane = document.createElement('div');
+  previewPane.className = 'animation-preview-pane';
+  const inspector = document.createElement('aside');
+  inspector.className = 'animation-inspector';
+  inspector.setAttribute('aria-label', 'Панель настроек анимации');
+  inspector.innerHTML = `
+    <div class="animation-inspector-head"><div><p class="eyebrow">MOTION CONTROLS</p><h2>Настройки</h2></div><div id="animation-inspector-master"></div></div>
+    <div class="animation-inspector-tabs" role="tablist">
+      <button type="button" class="active" data-animation-inspector-tab="menu">Меню</button>
+      <button type="button" data-animation-inspector-tab="text">Текст</button>
+      <button type="button" data-animation-inspector-tab="scene">Сцена</button>
+    </div>
+    <div class="animation-inspector-panels">
+      <div data-animation-inspector-panel="menu"></div>
+      <div data-animation-inspector-panel="text" hidden></div>
+      <div data-animation-inspector-panel="scene" hidden></div>
+    </div>
+    <div class="animation-targets">
+      <div class="animation-targets-head"><div><strong>Применить к мониторам</strong><small id="animation-target-summary">Мониторы не выбраны</small></div><div><button class="button button-secondary" id="animation-target-all" type="button">Все</button><button class="button button-secondary" id="animation-target-none" type="button">Снять</button></div></div>
+      <div class="animation-target-list" id="animation-target-list"></div>
+    </div>
+    <div class="animation-inspector-actions" id="animation-inspector-actions"></div>`;
+
+  previewPane.append(previewCard);
+  const menuPanel = inspector.querySelector('[data-animation-inspector-panel="menu"]');
+  const textPanel = inspector.querySelector('[data-animation-inspector-panel="text"]');
+  const scenePanel = inspector.querySelector('[data-animation-inspector-panel="scene"]');
+  const motionGrid = content.querySelector('.animation-motion-grid');
+  const announcement = content.querySelector('.animation-announcement-card');
+  const overlayGrid = content.querySelector('.animation-overlay-grid');
+  const brand = overlayGrid?.querySelector('.animation-brand-card');
+  const aquarium = overlayGrid?.querySelector('.animation-aquarium-card');
+  const entity = content.querySelector('.animation-entity-card');
+  if (motionGrid) menuPanel?.append(motionGrid);
+  if (announcement) textPanel?.append(announcement);
+  if (brand) textPanel?.append(brand);
+  if (aquarium) scenePanel?.append(aquarium);
+  if (entity) scenePanel?.append(entity);
+  overlayGrid?.remove();
+
+  const master = content.querySelector('.animation-master-toggle');
+  if (master) inspector.querySelector('#animation-inspector-master')?.append(master);
+  const save = element('animation-save');
+  if (save) { save.textContent = 'Сохранить пресет'; inspector.querySelector('#animation-inspector-actions')?.append(save); }
+  const apply = document.createElement('button');
+  apply.className = 'button button-primary';
+  apply.id = 'animation-apply-screens';
+  apply.type = 'button';
+  apply.textContent = 'Применить к выбранным';
+  inspector.querySelector('#animation-inspector-actions')?.append(apply);
+
+  workspace.append(previewPane, inspector);
+  const heading = content.querySelector('.animation-heading');
+  (heading || content.firstElementChild)?.after(workspace);
+  document.querySelectorAll('[data-animation-inspector-tab]').forEach((button) => button.addEventListener('click', () => setInspectorTab(button.dataset.animationInspectorTab)));
+  element('animation-target-all')?.addEventListener('click', () => { availableScreens.forEach((screen) => selectedTargetScreenIds.add(Number(screen.id))); renderTargetScreens(); });
+  element('animation-target-none')?.addEventListener('click', () => { selectedTargetScreenIds.clear(); renderTargetScreens(); });
+  setInspectorTab('menu');
+}
+
+function animationPayload() {
+  currentAnnouncement = announcementFromControls();
+  currentBrand = brandFromControls();
+  currentAquarium = aquariumFromControls();
+  return {
+    enabled: checked('animation-enabled'), preset_id: PROFILE_ID, profile: readMotionProfile(),
+    entity: currentEntity, announcement: currentAnnouncement, brand: currentBrand, aquarium: currentAquarium
+  };
+}
+
+function applySavedSettings(saved) {
+  writeMotionProfile(saved.profile);
+  currentAnnouncement = normaliseAnnouncement(saved.announcement);
+  currentBrand = normaliseBrandTitle(saved.brand);
+  currentAquarium = normaliseAquarium(saved.aquarium);
+  syncAnnouncementControls(currentAnnouncement);
+  syncBrandControls(currentBrand);
+  syncAquariumControls(currentAquarium);
+  applyEntity(saved.entity);
+  renderAnnouncementPreview();
+  renderBrandPreview();
+  renderAquariumPreview(false);
+}
+
+async function applySettingsToScreens() {
+  const button = element('animation-apply-screens');
+  const screenIds = targetScreenIds();
+  if (!screenIds.length) { setMessage('animation-message', 'Выберите хотя бы один монитор.', 'error'); return; }
+  setPending(button, true, 'Применяем…');
+  try {
+    const result = await api.put(API.animationApply, { screen_ids: screenIds, settings: animationPayload() });
+    applySavedSettings(result.settings);
+    setMessage('animation-message', `Анимация применена к мониторам: ${result.applied_screen_ids.length}.`, 'success');
+  } catch (error) { setMessage('animation-message', error.message); }
+  finally { setPending(button, false, 'Применяем…'); updateTargetSummary(); }
 }
 
 async function loadSettings() {
@@ -458,25 +631,9 @@ async function saveSettings() {
   const button = element('animation-save');
   setPending(button, true, 'Сохраняем…');
   try {
-    currentAnnouncement = announcementFromControls();
-    currentBrand = brandFromControls();
-    currentAquarium = aquariumFromControls();
-    const saved = await api.put(API.animationSettings, {
-      enabled: checked('animation-enabled'), preset_id: PROFILE_ID, profile: readMotionProfile(),
-      entity: currentEntity, announcement: currentAnnouncement, brand: currentBrand, aquarium: currentAquarium
-    });
-    writeMotionProfile(saved.profile);
-    currentAnnouncement = normaliseAnnouncement(saved.announcement);
-    currentBrand = normaliseBrandTitle(saved.brand);
-    currentAquarium = normaliseAquarium(saved.aquarium);
-    syncAnnouncementControls(currentAnnouncement);
-    syncBrandControls(currentBrand);
-    syncAquariumControls(currentAquarium);
-    applyEntity(saved.entity);
-    renderAnnouncementPreview();
-    renderBrandPreview();
-    renderAquariumPreview(false);
-    setMessage('animation-message', 'Настройки живого меню сохранены.', 'success');
+    const saved = await api.put(API.animationSettings, animationPayload());
+    applySavedSettings(saved);
+    setMessage('animation-message', 'Пресет сохранён. Мониторы не изменены — используйте «Применить к выбранным».', 'success');
   } catch (error) { setMessage('animation-message', error.message); }
   finally { setPending(button, false, 'Сохраняем…'); }
 }
@@ -484,6 +641,7 @@ async function saveSettings() {
 export function initialiseAnimationStudio() {
   const stage = element('animation-stage');
   if (!stage) return;
+  buildStudioWorkspace();
   player?.destroy();
   entityEditor?.destroy();
   player = new AnimationPreviewPlayer({
@@ -506,5 +664,6 @@ export function initialiseAnimationStudio() {
   syncBrandControls();
   syncAquariumControls();
   element('animation-save')?.addEventListener('click', () => { void saveSettings(); });
+  element('animation-apply-screens')?.addEventListener('click', () => { void applySettingsToScreens(); });
   void Promise.all([loadSettings(), loadScreenOptions()]).catch((error) => setMessage('animation-message', error.message));
 }
