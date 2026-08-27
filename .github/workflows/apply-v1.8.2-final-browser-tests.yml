@@ -1,0 +1,60 @@
+name: apply-v1.8.2-final-browser-tests
+
+on:
+  push:
+    branches:
+      - fix/v1.8.2-brand-entity-decoupling
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/v1.8.2-brand-entity-decoupling
+          fetch-depth: 0
+      - name: Align browser tests with tabbed Motion Studio
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, got {count}: {old!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'tests/browser/animation-studio.spec.js',
+              "    await page.locator('#animation-announcement-enabled').check();",
+              "    const textTab = inspector.locator('[data-animation-inspector-tab=\"text\"]');\n    await textTab.click();\n    await expect(textTab).toHaveClass(/active/);\n    await page.locator('#animation-announcement-enabled').check();"
+          )
+          replace_once(
+              'tests/browser/animation-studio.spec.js',
+              "    await page.locator('#animation-aquarium-enabled').check();",
+              "    const sceneTab = inspector.locator('[data-animation-inspector-tab=\"scene\"]');\n    await sceneTab.click();\n    await expect(sceneTab).toHaveClass(/active/);\n    await page.locator('#animation-aquarium-enabled').check();"
+          )
+          replace_once(
+              'tests/browser/brand-title-editing.spec.js',
+              "    await expect(page).toHaveTitle('MIRA-TV');",
+              "    await expect(page).toHaveTitle('MIRA-TV — Анимация');"
+          )
+          PY
+          git diff --check
+      - name: Commit aligned tests and remove helper workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-v1.8.2-final-browser-tests.yml
+          git add tests/browser/animation-studio.spec.js tests/browser/brand-title-editing.spec.js
+          git commit -m "Align final v1.8.2 browser tests"
+          git push origin HEAD:fix/v1.8.2-brand-entity-decoupling
