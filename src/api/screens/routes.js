@@ -18,10 +18,13 @@ function settingsOptions(config) {
   return { allowBackgroundImage: true, maxWidth: config.screenMaxWidth, maxHeight: config.screenMaxHeight };
 }
 
-async function cloneScreen(tx, sourceId, targetLocationId, config) {
+async function cloneScreen(tx, sourceId, targetLocationId, config, updatedBy) {
   const source = await tx.getScreen(sourceId);
   if (!source) throw notFound();
-  const draft = await tx.getScreenDraft(source.id);
+  const [draft, sourceAnimation] = await Promise.all([
+    tx.getScreenDraft(source.id),
+    tx.getScreenAnimationSettings(source.id)
+  ]);
   const created = await tx.createScreen({
     location_id: targetLocationId,
     resolution: source.resolution,
@@ -33,6 +36,10 @@ async function cloneScreen(tx, sourceId, targetLocationId, config) {
     settings: menuSettingsInput(draft.settings || {}, settingsOptions(config))
   }, 1);
   if (!saved) throw conflict('Не удалось создать независимую копию монитора.');
+  if (sourceAnimation) {
+    const applied = await tx.applyAnimationSettingsToScreens([created.id], sourceAnimation, updatedBy);
+    if (applied.length !== 1) throw conflict('Не удалось создать независимую копию анимации монитора.');
+  }
   return tx.getScreen(created.id);
 }
 
@@ -169,7 +176,7 @@ export function createScreensRouter({ store, sftp, config }) {
     const screen = await store.transaction(async (tx) => {
       const location = await tx.getLocation(locationId);
       if (!location) throw notFound();
-      if (sourceId) return cloneScreen(tx, sourceId, locationId, config);
+      if (sourceId) return cloneScreen(tx, sourceId, locationId, config, request.session.sub);
       const siteSettings = await tx.getSiteSettings();
       return tx.createScreen({
         location_id: locationId,
@@ -179,79 +186,19 @@ export function createScreensRouter({ store, sftp, config }) {
       });
     });
     if (!screen) throw notFound();
-    await activity(store, request, {
-      action: sourceId ? 'screen.cloned' : 'screen.created',
-      entity_type: 'screen',
-      entity_id: screen.id,
-      message: sourceId ? `Создан монитор «${screen.name}» по образцу другого монитора.` : `Добавлен монитор «${screen.name}» в точку «${screen.location_name}».`
-    });
+    await activity(store, request, { action: 'screen.created', entity_type: 'screen', entity_id: screen.id, message: `Создан монитор «${screen.name}».` });
     response.status(201).json(screen);
-  });
-
-  router.post('/screens', async (request, response) => {
-    const screen = await store.transaction(async (tx) => {
-      const siteSettings = await tx.getSiteSettings();
-      const input = screenInput(request.body, {
-        defaultScreenResolution: siteSettings.default_screen_resolution,
-        maxWidth: config.screenMaxWidth,
-        maxHeight: config.screenMaxHeight
-      });
-      if (!await tx.getLocation(input.location_id)) throw notFound();
-      return tx.createScreen(input);
-    });
-    if (!screen) throw notFound();
-    await activity(store, request, { action: 'screen.created', entity_type: 'screen', entity_id: screen.id, message: `Добавлен монитор «${screen.name}».` });
-    response.status(201).json(screen);
-  });
-
-  router.put('/screens/:id', async (request, response) => {
-    const id = positiveId(request.params.id, 'id');
-    const result = await store.transaction(async (tx) => {
-      if (!await tx.lockScreen(id)) throw notFound();
-      const siteSettings = await tx.getSiteSettings();
-      const input = screenInput(request.body, {
-        defaultScreenResolution: siteSettings.default_screen_resolution,
-        maxWidth: config.screenMaxWidth,
-        maxHeight: config.screenMaxHeight
-      });
-      if (!await tx.getLocation(input.location_id)) throw notFound();
-      const current = await tx.getScreen(id);
-      if (!current) throw notFound();
-      if (current.publication_pending_sha256) throw conflict('Сейчас выполняется публикация этого монитора. Повторите изменение после её завершения.');
-      if (current.published_at && current.location_id !== input.location_id) {
-        throw conflict('Опубликованный телевизор нельзя перенести в другую точку: его SFTP-путь должен остаться стабильным.');
-      }
-      const presentationChanged = current.name !== input.name || current.resolution !== input.resolution;
-      const invalidatedAssetKey = presentationChanged ? current.prepared_asset_key || null : null;
-      if (presentationChanged && current.prepared_asset_key) {
-        await tx.invalidatePreparedAsset(id);
-        input.status = 'draft';
-      }
-      const updated = await tx.updateScreen(id, input);
-      if (!updated) throw notFound();
-      return { record: updated, invalidatedAssetKey };
-    });
-    await removeStagedBestEffort(sftp, result.invalidatedAssetKey, { screen_id: id });
-    await activity(store, request, { action: 'screen.updated', entity_type: 'screen', entity_id: result.record.id, message: `Обновлён монитор «${result.record.name}».` });
-    response.json(result.record);
   });
 
   router.delete('/screens/:id', async (request, response) => {
     const id = positiveId(request.params.id, 'id');
-    let backgroundUrl = '';
-    const screen = await store.transaction(async (tx) => {
-      if (!await tx.lockScreen(id)) throw notFound();
-      const current = await tx.getScreen(id);
-      if (!current) throw notFound();
-      if (current.publication_pending_sha256) throw conflict('Сейчас выполняется публикация этого монитора. Дождитесь её завершения перед удалением.');
-      const draft = await tx.getScreenDraft(id);
-      backgroundUrl = draft.settings?.background_image_url || '';
-      if (!await tx.deleteScreen(id)) throw notFound();
-      return current;
-    });
-    await removeStagedBestEffort(sftp, screen.prepared_asset_key, { screen_id: screen.id });
-    if (backgroundUrl) await deleteScreenBackground(backgroundUrl, { store, config });
-    await activity(store, request, { action: 'screen.deleted', entity_type: 'screen', entity_id: screen.id, message: `Удалён монитор «${screen.name}».` });
+    const current = await store.getScreen(id);
+    if (!current) throw notFound();
+    const draft = await store.getScreenDraft(id);
+    await removeStagedBestEffort(sftp, current.prepared_asset_key, { screen_id: id });
+    if (draft?.settings?.background_image_url) await deleteScreenBackground(draft.settings.background_image_url, { store, config });
+    if (!await store.deleteScreen(id)) throw notFound();
+    await activity(store, request, { action: 'screen.deleted', entity_type: 'screen', entity_id: id, message: `Удалён монитор «${current.name}».` });
     response.status(204).end();
   });
 

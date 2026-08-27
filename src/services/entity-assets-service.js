@@ -147,7 +147,12 @@ async function persistEntityAsset({ temporary, target, filename, media, mime, co
     await unlink(target).catch(() => undefined);
     throw error;
   }
-  if (previousFile && previousFile !== filename) await unlink(path.join(path.dirname(target), previousFile)).catch(() => undefined);
+  if (previousFile && previousFile !== filename) {
+    const previousUrl = `/site-assets/${ENTITY_DIR}/${previousFile}`;
+    if (!await store.isAnimationEntityAssetReferenced(previousUrl)) {
+      await unlink(path.join(path.dirname(target), previousFile)).catch(() => undefined);
+    }
+  }
   return updated;
 }
 

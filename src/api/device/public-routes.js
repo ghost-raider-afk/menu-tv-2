@@ -201,7 +201,7 @@ export function createDevicePublicRouter({ store, config }) {
     const [screen, draft, animationSettings] = await Promise.all([
       store.getScreen(session.screen_id),
       store.getScreenDraft(session.screen_id),
-      store.getAnimationSettings()
+      store.getScreenAnimationSettings(session.screen_id)
     ]);
     if (!screen || screen.active === false) {
       response.setHeader('Set-Cookie', deviceSessionCookie('', config, 0));

@@ -382,6 +382,19 @@ async function warmPlayerAssetCache(context) {
   await Promise.all(assets.map((asset) => fetch(asset, { cache: 'reload' }).catch(() => undefined)));
 }
 
+function ensurePlayerLayer(className, attribute) {
+  let layer = playerStage.querySelector(`[${attribute}]`);
+  if (layer instanceof HTMLElement) {
+    layer.classList.add(className);
+    return layer;
+  }
+  layer = document.createElement('div');
+  layer.className = className;
+  layer.setAttribute(attribute, '');
+  playerStage.append(layer);
+  return layer;
+}
+
 function renderPlayerContext(context) {
   const viewport = resolutionOf(context.screen);
   const model = buildRenderModel(context.draft, viewport);
@@ -391,15 +404,17 @@ function renderPlayerContext(context) {
     fallbackTitle: context.screen?.name || 'Меню'
   });
   const layout = buildRenderLayout(model, lines);
-  playerStage.innerHTML = `
-    <div class="tv-player-menu-layer">${buildTableSvg(model, lines, layout)}</div>
-    <div class="tv-player-entity-layer" data-motion-entity-layer aria-hidden="true"></div>
-    <div class="tv-player-announcement-layer" data-announcement-layer aria-label="Объявление"></div>`;
+  const menuLayer = ensurePlayerLayer('tv-player-menu-layer', 'data-player-menu-layer');
+  const entityLayer = ensurePlayerLayer('tv-player-entity-layer', 'data-motion-entity-layer');
+  const announcementLayer = ensurePlayerLayer('tv-player-announcement-layer', 'data-announcement-layer');
+  entityLayer.setAttribute('aria-hidden', 'true');
+  announcementLayer.setAttribute('aria-label', 'Объявление');
+  menuLayer.innerHTML = buildTableSvg(model, lines, layout);
   playerStage.style.backgroundColor = model.settings.background_color || '#101828';
   const background = sameOriginAsset(model.settings.background_image_url);
   playerStage.style.backgroundImage = background ? `url(${JSON.stringify(background)})` : 'none';
   renderSceneEntity(playerStage, context.entity, { editable: false });
-  renderAnnouncementLayer(playerStage.querySelector('[data-announcement-layer]'), context.announcement);
+  renderAnnouncementLayer(announcementLayer, context.announcement);
   liveMotion.render({
     enabled: context.animation?.enabled === true,
     profile: context.animation?.profile,

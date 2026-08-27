@@ -71,4 +71,8 @@ export function initialiseSettings() {
       setPending(submit, false, 'Сохраняем…');
     }
   });
+  siteForm.querySelectorAll('input, select, button').forEach((control) => {
+    if (control.id !== 'site-domain') control.disabled = false;
+  });
+  siteForm.dataset.hydrated = 'true';
 }

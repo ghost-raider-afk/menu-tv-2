@@ -47,6 +47,8 @@ test('real TV player runs the continuous WASM Motion Engine and keeps it availab
   assert.doesNotMatch(adapter, /kind: 'price'/);
   assert.match(wasmDriver, /requestAnimationFrame/);
   assert.match(publicRoutes, /animation:\s*\{/);
+  assert.match(publicRoutes, /store\.getScreenAnimationSettings\(session\.screen_id\)/);
+  assert.doesNotMatch(publicRoutes, /store\.getAnimationSettings\(\)/);
   assert.match(publicRoutes, /enabled: animationSettings\?\.enabled === true/);
   assert.match(playerCss, /\.tv-player-announcement-layer/);
   assert.match(playerCss, /transform-box:\s*fill-box/);

@@ -163,3 +163,42 @@ test('pairing card stays fully inside common TV viewports', async ({ browser }) 
     }
   }
 });
+
+
+test('unchanged Brand keeps the same DOM across periodic Player refresh', async ({ browser }) => {
+  const context = await browser.newContext({ baseURL, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  let playerContextRequests = 0;
+  try {
+    await page.route('**/api/device/session', (route) => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        authorized: true, device_id: 1, device_key: 'device-key-refresh-123456',
+        session_expires_at: new Date(Date.now() + 86400000).toISOString(),
+        screen: { id: 1, name: 'ТВ 1', resolution: '1920x1080', location_id: 1, location_name: 'Точка 1', location_number: 1 }
+      })
+    }));
+    await page.route('**/api/device/player-context', (route) => {
+      playerContextRequests += 1;
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          screen: { id: 1, name: 'ТВ 1', resolution: '1920x1080', location_id: 1, location_name: 'Точка 1', location_number: 1 },
+          draft: { rows: [], settings: {}, revision: 1 }, products: [], packaging: [],
+          animation: { enabled: false, profile: null }, entity: null, announcement: null,
+          brand: { enabled: true, text: 'MIRA REFRESH', entrance_effect: 'blur-reveal', loop_effect: 'none', exit_effect: 'none' },
+          aquarium: null, refresh_interval_ms: 2000
+        })
+      });
+    });
+
+    await page.goto('/player.html');
+    const brand = page.locator('[data-brand-layer] .scene-brand-title');
+    await expect(brand).toBeVisible();
+    await brand.evaluate((node) => { node.dataset.refreshIdentity = 'preserved'; });
+    await expect.poll(() => playerContextRequests, { timeout: 5000 }).toBeGreaterThanOrEqual(2);
+    await expect(brand).toHaveAttribute('data-refresh-identity', 'preserved');
+  } finally {
+    await context.close();
+  }
+});

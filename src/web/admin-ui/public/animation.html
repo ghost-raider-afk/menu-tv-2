@@ -111,9 +111,11 @@
               <div class="card-heading"><div><p class="eyebrow">BRAND ENTITY</p><h2>Название бренда</h2><p>Отдельная текстовая сущность. Не связана с таблицей: имеет собственную анимацию, неон и позицию на экране.</p></div></div>
               <label class="animation-entity-visible"><input id="animation-brand-enabled" type="checkbox" /><span>Показывать название бренда</span></label>
               <div class="animation-control-grid">
-                <label class="field"><span>Название</span><input id="animation-brand-text" type="text" maxlength="80" value="MIRA-TV" /></label>
+                <label class="field"><span>Название</span><input id="animation-brand-text" type="text" maxlength="80" placeholder="Например: БАР МАЯК" /></label>
                 <label class="field"><span>Шрифт</span><select id="animation-brand-font-family"><option value="inter">Inter / System</option><option value="arial">Arial</option><option value="montserrat">Montserrat</option><option value="oswald">Oswald / Narrow</option><option value="georgia">Georgia</option></select></label>
-                <label class="field"><span>Анимация</span><select id="animation-brand-effect"><option value="neon-pulse">Neon Pulse</option><option value="breathe">Breathe</option><option value="float">Float</option><option value="none">Статично</option></select></label>
+                <label class="field"><span>Вход</span><select id="animation-brand-entrance-effect"><option value="blur-reveal">Blur Reveal</option><option value="pop-up">Pop Up</option><option value="zoom-in">Zoom In</option><option value="tracking-expand">Tracking Expand</option><option value="neon-reveal">Neon Reveal</option><option value="none">Без входа</option></select></label>
+                <label class="field"><span>Движение букв</span><select id="animation-brand-effect"><option value="wave">Wave</option><option value="neon-pulse">Neon Pulse</option><option value="stretch">Stretch</option><option value="float">Float</option><option value="breathe">Breathe</option><option value="none">Статично</option></select></label>
+                <label class="field"><span>Выход</span><select id="animation-brand-exit-effect"><option value="fade-out">Fade Out</option><option value="blur-out">Blur Out</option><option value="zoom-out">Zoom Out</option><option value="none">Без выхода</option></select></label>
               </div>
               <div class="animation-slider-grid">
                 <label class="field"><span>X</span><input id="animation-brand-x" type="number" min="0" max="1920" step="1" /></label>
@@ -124,7 +126,12 @@
                 <label class="field"><span>Цвет текста</span><input id="animation-brand-text-color" type="color" value="#FFFFFF" /></label>
                 <label class="field"><span>Цвет glow</span><input id="animation-brand-glow-color" type="color" value="#35D9FF" /></label>
                 <label class="field animation-range-field"><span>Сила glow</span><div><input id="animation-brand-glow-strength" type="range" min="0" max="48" step="1" /><output id="animation-brand-glow-strength-output">18 px</output></div></label>
-                <label class="field animation-range-field"><span>Период анимации</span><div><input id="animation-brand-cycle" type="range" min="2" max="30" step="0.5" /><output id="animation-brand-cycle-output">5.5 с</output></div></label>
+                <label class="field animation-range-field"><span>Вход, длительность</span><div><input id="animation-brand-entrance-duration" type="range" min="200" max="3000" step="50" /><output id="animation-brand-entrance-duration-output">900 мс</output></div></label>
+                <label class="field animation-range-field"><span>Задержка между буквами</span><div><input id="animation-brand-stagger" type="range" min="0" max="250" step="5" /><output id="animation-brand-stagger-output">55 мс</output></div></label>
+                <label class="field animation-range-field"><span>Амплитуда букв</span><div><input id="animation-brand-amplitude" type="range" min="0" max="80" step="1" /><output id="animation-brand-amplitude-output">12 px</output></div></label>
+                <label class="field animation-range-field"><span>Overshoot</span><div><input id="animation-brand-overshoot" type="range" min="0" max="0.45" step="0.01" /><output id="animation-brand-overshoot-output">12%</output></div></label>
+                <label class="field animation-range-field"><span>Выход, длительность</span><div><input id="animation-brand-exit-duration" type="range" min="150" max="2000" step="50" /><output id="animation-brand-exit-duration-output">550 мс</output></div></label>
+                <label class="field animation-range-field"><span>Период движения</span><div><input id="animation-brand-cycle" type="range" min="2" max="30" step="0.5" /><output id="animation-brand-cycle-output">5.5 с</output></div></label>
               </div>
               <div class="animation-entity-positioning">
                 <span>Быстрое позиционирование</span>

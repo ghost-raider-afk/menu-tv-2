@@ -21,7 +21,10 @@ export function createLocationsRouter({ store, config }) {
       const created = await tx.createLocation(input);
       const sourceScreens = await tx.listScreensByLocation(sourceId);
       for (const sourceScreen of sourceScreens) {
-        const sourceDraft = await tx.getScreenDraft(sourceScreen.id);
+        const [sourceDraft, sourceAnimation] = await Promise.all([
+          tx.getScreenDraft(sourceScreen.id),
+          tx.getScreenAnimationSettings(sourceScreen.id)
+        ]);
         const cloned = await tx.createScreen({
           location_id: created.id,
           name: sourceScreen.name,
@@ -36,6 +39,10 @@ export function createLocationsRouter({ store, config }) {
         });
         const saved = await tx.saveScreenDraft(cloned.id, { rows: structuredClone(sourceDraft.rows || []), settings }, 1);
         if (!saved) throw conflict('Не удалось создать независимую копию мониторов торговой точки.');
+        if (sourceAnimation) {
+          const applied = await tx.applyAnimationSettingsToScreens([cloned.id], sourceAnimation, request.session.sub);
+          if (applied.length !== 1) throw conflict('Не удалось скопировать анимацию монитора торговой точки.');
+        }
       }
       return tx.getLocation(created.id);
     });

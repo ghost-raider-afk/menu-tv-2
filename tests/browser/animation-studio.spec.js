@@ -91,6 +91,17 @@ test('animation studio keeps glyphs fixed while light surfaces, promo glow and o
   const original = await animationSettings(page);
   try {
     await page.goto(`/animation.html?screen=${fixture.screenId}`);
+    const previewPane = page.locator('.animation-preview-pane');
+    const inspector = page.locator('.animation-inspector');
+    const [previewBox, inspectorBox] = await Promise.all([previewPane.boundingBox(), inspector.boundingBox()]);
+    expect(previewBox).not.toBeNull();
+    expect(inspectorBox).not.toBeNull();
+    expect(previewBox.x).toBeLessThan(inspectorBox.x);
+    await expect(inspector.locator('.animation-inspector-tabs')).toContainText('Меню');
+    await expect(inspector.locator('.animation-inspector-tabs')).toContainText('Текст');
+    await expect(inspector.locator('.animation-inspector-tabs')).toContainText('Сцена');
+    await expect(inspector.locator('.animation-inspector-actions #animation-save')).toBeVisible();
+    await expect(inspector.locator('.animation-inspector-actions #animation-apply-screens')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Живое меню' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '«Акция»' })).toBeVisible();
     await expect(page.getByText('ФОН · БЕЗ ИЗМЕНЕНИЙ')).toBeVisible();
@@ -130,6 +141,9 @@ test('animation studio keeps glyphs fixed while light surfaces, promo glow and o
     expect(Math.abs((after?.x || 0) - (before?.x || 0))).toBeLessThan(0.1);
     expect(Math.abs((after?.y || 0) - (before?.y || 0))).toBeLessThan(0.1);
 
+    const textTab = inspector.locator('[data-animation-inspector-tab="text"]');
+    await textTab.click();
+    await expect(textTab).toHaveClass(/active/);
     await page.locator('#animation-announcement-enabled').check();
     await page.locator('#animation-announcement-text').fill('Сегодня специальное предложение до 22:00');
     await page.locator('#animation-announcement-font-family').selectOption('oswald');
@@ -145,6 +159,9 @@ test('animation studio keeps glyphs fixed while light surfaces, promo glow and o
     await page.locator('#animation-brand-effect').selectOption('neon-pulse');
     await expect(page.locator('#animation-stage .scene-brand-title-glyphs')).toHaveText('БАР МАЯК');
 
+    const sceneTab = inspector.locator('[data-animation-inspector-tab="scene"]');
+    await sceneTab.click();
+    await expect(sceneTab).toHaveClass(/active/);
     await page.locator('#animation-aquarium-enabled').check();
     await page.locator('#animation-aquarium-style').selectOption('neon');
     await page.locator('#animation-aquarium-fish-count').fill('4');
