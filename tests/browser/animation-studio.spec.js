@@ -101,7 +101,7 @@ test('animation studio keeps glyphs fixed while light surfaces, promo glow and o
     await expect(inspector.locator('.animation-inspector-tabs')).toContainText('Текст');
     await expect(inspector.locator('.animation-inspector-tabs')).toContainText('Сцена');
     await expect(inspector.locator('.animation-inspector-actions #animation-save')).toBeVisible();
-    await expect(inspector.locator('.animation-inspector-actions #animation-apply')).toBeVisible();
+    await expect(inspector.locator('.animation-inspector-actions #animation-apply-screens')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Живое меню' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '«Акция»' })).toBeVisible();
     await expect(page.getByText('ФОН · БЕЗ ИЗМЕНЕНИЙ')).toBeVisible();

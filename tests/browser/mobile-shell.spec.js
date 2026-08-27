@@ -28,10 +28,11 @@ test.describe('mobile application shell', () => {
 
     const rail = page.locator('.ui-rail');
     await expect(rail).toBeVisible();
-    await expect(rail.locator('.ui-rail-button')).toHaveCount(4);
+    await expect(rail.locator('.ui-rail-button')).toHaveCount(5);
     await expect(rail.getByLabel('Обзор')).toBeVisible();
     await expect(rail.getByLabel('Мониторы')).toBeVisible();
     await expect(rail.getByLabel('Каталог')).toBeVisible();
+    await expect(rail.getByLabel('Анимация')).toBeVisible();
     await expect(rail.getByLabel('Настройки')).toBeVisible();
 
     const railBox = await rail.boundingBox();
@@ -50,10 +51,14 @@ test.describe('mobile application shell', () => {
     await expect(page.locator('.ui-context-backdrop')).toHaveClass(/is-visible/);
     await expect(page.locator('body')).toHaveClass(/ui-context-open/);
 
-    await page.getByRole('link', { name: /^Анимация/ }).click();
-    await expect(page).toHaveURL(/\/animation\.html$/);
+    await page.getByRole('link', { name: /^Журнал событий/ }).click();
+    await expect(page).toHaveURL(/\/events\.html$/);
     await expect(page.locator('.ui-context')).toHaveClass(/is-collapsed/);
     await expect(page.locator('body')).not.toHaveClass(/ui-context-open/);
+
+    await page.locator('.ui-rail').getByLabel('Анимация').click();
+    await expect(page).toHaveURL(/\/animation\.html$/);
+    await expect(page.locator('.ui-context')).toHaveClass(/is-collapsed/);
     await expectNoPageOverflow(page);
   });
 
@@ -96,7 +101,7 @@ test.describe('mobile application shell', () => {
 test('mobile shell remains usable at 360px width', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await login(page);
-  await expect(page.locator('.ui-rail-button')).toHaveCount(4);
+  await expect(page.locator('.ui-rail-button')).toHaveCount(5);
   await expectNoPageOverflow(page);
   await page.locator('.ui-rail-button[aria-label="Каталог"]').click();
   await expect(page).toHaveURL(/\/catalog\.html$/);

@@ -33,6 +33,9 @@ test('Brand Entity is user-owned and can be cleared, replaced and persisted inde
   const original = await getSettings(page);
   try {
     await page.goto('/animation.html');
+    const textTab = page.locator('[data-animation-inspector-tab="text"]');
+    await textTab.click();
+    await expect(textTab).toHaveClass(/active/);
     const input = page.locator('#animation-brand-text');
     await expect(input).toBeVisible();
 
