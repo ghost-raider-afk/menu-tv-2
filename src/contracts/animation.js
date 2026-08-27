@@ -75,3 +75,11 @@ export function animationSettingsInput(body) {
     aquarium: aquariumInput(body.aquarium)
   };
 }
+
+export function animationTargetScreenIds(value) {
+  if (!Array.isArray(value) || value.length < 1) throw new ValidationError('Выберите хотя бы один монитор для применения анимации.');
+  if (value.length > 200) throw new ValidationError('За один раз можно выбрать не более 200 мониторов.');
+  const ids = [...new Set(value.map((item) => Number(item)))];
+  if (ids.some((id) => !Number.isSafeInteger(id) || id < 1)) throw new ValidationError('Список мониторов содержит некорректный идентификатор.');
+  return ids;
+}
