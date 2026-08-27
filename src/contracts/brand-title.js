@@ -55,7 +55,7 @@ export function completeBrandTitle(value = {}) {
   const loopEffect = enumValue(source.loop_effect, BRAND_LOOP_EFFECTS, legacyLoop);
   return {
     enabled: source.enabled === true,
-    text: String(source.text ?? DEFAULT_BRAND_TITLE.text).trim().slice(0, 80),
+    text: String(source.text ?? DEFAULT_BRAND_TITLE.text).replace(/\r\n?/g, '\n').trim().slice(0, 80),
     x: clamp(source.x, DEFAULT_BRAND_TITLE.x, 0, 1920),
     y: clamp(source.y, DEFAULT_BRAND_TITLE.y, 0, 1080),
     font_family: enumValue(source.font_family, BRAND_FONTS, DEFAULT_BRAND_TITLE.font_family),
