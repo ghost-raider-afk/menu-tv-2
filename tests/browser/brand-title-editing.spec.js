@@ -44,12 +44,12 @@ test('Brand Entity is user-owned and can be cleared, replaced and persisted inde
     await expect(input).toHaveValue('');
     await input.fill('БАР\nСЕВЕР');
     await expect(input).toHaveValue('БАР\nСЕВЕР');
+    if (!(await page.locator('#animation-brand-enabled').isChecked())) await page.locator('#animation-brand-enabled').check();
     const lines = page.locator('#animation-stage .scene-brand-title-line');
     await expect(lines).toHaveCount(2);
     await expect(lines.nth(0)).toHaveText('БАР');
     await expect(lines.nth(1)).toHaveText('СЕВЕР');
 
-    if (!(await page.locator('#animation-brand-enabled').isChecked())) await page.locator('#animation-brand-enabled').check();
     const responsePromise = page.waitForResponse((response) => response.url().endsWith('/api/settings/animation') && response.request().method() === 'PUT');
     await page.locator('#animation-save').click();
     expect((await responsePromise).ok()).toBeTruthy();
