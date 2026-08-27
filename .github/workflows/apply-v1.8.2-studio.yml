@@ -1,4 +1,5 @@
 name: Apply Motion Studio v1.8.2
+# v1.8.2 validation pass: legacy snapshot normalization
 
 on:
   push:
