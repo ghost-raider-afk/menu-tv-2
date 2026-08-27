@@ -28,17 +28,46 @@ async function putSettings(page, payload) {
   }, payload);
 }
 
+async function createPreviewScreen(page) {
+  return page.evaluate(async () => {
+    async function request(url, init = {}) {
+      const response = await fetch(url, {
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', ...(init.headers || {}) },
+        ...init
+      });
+      if (!response.ok) throw new Error(`${init.method || 'GET'} ${url} failed: ${response.status}`);
+      return response.status === 204 ? null : response.json();
+    }
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const location = await request('/api/locations', {
+      method: 'POST', body: JSON.stringify({ name: `Brand multiline ${suffix}`, address: '', active: true })
+    });
+    const screen = await request(`/api/locations/${location.id}/screens`, { method: 'POST', body: '{}' });
+    return { locationId: location.id, screenId: screen.id };
+  });
+}
+
+async function removePreviewScreen(page, fixture) {
+  await page.evaluate(async ({ screenId, locationId }) => {
+    await fetch(`/api/screens/${screenId}`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => undefined);
+    await fetch(`/api/locations/${locationId}`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => undefined);
+  }, fixture);
+}
+
 test('Brand Entity is user-owned and can be cleared, replaced and persisted independently of MIRA-TV branding', async ({ page }) => {
   await login(page);
+  const fixture = await createPreviewScreen(page);
   const original = await getSettings(page);
   try {
-    await page.goto('/animation.html');
+    await page.goto(`/animation.html?screen=${fixture.screenId}`);
     const textTab = page.locator('[data-animation-inspector-tab="text"]');
     await textTab.click();
     await expect(textTab).toHaveClass(/active/);
     const input = page.locator('#animation-brand-text');
     await expect(input).toBeVisible();
     await expect(input).toHaveJSProperty('tagName', 'TEXTAREA');
+    await expect(page.locator('#animation-stage')).toHaveAttribute('data-screen-id', String(fixture.screenId));
 
     await input.fill('');
     await expect(input).toHaveValue('');
@@ -68,5 +97,6 @@ test('Brand Entity is user-owned and can be cleared, replaced and persisted inde
       brand: original.brand,
       aquarium: original.aquarium
     });
+    await removePreviewScreen(page, fixture);
   }
 });
