@@ -29,16 +29,16 @@ export async function migrateScreenAnimationSettings(pool) {
        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (screen_id) DO NOTHING`,
       [
-        screen.id,
-        animation.enabled,
-        animation.preset_id,
-        animation.profile_json,
-        animation.entity_json,
-        animation.announcement_json,
-        animation.brand_json,
-        animation.aquarium_json,
-        animation.updated_by,
-        animation.updated_at
+        Number(screen.id),
+        animation.enabled === true,
+        animation.preset_id || 'cinematic-live-menu',
+        animation.profile_json || '{}',
+        animation.entity_json || '{}',
+        animation.announcement_json || '{}',
+        animation.brand_json || '{}',
+        animation.aquarium_json || '{}',
+        animation.updated_by || '',
+        animation.updated_at || new Date().toISOString()
       ]
     );
   }
