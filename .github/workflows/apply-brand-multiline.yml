@@ -1,0 +1,158 @@
+name: apply-brand-multiline
+
+on:
+  push:
+    branches:
+      - feat/brand-multiline-text
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: feat/brand-multiline-text
+          fetch-depth: 0
+      - name: Apply multiline Brand implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, got {count}: {old!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'src/web/admin-ui/public/animation.html',
+              '<label class="field"><span>Название</span><input id="animation-brand-text" type="text" maxlength="80" placeholder="Например: БАР МАЯК" /></label>',
+              '<label class="field"><span>Название</span><textarea id="animation-brand-text" rows="2" maxlength="80" placeholder="Например: БАР МАЯК"></textarea><small>Enter — новая строка.</small></label>'
+          )
+
+          for path in ('src/contracts/brand-title.js', 'src/web/admin-ui/public/js/motion/brand-title.js'):
+              replace_once(
+                  path,
+                  'text: String(source.text ?? DEFAULT_BRAND_TITLE.text).trim().slice(0, 80),',
+                  "text: String(source.text ?? DEFAULT_BRAND_TITLE.text).replace(/\\r\\n?/g, '\\n').trim().slice(0, 80),"
+              )
+
+          brand = Path('src/web/admin-ui/public/js/motion/brand-title.js')
+          text = brand.read_text()
+          old = '''  const motion = document.createElement('div');
+  motion.className = 'scene-brand-title-motion';
+  const glyphs = document.createElement('span');
+  glyphs.className = 'scene-brand-title-glyphs';
+  glyphs.setAttribute('aria-hidden', 'true');
+  const characters = [...brand.text];
+  const center = (characters.length - 1) / 2;
+  characters.forEach((character, index) => {
+    const shell = document.createElement('span');
+    shell.className = 'scene-brand-glyph';
+    shell.style.setProperty('--brand-delay', `${Math.round(index * brand.letter_stagger_ms)}ms`);
+    shell.style.setProperty('--brand-loop-delay', `${Math.round(brand.entrance_duration_ms + index * brand.letter_stagger_ms + 90)}ms`);
+    shell.style.setProperty('--brand-track-offset', `${((index - center) * Math.max(4, brand.amplitude_px) / 19.2).toFixed(4)}cqw`);
+    const loop = document.createElement('span');
+    loop.className = 'scene-brand-glyph-loop';
+    const char = document.createElement('span');
+    char.className = 'scene-brand-glyph-char';
+    char.textContent = character === ' ' ? '\\u00a0' : character;
+    loop.append(char);
+    shell.append(loop);
+    glyphs.append(shell);
+  });
+  motion.append(glyphs);'''
+          new = '''  const motion = document.createElement('div');
+  motion.className = 'scene-brand-title-motion';
+  const glyphs = document.createElement('span');
+  glyphs.className = 'scene-brand-title-glyphs';
+  glyphs.setAttribute('aria-hidden', 'true');
+  let glyphIndex = 0;
+  brand.text.split('\\n').forEach((lineText, lineIndex) => {
+    const line = document.createElement('span');
+    line.className = 'scene-brand-title-line';
+    line.dataset.brandLine = String(lineIndex + 1);
+    const characters = [...lineText];
+    const center = (characters.length - 1) / 2;
+    if (!characters.length) line.classList.add('is-empty');
+    characters.forEach((character, index) => {
+      const sequenceIndex = glyphIndex++;
+      const shell = document.createElement('span');
+      shell.className = 'scene-brand-glyph';
+      shell.style.setProperty('--brand-delay', `${Math.round(sequenceIndex * brand.letter_stagger_ms)}ms`);
+      shell.style.setProperty('--brand-loop-delay', `${Math.round(brand.entrance_duration_ms + sequenceIndex * brand.letter_stagger_ms + 90)}ms`);
+      shell.style.setProperty('--brand-track-offset', `${((index - center) * Math.max(4, brand.amplitude_px) / 19.2).toFixed(4)}cqw`);
+      const loop = document.createElement('span');
+      loop.className = 'scene-brand-glyph-loop';
+      const char = document.createElement('span');
+      char.className = 'scene-brand-glyph-char';
+      char.textContent = character === ' ' ? '\\u00a0' : character;
+      loop.append(char);
+      shell.append(loop);
+      line.append(shell);
+    });
+    glyphs.append(line);
+  });
+  motion.append(glyphs);'''
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'brand-title.js: expected renderer block once, got {count}')
+          brand.write_text(text.replace(old, new, 1))
+
+          css = Path('src/web/admin-ui/public/css/brand-motion-v2.css')
+          text = css.read_text()
+          old = '.scene-brand-title-motion{will-change:auto}.scene-brand-title-glyphs{display:inline-flex;align-items:baseline;transform:none!important;transform-origin:center;letter-spacing:var(--brand-letter-spacing);text-shadow:none!important}.scene-brand-glyph{display:inline-block;transform-origin:50% 100%;will-change:transform,filter,opacity}'
+          new = '.scene-brand-title-motion{will-change:auto}.scene-brand-title-glyphs{display:flex;flex-direction:column;align-items:center;gap:.08em;transform:none!important;transform-origin:center;letter-spacing:var(--brand-letter-spacing);text-shadow:none!important}.scene-brand-title-line{display:inline-flex;align-items:baseline;justify-content:center;min-height:1em;line-height:1;white-space:nowrap}.scene-brand-title-line.is-empty::before{content:"\\00a0"}.scene-brand-glyph{display:inline-block;transform-origin:50% 100%;will-change:transform,filter,opacity}'
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'brand-motion-v2.css: expected base rule once, got {count}')
+          css.write_text(text.replace(old, new, 1))
+
+          test = Path('tests/browser/brand-title-editing.spec.js')
+          text = test.read_text()
+          replace_pairs = [
+              ("    await expect(input).toBeVisible();\n", "    await expect(input).toBeVisible();\n    await expect(input).toHaveJSProperty('tagName', 'TEXTAREA');\n"),
+              ("    await input.fill('БАР СЕВЕР');\n    await expect(input).toHaveValue('БАР СЕВЕР');\n", "    await input.fill('БАР\\nСЕВЕР');\n    await expect(input).toHaveValue('БАР\\nСЕВЕР');\n    const lines = page.locator('#animation-stage .scene-brand-title-line');\n    await expect(lines).toHaveCount(2);\n    await expect(lines.nth(0)).toHaveText('БАР');\n    await expect(lines.nth(1)).toHaveText('СЕВЕР');\n"),
+              ("    expect(saved.brand.text).toBe('БАР СЕВЕР');\n", "    expect(saved.brand.text).toBe('БАР\\nСЕВЕР');\n")
+          ]
+          for old, new in replace_pairs:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'brand-title-editing.spec.js: expected one match, got {count}: {old!r}')
+              text = text.replace(old, new, 1)
+          test.write_text(text)
+
+          unit = Path('tests/brand-title-multiline.test.js')
+          if unit.exists():
+              raise SystemExit('tests/brand-title-multiline.test.js already exists')
+          unit.write_text('''import test from 'node:test';
+import assert from 'node:assert/strict';
+import { completeBrandTitle } from '../src/contracts/brand-title.js';
+
+test('Brand title preserves intentional line breaks and canonicalises CRLF', () => {
+  const brand = completeBrandTitle({ enabled: true, text: '  БАР\\r\\nСЕВЕР  ' });
+  assert.equal(brand.text, 'БАР\\nСЕВЕР');
+});
+''')
+          PY
+          node --check src/contracts/brand-title.js
+          node --check src/web/admin-ui/public/js/motion/brand-title.js
+          node --test tests/brand-title-multiline.test.js
+          git diff --check
+      - name: Commit implementation and remove helper workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-brand-multiline.yml
+          git add src/web/admin-ui/public/animation.html src/contracts/brand-title.js src/web/admin-ui/public/js/motion/brand-title.js src/web/admin-ui/public/css/brand-motion-v2.css tests/browser/brand-title-editing.spec.js tests/brand-title-multiline.test.js
+          git commit -m "Add multiline Brand text"
+          git push origin HEAD:feat/brand-multiline-text
