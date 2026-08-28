@@ -54,9 +54,7 @@ export function renderAnimationScreenPreview(stage, bundle) {
     <div class="animation-screen-content-layer" data-scene-content-layer aria-label="Scene Playlist"></div>
     <div class="animation-screen-entity-layer" data-motion-entity-layer aria-label="Объекты сцены"></div>
     <div class="animation-screen-brand-layer" data-brand-layer aria-label="Название бренда"></div>
-    <div class="animation-screen-announcement-layer" data-announcement-layer aria-label="Бегущая строка"></div>
-    <div class="animation-screen-vignette" aria-hidden="true"></div>
-    <div class="animation-screen-shimmer" aria-hidden="true"></div>`;
+    <div class="animation-screen-announcement-layer" data-announcement-layer aria-label="Бегущая строка"></div>`;
 
   backgroundStyle(stage.querySelector('.animation-screen-background'), model, layout.palette);
   applyTypography(stage, layout);
