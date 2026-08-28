@@ -202,3 +202,55 @@ test('unchanged Brand keeps the same DOM across periodic Player refresh', async 
     await context.close();
   }
 });
+
+
+test('Player reuses ETag and keeps the same Flat Menu Surface when context is unchanged', async ({ browser }) => {
+  const context = await browser.newContext({ baseURL, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const seenEtags = [];
+  let playerContextRequests = 0;
+  try {
+    await page.route('**/api/device/session', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        authorized: true, device_id: 1, device_key: 'device-key-flat-123456',
+        session_expires_at: new Date(Date.now() + 86400000).toISOString(),
+        screen: { id: 1, name: 'ТВ 1', resolution: '1920x1080', location_id: 1, location_name: 'Точка 1', location_number: 1 }
+      })
+    }));
+    await page.route('**/api/device/player-context', (route) => {
+      playerContextRequests += 1;
+      const ifNoneMatch = route.request().headers()['if-none-match'] || '';
+      seenEtags.push(ifNoneMatch);
+      if (ifNoneMatch === '"ctx-flat-1"') {
+        return route.fulfill({ status: 304, headers: { etag: '"ctx-flat-1"' } });
+      }
+      return route.fulfill({
+        status: 200,
+        headers: { etag: '"ctx-flat-1"' },
+        contentType: 'application/json',
+        body: JSON.stringify({
+          screen: { id: 1, name: 'ТВ 1', resolution: '1920x1080', location_id: 1, location_name: 'Точка 1', location_number: 1 },
+          draft: { rows: [], settings: {}, revision: 1 }, products: [], packaging: [],
+          animation: { enabled: false, profile: null }, entity: null, announcement: null,
+          brand: null, aquarium: null, refresh_interval_ms: 2000
+        })
+      });
+    });
+
+    await page.goto('/player.html');
+    const menuLayer = page.locator('[data-player-menu-layer]');
+    await expect(menuLayer).toHaveAttribute('data-render-mode', 'flat');
+    const canvas = menuLayer.locator('[data-flat-menu-canvas]');
+    await expect(canvas).toHaveCount(1);
+    await canvas.evaluate((node) => { node.dataset.surfaceIdentity = 'preserved'; });
+
+    await expect.poll(() => playerContextRequests, { timeout: 6000 }).toBeGreaterThanOrEqual(2);
+    expect(seenEtags[0]).toBe('');
+    expect(seenEtags.slice(1)).toContain('"ctx-flat-1"');
+    await expect(canvas).toHaveAttribute('data-surface-identity', 'preserved');
+  } finally {
+    await context.close();
+  }
+});

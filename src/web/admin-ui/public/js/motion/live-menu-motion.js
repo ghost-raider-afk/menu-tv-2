@@ -1,7 +1,6 @@
 import { WasmMotionDriver } from './drivers/wasm-motion-driver.js';
 import { buildDomMotionScene } from './dom-scene-adapter.js';
 import { DEFAULT_SCENE_COMPILERS } from './motion-plan.js';
-import { compileEntityBehaviorProgram } from './entity-behavior.js';
 import { SceneRuntime } from './scene-runtime.js';
 
 export class LiveMenuMotion {
@@ -11,7 +10,7 @@ export class LiveMenuMotion {
     this.runtime = new SceneRuntime({
       root: stage,
       driver: new WasmMotionDriver(),
-      compilers: [...DEFAULT_SCENE_COMPILERS, compileEntityBehaviorProgram]
+      compilers: DEFAULT_SCENE_COMPILERS
     });
     this.scene = null;
   }
@@ -22,7 +21,7 @@ export class LiveMenuMotion {
     delete this.stage.dataset.motionMode;
   }
 
-  render({ enabled = false, profile = null, entity = null } = {}) {
+  render({ enabled = false, profile = null } = {}) {
     this.runtime.destroy();
     this.scene = null;
     if (!enabled || !profile) {
@@ -30,7 +29,7 @@ export class LiveMenuMotion {
       return null;
     }
     this.scene = buildDomMotionScene(this.stage);
-    const plan = this.runtime.load({ scene: this.scene, context: { profile, entity } });
+    const plan = this.runtime.load({ scene: this.scene, context: { profile } });
     this.stage.dataset.motionMode = 'wasm-continuous';
     this.runtime.play();
     return plan;

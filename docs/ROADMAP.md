@@ -1,16 +1,27 @@
 # TV Menu 2.0 — план развития
 
-## Принцип анимации
+## Утверждённый принцип отображения и сцен
 
-Меню является постоянно открытым информационным экраном, а не последовательностью слайдов. Поэтому основной Motion Engine должен работать как **continuous / ambient motion**:
+MIRA-TV остаётся системой постоянно доступного меню, но экран больше не считается только одной непрерывно анимируемой таблицей. Базовая модель экрана — **Scene Playlist**:
 
-- весь контент меню виден с первого кадра и остаётся читаемым;
-- анимация не строит экран заново и не скрывает строки целиком;
-- движение используется для фона, света, глубины, разделов, отдельных строк и цен;
-- активные события короткие, между ними есть спокойные участки цикла;
-- один и тот же canonical renderer остаётся источником геометрии и содержимого.
+- `Menu Scene` — основная постоянная сцена меню;
+- `Promo Scene` — кратковременная акция;
+- `Content Scene` — изображение, видео, текст или другой контент;
+- `Object Story Scene` — короткая история Object+/Actor;
+- сцена может быть overlay поверх меню или временно занимать весь экран;
+- после временной сцены player гарантированно возвращается к базовой `Menu Scene`.
 
-Entrance/slide-show модель считается устаревшей и поддерживается только как compatibility-вход для миграции ранее сохранённых профилей.
+Обычное меню не должно расходовать ресурсы пропорционально числу строк. Статичное содержимое меню рендерится как одна **Flat Menu Surface**, а всё движущееся существует как небольшое число независимых scene layers и исполняется GPU/compositor-friendly renderer.
+
+Целевой принцип:
+
+```text
+Static content  → Flat TV Renderer
+Dynamic content → GPU Scene Engine / Layer Composer
+Sequence        → Scene Playlist / Master Timeline
+```
+
+Количество строк меню не должно определять постоянную стоимость анимации. Новые эффекты не имеют права возвращать архитектуру к покадровому изменению десятков DOM/SVG-узлов.
 
 ## Live Player — браузерный вывод меню
 
@@ -175,14 +186,25 @@ TV 1   TV 2   TV 3
 
 ## Порядок реализации
 
-1. Continuous Motion Engine для постоянно открытого одиночного меню.
-2. Подключение Motion Engine к конечному browser/live renderer.
-3. Single-screen Live Player: kiosk URL, realtime update, heartbeat, offline cache.
-4. Character Story Engine для одиночного экрана + первый Story Pack с рыбкой.
-5. Server clock и drift correction.
-6. `ScreenGroup` + виртуальный общий холст.
-7. Group Motion Studio + синхронизированная master timeline.
-8. Поддержка cross-screen Character Story для групп экранов.
-9. Мониторинг группы и диагностика синхронизации.
+Утверждённый порядок развития после v1.8.2:
 
-Live Player, Character Story Engine и ScreenGroup должны добавляться без удаления существующей JPEG/SFTP публикации: каналы должны сосуществовать, а статический JPEG оставаться независимым fallback.
+1. **Flat TV Renderer** — статичное меню становится одной canvas/texture surface; DOM/SVG renderer остаётся редакторским и compatibility renderer до завершения переноса motion-слоёв.
+2. **GPU Scene Engine / Layer Composer** — Brand, Object+, promo, transitions и FX становятся независимыми compositor/GPU layers; постоянная стоимость сцены должна быть близка к O(1) относительно числа строк меню.
+3. **Scene Playlist** — `Menu Scene`, `Promo Scene`, `Content Scene`, overlay/fullscreen режимы, длительность, переходы и гарантированный возврат к меню.
+4. **Object+ Actor / Story Engine** — actor states `enter / idle / action / focus / exit`, StoryPreset, StoryTimeline, MotionPath, props и safe zones.
+5. **Screen Asset Cache** — локальный manifest и cache всех menu surfaces, изображений, видео, Object+ assets, шрифтов и scene definitions; offline playback без постоянной сети.
+6. **Расписания** — смена Menu Scene и запуск Promo/Content Scene по времени, дням недели и периодам.
+7. **POS/Catalog adapters** — iiko, R_keeper, QuickResto и другие источники обновляют canonical MIRA Catalog, а не экран напрямую.
+8. **Widget Layer API** — Clock, Weather, QR, Timer, Queue, Exchange Rate, Custom API и другие widgets как обычные scene nodes.
+9. После стабилизации single-screen scene runtime — `ScreenGroup`, общий виртуальный canvas, server clock, drift correction и cross-screen Object Story.
+
+### Обязательные инварианты
+
+- один canonical menu model используется редактором и всеми TV renderers;
+- Flat Menu Surface не содержит долговременной индивидуальной анимации строк;
+- динамика живёт в отдельных layers с явным ownership;
+- `Menu`, `Brand`, `Actor/Object+`, `Promo`, `Content`, `Announcement`, `FX`, `Widget` являются семантическими сущностями, а не безымянными canvas-объектами;
+- Scene Playlist не превращает MIRA-TV в общий графический редактор: ресторанная доменная модель остаётся первичной;
+- TV Player должен продолжать показ последнего валидного состояния при потере сети;
+- существующий JPEG/SFTP publish остаётся независимым fallback;
+- новые runtime-механизмы должны иметь измеряемый performance budget и не зависеть от количества строк меню линейно.

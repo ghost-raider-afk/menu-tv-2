@@ -4,6 +4,27 @@
 
 Motion Engine v3 — внутренний runtime-контур анимации TV Menu 2. Он отделяет структуру сцены, поведение и сценарий движения от конкретного renderer/API. Формат сохранённых пользовательских animation settings пока остаётся `motion_version: 2`; это отдельная persistence boundary.
 
+## Целевой TV runtime после v1.8.2
+
+Motion Engine остаётся renderer-agnostic, но TV runtime разделяется по ответственности:
+
+```text
+MIRA Scene
+├── Flat Menu Renderer  → одна статичная menu surface
+├── Menu Motion Driver  → compatibility до GPU migration
+├── Actor Runtime       → Object+/Story
+├── Promo/Content       → временные scene layers
+└── Scene Playlist      → orchestration / master timeline
+```
+
+Главное правило производительности: обычные строки меню не должны порождать постоянную O(N) покадровую работу. После GPU migration динамический budget определяется количеством активных scene layers, а не количеством строк меню.
+
+`LiveMenuMotion` владеет только menu motion. `entity` имеет отдельный runtime owner и не должен одновременно компилироваться вторым runtime для того же DOM target. В дальнейшем оба владельца подключаются через единый TV Scene Coordinator, но channel ownership остаётся раздельным.
+
+`FlatMenuRenderer` является renderer adapter/runtime boundary, а не новым источником layout. Он получает результат canonical renderer и превращает статичную Menu Scene в одну canvas/texture surface. При отсутствии поддержки raster path player обязан безопасно вернуться к DOM compatibility output без изменения данных.
+
+Scene Playlist и Actor Story добавляются через новые SceneProgram/Coordinator слои. Они не должны добавлять условные ветки внутрь core Scene Graph или связывать core с DOM.
+
 ## Главный поток
 
 ```text
