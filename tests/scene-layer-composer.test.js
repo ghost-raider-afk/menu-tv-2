@@ -14,6 +14,6 @@ test('Player scene layer stack reserves stable coarse layers for future scenes',
     assert.ok(index > last, `scene layer ${id} is missing or out of order`);
     last = index;
   }
-  assert.match(source, /data\.sceneLayer = id/);
+  assert.match(source, /layer\.dataset\.sceneLayer = id/);
   assert.match(source, /ensureCore\(\)/);
 });
