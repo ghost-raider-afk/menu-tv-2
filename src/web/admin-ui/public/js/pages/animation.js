@@ -5,7 +5,7 @@ import { AnimationPreviewPlayer } from '../motion/preview-player.js';
 import { SceneEntityEditor, createEntityMedia, normaliseSceneEntity } from '../motion/entity-editor.js';
 import { normaliseAnnouncement, renderAnnouncementLayer } from '../motion/announcement.js';
 import { normaliseBrandTitle, renderBrandTitleLayer } from '../motion/brand-title.js';
-import { normaliseAquarium, renderAquariumLayer, resetAquariumIntro } from '../motion/aquarium.js';
+import { aquariumEnvironment, aquariumParameters, renderEnvironmentLayer, resetEnvironmentIntro } from '../motion/environment.js';
 import { renderAnimationScreenEmpty, renderAnimationScreenPreview } from '../motion/screen-preview.js';
 import {
   DEFAULT_LIVE_PROFILE,
@@ -19,7 +19,7 @@ const ENTITY_MEDIA_TYPES = Object.freeze(['image/png', 'image/webp', 'video/mp4'
 let currentEntity = normaliseSceneEntity();
 let currentAnnouncement = normaliseAnnouncement();
 let currentBrand = normaliseBrandTitle();
-let currentAquarium = normaliseAquarium();
+let currentAquarium = aquariumParameters();
 let player = null;
 let entityEditor = null;
 let previewFrame = null;
@@ -43,8 +43,8 @@ function renderBrandPreview() {
 }
 
 function renderAquariumPreview(allowIntro = false) {
-  const layer = element('animation-stage')?.querySelector('[data-aquarium-layer]');
-  if (layer) renderAquariumLayer(layer, currentAquarium, { allowIntro });
+  const layer = element('animation-stage')?.querySelector('[data-environment-layer]');
+  if (layer) renderEnvironmentLayer(layer, aquariumEnvironment(currentAquarium), { allowIntro });
 }
 
 function restartPreview() {
@@ -223,8 +223,6 @@ function bindBrandControls() {
     const eventName = node instanceof HTMLSelectElement || (node instanceof HTMLInputElement && node.type === 'checkbox') ? 'change' : 'input';
     node.addEventListener(eventName, () => {
       currentBrand = brandFromControls();
-      // Text is an editable draft: do not rewrite the input on every keystroke.
-      // Re-syncing it here used to restore the product-brand fallback and move the caret.
       if (id !== 'animation-brand-text') syncBrandControls(currentBrand);
       renderBrandPreview();
     });
@@ -233,7 +231,7 @@ function bindBrandControls() {
 }
 
 function aquariumFromControls() {
-  return normaliseAquarium({
+  return aquariumParameters(aquariumEnvironment({
     enabled: checked('animation-aquarium-enabled'),
     style: value('animation-aquarium-style'),
     intro_fill: checked('animation-aquarium-intro'),
@@ -243,11 +241,11 @@ function aquariumFromControls() {
     plant_density: number('animation-aquarium-plants'),
     caustics: number('animation-aquarium-caustics'),
     speed: number('animation-aquarium-speed')
-  });
+  }));
 }
 
 function syncAquariumControls(aquarium = currentAquarium) {
-  const current = normaliseAquarium(aquarium);
+  const current = aquariumParameters(aquariumEnvironment(aquarium));
   const enabled = element('animation-aquarium-enabled');
   const intro = element('animation-aquarium-intro');
   if (enabled) enabled.checked = current.enabled;
@@ -288,7 +286,7 @@ function bindAquariumControls() {
   });
   element('animation-aquarium-replay')?.addEventListener('click', () => {
     currentAquarium = aquariumFromControls();
-    resetAquariumIntro();
+    resetEnvironmentIntro();
     renderAquariumPreview(true);
   });
 }
@@ -580,7 +578,8 @@ function animationPayload() {
   currentAquarium = aquariumFromControls();
   return {
     enabled: checked('animation-enabled'), preset_id: PROFILE_ID, profile: readMotionProfile(),
-    entity: currentEntity, announcement: currentAnnouncement, brand: currentBrand, aquarium: currentAquarium
+    entity: currentEntity, announcement: currentAnnouncement, brand: currentBrand,
+    environment: aquariumEnvironment(currentAquarium)
   };
 }
 
@@ -588,7 +587,7 @@ function applySavedSettings(saved) {
   writeMotionProfile(saved.profile);
   currentAnnouncement = normaliseAnnouncement(saved.announcement);
   currentBrand = normaliseBrandTitle(saved.brand);
-  currentAquarium = normaliseAquarium(saved.aquarium);
+  currentAquarium = aquariumParameters(saved.environment);
   syncAnnouncementControls(currentAnnouncement);
   syncBrandControls(currentBrand);
   syncAquariumControls(currentAquarium);
@@ -618,7 +617,7 @@ async function loadSettings() {
   writeMotionProfile(settings?.profile || DEFAULT_LIVE_PROFILE);
   currentAnnouncement = normaliseAnnouncement(settings?.announcement);
   currentBrand = normaliseBrandTitle(settings?.brand);
-  currentAquarium = normaliseAquarium(settings?.aquarium);
+  currentAquarium = aquariumParameters(settings?.environment);
   syncAnnouncementControls(currentAnnouncement);
   syncBrandControls(currentBrand);
   syncAquariumControls(currentAquarium);
