@@ -17,7 +17,22 @@ function descriptor(id) {
 }
 
 function positionLayer(stage, layer, index) {
-  const next = [...stage.children].find((candidate) => {
+  const children = [...stage.children];
+  const currentPosition = children.indexOf(layer);
+  if (currentPosition >= 0) {
+    const outOfOrder = children.some((candidate, candidatePosition) => {
+      if (!(candidate instanceof HTMLElement) || candidate === layer) return false;
+      const id = candidate.dataset.sceneLayer;
+      const entry = id ? LAYER_BY_ID.get(id) : null;
+      if (!entry) return false;
+      if (entry.index < index) return candidatePosition > currentPosition;
+      if (entry.index > index) return candidatePosition < currentPosition;
+      return false;
+    });
+    if (!outOfOrder) return;
+  }
+
+  const next = children.find((candidate) => {
     if (!(candidate instanceof HTMLElement) || candidate === layer) return false;
     const id = candidate.dataset.sceneLayer;
     const entry = id ? LAYER_BY_ID.get(id) : null;
