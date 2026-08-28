@@ -1,3 +1,24 @@
+## [1.9.0] - 2026-08-28
+
+### TV Player / производительность
+- Основное меню TV Player переведено на Flat Menu Surface: статичное меню рендерится одной графической поверхностью и больше не создаёт постоянную row-by-row анимационную нагрузку, растущую вместе с числом строк.
+- Player использует ETag / If-None-Match: ответ 304 сохраняет существующие Flat Surface, Brand, Entity и scene runtime без повторной сборки.
+- TV offline shell больше не загружает row-WASM runtime/kernel, сохраняя renderer-neutral runtime и независимый Entity playback.
+
+### GPU Scene Engine
+- Добавлен PlayerSceneLayerComposer со стабильными слоями `environment / menu / fx / content / entity / brand / announcement` — базой для будущих PromoScene, Object Story и Scene Playlist.
+- Добавлен GpuSceneRuntime: animation profile компилируется в один coarse WAAPI compositor effect на `transform`/`opacity` без собственного `requestAnimationFrame` и без покадровых `filter`/`drop-shadow`.
+- Исправлена идемпотентность Layer Composer: повторный `ensure()` корректно размещённого слоя не меняет DOM и не может зациклить MutationObserver.
+
+### Brand
+- Brand теперь поддерживает переносы строк; CRLF/CR канонизируются в `\n`, внутренние переносы сохраняются, общий лимит остаётся 80 символов.
+- Каждая строка Brand рендерится отдельно, при этом glyph entrance/loop/exit и общий stagger сохраняются; `tracking-expand` центрируется независимо по строкам.
+
+### Архитектура и проверки
+- DOM/WASM Motion Studio остаётся отдельным editor capability; TV playback отделён через renderer-specific Flat/GPU путь.
+- Добавлены unit/architecture/browser-регрессии на Flat Renderer, ETag/304 identity, GPU scene ownership, стабильный scene layer stack и отсутствие MutationObserver-loop.
+- Релизный контур сохраняет обязательные gate: `node-check`, `browser-visual`, `clean-install-smoke`.
+
 ## [1.8.2] - 2026-08-27
 
 ### Motion Studio
