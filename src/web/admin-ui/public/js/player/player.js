@@ -7,7 +7,7 @@ import {
 import { renderSceneEntity } from '../motion/entity-editor.js';
 import { renderAnnouncementLayer } from '../motion/announcement.js';
 import { renderBrandTitleLayer } from '../motion/brand-title.js';
-import { renderAquariumLayer } from '../motion/aquarium.js';
+import { renderEnvironmentLayer } from '../motion/environment.js';
 import { FlatMenuRenderer, playerMenuRenderMode } from './flat-menu-renderer.js';
 import { GpuSceneRuntime } from './gpu-scene-runtime.js';
 import { PlayerSceneLayerComposer } from './scene-layer-composer.js';
@@ -422,7 +422,7 @@ function renderPlayerContext(context) {
   playerStage.style.backgroundColor = model.settings.background_color || '#101828';
   const background = sameOriginAsset(model.settings.background_image_url);
   playerStage.style.backgroundImage = background ? `url(${JSON.stringify(background)})` : 'none';
-  renderAquariumLayer(environmentLayer, context.aquarium, { allowIntro: true });
+  renderEnvironmentLayer(environmentLayer, context.environment, { allowIntro: true });
   renderSceneEntity(playerStage, context.entity, { editable: false });
   renderBrandTitleLayer(brandLayer, context.brand);
   renderAnnouncementLayer(announcementLayer, context.announcement);
