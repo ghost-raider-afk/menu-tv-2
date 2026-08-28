@@ -27,3 +27,10 @@ test('Player scene layer stack reserves stable coarse layers for future scenes',
   assert.match(playerCss, /\.tv-player-environment-layer/);
   assert.doesNotMatch(playerCss, /\.tv-player-aquarium-layer/);
 });
+
+test('Player scene layer positioning is idempotent once the stack order is correct', async () => {
+  const source = await read('js/player/scene-layer-composer.js');
+  assert.match(source, /const currentPosition = children\.indexOf\(layer\)/);
+  assert.match(source, /const outOfOrder = children\.some/);
+  assert.match(source, /if \(!outOfOrder\) return;/);
+});
