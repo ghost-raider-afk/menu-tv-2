@@ -77,10 +77,12 @@ export class PlayerSceneLayerComposer {
 
   ensureCore() {
     return Object.freeze({
+      environment: this.ensure('environment', { ariaLabel: 'Фоновая сцена' }),
       menu: this.ensure('menu', { ariaHidden: true }),
       fx: this.ensure('fx', { ariaHidden: true }),
       content: this.ensure('content', { ariaHidden: true }),
       entity: this.ensure('entity', { ariaHidden: true }),
+      brand: this.ensure('brand', { ariaLabel: 'Название бренда' }),
       announcement: this.ensure('announcement', { ariaLabel: 'Объявление' })
     });
   }
