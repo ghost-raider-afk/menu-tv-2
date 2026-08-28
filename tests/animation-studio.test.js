@@ -179,8 +179,9 @@ test('Motion Studio exposes generic scene layers, Aquarium environment effect an
   assert.match(previewCss, /\.animation-screen-background\{[^}]*background-size:cover/);
   assert.match(announcement, /scene-announcement-glyphs/);
   assert.match(overlays, /scene-environment-layer/);
-  assert.match(overlays, /environment-effect-aquarium/);
+  assert.doesNotMatch(overlays, /scene-aquarium-layer|tv-player-aquarium-layer|animation-screen-aquarium-layer/);
   assert.match(overlays, /scene-brand-title/);
   assert.match(environment, /function renderAquariumEffect/);
+  assert.match(environment, /layer\.classList\.add\('environment-effect-aquarium'\)/);
   assert.match(environment, /environment\.effect === 'aquarium'/);
 });
