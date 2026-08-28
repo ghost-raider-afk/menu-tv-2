@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.3.4"
+SCRIPT_VERSION="1.3.5"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 LEGACY_PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
@@ -21,6 +21,9 @@ SFTP_CONTAINER="menu-tv-2-sftp"
 DB_VOLUME="menu-tv-2-db-data"
 SFTP_VOLUME="menu-tv-2-sftp-data"
 SITE_ASSETS_VOLUME="menu-tv-2-site-assets"
+BUILD_BUILDER="menu-tv-2-builder"
+BUILD_CACHE_MAX="1GB"
+BUILD_CACHE_RESERVED="256MB"
 PROXY_NETWORK="menu-tv-2-proxy"
 PROXY_DIR="/opt/menu-tv-2-proxy"
 PROXY_COMPOSE_FILE="$PROXY_DIR/compose.yaml"
@@ -271,6 +274,33 @@ proxy_compose() {
   docker compose --project-name menu-tv-2-proxy --project-directory "$PROXY_DIR" --env-file "$PROXY_ENV_FILE" "$@"
 }
 
+ensure_project_builder() {
+  if ! docker buildx inspect "$BUILD_BUILDER" >/dev/null 2>&1; then
+    docker buildx create --name "$BUILD_BUILDER" --driver docker-container >/dev/null
+  fi
+  docker buildx inspect --bootstrap "$BUILD_BUILDER" >/dev/null
+}
+
+stop_project_builder() {
+  docker buildx stop "$BUILD_BUILDER" >/dev/null 2>&1 || true
+}
+
+cleanup_project_build_artifacts() {
+  local previous_image="${1:-}" current_image
+  current_image="$(docker inspect --format '{{.Image}}' "$APP_CONTAINER" 2>/dev/null || true)"
+  if [[ -n "$previous_image" && "$previous_image" != "$current_image" ]]; then
+    docker image rm "$previous_image" >/dev/null 2>&1 || true
+  fi
+  if ! docker buildx --builder "$BUILD_BUILDER" prune --force --max-used-space "$BUILD_CACHE_MAX" --reserved-space "$BUILD_CACHE_RESERVED" >/dev/null; then
+    warn "Не удалось ограничить кэш сборки MIRA-TV; работа приложения не затронута."
+  fi
+  stop_project_builder
+}
+
+remove_project_builder() {
+  docker buildx rm --force "$BUILD_BUILDER" >/dev/null 2>&1 || true
+}
+
 check_dependencies() {
   local tool
   for tool in docker git tar openssl awk sed find install mktemp runuser od tr fold shuf dig cmp sort readlink; do
@@ -278,6 +308,7 @@ check_dependencies() {
   done
   docker info >/dev/null 2>&1 || die "Docker daemon недоступен."
   docker compose version >/dev/null 2>&1 || die "Нужен Docker Compose v2."
+  docker buildx version >/dev/null 2>&1 || die "Нужен Docker Buildx."
 }
 
 ask_for_acme_email() {
@@ -663,7 +694,7 @@ verify_https_certificate() {
 }
 
 build_and_start() {
-  local mode="${1:-build}" check_https="${2:-true}" domain
+  local mode="${1:-build}" check_https="${2:-true}" domain previous_image=""
   validate_env
   domain="$(env_value MENU_TV_2_DOMAIN)"
   assert_proxy_network
@@ -671,11 +702,17 @@ build_and_start() {
   log "Проверка конфигурации Docker Compose"
   compose config -q || return 1
   if [[ "$mode" == build ]]; then
+    previous_image="$(docker inspect --format '{{.Image}}' "$APP_CONTAINER" 2>/dev/null || true)"
+    ensure_project_builder || return 1
     log "Сборка и запуск изменённых контейнеров"
-    compose up -d --build --wait || { show_app_failure; return 1; }
+    if ! compose build --builder "$BUILD_BUILDER" "$APP_SERVICE"; then
+      stop_project_builder
+      return 1
+    fi
+    compose up -d --no-build --wait || { stop_project_builder; show_app_failure; return 1; }
   else
     log "Применение изменённой конфигурации контейнеров"
-    compose up -d --wait || { show_app_failure; return 1; }
+    compose up -d --no-build --wait || { show_app_failure; return 1; }
   fi
   log "Проверка готовности приложения"
   verify_application || { show_app_failure; return 1; }
@@ -686,6 +723,9 @@ build_and_start() {
     verify_https_certificate "$domain" || return 1
   fi
   finalize_bootstrap_administrator
+  if [[ "$mode" == build ]]; then
+    cleanup_project_build_artifacts "$previous_image"
+  fi
 }
 
 show_app_failure() {
@@ -795,9 +835,14 @@ restore_temporary_backup() {
     restore_database_exact "$TEMP_BACKUP_DIR/database.dump"
   fi
   restore_proxy_backup
-  compose up -d --build --wait
+  local failed_image
+  failed_image="$(docker image inspect menu-tv-2.0:local --format '{{.Id}}' 2>/dev/null || true)"
+  ensure_project_builder
+  compose build --builder "$BUILD_BUILDER" "$APP_SERVICE"
+  compose up -d --no-build --wait
   verify_application
   verify_sftp
+  cleanup_project_build_artifacts "$failed_image"
 }
 
 recover_failed_update() {
@@ -894,6 +939,7 @@ cleanup_failed_install() {
     docker network rm "$PROXY_NETWORK" >/dev/null 2>&1 || true
     rm -rf -- "$PROXY_DIR"
   fi
+  remove_project_builder
   info "Ресурсы неудачной установки удалены."
 }
 
@@ -1051,6 +1097,7 @@ remove_project() {
   docker volume rm "$SFTP_VOLUME" >/dev/null 2>&1 || true
   docker volume rm "$SITE_ASSETS_VOLUME" >/dev/null 2>&1 || true
   rm -rf -- "$INSTALL_DIR"
+  remove_project_builder
   info "Проект удалён. Скрипт оставлен: sudo $PROGRAM_NAME"
 }
 
@@ -1066,6 +1113,7 @@ purge_project() {
     docker volume rm "$SITE_ASSETS_VOLUME" >/dev/null 2>&1 || true
     rm -rf -- "$INSTALL_DIR"
   fi
+  remove_project_builder
   rm -f -- "$LAUNCHER_PATH"
   if [[ -d "$PROXY_DIR" ]]; then
     proxy_compose down --volumes --remove-orphans || true
