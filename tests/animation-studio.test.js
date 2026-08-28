@@ -184,6 +184,6 @@ test('Motion Studio exposes generic scene layers, Aquarium environment effect an
   assert.match(brandCss, /scene-brand-title/);
   assert.match(brandCss, /--brand-line-spacing/);
   assert.match(environment, /function renderAquariumEffect/);
-  assert.match(environment, /layer\.classList\.add\('environment-effect-aquarium'\)/);
+  assert.match(environment, /classList\.add\('environment-effect-aquarium',/);
   assert.match(environment, /environment\.effect === 'aquarium'/);
 });
