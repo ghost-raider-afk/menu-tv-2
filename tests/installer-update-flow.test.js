@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const installerPath = fileURLToPath(new URL('../menu-tv-2.sh', import.meta.url));
+const releaseWorkflowPath = fileURLToPath(new URL('../.github/workflows/release.yml', import.meta.url));
 
 test('update exits immediately when installed release is already current', async () => {
   const root = await mkdtemp(join(tmpdir(), 'mira-installer-current-'));
@@ -32,4 +33,20 @@ test('update exits immediately when installed release is already current', async
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('installer 1.3.4 uses quiet release fetch and gated installer tags', async () => {
+  const [installer, workflow] = await Promise.all([
+    readFile(installerPath, 'utf8'),
+    readFile(releaseWorkflowPath, 'utf8')
+  ]);
+
+  assert.match(installer, /^SCRIPT_VERSION="1\.3\.4"$/m);
+  assert.match(installer, /fetch --quiet --depth 1 origin "refs\/tags\/\$release_tag"/);
+  assert.doesNotMatch(installer, /Установленная версия: %s/);
+  assert.doesNotMatch(installer, /Доступная версия:\s+%s/);
+  assert.match(workflow, /Publish verified installer tag/);
+  assert.match(workflow, /INSTALLER_TAG="installer-v\$\{SCRIPT_VERSION\}"/);
+  assert.match(workflow, /test "\$\(git rev-parse origin\/main\)" = "\$VERIFIED_SHA"/);
+  assert.match(workflow, /git push origin "refs\/tags\/\$\{INSTALLER_TAG\}"/);
 });
