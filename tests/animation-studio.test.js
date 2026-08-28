@@ -157,7 +157,8 @@ test('Motion Studio exposes generic scene layers, Aquarium environment effect an
   assert.match(html, /MIRA WASM MOTION/);
   assert.match(html, /ФОН · БЕЗ ИЗМЕНЕНИЙ/);
   assert.match(html, /PROMO GLOW PULSE/);
-  assert.match(html, /AQUARIUM ENVIRONMENT/);
+  assert.match(html, /ENVIRONMENT · AQUARIUM/);
+  assert.match(html, /Отдельного архитектурного слоя Aquarium нет/);
   assert.match(html, /BRAND ENTITY/);
   assert.match(html, /video\/mp4,video\/webm/);
   assert.match(page, /renderEnvironmentLayer/);
