@@ -1,0 +1,238 @@
+name: apply-build-cache-lifecycle
+
+on:
+  push:
+    branches: [fix/project-build-cache-lifecycle]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: fix/project-build-cache-lifecycle
+          fetch-depth: 0
+
+      - name: Apply isolated builder lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('menu-tv-2.sh')
+          text = path.read_text()
+
+          text = text.replace('SCRIPT_VERSION="1.3.4"', 'SCRIPT_VERSION="1.3.5"', 1)
+          text = text.replace(
+              'SITE_ASSETS_VOLUME="menu-tv-2-site-assets"\n',
+              'SITE_ASSETS_VOLUME="menu-tv-2-site-assets"\nBUILD_BUILDER="menu-tv-2-builder"\nBUILD_CACHE_MAX="1GB"\nBUILD_CACHE_RESERVED="256MB"\n',
+              1,
+          )
+
+          old_check = '''  docker info >/dev/null 2>&1 || die "Docker daemon недоступен."
+            docker compose version >/dev/null 2>&1 || die "Нужен Docker Compose v2."
+          }'''.replace('            ', '')
+          new_check = '''  docker info >/dev/null 2>&1 || die "Docker daemon недоступен."
+            docker compose version >/dev/null 2>&1 || die "Нужен Docker Compose v2."
+            docker buildx version >/dev/null 2>&1 || die "Нужен Docker Buildx."
+          }'''.replace('            ', '')
+          if old_check not in text:
+              raise SystemExit('check_dependencies marker missing')
+          text = text.replace(old_check, new_check, 1)
+
+          marker = '''proxy_compose() {
+            docker compose --project-name menu-tv-2-proxy --project-directory "$PROXY_DIR" --env-file "$PROXY_ENV_FILE" "$@"
+          }
+
+          check_dependencies() {'''.replace('          ', '')
+          insert = '''proxy_compose() {
+            docker compose --project-name menu-tv-2-proxy --project-directory "$PROXY_DIR" --env-file "$PROXY_ENV_FILE" "$@"
+          }
+
+          ensure_project_builder() {
+            if ! docker buildx inspect "$BUILD_BUILDER" >/dev/null 2>&1; then
+              docker buildx create --name "$BUILD_BUILDER" --driver docker-container >/dev/null
+            fi
+            docker buildx inspect --bootstrap "$BUILD_BUILDER" >/dev/null
+          }
+
+          stop_project_builder() {
+            docker buildx stop "$BUILD_BUILDER" >/dev/null 2>&1 || true
+          }
+
+          cleanup_project_build_artifacts() {
+            local previous_image="${1:-}" current_image
+            current_image="$(docker inspect --format '{{.Image}}' "$APP_CONTAINER" 2>/dev/null || true)"
+            if [[ -n "$previous_image" && "$previous_image" != "$current_image" ]]; then
+              docker image rm "$previous_image" >/dev/null 2>&1 || true
+            fi
+            if ! docker buildx --builder "$BUILD_BUILDER" prune --force --max-used-space "$BUILD_CACHE_MAX" --reserved-space "$BUILD_CACHE_RESERVED" >/dev/null; then
+              warn "Не удалось ограничить кэш сборки MIRA-TV; работа приложения не затронута."
+            fi
+            stop_project_builder
+          }
+
+          remove_project_builder() {
+            docker buildx rm --force "$BUILD_BUILDER" >/dev/null 2>&1 || true
+          }
+
+          check_dependencies() {'''.replace('          ', '')
+          if marker not in text:
+              raise SystemExit('compose helper marker missing')
+          text = text.replace(marker, insert, 1)
+
+          old_build = r'''build_and_start() {
+            local mode="${1:-build}" check_https="${2:-true}" domain
+            validate_env
+            domain="$(env_value MENU_TV_2_DOMAIN)"
+            assert_proxy_network
+            repair_permissions
+            log "Проверка конфигурации Docker Compose"
+            compose config -q || return 1
+            if [[ "$mode" == build ]]; then
+              log "Сборка и запуск изменённых контейнеров"
+              compose up -d --build --wait || { show_app_failure; return 1; }
+            else
+              log "Применение изменённой конфигурации контейнеров"
+              compose up -d --wait || { show_app_failure; return 1; }
+            fi
+            log "Проверка готовности приложения"
+            verify_application || { show_app_failure; return 1; }
+            log "Проверка SFTP-сервера"
+            verify_sftp || return 1
+            if [[ "$check_https" == true ]]; then
+              log "Выпуск и проверка HTTPS-сертификата Let's Encrypt"
+              verify_https_certificate "$domain" || return 1
+            fi
+            finalize_bootstrap_administrator
+          }'''.replace('          ', '')
+          new_build = r'''build_and_start() {
+            local mode="${1:-build}" check_https="${2:-true}" domain previous_image=""
+            validate_env
+            domain="$(env_value MENU_TV_2_DOMAIN)"
+            assert_proxy_network
+            repair_permissions
+            log "Проверка конфигурации Docker Compose"
+            compose config -q || return 1
+            if [[ "$mode" == build ]]; then
+              previous_image="$(docker inspect --format '{{.Image}}' "$APP_CONTAINER" 2>/dev/null || true)"
+              ensure_project_builder || return 1
+              log "Сборка и запуск изменённых контейнеров"
+              if ! compose build --builder "$BUILD_BUILDER" "$APP_SERVICE"; then
+                stop_project_builder
+                return 1
+              fi
+              compose up -d --no-build --wait || { stop_project_builder; show_app_failure; return 1; }
+            else
+              log "Применение изменённой конфигурации контейнеров"
+              compose up -d --no-build --wait || { show_app_failure; return 1; }
+            fi
+            log "Проверка готовности приложения"
+            verify_application || { show_app_failure; return 1; }
+            log "Проверка SFTP-сервера"
+            verify_sftp || return 1
+            if [[ "$check_https" == true ]]; then
+              log "Выпуск и проверка HTTPS-сертификата Let's Encrypt"
+              verify_https_certificate "$domain" || return 1
+            fi
+            finalize_bootstrap_administrator
+            if [[ "$mode" == build ]]; then
+              cleanup_project_build_artifacts "$previous_image"
+            fi
+          }'''.replace('          ', '')
+          if old_build not in text:
+              raise SystemExit('build_and_start marker missing')
+          text = text.replace(old_build, new_build, 1)
+
+          old_restore = '''  restore_proxy_backup
+            compose up -d --build --wait
+            verify_application
+            verify_sftp
+          }'''.replace('            ', '')
+          new_restore = '''  restore_proxy_backup
+            local failed_image
+            failed_image="$(docker image inspect menu-tv-2.0:local --format '{{.Id}}' 2>/dev/null || true)"
+            ensure_project_builder
+            compose build --builder "$BUILD_BUILDER" "$APP_SERVICE"
+            compose up -d --no-build --wait
+            verify_application
+            verify_sftp
+            cleanup_project_build_artifacts "$failed_image"
+          }'''.replace('            ', '')
+          if old_restore not in text:
+              raise SystemExit('restore marker missing')
+          text = text.replace(old_restore, new_restore, 1)
+
+          text = text.replace(
+              '  info "Ресурсы неудачной установки удалены."\n}',
+              '  remove_project_builder\n  info "Ресурсы неудачной установки удалены."\n}',
+              1,
+          )
+          text = text.replace(
+              '  rm -rf -- "$INSTALL_DIR"\n  info "Проект удалён. Скрипт оставлен: sudo $PROGRAM_NAME"',
+              '  rm -rf -- "$INSTALL_DIR"\n  remove_project_builder\n  info "Проект удалён. Скрипт оставлен: sudo $PROGRAM_NAME"',
+              1,
+          )
+          text = text.replace(
+              '    rm -rf -- "$INSTALL_DIR"\n  fi\n  rm -f -- "$LAUNCHER_PATH"',
+              '    rm -rf -- "$INSTALL_DIR"\n  fi\n  remove_project_builder\n  rm -f -- "$LAUNCHER_PATH"',
+              1,
+          )
+
+          path.write_text(text)
+          PY
+
+          cat > tests/installer-build-cache-lifecycle.test.js <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          import { fileURLToPath } from 'node:url';
+          import test from 'node:test';
+
+          const installerPath = fileURLToPath(new URL('../menu-tv-2.sh', import.meta.url));
+
+          test('installer isolates and bounds MIRA-TV build cache', async () => {
+            const source = await readFile(installerPath, 'utf8');
+            assert.match(source, /^SCRIPT_VERSION="1\.3\.5"$/m);
+            assert.match(source, /^BUILD_BUILDER="menu-tv-2-builder"$/m);
+            assert.match(source, /^BUILD_CACHE_MAX="1GB"$/m);
+            assert.match(source, /^BUILD_CACHE_RESERVED="256MB"$/m);
+            assert.match(source, /docker buildx create --name "\$BUILD_BUILDER" --driver docker-container/);
+            assert.match(source, /compose build --builder "\$BUILD_BUILDER" "\$APP_SERVICE"/);
+            assert.match(source, /compose up -d --no-build --wait/);
+            assert.match(source, /docker buildx --builder "\$BUILD_BUILDER" prune --force --max-used-space "\$BUILD_CACHE_MAX" --reserved-space "\$BUILD_CACHE_RESERVED"/);
+            assert.match(source, /docker buildx stop "\$BUILD_BUILDER"/);
+            assert.match(source, /docker image rm "\$previous_image"/);
+            assert.match(source, /docker buildx rm --force "\$BUILD_BUILDER"/);
+            assert.doesNotMatch(source, /docker (?:system|volume) prune/);
+            assert.doesNotMatch(source, /docker builder prune/);
+            assert.doesNotMatch(source, /compose up -d --build --wait/);
+          });
+
+          test('failed update rebuild uses the isolated project builder too', async () => {
+            const source = await readFile(installerPath, 'utf8');
+            const restore = source.match(/restore_temporary_backup\(\) \{([\s\S]*?)\n\}/)?.[1] ?? '';
+            assert.match(restore, /ensure_project_builder/);
+            assert.match(restore, /compose build --builder "\$BUILD_BUILDER" "\$APP_SERVICE"/);
+            assert.match(restore, /cleanup_project_build_artifacts "\$failed_image"/);
+          });
+          JS
+
+          bash -n menu-tv-2.sh
+          node --test tests/installer-build-cache-lifecycle.test.js
+
+      - name: Commit generated fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add menu-tv-2.sh tests/installer-build-cache-lifecycle.test.js
+          git commit -m 'Bound MIRA-TV build cache lifecycle'
+          git push origin HEAD:fix/project-build-cache-lifecycle
