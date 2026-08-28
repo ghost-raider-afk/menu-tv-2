@@ -6,8 +6,11 @@ const root = new URL('../src/web/admin-ui/public/', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
 test('Player scene layer stack reserves stable coarse layers for future scenes', async () => {
-  const source = await read('js/player/scene-layer-composer.js');
-  const expected = ['aquarium', 'menu', 'fx', 'content', 'entity', 'brand', 'announcement'];
+  const [source, overlays] = await Promise.all([
+    read('js/player/scene-layer-composer.js'),
+    read('js/player/overlay-runtime.js')
+  ]);
+  const expected = ['environment', 'menu', 'fx', 'content', 'entity', 'brand', 'announcement'];
   let last = -1;
   for (const id of expected) {
     const index = source.indexOf(`id: '${id}'`);
@@ -16,4 +19,8 @@ test('Player scene layer stack reserves stable coarse layers for future scenes',
   }
   assert.match(source, /layer\.dataset\.sceneLayer = id/);
   assert.match(source, /ensureCore\(\)/);
+  assert.doesNotMatch(source, /id:\s*'aquarium'/);
+  assert.match(overlays, /ensurePlayerSceneLayer\(stage, 'environment'/);
+  assert.match(overlays, /renderAquariumLayer\(environmentLayer, context\.aquarium/);
+  assert.doesNotMatch(overlays, /ensurePlayerSceneLayer\(stage, 'aquarium'/);
 });
