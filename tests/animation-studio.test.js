@@ -137,11 +137,11 @@ test('stored v3 bounce/pop settings are canonicalized instead of reintroducing j
 });
 
 test('Motion Studio exposes generic scene layers, Aquarium environment effect and Video Entity v2', async () => {
-  const [html, page, profileEditor, motionPlan, domAdapter, liveMotion, previewCss, announcement, overlays, environment] = await Promise.all([
+  const [html, page, profileEditor, motionPlan, domAdapter, liveMotion, previewCss, announcement, overlays, brandCss, environment] = await Promise.all([
     read('animation.html'), read('js/pages/animation.js'), read('js/motion/profile-editor.js'),
     read('js/motion/motion-plan.js'), read('js/motion/dom-scene-adapter.js'), read('js/motion/live-menu-motion.js'),
     read('css/pages/animation-screen-preview.css'), read('js/motion/announcement.js'), read('css/motion-overlays.css'),
-    read('js/motion/environment.js')
+    read('css/brand-motion-v2.css'), read('js/motion/environment.js')
   ]);
 
   for (const id of [
@@ -180,7 +180,9 @@ test('Motion Studio exposes generic scene layers, Aquarium environment effect an
   assert.match(announcement, /scene-announcement-glyphs/);
   assert.match(overlays, /scene-environment-layer/);
   assert.doesNotMatch(overlays, /scene-aquarium-layer|tv-player-aquarium-layer|animation-screen-aquarium-layer/);
-  assert.match(overlays, /scene-brand-title/);
+  assert.doesNotMatch(overlays, /scene-brand-title/);
+  assert.match(brandCss, /scene-brand-title/);
+  assert.match(brandCss, /--brand-line-spacing/);
   assert.match(environment, /function renderAquariumEffect/);
   assert.match(environment, /layer\.classList\.add\('environment-effect-aquarium'\)/);
   assert.match(environment, /environment\.effect === 'aquarium'/);
