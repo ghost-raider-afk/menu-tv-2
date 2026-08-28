@@ -41,7 +41,8 @@ test('real TV player uses a flat menu plus one compositor scene runtime and keep
   ]) assert.ok(!worker.includes(`'${retiredAsset}'`), `TV offline shell still contains ${retiredAsset}`);
   assert.match(player, /new GpuSceneRuntime\(playerStage/);
   assert.match(player, /new PlayerSceneLayerComposer\(playerStage\)/);
-  assert.match(player, /context\.animation\?\.enabled/);
+  assert.match(player, /playerMenuRenderMode\(context\)/);
+  assert.match(player, /profile:\s*context\.animation\?\.profile/);
   assert.match(player, /sameOriginAsset\(context\?\.entity\?\.asset_url\)/);
   assert.doesNotMatch(player, /LiveMenuMotion|WasmMotionDriver/);
   assert.match(gpuRuntime, /effect\.animate\(/);
