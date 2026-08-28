@@ -940,8 +940,7 @@ update_app() {
   latest_version="$(release_tag_version "$latest_tag")"
 
   if [[ "$current_version" == "$latest_version" ]]; then
-    printf 'MIRA-TV v%s уже актуален.
-' "$current_version"
+    printf 'MIRA-TV v%s уже актуален.\n' "$current_version"
     return
   fi
   if version_is_newer "$latest_version" "$current_version"; then
@@ -949,8 +948,7 @@ update_app() {
     return
   fi
 
-  printf 'Доступно обновление MIRA-TV: v%s → v%s
-' "$current_version" "$latest_version"
+  printf 'Доступно обновление MIRA-TV: v%s → v%s\n' "$current_version" "$latest_version"
   read -r -p 'Установить обновление? [y/N]: ' input
   if [[ "${input,,}" != y ]]; then
     info "Обновление отменено."
