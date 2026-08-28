@@ -37,7 +37,7 @@ async function rasterSource(blob) {
 
 export function playerMenuRenderMode(context = {}) {
   const animation = context?.animation;
-  return animation?.enabled === true && animation?.profile ? 'dom-motion' : 'flat';
+  return animation?.enabled === true && animation?.profile ? 'flat-gpu' : 'flat';
 }
 
 export class FlatMenuRenderer {
