@@ -254,3 +254,53 @@ test('Player reuses ETag and keeps the same Flat Menu Surface when context is un
     await context.close();
   }
 });
+
+
+test('animated TV menu stays flat and uses one compositor scene effect across 304 refresh', async ({ browser }) => {
+  const context = await browser.newContext({ baseURL, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  let playerContextRequests = 0;
+  try {
+    await page.route('**/api/device/session', (route) => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        authorized: true, device_id: 1, device_key: 'device-key-gpu-scene-123456',
+        session_expires_at: new Date(Date.now() + 86400000).toISOString(),
+        screen: { id: 1, name: 'ТВ 1', resolution: '1920x1080', location_id: 1, location_name: 'Точка 1', location_number: 1 }
+      })
+    }));
+    await page.route('**/api/device/player-context', (route) => {
+      playerContextRequests += 1;
+      if (route.request().headers()['if-none-match'] === '"gpu-v1"') {
+        return route.fulfill({ status: 304, headers: { ETag: '"gpu-v1"' } });
+      }
+      return route.fulfill({
+        status: 200,
+        headers: { ETag: '"gpu-v1"' },
+        contentType: 'application/json',
+        body: JSON.stringify({
+          screen: { id: 1, name: 'ТВ 1', resolution: '1920x1080', location_id: 1, location_name: 'Точка 1', location_number: 1 },
+          draft: { rows: [], settings: { table_x: 56, table_y: 15, table_width_px: 1374, table_height_px: 925 }, revision: 1 },
+          products: [], packaging: [],
+          animation: { enabled: true, profile: { pattern: 'cinematic', intensity: 65, cycle_seconds: 8, flow_direction: 'left-to-right' } },
+          entity: null, announcement: null, brand: null, aquarium: null,
+          refresh_interval_ms: 2000
+        })
+      });
+    });
+
+    await page.goto('/player.html');
+    const menu = page.locator('[data-player-menu-layer]');
+    await expect(menu).toHaveAttribute('data-render-mode', 'flat-gpu');
+    await expect(menu.locator('[data-flat-menu-canvas]')).toHaveCount(1);
+    await expect(menu.locator('svg')).toHaveCount(0);
+    const effect = page.locator('[data-player-fx-layer] [data-gpu-scene-effect]');
+    await expect(effect).toHaveCount(1);
+    await effect.evaluate((node) => { node.dataset.gpuIdentity = 'preserved'; });
+    await expect.poll(() => playerContextRequests, { timeout: 5000 }).toBeGreaterThanOrEqual(2);
+    await expect(effect).toHaveAttribute('data-gpu-identity', 'preserved');
+    await expect(menu.locator('[data-flat-menu-canvas]')).toHaveCount(1);
+  } finally {
+    await context.close();
+  }
+});

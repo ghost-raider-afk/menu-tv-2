@@ -1,5 +1,5 @@
-const SHELL_CACHE = 'mira-tv-player-shell-v10';
-const DATA_CACHE = 'mira-tv-player-data-v10';
+const SHELL_CACHE = 'mira-tv-player-shell-v11';
+const DATA_CACHE = 'mira-tv-player-data-v11';
 const PLAYER_CONTEXT = '/api/device/player-context';
 const SHELL_ASSETS = [
   '/player.html',
@@ -9,6 +9,8 @@ const SHELL_ASSETS = [
   '/js/player/entity-runtime.js',
   '/js/player/overlay-runtime.js',
   '/js/player/flat-menu-renderer.js',
+  '/js/player/scene-layer-composer.js',
+  '/js/player/gpu-scene-runtime.js',
   '/js/editor/renderer.js',
   '/js/editor/renderer-model.js',
   '/js/editor/renderer-svg.js',
@@ -17,17 +19,12 @@ const SHELL_ASSETS = [
   '/js/motion/announcement.js',
   '/js/motion/brand-title.js',
   '/js/motion/aquarium.js',
-  '/js/motion/live-menu-motion.js',
-  '/js/motion/motion-plan.js',
   '/js/motion/dom-scene-adapter.js',
   '/js/motion/scene-graph.js',
   '/js/motion/scene-composer.js',
   '/js/motion/scene-runtime.js',
   '/js/motion/timeline.js',
-  '/js/motion/drivers/waapi-driver.js',
-  '/js/motion/drivers/wasm-motion-driver.js',
-  '/js/motion/wasm-motion-kernel.js',
-  '/wasm/mira-motion-kernel.wasm'
+  '/js/motion/drivers/waapi-driver.js'
 ];
 
 self.addEventListener('install', (event) => {

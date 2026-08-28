@@ -208,3 +208,13 @@ TV 1   TV 2   TV 3
 - TV Player должен продолжать показ последнего валидного состояния при потере сети;
 - существующий JPEG/SFTP publish остаётся независимым fallback;
 - новые runtime-механизмы должны иметь измеряемый performance budget и не зависеть от количества строк меню линейно.
+
+
+## GPU Scene Layer Composer — реализован
+
+- TV Player использует Flat Menu Surface даже при включённом animation profile;
+- введён стабильный semantic layer stack: `menu / fx / content / entity / brand / announcement`;
+- базовый menu motion компилируется в один coarse compositor effect;
+- row-by-row WASM runtime удалён из TV Player и его offline shell;
+- Motion Studio сохраняет legacy motion capability до отдельной миграции preview;
+- следующий этап: `Scene Playlist` contract + `PromoScene / ContentScene`, затем Actor lifecycle для Object+.

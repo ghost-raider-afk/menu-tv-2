@@ -289,3 +289,30 @@ Default compilers игнорируют неизвестные `kind`, включ
 8. Concrete driver — единственное место сериализации состояния под конкретный runtime.
 9. Live Entity не наследует menu behavior неявно.
 10. GPU/Entity никогда не должны становиться обязательным условием отображения основного меню.
+
+
+## TV compositor runtime
+
+Motion Studio и TV Player разделяют semantic scene contracts, но не обязаны использовать один concrete renderer path. TV Player оптимизирован для длительного воспроизведения на Smart TV:
+
+```text
+Canonical Menu Model
+        ↓
+   Flat Menu Surface
+        +
+PlayerSceneLayerComposer
+        ↓
+   GpuSceneRuntime
+        ↓
+Browser compositor / WAAPI
+```
+
+Инварианты TV runtime:
+- количество постоянных menu-motion targets — `O(1)`, а не `O(number of rows)`;
+- нет row-by-row `requestAnimationFrame` цикла;
+- нет покадровых `filter`, `blur` и `drop-shadow` для базового menu motion;
+- профиль компилируется в одну coarse `transform/opacity` animation;
+- `Entity / Object+` сохраняет отдельного runtime-владельца;
+- будущие `Promo`, `Content` и `Story` добавляются как независимые крупные слои через `PlayerSceneLayerComposer`.
+
+`WasmMotionDriver` остаётся допустимым Studio/legacy driver, но больше не является зависимостью TV offline shell.

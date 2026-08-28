@@ -6,8 +6,9 @@ import {
 } from '../editor/renderer.js';
 import { renderSceneEntity } from '../motion/entity-editor.js';
 import { renderAnnouncementLayer } from '../motion/announcement.js';
-import { LiveMenuMotion } from '../motion/live-menu-motion.js';
 import { FlatMenuRenderer, playerMenuRenderMode } from './flat-menu-renderer.js';
+import { GpuSceneRuntime } from './gpu-scene-runtime.js';
+import { PlayerSceneLayerComposer } from './scene-layer-composer.js';
 
 const ACTIVATION_STORAGE_KEY = 'tv-menu.device-activation.v2';
 const LEGACY_ACTIVATION_STORAGE_KEY = 'tv-menu.device-activation';
@@ -24,8 +25,9 @@ const activationLead = document.querySelector('.activation-lead');
 const player = document.querySelector('[data-tv-player]');
 const playerStage = document.querySelector('[data-player-stage]');
 const playerMessage = document.querySelector('[data-player-message]');
-const liveMotion = new LiveMenuMotion(playerStage);
+const sceneLayers = new PlayerSceneLayerComposer(playerStage);
 const flatMenuRenderer = new FlatMenuRenderer();
+const gpuSceneRuntime = new GpuSceneRuntime(playerStage, { composer: sceneLayers });
 
 let pollTimer = null;
 let expiryTimer = null;
@@ -182,7 +184,8 @@ async function enterImmersiveMode() {
 function showActivationScreen() {
   if (refreshTimer) clearTimeout(refreshTimer);
   refreshTimer = null;
-  liveMotion.destroy();
+  gpuSceneRuntime.destroy();
+  flatMenuRenderer.destroy();
   setHidden(player, true);
   setHidden(activationView, false);
   setHidden(playerMessage, true);
@@ -385,19 +388,6 @@ async function warmPlayerAssetCache(context) {
   await Promise.all(assets.map((asset) => fetch(asset, { cache: 'reload' }).catch(() => undefined)));
 }
 
-function ensurePlayerLayer(className, attribute) {
-  let layer = playerStage.querySelector(`[${attribute}]`);
-  if (layer instanceof HTMLElement) {
-    layer.classList.add(className);
-    return layer;
-  }
-  layer = document.createElement('div');
-  layer.className = className;
-  layer.setAttribute(attribute, '');
-  playerStage.append(layer);
-  return layer;
-}
-
 function renderPlayerContext(context) {
   const viewport = resolutionOf(context.screen);
   const model = buildRenderModel(context.draft, viewport);
@@ -407,38 +397,32 @@ function renderPlayerContext(context) {
     fallbackTitle: context.screen?.name || 'Меню'
   });
   const layout = buildRenderLayout(model, lines);
-  const menuLayer = ensurePlayerLayer('tv-player-menu-layer', 'data-player-menu-layer');
-  const entityLayer = ensurePlayerLayer('tv-player-entity-layer', 'data-motion-entity-layer');
-  const announcementLayer = ensurePlayerLayer('tv-player-announcement-layer', 'data-announcement-layer');
-  entityLayer.setAttribute('aria-hidden', 'true');
-  announcementLayer.setAttribute('aria-label', 'Объявление');
+  const { menu: menuLayer, entity: entityLayer, announcement: announcementLayer } = sceneLayers.ensureCore();
   const menuSvg = buildTableSvg(model, lines, layout);
   const renderMode = playerMenuRenderMode(context);
   menuLayer.dataset.renderMode = renderMode;
-  if (renderMode === 'flat') {
-    liveMotion.destroy();
-    void flatMenuRenderer.render(menuLayer, menuSvg, viewport).catch((error) => {
-      console.error('Flat TV menu render failed; using DOM compatibility output', error);
-      if (menuLayer.dataset.renderMode !== 'flat') return;
-      flatMenuRenderer.destroy();
-      menuLayer.innerHTML = menuSvg;
-      menuLayer.dataset.renderMode = 'dom-fallback';
-    });
-  } else {
+
+  void flatMenuRenderer.render(menuLayer, menuSvg, viewport).catch((error) => {
+    console.error('Flat TV menu render failed; using static DOM fallback', error);
+    if (menuLayer.dataset.renderMode !== renderMode) return;
     flatMenuRenderer.destroy();
     menuLayer.innerHTML = menuSvg;
-  }
+    menuLayer.dataset.renderMode = 'dom-fallback';
+    gpuSceneRuntime.destroy();
+  });
+
   playerStage.style.backgroundColor = model.settings.background_color || '#101828';
   const background = sameOriginAsset(model.settings.background_image_url);
   playerStage.style.backgroundImage = background ? `url(${JSON.stringify(background)})` : 'none';
   renderSceneEntity(playerStage, context.entity, { editable: false });
   renderAnnouncementLayer(announcementLayer, context.announcement);
-  if (renderMode !== 'flat') {
-    liveMotion.render({
-      enabled: context.animation?.enabled === true,
-      profile: context.animation?.profile
-    });
-  }
+  gpuSceneRuntime.render({
+    enabled: renderMode === 'flat-gpu',
+    profile: context.animation?.profile,
+    viewport,
+    settings: model.settings
+  });
+  entityLayer.setAttribute('aria-hidden', 'true');
   playerRefreshMs = Math.max(2000, Number(context.refresh_interval_ms) || 5000);
 }
 
