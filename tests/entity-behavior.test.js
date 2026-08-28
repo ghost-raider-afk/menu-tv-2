@@ -63,8 +63,8 @@ test('preview and TV player keep one explicit runtime owner for entity behavior 
 
   assert.doesNotMatch(liveMotion, /compileEntityBehaviorProgram/);
   assert.match(liveMotion, /compilers:\s*DEFAULT_SCENE_COMPILERS/);
-  assert.match(player, /new LiveMenuMotion\(playerStage\)/);
-  assert.doesNotMatch(player, /liveMotion\.render\(\{[^}]*entity:/s);
+  assert.doesNotMatch(player, /LiveMenuMotion|WasmMotionDriver/);
+  assert.match(player, /new GpuSceneRuntime\(playerStage/);
 
   assert.match(playerHtml, /\/js\/player\/entity-runtime\.js/);
   assert.match(entityRuntime, /compileEntityBehaviorProgram/);
@@ -72,8 +72,14 @@ test('preview and TV player keep one explicit runtime owner for entity behavior 
 
   for (const asset of [
     '/js/player/entity-runtime.js', '/js/player/flat-menu-renderer.js',
-    '/js/motion/live-menu-motion.js', '/js/motion/entity-behavior.js', '/js/motion/dom-scene-adapter.js',
+    '/js/player/scene-layer-composer.js', '/js/player/gpu-scene-runtime.js',
+    '/js/motion/entity-behavior.js', '/js/motion/dom-scene-adapter.js',
     '/js/motion/scene-graph.js', '/js/motion/scene-composer.js', '/js/motion/scene-runtime.js',
     '/js/motion/timeline.js', '/js/motion/drivers/waapi-driver.js'
   ]) assert.ok(worker.includes(asset), `offline shell is missing ${asset}`);
+
+  for (const retiredPlayerAsset of [
+    '/js/motion/live-menu-motion.js', '/js/motion/drivers/wasm-motion-driver.js',
+    '/js/motion/wasm-motion-kernel.js', '/wasm/mira-motion-kernel.wasm'
+  ]) assert.ok(!worker.includes(retiredPlayerAsset), `offline shell still carries ${retiredPlayerAsset}`);
 });
