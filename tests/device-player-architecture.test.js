@@ -18,10 +18,11 @@ test('player is public while TV connection page remains admin protected', async 
   assert.match(connectHtml, /Сканировать QR-код/);
 });
 
-test('real TV player uses a flat menu plus one compositor scene runtime and keeps required assets offline', async () => {
-  const [worker, player, gpuRuntime, layerComposer, publicRoutes, playerCss] = await Promise.all([
+test('real TV player owns all scene layers from one player context and keeps required assets offline', async () => {
+  const [worker, player, playerHtml, gpuRuntime, layerComposer, publicRoutes, playerCss] = await Promise.all([
     read('src/web/admin-ui/public/player-sw.js'),
     read('src/web/admin-ui/public/js/player/player.js'),
+    read('src/web/admin-ui/public/player.html'),
     read('src/web/admin-ui/public/js/player/gpu-scene-runtime.js'),
     read('src/web/admin-ui/public/js/player/scene-layer-composer.js'),
     read('src/api/device/public-routes.js'),
@@ -29,32 +30,41 @@ test('real TV player uses a flat menu plus one compositor scene runtime and keep
   ]);
   assert.match(worker, /mira-tv-player-shell-v\d+/);
   for (const asset of [
+    '/css/brand-motion-v2.css','/css/motion-overlays.css',
     '/js/editor/renderer.js','/js/editor/renderer-model.js','/js/editor/renderer-svg.js',
     '/js/player/flat-menu-renderer.js','/js/player/scene-layer-composer.js','/js/player/gpu-scene-runtime.js',
-    '/js/player/entity-runtime.js','/js/motion/entity-behavior.js','/js/motion/dom-scene-adapter.js',
-    '/js/motion/scene-graph.js','/js/motion/scene-composer.js','/js/motion/scene-runtime.js',
-    '/js/motion/timeline.js','/js/motion/drivers/waapi-driver.js'
+    '/js/player/entity-runtime.js','/js/motion/environment.js','/js/motion/brand-title.js','/js/motion/announcement.js',
+    '/js/motion/entity-behavior.js','/js/motion/dom-scene-adapter.js','/js/motion/scene-graph.js',
+    '/js/motion/scene-composer.js','/js/motion/scene-runtime.js','/js/motion/timeline.js','/js/motion/drivers/waapi-driver.js'
   ]) assert.ok(worker.includes(`'${asset}'`), `offline shell is missing ${asset}`);
   for (const retiredAsset of [
-    '/js/motion/live-menu-motion.js','/js/motion/motion-plan.js',
+    '/js/player/overlay-runtime.js','/js/motion/aquarium.js','/js/motion/live-menu-motion.js','/js/motion/motion-plan.js',
     '/js/motion/drivers/wasm-motion-driver.js','/js/motion/wasm-motion-kernel.js','/wasm/mira-motion-kernel.wasm'
   ]) assert.ok(!worker.includes(`'${retiredAsset}'`), `TV offline shell still contains ${retiredAsset}`);
+
+  assert.match(playerHtml, /\/css\/brand-motion-v2\.css/);
+  assert.doesNotMatch(playerHtml, /overlay-runtime\.js/);
   assert.match(player, /new GpuSceneRuntime\(playerStage/);
   assert.match(player, /new PlayerSceneLayerComposer\(playerStage\)/);
+  assert.match(player, /renderEnvironmentLayer\(environmentLayer, context\.environment/);
+  assert.match(player, /renderBrandTitleLayer\(brandLayer, context\.brand\)/);
+  assert.match(player, /renderAnnouncementLayer\(announcementLayer, context\.announcement\)/);
   assert.match(player, /playerMenuRenderMode\(context\)/);
   assert.match(player, /profile:\s*context\.animation\?\.profile/);
   assert.match(player, /sameOriginAsset\(context\?\.entity\?\.asset_url\)/);
-  assert.doesNotMatch(player, /LiveMenuMotion|WasmMotionDriver/);
+  assert.doesNotMatch(player, /LiveMenuMotion|WasmMotionDriver|MutationObserver/);
   assert.match(gpuRuntime, /effect\.animate\(/);
   assert.doesNotMatch(gpuRuntime, /requestAnimationFrame|style\.filter|drop-shadow/);
-  assert.match(layerComposer, /'menu'/);
-  assert.match(layerComposer, /'fx'/);
-  assert.match(layerComposer, /'content'/);
-  assert.match(layerComposer, /'entity'/);
+  for (const layer of ['environment','menu','fx','content','entity','brand','announcement']) {
+    assert.match(layerComposer, new RegExp(`'${layer}'`));
+  }
   assert.match(publicRoutes, /animation:\s*\{/);
   assert.match(publicRoutes, /store\.getScreenAnimationSettings\(session\.screen_id\)/);
   assert.doesNotMatch(publicRoutes, /store\.getAnimationSettings\(\)/);
   assert.match(publicRoutes, /enabled: animationSettings\?\.enabled === true/);
+  assert.match(publicRoutes, /environment: animationSettings\?\.environment \|\| null/);
+  assert.doesNotMatch(publicRoutes, /aquarium: animationSettings/);
+  assert.match(playerCss, /\.tv-player-environment-layer/);
   assert.match(playerCss, /\.tv-player-announcement-layer/);
   assert.match(playerCss, /\.tv-player-gpu-effect/);
   assert.match(playerCss, /will-change:\s*transform, opacity/);

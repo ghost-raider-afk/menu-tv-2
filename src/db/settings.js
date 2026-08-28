@@ -3,7 +3,7 @@ import { completeAnimationProfile } from '../shared/animation-profile.js';
 import { completeSceneEntity } from '../contracts/scene-entity.js';
 import { completeAnnouncement } from '../contracts/announcement.js';
 import { completeBrandTitle } from '../contracts/brand-title.js';
-import { completeAquarium } from '../contracts/aquarium.js';
+import { completeEnvironment } from '../contracts/environment.js';
 
 function parseJson(value) {
   try { return JSON.parse(value || '{}'); }
@@ -22,7 +22,7 @@ function normaliseAnimationSettings(row) {
     entity: completeSceneEntity(parseJson(value.entity_json)),
     announcement: completeAnnouncement(parseJson(value.announcement_json)),
     brand: completeBrandTitle(parseJson(value.brand_json)),
-    aquarium: completeAquarium(parseJson(value.aquarium_json)),
+    environment: completeEnvironment(parseJson(value.environment_json)),
     updated_by: value.updated_by || '',
     created_at: value.created_at,
     updated_at: value.updated_at
@@ -37,7 +37,7 @@ function animationValues(settings) {
     JSON.stringify(settings.entity || {}),
     JSON.stringify(settings.announcement || {}),
     JSON.stringify(settings.brand || {}),
-    JSON.stringify(settings.aquarium || {})
+    JSON.stringify(settings.environment || {})
   ];
 }
 
@@ -76,12 +76,12 @@ export function createSettingsRepository(pool) {
       return normaliseAnimationSettings(rows[0]);
     },
 
-    async updateAnimationSettings({ enabled, preset_id, profile, entity, announcement, brand, aquarium, updated_by }) {
+    async updateAnimationSettings({ enabled, preset_id, profile, entity, announcement, brand, environment, updated_by }) {
       const { rows } = await pool.query(
         `UPDATE animation_settings SET enabled = $1, preset_id = $2, profile_json = $3, entity_json = $4,
-         announcement_json = $5, brand_json = $6, aquarium_json = $7, updated_by = $8, updated_at = $9
+         announcement_json = $5, brand_json = $6, environment_json = $7, updated_by = $8, updated_at = $9
          WHERE id = 1 RETURNING *`,
-        [enabled, preset_id, JSON.stringify(profile), JSON.stringify(entity), JSON.stringify(announcement), JSON.stringify(brand), JSON.stringify(aquarium), updated_by, isoNow()]
+        [enabled, preset_id, JSON.stringify(profile), JSON.stringify(entity), JSON.stringify(announcement), JSON.stringify(brand), JSON.stringify(environment), updated_by, isoNow()]
       );
       return normaliseAnimationSettings(rows[0]);
     },
@@ -92,14 +92,14 @@ export function createSettingsRepository(pool) {
       for (const screenId of screenIds) {
         const { rows } = await pool.query(
           `INSERT INTO screen_animation_settings (
-             screen_id, enabled, preset_id, profile_json, entity_json, announcement_json, brand_json, aquarium_json, updated_by, updated_at
+             screen_id, enabled, preset_id, profile_json, entity_json, announcement_json, brand_json, environment_json, updated_by, updated_at
            )
            SELECT s.id, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP
            FROM screens s WHERE s.id = $1
            ON CONFLICT (screen_id) DO UPDATE SET
              enabled = EXCLUDED.enabled, preset_id = EXCLUDED.preset_id, profile_json = EXCLUDED.profile_json,
              entity_json = EXCLUDED.entity_json, announcement_json = EXCLUDED.announcement_json,
-             brand_json = EXCLUDED.brand_json, aquarium_json = EXCLUDED.aquarium_json,
+             brand_json = EXCLUDED.brand_json, environment_json = EXCLUDED.environment_json,
              updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at
            RETURNING screen_id`,
           [screenId, ...values, updatedBy]

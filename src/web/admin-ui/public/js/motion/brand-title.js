@@ -20,6 +20,7 @@ export const DEFAULT_BRAND_TITLE = Object.freeze({
   font_size: 72,
   vertical_scale: 1,
   letter_spacing: 2,
+  line_spacing: 6,
   text_color: '#FFFFFF',
   glow_color: '#35D9FF',
   glow_strength: 18,
@@ -59,6 +60,7 @@ export function normaliseBrandTitle(value = {}) {
     font_size: clamp(source.font_size, DEFAULT_BRAND_TITLE.font_size, 18, 180),
     vertical_scale: clamp(source.vertical_scale, DEFAULT_BRAND_TITLE.vertical_scale, 0.5, 2.2),
     letter_spacing: clamp(source.letter_spacing, DEFAULT_BRAND_TITLE.letter_spacing, -2, 20),
+    line_spacing: clamp(source.line_spacing, DEFAULT_BRAND_TITLE.line_spacing, -60, 80),
     text_color: textColor,
     glow_color: glowColor,
     glow_strength: clamp(source.glow_strength, DEFAULT_BRAND_TITLE.glow_strength, 0, 48),
@@ -135,6 +137,7 @@ export function renderBrandTitleLayer(layer, value) {
   root.style.setProperty('--brand-font-size', `${brand.font_size / 19.2}cqw`);
   root.style.setProperty('--brand-scale-y', String(brand.vertical_scale));
   root.style.setProperty('--brand-letter-spacing', `${brand.letter_spacing / 19.2}cqw`);
+  root.style.setProperty('--brand-line-spacing', `${brand.line_spacing / 19.2}cqw`);
   root.style.setProperty('--brand-text-color', brand.text_color);
   root.style.setProperty('--brand-glow-color', brand.glow_color);
   root.style.setProperty('--brand-glow-radius', `${brand.glow_strength / 19.2}cqw`);

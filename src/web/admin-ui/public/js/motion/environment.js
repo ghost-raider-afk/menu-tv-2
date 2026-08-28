@@ -1,5 +1,4 @@
-export const DEFAULT_AQUARIUM = Object.freeze({
-  enabled: false,
+export const DEFAULT_AQUARIUM_PARAMETERS = Object.freeze({
   style: 'premium',
   intro_fill: true,
   intensity: 45,
@@ -10,7 +9,17 @@ export const DEFAULT_AQUARIUM = Object.freeze({
   speed: 35
 });
 
+export const DEFAULT_ENVIRONMENT = Object.freeze({
+  enabled: false,
+  effect: 'none',
+  parameters: DEFAULT_AQUARIUM_PARAMETERS
+});
+
 let introPlayed = false;
+
+function sourceObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
 
 function clamp(value, fallback, min, max, integer = false) {
   const number = Number(value);
@@ -19,19 +28,42 @@ function clamp(value, fallback, min, max, integer = false) {
   return integer ? Math.round(result) : result;
 }
 
-export function normaliseAquarium(value = {}) {
-  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+export function normaliseAquariumParameters(value = {}) {
+  const source = sourceObject(value);
   return {
-    enabled: source.enabled === true,
-    style: ['premium', 'neon', 'reef'].includes(source.style) ? source.style : DEFAULT_AQUARIUM.style,
+    style: ['premium', 'neon', 'reef'].includes(source.style) ? source.style : DEFAULT_AQUARIUM_PARAMETERS.style,
     intro_fill: source.intro_fill !== false,
-    intensity: clamp(source.intensity, DEFAULT_AQUARIUM.intensity, 0, 100, true),
-    fish_count: clamp(source.fish_count, DEFAULT_AQUARIUM.fish_count, 0, 8, true),
-    bubble_density: clamp(source.bubble_density, DEFAULT_AQUARIUM.bubble_density, 0, 100, true),
-    plant_density: clamp(source.plant_density, DEFAULT_AQUARIUM.plant_density, 0, 100, true),
-    caustics: clamp(source.caustics, DEFAULT_AQUARIUM.caustics, 0, 100, true),
-    speed: clamp(source.speed, DEFAULT_AQUARIUM.speed, 10, 100, true)
+    intensity: clamp(source.intensity, DEFAULT_AQUARIUM_PARAMETERS.intensity, 0, 100, true),
+    fish_count: clamp(source.fish_count, DEFAULT_AQUARIUM_PARAMETERS.fish_count, 0, 8, true),
+    bubble_density: clamp(source.bubble_density, DEFAULT_AQUARIUM_PARAMETERS.bubble_density, 0, 100, true),
+    plant_density: clamp(source.plant_density, DEFAULT_AQUARIUM_PARAMETERS.plant_density, 0, 100, true),
+    caustics: clamp(source.caustics, DEFAULT_AQUARIUM_PARAMETERS.caustics, 0, 100, true),
+    speed: clamp(source.speed, DEFAULT_AQUARIUM_PARAMETERS.speed, 10, 100, true)
   };
+}
+
+export function normaliseEnvironment(value = {}) {
+  const source = sourceObject(value);
+  const effect = ['none', 'aquarium'].includes(source.effect) ? source.effect : 'none';
+  return {
+    enabled: source.enabled === true && effect !== 'none',
+    effect,
+    parameters: normaliseAquariumParameters(source.parameters)
+  };
+}
+
+export function aquariumEnvironment(value = {}) {
+  const source = sourceObject(value);
+  return normaliseEnvironment({
+    enabled: source.enabled === true,
+    effect: source.enabled === true ? 'aquarium' : 'none',
+    parameters: source
+  });
+}
+
+export function aquariumParameters(value = {}) {
+  const environment = normaliseEnvironment(value);
+  return { enabled: environment.enabled && environment.effect === 'aquarium', ...environment.parameters };
 }
 
 function createFish(index, speed) {
@@ -71,7 +103,7 @@ function createPlant(index, side, speed) {
   return plant;
 }
 
-function setVisualVariables(layer, aquarium) {
+function setAquariumVisualVariables(layer, aquarium) {
   const intensity = aquarium.intensity / 100;
   const caustics = aquarium.caustics / 100;
   layer.style.setProperty('--aquarium-water-opacity', (0.18 + intensity * 0.28).toFixed(3));
@@ -87,20 +119,14 @@ function setVisualVariables(layer, aquarium) {
 }
 
 function resetHostState(layer) {
-  layer.classList.remove('aquarium-style-premium', 'aquarium-style-neon', 'aquarium-style-reef', 'aquarium-intro-active', 'is-enabled');
-  layer.classList.add('scene-aquarium-layer');
+  layer.classList.remove('environment-effect-aquarium', 'aquarium-style-premium', 'aquarium-style-neon', 'aquarium-style-reef', 'aquarium-intro-active', 'is-enabled');
+  layer.classList.add('scene-environment-layer');
 }
 
-export function renderAquariumLayer(layer, value, { allowIntro = true } = {}) {
-  if (!(layer instanceof Element)) return null;
-  const aquarium = normaliseAquarium(value);
-  layer.replaceChildren();
-  resetHostState(layer);
-  layer.classList.toggle('is-enabled', aquarium.enabled);
-  if (!aquarium.enabled) return aquarium;
-
-  layer.classList.add(`aquarium-style-${aquarium.style}`);
-  setVisualVariables(layer, aquarium);
+function renderAquariumEffect(layer, parameters, { allowIntro = true } = {}) {
+  const aquarium = normaliseAquariumParameters(parameters);
+  layer.classList.add('environment-effect-aquarium', `aquarium-style-${aquarium.style}`);
+  setAquariumVisualVariables(layer, aquarium);
 
   const water = document.createElement('div');
   water.className = 'aquarium-water';
@@ -129,9 +155,20 @@ export function renderAquariumLayer(layer, value, { allowIntro = true } = {}) {
   for (let index = 0; index < bubbleCount; index += 1) bubbles.append(createBubble(index, aquarium.speed));
 
   layer.append(water, scenery, fishLayer, bubbles);
-  return aquarium;
 }
 
-export function resetAquariumIntro() {
+export function renderEnvironmentLayer(layer, value, options = {}) {
+  if (!(layer instanceof Element)) return null;
+  const environment = normaliseEnvironment(value);
+  layer.replaceChildren();
+  resetHostState(layer);
+  layer.classList.toggle('is-enabled', environment.enabled);
+  if (!environment.enabled) return environment;
+
+  if (environment.effect === 'aquarium') renderAquariumEffect(layer, environment.parameters, options);
+  return environment;
+}
+
+export function resetEnvironmentIntro() {
   introPlayed = false;
 }

@@ -5,7 +5,7 @@ import { AnimationPreviewPlayer } from '../motion/preview-player.js';
 import { SceneEntityEditor, createEntityMedia, normaliseSceneEntity } from '../motion/entity-editor.js';
 import { normaliseAnnouncement, renderAnnouncementLayer } from '../motion/announcement.js';
 import { normaliseBrandTitle, renderBrandTitleLayer } from '../motion/brand-title.js';
-import { normaliseAquarium, renderAquariumLayer, resetAquariumIntro } from '../motion/aquarium.js';
+import { aquariumEnvironment, aquariumParameters, renderEnvironmentLayer, resetEnvironmentIntro } from '../motion/environment.js';
 import { renderAnimationScreenEmpty, renderAnimationScreenPreview } from '../motion/screen-preview.js';
 import {
   DEFAULT_LIVE_PROFILE,
@@ -19,7 +19,7 @@ const ENTITY_MEDIA_TYPES = Object.freeze(['image/png', 'image/webp', 'video/mp4'
 let currentEntity = normaliseSceneEntity();
 let currentAnnouncement = normaliseAnnouncement();
 let currentBrand = normaliseBrandTitle();
-let currentAquarium = normaliseAquarium();
+let currentAquarium = aquariumParameters();
 let player = null;
 let entityEditor = null;
 let previewFrame = null;
@@ -43,8 +43,8 @@ function renderBrandPreview() {
 }
 
 function renderAquariumPreview(allowIntro = false) {
-  const layer = element('animation-stage')?.querySelector('[data-aquarium-layer]');
-  if (layer) renderAquariumLayer(layer, currentAquarium, { allowIntro });
+  const layer = element('animation-stage')?.querySelector('[data-environment-layer]');
+  if (layer) renderEnvironmentLayer(layer, aquariumEnvironment(currentAquarium), { allowIntro });
 }
 
 function restartPreview() {
@@ -134,6 +134,7 @@ function brandFromControls() {
     font_size: number('animation-brand-font-size'),
     vertical_scale: number('animation-brand-vertical-scale'),
     letter_spacing: number('animation-brand-letter-spacing'),
+    line_spacing: number('animation-brand-line-spacing'),
     text_color: value('animation-brand-text-color'),
     glow_color: value('animation-brand-glow-color'),
     glow_strength: number('animation-brand-glow-strength'),
@@ -161,6 +162,7 @@ function syncBrandControls(brand = currentBrand) {
   setValue('animation-brand-font-size', current.font_size);
   setValue('animation-brand-vertical-scale', current.vertical_scale);
   setValue('animation-brand-letter-spacing', current.letter_spacing);
+  setValue('animation-brand-line-spacing', current.line_spacing);
   setValue('animation-brand-text-color', current.text_color);
   setValue('animation-brand-glow-color', current.glow_color);
   setValue('animation-brand-glow-strength', current.glow_strength);
@@ -177,6 +179,7 @@ function syncBrandControls(brand = currentBrand) {
     'animation-brand-font-size-output': `${Math.round(current.font_size)} px`,
     'animation-brand-vertical-scale-output': `${current.vertical_scale.toFixed(2)}×`,
     'animation-brand-letter-spacing-output': `${current.letter_spacing.toFixed(1)} px`,
+    'animation-brand-line-spacing-output': `${Math.round(current.line_spacing)} px`,
     'animation-brand-glow-strength-output': `${Math.round(current.glow_strength)} px`,
     'animation-brand-entrance-duration-output': `${Math.round(current.entrance_duration_ms)} мс`,
     'animation-brand-exit-duration-output': `${Math.round(current.exit_duration_ms)} мс`,
@@ -209,7 +212,7 @@ function bindBrandControls() {
   const ids = [
     'animation-brand-enabled', 'animation-brand-text', 'animation-brand-x', 'animation-brand-y',
     'animation-brand-font-family', 'animation-brand-font-size', 'animation-brand-vertical-scale',
-    'animation-brand-letter-spacing', 'animation-brand-text-color', 'animation-brand-glow-color',
+    'animation-brand-letter-spacing', 'animation-brand-line-spacing', 'animation-brand-text-color', 'animation-brand-glow-color',
     'animation-brand-glow-strength', 'animation-brand-entrance-effect', 'animation-brand-effect', 'animation-brand-exit-effect',
     'animation-brand-entrance-duration', 'animation-brand-exit-duration', 'animation-brand-stagger',
     'animation-brand-amplitude', 'animation-brand-overshoot', 'animation-brand-cycle'
@@ -220,8 +223,6 @@ function bindBrandControls() {
     const eventName = node instanceof HTMLSelectElement || (node instanceof HTMLInputElement && node.type === 'checkbox') ? 'change' : 'input';
     node.addEventListener(eventName, () => {
       currentBrand = brandFromControls();
-      // Text is an editable draft: do not rewrite the input on every keystroke.
-      // Re-syncing it here used to restore the product-brand fallback and move the caret.
       if (id !== 'animation-brand-text') syncBrandControls(currentBrand);
       renderBrandPreview();
     });
@@ -230,7 +231,7 @@ function bindBrandControls() {
 }
 
 function aquariumFromControls() {
-  return normaliseAquarium({
+  return aquariumParameters(aquariumEnvironment({
     enabled: checked('animation-aquarium-enabled'),
     style: value('animation-aquarium-style'),
     intro_fill: checked('animation-aquarium-intro'),
@@ -240,11 +241,11 @@ function aquariumFromControls() {
     plant_density: number('animation-aquarium-plants'),
     caustics: number('animation-aquarium-caustics'),
     speed: number('animation-aquarium-speed')
-  });
+  }));
 }
 
 function syncAquariumControls(aquarium = currentAquarium) {
-  const current = normaliseAquarium(aquarium);
+  const current = aquariumParameters(aquariumEnvironment(aquarium));
   const enabled = element('animation-aquarium-enabled');
   const intro = element('animation-aquarium-intro');
   if (enabled) enabled.checked = current.enabled;
@@ -285,7 +286,7 @@ function bindAquariumControls() {
   });
   element('animation-aquarium-replay')?.addEventListener('click', () => {
     currentAquarium = aquariumFromControls();
-    resetAquariumIntro();
+    resetEnvironmentIntro();
     renderAquariumPreview(true);
   });
 }
@@ -463,7 +464,6 @@ async function loadScreenOptions() {
   await loadScreenPreview(selected.id);
 }
 
-
 function setInspectorTab(name) {
   document.querySelectorAll('[data-animation-inspector-tab]').forEach((button) => button.classList.toggle('active', button.dataset.animationInspectorTab === name));
   document.querySelectorAll('[data-animation-inspector-panel]').forEach((panel) => { panel.hidden = panel.dataset.animationInspectorPanel !== name; });
@@ -578,7 +578,8 @@ function animationPayload() {
   currentAquarium = aquariumFromControls();
   return {
     enabled: checked('animation-enabled'), preset_id: PROFILE_ID, profile: readMotionProfile(),
-    entity: currentEntity, announcement: currentAnnouncement, brand: currentBrand, aquarium: currentAquarium
+    entity: currentEntity, announcement: currentAnnouncement, brand: currentBrand,
+    environment: aquariumEnvironment(currentAquarium)
   };
 }
 
@@ -586,7 +587,7 @@ function applySavedSettings(saved) {
   writeMotionProfile(saved.profile);
   currentAnnouncement = normaliseAnnouncement(saved.announcement);
   currentBrand = normaliseBrandTitle(saved.brand);
-  currentAquarium = normaliseAquarium(saved.aquarium);
+  currentAquarium = aquariumParameters(saved.environment);
   syncAnnouncementControls(currentAnnouncement);
   syncBrandControls(currentBrand);
   syncAquariumControls(currentAquarium);
@@ -616,7 +617,7 @@ async function loadSettings() {
   writeMotionProfile(settings?.profile || DEFAULT_LIVE_PROFILE);
   currentAnnouncement = normaliseAnnouncement(settings?.announcement);
   currentBrand = normaliseBrandTitle(settings?.brand);
-  currentAquarium = normaliseAquarium(settings?.aquarium);
+  currentAquarium = aquariumParameters(settings?.environment);
   syncAnnouncementControls(currentAnnouncement);
   syncBrandControls(currentBrand);
   syncAquariumControls(currentAquarium);
