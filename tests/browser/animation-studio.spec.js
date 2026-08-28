@@ -36,7 +36,7 @@ async function restoreAnimationSettings(page, settings) {
     if (!response.ok) throw new Error(`animation settings restore failed: ${response.status}`);
   }, {
     enabled: settings.enabled, preset_id: settings.preset_id, profile: settings.profile,
-    entity: settings.entity, announcement: settings.announcement, brand: settings.brand, aquarium: settings.aquarium
+    entity: settings.entity, announcement: settings.announcement, brand: settings.brand, environment: settings.environment
   });
 }
 
@@ -153,11 +153,13 @@ test('animation studio keeps glyphs fixed while light surfaces, promo glow and o
     await expect(page.locator('#animation-stage .scene-announcement')).toHaveClass(/has-glow/);
 
     await page.locator('#animation-brand-enabled').check();
-    await page.locator('#animation-brand-text').fill('БАР МАЯК');
+    await page.locator('#animation-brand-text').fill('БАР\nМАЯК');
     await page.locator('#animation-brand-x').fill('300');
     await page.locator('#animation-brand-y').fill('120');
+    await page.locator('#animation-brand-line-spacing').fill('-18');
     await page.locator('#animation-brand-effect').selectOption('neon-pulse');
-    await expect(page.locator('#animation-stage .scene-brand-title-glyphs')).toHaveText('БАР МАЯК');
+    await expect(page.locator('#animation-stage .scene-brand-title-line')).toHaveCount(2);
+    await expect(page.locator('#animation-brand-line-spacing-output')).toHaveText('-18 px');
 
     const sceneTab = inspector.locator('[data-animation-inspector-tab="scene"]');
     await sceneTab.click();
@@ -165,7 +167,9 @@ test('animation studio keeps glyphs fixed while light surfaces, promo glow and o
     await page.locator('#animation-aquarium-enabled').check();
     await page.locator('#animation-aquarium-style').selectOption('neon');
     await page.locator('#animation-aquarium-fish-count').fill('4');
-    await expect(page.locator('#animation-stage [data-aquarium-layer]')).toHaveClass(/animation-screen-aquarium-layer/);
+    const environmentLayer = page.locator('#animation-stage [data-environment-layer]');
+    await expect(environmentLayer).toHaveClass(/animation-screen-environment-layer/);
+    await expect(environmentLayer).toHaveClass(/environment-effect-aquarium/);
     await expect(page.locator('#animation-stage .aquarium-fish')).toHaveCount(4);
     await expect(page.locator('#animation-stage .animation-screen-background')).toHaveCSS('background-color', 'rgb(18, 52, 86)');
 
@@ -181,11 +185,13 @@ test('animation studio keeps glyphs fixed while light surfaces, promo glow and o
     expect(saved.announcement.font_family).toBe('oswald');
     expect(saved.announcement.vertical_scale).toBe(1.35);
     expect(saved.announcement.glow_enabled).toBe(true);
-    expect(saved.brand.text).toBe('БАР МАЯК');
+    expect(saved.brand.text).toBe('БАР\nМАЯК');
     expect(saved.brand.x).toBe(300);
-    expect(saved.aquarium.enabled).toBe(true);
-    expect(saved.aquarium.style).toBe('neon');
-    expect(saved.aquarium.fish_count).toBe(4);
+    expect(saved.brand.line_spacing).toBe(-18);
+    expect(saved.environment.enabled).toBe(true);
+    expect(saved.environment.effect).toBe('aquarium');
+    expect(saved.environment.parameters.style).toBe('neon');
+    expect(saved.environment.parameters.fish_count).toBe(4);
   } finally {
     await restoreAnimationSettings(page, original);
     await removePreviewFixture(page, fixture);
