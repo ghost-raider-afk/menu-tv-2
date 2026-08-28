@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # Menu TV 2.0 is intentionally independent from the legacy TV Menu project.
 PROGRAM_NAME="menu-tv-2.0"
-SCRIPT_VERSION="1.3.3"
+SCRIPT_VERSION="1.3.4"
 INSTALL_DIR="/opt/menu-tv-2.0"
 REPO_URL="https://github.com/ghost-raider-afk/menu-tv-2.git"
 LEGACY_PROJECT_REF_FILE="$INSTALL_DIR/.installer-ref"
@@ -735,7 +735,7 @@ source_requires_proxy_update() {
 
 fetch_release_revision() {
   local release_tag="$1"
-  git_as_project_owner -C "$INSTALL_DIR" fetch --depth 1 origin "refs/tags/$release_tag"
+  git_as_project_owner -C "$INSTALL_DIR" fetch --quiet --depth 1 origin "refs/tags/$release_tag"
   git_as_project_owner -C "$INSTALL_DIR" rev-parse FETCH_HEAD
 }
 
@@ -747,7 +747,6 @@ create_temporary_backup() {
   [[ -f "$installer_source" ]] || die "Не удалось сохранить текущий установщик перед обновлением."
   TEMP_BACKUP_DIR="$(mktemp -d -t "${PROGRAM_NAME}.update.XXXXXX")"
   chmod 700 "$TEMP_BACKUP_DIR"
-  log "Создание временной резервной копии исходников и .env"
   tar --exclude='./.git' --exclude='./.env' --exclude='./node_modules' -C "$INSTALL_DIR" -czf "$TEMP_BACKUP_DIR/source.tar.gz" .
   cp "$INSTALL_DIR/.env" "$TEMP_BACKUP_DIR/.env"
   cp "$installer_source" "$TEMP_BACKUP_DIR/installer.sh"
@@ -758,11 +757,9 @@ create_temporary_backup() {
     cp "$PROXY_COMPOSE_FILE" "$TEMP_BACKUP_DIR/proxy-compose.yaml"
   fi
   if [[ "$with_database" == true ]]; then
-    log "Создание резервной копии базы данных"
     compose exec -T "$DB_SERVICE" sh -ec 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom --no-owner --no-privileges' > "$TEMP_BACKUP_DIR/database.dump"
     [[ -s "$TEMP_BACKUP_DIR/database.dump" ]] || die "Резервная копия PostgreSQL пуста; обновление остановлено."
   fi
-  info "Временный бэкап создан до изменения конфигурации и будет удалён после успешной операции."
 }
 
 restore_database_exact() {
@@ -942,32 +939,29 @@ update_app() {
   latest_tag="$(latest_release_tag)" || die "Не удалось определить последний стабильный GitHub Release."
   latest_version="$(release_tag_version "$latest_tag")"
 
-  printf 'Установленная версия: %s\n' "$current_version"
-  printf 'Доступная версия:     %s\n' "$latest_version"
-  if version_is_newer "$current_version" "$latest_version"; then
-    read -r -p "Обновить ТВ МЕНЮ 2 до версии $latest_version? [y/N]: " input
-    if [[ "${input,,}" != y ]]; then
-      info "Обновление отменено."
-      return
-    fi
-  elif version_is_newer "$latest_version" "$current_version"; then
+  if [[ "$current_version" == "$latest_version" ]]; then
+    printf 'MIRA-TV v%s уже актуален.
+' "$current_version"
+    return
+  fi
+  if version_is_newer "$latest_version" "$current_version"; then
     warn "Установленная версия $current_version новее последнего опубликованного релиза $latest_version. Автоматическое понижение версии запрещено."
+    return
+  fi
+
+  printf 'Доступно обновление MIRA-TV: v%s → v%s
+' "$current_version" "$latest_version"
+  read -r -p 'Установить обновление? [y/N]: ' input
+  if [[ "${input,,}" != y ]]; then
+    info "Обновление отменено."
     return
   fi
 
   prepare_host
   check_dependencies
-  log "Проверка стабильного релиза $latest_tag"
   remote_revision="$(fetch_release_revision "$latest_tag")"
   if ! git_as_project_owner -C "$INSTALL_DIR" diff --quiet HEAD "$remote_revision"; then
     source_changed=true
-    if [[ "$current_version" == "$latest_version" ]]; then
-      read -r -p "Исходники отличаются от опубликованного $latest_tag. Восстановить стабильный релиз? [y/N]: " input
-      if [[ "${input,,}" != y ]]; then
-        info "Выравнивание с опубликованным релизом отменено."
-        return
-      fi
-    fi
     changed_files="$(git_as_project_owner -C "$INSTALL_DIR" diff --name-only HEAD "$remote_revision")"
     source_requires_runtime_update "$changed_files" && needs_runtime=true
     source_requires_image_rebuild "$changed_files" && needs_build=true
@@ -993,7 +987,7 @@ update_app() {
 
   if [[ "$source_changed" == false && "$env_changed" == false ]]; then
     rm -f -- "$LEGACY_PROJECT_REF_FILE"
-    info "Установлен актуальный стабильный релиз $latest_tag."
+    info "Изменения не требуются."
     return
   fi
 
@@ -1008,9 +1002,9 @@ update_app() {
 
   if [[ "$needs_runtime" == false && "$env_changed" == false ]]; then
     if [[ "$needs_proxy" == true ]]; then
-      info "Обновлена конфигурация HTTPS-прокси до $latest_tag. Приложение и база данных не перезапускались."
+      info "Обновлена конфигурация HTTPS-прокси. Приложение и база данных не перезапускались."
     else
-      info "Обновлены служебные файлы до $latest_tag. Контейнеры, база данных и HTTPS не затрагивались."
+      info "Обновлены служебные файлы. Контейнеры и база данных не затрагивались."
     fi
     return
   fi
@@ -1021,7 +1015,7 @@ update_app() {
     recover_failed_update
   fi
   rm -f -- "$LEGACY_PROJECT_REF_FILE"
-  info "Обновление до $latest_tag прошло проверку. HTTPS-сертификат не перевыпускался."
+  info "MIRA-TV обновлён до v$latest_version."
 }
 
 reset_admin_password() {
