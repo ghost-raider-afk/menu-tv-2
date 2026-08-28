@@ -230,10 +230,10 @@ export function createDevicePublicRouter({ store, config }) {
         enabled: animationSettings?.enabled === true,
         profile: animationSettings?.profile || null
       },
+      environment: animationSettings?.environment || null,
       entity: animationSettings?.entity || null,
-      announcement: animationSettings?.announcement || null,
       brand: animationSettings?.brand || null,
-      aquarium: animationSettings?.aquarium || null,
+      announcement: animationSettings?.announcement || null,
       refresh_interval_ms: config.playerRefreshSeconds * 1000
     };
     const etag = contextEtag(context);
