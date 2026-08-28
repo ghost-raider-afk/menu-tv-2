@@ -21,9 +21,9 @@ function renderOverlays() {
   if (!context) return;
   rendering = true;
   try {
-    const aquariumLayer = ensurePlayerSceneLayer(stage, 'aquarium', { ariaLabel: 'Аквариум' });
+    const environmentLayer = ensurePlayerSceneLayer(stage, 'environment', { ariaLabel: 'Фоновая сцена' });
     const brandLayer = ensurePlayerSceneLayer(stage, 'brand', { ariaLabel: 'Название бренда' });
-    renderAquariumLayer(aquariumLayer, context.aquarium, { allowIntro: true });
+    renderAquariumLayer(environmentLayer, context.aquarium, { allowIntro: true });
     renderBrandTitleLayer(brandLayer, context.brand);
   } finally {
     rendering = false;
