@@ -134,6 +134,7 @@ function brandFromControls() {
     font_size: number('animation-brand-font-size'),
     vertical_scale: number('animation-brand-vertical-scale'),
     letter_spacing: number('animation-brand-letter-spacing'),
+    line_spacing: number('animation-brand-line-spacing'),
     text_color: value('animation-brand-text-color'),
     glow_color: value('animation-brand-glow-color'),
     glow_strength: number('animation-brand-glow-strength'),
@@ -161,6 +162,7 @@ function syncBrandControls(brand = currentBrand) {
   setValue('animation-brand-font-size', current.font_size);
   setValue('animation-brand-vertical-scale', current.vertical_scale);
   setValue('animation-brand-letter-spacing', current.letter_spacing);
+  setValue('animation-brand-line-spacing', current.line_spacing);
   setValue('animation-brand-text-color', current.text_color);
   setValue('animation-brand-glow-color', current.glow_color);
   setValue('animation-brand-glow-strength', current.glow_strength);
@@ -177,6 +179,7 @@ function syncBrandControls(brand = currentBrand) {
     'animation-brand-font-size-output': `${Math.round(current.font_size)} px`,
     'animation-brand-vertical-scale-output': `${current.vertical_scale.toFixed(2)}×`,
     'animation-brand-letter-spacing-output': `${current.letter_spacing.toFixed(1)} px`,
+    'animation-brand-line-spacing-output': `${Math.round(current.line_spacing)} px`,
     'animation-brand-glow-strength-output': `${Math.round(current.glow_strength)} px`,
     'animation-brand-entrance-duration-output': `${Math.round(current.entrance_duration_ms)} мс`,
     'animation-brand-exit-duration-output': `${Math.round(current.exit_duration_ms)} мс`,
@@ -209,7 +212,7 @@ function bindBrandControls() {
   const ids = [
     'animation-brand-enabled', 'animation-brand-text', 'animation-brand-x', 'animation-brand-y',
     'animation-brand-font-family', 'animation-brand-font-size', 'animation-brand-vertical-scale',
-    'animation-brand-letter-spacing', 'animation-brand-text-color', 'animation-brand-glow-color',
+    'animation-brand-letter-spacing', 'animation-brand-line-spacing', 'animation-brand-text-color', 'animation-brand-glow-color',
     'animation-brand-glow-strength', 'animation-brand-entrance-effect', 'animation-brand-effect', 'animation-brand-exit-effect',
     'animation-brand-entrance-duration', 'animation-brand-exit-duration', 'animation-brand-stagger',
     'animation-brand-amplitude', 'animation-brand-overshoot', 'animation-brand-cycle'
@@ -462,7 +465,6 @@ async function loadScreenOptions() {
   select.addEventListener('change', () => { const id = Number(select.value); if (!id) return; rememberSelectedScreen(id); void loadScreenPreview(id); });
   await loadScreenPreview(selected.id);
 }
-
 
 function setInspectorTab(name) {
   document.querySelectorAll('[data-animation-inspector-tab]').forEach((button) => button.classList.toggle('active', button.dataset.animationInspectorTab === name));
