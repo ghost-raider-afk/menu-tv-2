@@ -1,5 +1,98 @@
 # Архитектура TV Menu 2.0 — 1.2.0
 
+## Целевая TV Scene Architecture (утверждено 2026-08-28)
+
+Текущий canonical menu model сохраняется, но TV Player получает отдельный renderer path, оптимизированный под длительное воспроизведение на Smart TV.
+
+```text
+Canonical Screen Model
+        ↓
+     MIRA Scene
+        ↓
+ ┌──────┴────────┐
+ ↓               ↓
+Flat Menu     Dynamic Scene Layers
+Renderer          ↓
+ ↓          GPU Scene Engine
+Menu Surface      ↓
+ └──────┬─────────┘
+        ↓
+   TV Compositor
+```
+
+### Flat TV Renderer
+
+Статичная часть `Menu Scene` должна быть сведена в одну raster/canvas/texture surface. Количество строк, цен, разделов и декоративных SVG-узлов после flatten не должно увеличивать число постоянно анимируемых render targets.
+
+Canonical DOM/SVG renderer остаётся источником геометрии и редакторского preview. Flat renderer использует тот же render model и не имеет отдельной бизнес-логики.
+
+До завершения переноса существующего row motion на GPU layers TV Player допускает capability fallback:
+
+- animation profile выключен → Flat renderer;
+- legacy row motion ещё требуется → DOM motion compatibility renderer;
+- после GPU migration обычное меню всегда должно идти через Flat renderer.
+
+### Dynamic Scene Layers
+
+Движущиеся сущности не встраиваются обратно в Flat Menu Surface:
+
+- `Brand`;
+- `Actor / Object+`;
+- `Promo`;
+- `Content` (image/video/text);
+- `Announcement`;
+- `FX`;
+- `Widget`.
+
+Каждый слой имеет явный lifecycle и channel ownership. Один объект не должен одновременно управляться несколькими независимыми runtime.
+
+### Scene Playlist
+
+`Screen` получает последовательность сцен, а не только один вечный экран:
+
+```text
+Menu Scene
+  ↓
+Promo Scene (8 s)
+  ↓
+Menu Scene
+  ↓
+Object Story Scene (10 s)
+  ↓
+Menu Scene
+```
+
+Временная сцена может работать как overlay, split-layout или fullscreen replacement. Базовая Menu Scene остаётся canonical fallback и гарантированной точкой возврата.
+
+### Object+ Actor model
+
+Object+ развивается в Actor, а не в набор несвязанных CSS-анимаций. Минимальный actor lifecycle:
+
+`enter → idle → action/focus → exit`
+
+Story Engine компилирует Actor behavior в SceneProgram и использует общий master timeline.
+
+### Screen Asset Cache
+
+Player должен хранить локальный manifest и immutable assets: menu surface, backgrounds, images, video, actor assets, fonts и scene definitions. Сервер передаёт только изменившиеся версии. Offline player продолжает воспроизведение последнего полностью валидного manifest.
+
+### Интеграции
+
+Внешние ресторанные системы подключаются через adapter boundary:
+
+```text
+iiko / R_keeper / QuickResto / ...
+                 ↓
+          Catalog Adapter
+                 ↓
+          MIRA Catalog
+                 ↓
+        Screen / Menu Scene
+```
+
+Внешний источник не должен писать напрямую в renderer state конкретного телевизора.
+
+
 ## 1. Доменная модель
 
 Runtime-модель приложения намеренно упрощена до одной цепочки:

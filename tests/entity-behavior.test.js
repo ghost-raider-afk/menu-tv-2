@@ -43,12 +43,14 @@ test('WAAPI serializer supports renderer-neutral entity rotation', () => {
   assert.match(keyframe.transform, /scale\(/);
 });
 
-test('preview and TV player use the same scene runtime for entity behavior and cache it offline', async () => {
-  const [adapter, preview, liveMotion, player, worker, entityEditor] = await Promise.all([
+test('preview and TV player keep one explicit runtime owner for entity behavior and cache it offline', async () => {
+  const [adapter, preview, liveMotion, player, playerHtml, entityRuntime, worker, entityEditor] = await Promise.all([
     read('js/motion/dom-scene-adapter.js'),
     read('js/motion/preview-player.js'),
     read('js/motion/live-menu-motion.js'),
     read('js/player/player.js'),
+    read('player.html'),
+    read('js/player/entity-runtime.js'),
     read('player-sw.js'),
     read('js/motion/entity-editor.js')
   ]);
@@ -58,11 +60,18 @@ test('preview and TV player use the same scene runtime for entity behavior and c
   assert.match(adapter, /id: `entity\.\$\{target\.dataset\.entityMotion \|\| index\}`/);
   assert.match(preview, /compileEntityBehaviorProgram/);
   assert.match(preview, /entity:\s*this\.entity/);
-  assert.match(liveMotion, /compileEntityBehaviorProgram/);
-  assert.match(liveMotion, /compilers:\s*\[\.\.\.DEFAULT_SCENE_COMPILERS, compileEntityBehaviorProgram\]/);
+
+  assert.doesNotMatch(liveMotion, /compileEntityBehaviorProgram/);
+  assert.match(liveMotion, /compilers:\s*DEFAULT_SCENE_COMPILERS/);
   assert.match(player, /new LiveMenuMotion\(playerStage\)/);
-  assert.match(player, /entity:\s*context\.entity/);
+  assert.doesNotMatch(player, /liveMotion\.render\(\{[^}]*entity:/s);
+
+  assert.match(playerHtml, /\/js\/player\/entity-runtime\.js/);
+  assert.match(entityRuntime, /compileEntityBehaviorProgram/);
+  assert.match(entityRuntime, /compilers:\s*\[compileEntityBehaviorProgram\]/);
+
   for (const asset of [
+    '/js/player/entity-runtime.js', '/js/player/flat-menu-renderer.js',
     '/js/motion/live-menu-motion.js', '/js/motion/entity-behavior.js', '/js/motion/dom-scene-adapter.js',
     '/js/motion/scene-graph.js', '/js/motion/scene-composer.js', '/js/motion/scene-runtime.js',
     '/js/motion/timeline.js', '/js/motion/drivers/waapi-driver.js'

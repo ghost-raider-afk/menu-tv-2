@@ -7,6 +7,7 @@ import {
 import { renderSceneEntity } from '../motion/entity-editor.js';
 import { renderAnnouncementLayer } from '../motion/announcement.js';
 import { LiveMenuMotion } from '../motion/live-menu-motion.js';
+import { FlatMenuRenderer, playerMenuRenderMode } from './flat-menu-renderer.js';
 
 const ACTIVATION_STORAGE_KEY = 'tv-menu.device-activation.v2';
 const LEGACY_ACTIVATION_STORAGE_KEY = 'tv-menu.device-activation';
@@ -24,6 +25,7 @@ const player = document.querySelector('[data-tv-player]');
 const playerStage = document.querySelector('[data-player-stage]');
 const playerMessage = document.querySelector('[data-player-message]');
 const liveMotion = new LiveMenuMotion(playerStage);
+const flatMenuRenderer = new FlatMenuRenderer();
 
 let pollTimer = null;
 let expiryTimer = null;
@@ -31,6 +33,7 @@ let rotationRetryTimer = null;
 let refreshTimer = null;
 let wakeLock = null;
 let playerRefreshMs = 5000;
+let playerContextEtag = '';
 let activationRequestInFlight = false;
 let bootstrapRetryTimer = null;
 
@@ -409,17 +412,33 @@ function renderPlayerContext(context) {
   const announcementLayer = ensurePlayerLayer('tv-player-announcement-layer', 'data-announcement-layer');
   entityLayer.setAttribute('aria-hidden', 'true');
   announcementLayer.setAttribute('aria-label', 'Объявление');
-  menuLayer.innerHTML = buildTableSvg(model, lines, layout);
+  const menuSvg = buildTableSvg(model, lines, layout);
+  const renderMode = playerMenuRenderMode(context);
+  menuLayer.dataset.renderMode = renderMode;
+  if (renderMode === 'flat') {
+    liveMotion.destroy();
+    void flatMenuRenderer.render(menuLayer, menuSvg, viewport).catch((error) => {
+      console.error('Flat TV menu render failed; using DOM compatibility output', error);
+      if (menuLayer.dataset.renderMode !== 'flat') return;
+      flatMenuRenderer.destroy();
+      menuLayer.innerHTML = menuSvg;
+      menuLayer.dataset.renderMode = 'dom-fallback';
+    });
+  } else {
+    flatMenuRenderer.destroy();
+    menuLayer.innerHTML = menuSvg;
+  }
   playerStage.style.backgroundColor = model.settings.background_color || '#101828';
   const background = sameOriginAsset(model.settings.background_image_url);
   playerStage.style.backgroundImage = background ? `url(${JSON.stringify(background)})` : 'none';
   renderSceneEntity(playerStage, context.entity, { editable: false });
   renderAnnouncementLayer(announcementLayer, context.announcement);
-  liveMotion.render({
-    enabled: context.animation?.enabled === true,
-    profile: context.animation?.profile,
-    entity: context.entity
-  });
+  if (renderMode !== 'flat') {
+    liveMotion.render({
+      enabled: context.animation?.enabled === true,
+      profile: context.animation?.profile
+    });
+  }
   playerRefreshMs = Math.max(2000, Number(context.refresh_interval_ms) || 5000);
 }
 
@@ -455,13 +474,17 @@ async function fetchPlayerContext(timeoutMs = 5000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch('/api/device/player-context', { cache: 'no-store', signal: controller.signal });
+    const headers = playerContextEtag ? { 'if-none-match': playerContextEtag } : {};
+    const response = await fetch('/api/device/player-context', { cache: 'no-store', signal: controller.signal, headers });
+    if (response.status === 304) return { unchanged: true };
     if (response.status === 401 || response.status === 403) {
+      playerContextEtag = '';
       clearPlayerContext();
       return { unauthorized: true };
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const context = await response.json();
+    playerContextEtag = response.headers.get('etag') || '';
     savePlayerContext(context);
     void warmPlayerAssetCache(context);
     return { context, offline: response.headers.get('x-tv-menu-offline') === '1' };
@@ -488,6 +511,11 @@ async function refreshPlayer() {
     if (result.unauthorized) {
       clearActivation();
       showPairingIntro();
+      return;
+    }
+    if (result.unchanged) {
+      showConnectionMessage('');
+      schedulePlayerRefresh();
       return;
     }
     renderPlayerContext(result.context);
