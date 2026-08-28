@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-test('MIRA-TV v1.8.2 release metadata is synchronized while legacy package identity remains compatible', async () => {
+test('MIRA-TV v1.9.0 release metadata is synchronized while legacy package identity remains compatible', async () => {
   const [packageText, lockText, installer, changelog, workflow] = await Promise.all([
     readFile(new URL('../package.json', import.meta.url), 'utf8'),
     readFile(new URL('../package-lock.json', import.meta.url), 'utf8'),
@@ -15,7 +15,7 @@ test('MIRA-TV v1.8.2 release metadata is synchronized while legacy package ident
   const scriptVersion = installer.match(/^SCRIPT_VERSION="(\d+\.\d+\.\d+)"$/m)?.[1];
 
   assert.equal(pkg.name, 'menu-tv-2');
-  assert.equal(pkg.version, '1.8.2');
+  assert.equal(pkg.version, '1.9.0');
   assert.match(pkg.description, /MIRA-TV/);
   assert.equal(lock.version, pkg.version);
   assert.equal(lock.packages?.['']?.version, pkg.version);
