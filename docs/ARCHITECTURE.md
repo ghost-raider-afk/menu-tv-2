@@ -26,11 +26,13 @@ Menu Surface      ↓
 
 Canonical DOM/SVG renderer остаётся источником геометрии и редакторского preview. Flat renderer использует тот же render model и не имеет отдельной бизнес-логики.
 
-До завершения переноса существующего row motion на GPU layers TV Player допускает capability fallback:
+TV Player больше не использует row-by-row DOM/WASM motion. Обычное меню всегда идёт через Flat renderer:
 
-- animation profile выключен → Flat renderer;
-- legacy row motion ещё требуется → DOM motion compatibility renderer;
-- после GPU migration обычное меню всегда должно идти через Flat renderer.
+- animation profile выключен → одна `Flat Menu Surface`;
+- animation profile включён → `Flat Menu Surface` + один coarse compositor FX layer;
+- DOM/WASM row motion остаётся только Studio/legacy capability и не входит в TV offline shell.
+
+`GpuSceneRuntime` компилирует профиль в compositor-friendly WAAPI keyframes. Для постоянного menu motion разрешены только `transform` и `opacity`: runtime не держит собственный `requestAnimationFrame`, не пишет `filter` покадрово и не увеличивает число animated targets вместе с количеством строк меню.
 
 ### Dynamic Scene Layers
 

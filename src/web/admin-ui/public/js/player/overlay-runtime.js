@@ -1,5 +1,6 @@
 import { renderAquariumLayer } from '../motion/aquarium.js';
 import { renderBrandTitleLayer } from '../motion/brand-title.js';
+import { ensurePlayerSceneLayer } from './scene-layer-composer.js';
 
 const PLAYER_CONTEXT_STORAGE_KEY = 'tv-menu.player-context.v1';
 const stage = document.querySelector('[data-player-stage]');
@@ -14,26 +15,15 @@ function cachedContext() {
   }
 }
 
-function ensureLayer(className, attribute, label) {
-  let layer = stage?.querySelector(`[${attribute}]`);
-  if (layer instanceof HTMLElement) return layer;
-  layer = document.createElement('div');
-  layer.className = className;
-  layer.setAttribute(attribute, '');
-  layer.setAttribute('aria-label', label);
-  stage?.append(layer);
-  return layer;
-}
-
 function renderOverlays() {
   if (!(stage instanceof HTMLElement) || rendering) return;
   const context = cachedContext();
   if (!context) return;
   rendering = true;
   try {
-    const aquariumLayer = ensureLayer('tv-player-aquarium-layer', 'data-aquarium-layer', 'Аквариум');
-    const brandLayer = ensureLayer('tv-player-brand-layer', 'data-brand-layer', 'Название бренда');
-    renderAquariumLayer(aquariumLayer, context.aquarium, { allowIntro: true });
+    const environmentLayer = ensurePlayerSceneLayer(stage, 'environment', { ariaLabel: 'Фоновая сцена' });
+    const brandLayer = ensurePlayerSceneLayer(stage, 'brand', { ariaLabel: 'Название бренда' });
+    renderAquariumLayer(environmentLayer, context.aquarium, { allowIntro: true });
     renderBrandTitleLayer(brandLayer, context.brand);
   } finally {
     rendering = false;
