@@ -35,13 +35,13 @@ test('update exits immediately when installed release is already current', async
   }
 });
 
-test('installer 1.3.4 uses quiet release fetch and gated installer tags', async () => {
+test('installer 1.3.5 uses quiet release fetch and gated installer tags', async () => {
   const [installer, workflow] = await Promise.all([
     readFile(installerPath, 'utf8'),
     readFile(releaseWorkflowPath, 'utf8')
   ]);
 
-  assert.match(installer, /^SCRIPT_VERSION="1\.3\.4"$/m);
+  assert.match(installer, /^SCRIPT_VERSION="1\.3\.5"$/m);
   assert.match(installer, /fetch --quiet --depth 1 origin "refs\/tags\/\$release_tag"/);
   assert.doesNotMatch(installer, /Установленная версия: %s/);
   assert.doesNotMatch(installer, /Доступная версия:\s+%s/);
