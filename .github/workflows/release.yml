@@ -72,3 +72,27 @@ jobs:
             --target "$VERIFIED_SHA" \
             --title "MIRA-TV $TAG" \
             --notes-file /tmp/release-notes.md
+
+      - name: Publish verified installer tag
+        env:
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCRIPT_VERSION="$(sed -nE 's/^SCRIPT_VERSION="([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' menu-tv-2.sh | head -n 1)"
+          test -n "$SCRIPT_VERSION"
+          bash -n menu-tv-2.sh
+          INSTALLER_TAG="installer-v${SCRIPT_VERSION}"
+
+          test "$(git rev-parse HEAD)" = "$VERIFIED_SHA"
+          git fetch origin main --depth=1
+          test "$(git rev-parse origin/main)" = "$VERIFIED_SHA"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/${INSTALLER_TAG}" >/dev/null 2>&1; then
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag "$INSTALLER_TAG" "$VERIFIED_SHA"
+          git push origin "refs/tags/${INSTALLER_TAG}"
