@@ -18,40 +18,45 @@ test('player is public while TV connection page remains admin protected', async 
   assert.match(connectHtml, /Сканировать QR-код/);
 });
 
-test('real TV player runs the continuous WASM Motion Engine and keeps it available offline', async () => {
-  const [worker, player, liveMotion, motionPlan, adapter, wasmDriver, publicRoutes, playerCss] = await Promise.all([
+test('real TV player uses a flat menu plus one compositor scene runtime and keeps required assets offline', async () => {
+  const [worker, player, gpuRuntime, layerComposer, publicRoutes, playerCss] = await Promise.all([
     read('src/web/admin-ui/public/player-sw.js'),
     read('src/web/admin-ui/public/js/player/player.js'),
-    read('src/web/admin-ui/public/js/motion/live-menu-motion.js'),
-    read('src/web/admin-ui/public/js/motion/motion-plan.js'),
-    read('src/web/admin-ui/public/js/motion/dom-scene-adapter.js'),
-    read('src/web/admin-ui/public/js/motion/drivers/wasm-motion-driver.js'),
+    read('src/web/admin-ui/public/js/player/gpu-scene-runtime.js'),
+    read('src/web/admin-ui/public/js/player/scene-layer-composer.js'),
     read('src/api/device/public-routes.js'),
     read('src/web/admin-ui/public/css/player.css')
   ]);
   assert.match(worker, /mira-tv-player-shell-v\d+/);
   for (const asset of [
     '/js/editor/renderer.js','/js/editor/renderer-model.js','/js/editor/renderer-svg.js',
-    '/js/motion/live-menu-motion.js','/js/motion/motion-plan.js','/js/motion/dom-scene-adapter.js',
-    '/js/motion/drivers/wasm-motion-driver.js','/js/motion/wasm-motion-kernel.js','/wasm/mira-motion-kernel.wasm'
+    '/js/player/flat-menu-renderer.js','/js/player/scene-layer-composer.js','/js/player/gpu-scene-runtime.js',
+    '/js/player/entity-runtime.js','/js/motion/entity-behavior.js','/js/motion/dom-scene-adapter.js',
+    '/js/motion/scene-graph.js','/js/motion/scene-composer.js','/js/motion/scene-runtime.js',
+    '/js/motion/timeline.js','/js/motion/drivers/waapi-driver.js'
   ]) assert.ok(worker.includes(`'${asset}'`), `offline shell is missing ${asset}`);
-  assert.match(player, /new LiveMenuMotion\(playerStage\)/);
+  for (const retiredAsset of [
+    '/js/motion/live-menu-motion.js','/js/motion/motion-plan.js',
+    '/js/motion/drivers/wasm-motion-driver.js','/js/motion/wasm-motion-kernel.js','/wasm/mira-motion-kernel.wasm'
+  ]) assert.ok(!worker.includes(`'${retiredAsset}'`), `TV offline shell still contains ${retiredAsset}`);
+  assert.match(player, /new GpuSceneRuntime\(playerStage/);
+  assert.match(player, /new PlayerSceneLayerComposer\(playerStage\)/);
   assert.match(player, /context\.animation\?\.enabled/);
   assert.match(player, /sameOriginAsset\(context\?\.entity\?\.asset_url\)/);
-  assert.match(liveMotion, /WasmMotionDriver/);
-  assert.match(liveMotion, /DEFAULT_SCENE_COMPILERS/);
-  assert.match(motionPlan, /procedural:/);
-  assert.doesNotMatch(motionPlan, /keyframes:/);
-  assert.doesNotMatch(motionPlan, /background_effect|background_zoom_percent/);
-  assert.doesNotMatch(adapter, /kind: 'background'/);
-  assert.doesNotMatch(adapter, /kind: 'price'/);
-  assert.match(wasmDriver, /requestAnimationFrame/);
+  assert.doesNotMatch(player, /LiveMenuMotion|WasmMotionDriver/);
+  assert.match(gpuRuntime, /effect\.animate\(/);
+  assert.doesNotMatch(gpuRuntime, /requestAnimationFrame|style\.filter|drop-shadow/);
+  assert.match(layerComposer, /'menu'/);
+  assert.match(layerComposer, /'fx'/);
+  assert.match(layerComposer, /'content'/);
+  assert.match(layerComposer, /'entity'/);
   assert.match(publicRoutes, /animation:\s*\{/);
   assert.match(publicRoutes, /store\.getScreenAnimationSettings\(session\.screen_id\)/);
   assert.doesNotMatch(publicRoutes, /store\.getAnimationSettings\(\)/);
   assert.match(publicRoutes, /enabled: animationSettings\?\.enabled === true/);
   assert.match(playerCss, /\.tv-player-announcement-layer/);
-  assert.match(playerCss, /transform-box:\s*fill-box/);
+  assert.match(playerCss, /\.tv-player-gpu-effect/);
+  assert.match(playerCss, /will-change:\s*transform, opacity/);
   assert.match(player, /showCachedPlayer/);
   assert.match(player, /serviceWorker\.register\('\/player-sw\.js'/);
   assert.match(player, /void registerOfflinePlayer\(\)/);
