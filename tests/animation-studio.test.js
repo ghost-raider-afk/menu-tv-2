@@ -4,7 +4,7 @@ import test from 'node:test';
 import { animationSettingsInput } from '../src/contracts/animation.js';
 import { announcementInput } from '../src/contracts/announcement.js';
 import { brandTitleInput } from '../src/contracts/brand-title.js';
-import { aquariumInput } from '../src/contracts/aquarium.js';
+import { environmentInput, environmentFromLegacyAquarium } from '../src/contracts/environment.js';
 import { completeAnimationProfile, DEFAULT_ANIMATION_PROFILE } from '../src/shared/animation-profile.js';
 
 const root = new URL('../src/web/admin-ui/public/', import.meta.url);
@@ -23,12 +23,20 @@ test('canonical profile keeps static menu text, static background and smooth pro
   assert.equal(profile.promotion_easing, 'smooth');
   assert.equal(profile.promotion_travel_px, 0);
   assert.ok(profile.promotion_scale_amount >= 0.03 && profile.promotion_scale_amount <= 0.08);
-  const parsed = animationSettingsInput({ enabled: true, preset_id: 'cinematic-live-menu', profile: DEFAULT_ANIMATION_PROFILE, announcement: {}, brand: {}, aquarium: {} });
+  const parsed = animationSettingsInput({
+    enabled: true,
+    preset_id: 'cinematic-live-menu',
+    profile: DEFAULT_ANIMATION_PROFILE,
+    announcement: {},
+    brand: {},
+    environment: {}
+  });
   assert.equal(parsed.preset_id, 'cinematic-live-menu');
   assert.equal(parsed.profile.price_effect, 'none');
   assert.equal(parsed.profile.promotion_easing, 'smooth');
   assert.equal(parsed.brand.text, '');
-  assert.equal(parsed.aquarium.enabled, false);
+  assert.equal(parsed.environment.enabled, false);
+  assert.equal(parsed.environment.effect, 'none');
 });
 
 test('announcement contract validates font, vertical stretch and independent row glow', () => {
@@ -46,19 +54,55 @@ test('announcement contract validates font, vertical stretch and independent row
   assert.throws(() => announcementInput({ enabled: true, text: 'x', font_family: 'remote-font' }), /Шрифт бегущей строки/);
 });
 
-test('brand title and aquarium are independent validated scene overlays', () => {
-  const brand = brandTitleInput({ enabled: true, text: 'БАР МАЯК', x: 240, y: 110, font_family: 'montserrat', vertical_scale: 1.2, effect: 'neon-pulse' });
-  assert.equal(brand.text, 'БАР МАЯК');
+test('brand title and environment effect are independent validated scene layers', () => {
+  const brand = brandTitleInput({
+    enabled: true,
+    text: 'БАР\nМАЯК',
+    x: 240,
+    y: 110,
+    font_family: 'montserrat',
+    vertical_scale: 1.2,
+    line_spacing: -18,
+    effect: 'neon-pulse'
+  });
+  assert.equal(brand.text, 'БАР\nМАЯК');
   assert.equal(brand.x, 240);
   assert.equal(brand.vertical_scale, 1.2);
+  assert.equal(brand.line_spacing, -18);
   assert.equal(brand.effect, 'neon-pulse');
   assert.equal(brandTitleInput({}).text, '');
   assert.throws(() => brandTitleInput({ enabled: true, text: '' }), /Введите название бренда/);
-  assert.equal(brandTitleInput({ enabled: true, text: 'MIRA-TV' }).text, 'MIRA-TV');
-  const aquarium = aquariumInput({ enabled: true, style: 'neon', intro_fill: true, fish_count: 4, bubble_density: 50, plant_density: 30, caustics: 60, speed: 40 });
-  assert.equal(aquarium.enabled, true);
-  assert.equal(aquarium.style, 'neon');
-  assert.equal(aquarium.fish_count, 4);
+
+  const environment = environmentInput({
+    enabled: true,
+    effect: 'aquarium',
+    parameters: { style: 'neon', intro_fill: true, fish_count: 4, bubble_density: 50, plant_density: 30, caustics: 60, speed: 40 }
+  });
+  assert.equal(environment.enabled, true);
+  assert.equal(environment.effect, 'aquarium');
+  assert.equal(environment.parameters.style, 'neon');
+  assert.equal(environment.parameters.fish_count, 4);
+});
+
+test('legacy aquarium settings are converted to an environment effect without becoming a layer', () => {
+  const environment = environmentFromLegacyAquarium({
+    enabled: true,
+    style: 'reef',
+    intro_fill: false,
+    fish_count: 5,
+    bubble_density: 44,
+    plant_density: 22,
+    caustics: 61,
+    speed: 37
+  });
+  assert.deepEqual(environment, {
+    enabled: true,
+    effect: 'aquarium',
+    parameters: {
+      style: 'reef', intro_fill: false, intensity: 45, fish_count: 5,
+      bubble_density: 44, plant_density: 22, caustics: 61, speed: 37
+    }
+  });
 });
 
 test('legacy animation data migrates without background or independent price motion', () => {
@@ -92,11 +136,12 @@ test('stored v3 bounce/pop settings are canonicalized instead of reintroducing j
   assert.equal(migrated.promotion_travel_px, 0);
 });
 
-test('Motion Studio exposes static-text light surfaces, brand, aquarium and Video Entity v2', async () => {
-  const [html, page, profileEditor, motionPlan, domAdapter, liveMotion, previewCss, announcement, overlays] = await Promise.all([
+test('Motion Studio exposes generic scene layers, Aquarium environment effect and Video Entity v2', async () => {
+  const [html, page, profileEditor, motionPlan, domAdapter, liveMotion, previewCss, announcement, overlays, environment] = await Promise.all([
     read('animation.html'), read('js/pages/animation.js'), read('js/motion/profile-editor.js'),
     read('js/motion/motion-plan.js'), read('js/motion/dom-scene-adapter.js'), read('js/motion/live-menu-motion.js'),
-    read('css/pages/animation-screen-preview.css'), read('js/motion/announcement.js'), read('css/motion-overlays.css')
+    read('css/pages/animation-screen-preview.css'), read('js/motion/announcement.js'), read('css/motion-overlays.css'),
+    read('js/motion/environment.js')
   ]);
 
   for (const id of [
@@ -104,8 +149,8 @@ test('Motion Studio exposes static-text light surfaces, brand, aquarium and Vide
     'animation-section-effect','animation-item-effect','animation-promotion-effect','animation-promotion-intensity',
     'animation-promotion-scale','animation-promotion-glow','animation-announcement-enabled','animation-announcement-font-family',
     'animation-announcement-vertical-scale','animation-announcement-glow-enabled','animation-brand-enabled','animation-brand-x',
-    'animation-brand-y','animation-brand-effect','animation-aquarium-enabled','animation-aquarium-style','animation-aquarium-replay',
-    'animation-entity-file','animation-entity-loop','animation-entity-muted','animation-entity-playback-rate'
+    'animation-brand-y','animation-brand-effect','animation-brand-line-spacing','animation-aquarium-enabled','animation-aquarium-style',
+    'animation-aquarium-replay','animation-entity-file','animation-entity-loop','animation-entity-muted','animation-entity-playback-rate'
   ]) assert.match(html, new RegExp(`id="${id}"`));
 
   assert.doesNotMatch(html, /id="animation-price-effect"/);
@@ -115,9 +160,10 @@ test('Motion Studio exposes static-text light surfaces, brand, aquarium and Vide
   assert.match(html, /AQUARIUM ENVIRONMENT/);
   assert.match(html, /BRAND ENTITY/);
   assert.match(html, /video\/mp4,video\/webm/);
-  assert.match(page, /normaliseBrandTitle/);
-  assert.match(page, /normaliseAquarium/);
-  assert.match(page, /resetAquariumIntro/);
+  assert.match(page, /renderEnvironmentLayer/);
+  assert.match(page, /environment:\s*aquariumEnvironment/);
+  assert.match(page, /resetEnvironmentIntro/);
+  assert.doesNotMatch(page, /normaliseAquarium|renderAquariumLayer|resetAquariumIntro/);
   assert.match(page, /ENTITY_MEDIA_TYPES/);
   assert.match(page, /createEntityMedia/);
   assert.match(profileEditor, /profile\.price_effect = 'none'/);
@@ -131,6 +177,9 @@ test('Motion Studio exposes static-text light surfaces, brand, aquarium and Vide
   assert.match(domAdapter, /row-motion-surface-item/);
   assert.match(previewCss, /\.animation-screen-background\{[^}]*background-size:cover/);
   assert.match(announcement, /scene-announcement-glyphs/);
-  assert.match(overlays, /scene-aquarium-layer/);
+  assert.match(overlays, /scene-environment-layer/);
+  assert.match(overlays, /environment-effect-aquarium/);
   assert.match(overlays, /scene-brand-title/);
+  assert.match(environment, /function renderAquariumEffect/);
+  assert.match(environment, /environment\.effect === 'aquarium'/);
 });
