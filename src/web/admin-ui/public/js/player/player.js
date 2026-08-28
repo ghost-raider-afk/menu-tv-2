@@ -6,6 +6,8 @@ import {
 } from '../editor/renderer.js';
 import { renderSceneEntity } from '../motion/entity-editor.js';
 import { renderAnnouncementLayer } from '../motion/announcement.js';
+import { renderBrandTitleLayer } from '../motion/brand-title.js';
+import { renderAquariumLayer } from '../motion/aquarium.js';
 import { FlatMenuRenderer, playerMenuRenderMode } from './flat-menu-renderer.js';
 import { GpuSceneRuntime } from './gpu-scene-runtime.js';
 import { PlayerSceneLayerComposer } from './scene-layer-composer.js';
@@ -397,7 +399,13 @@ function renderPlayerContext(context) {
     fallbackTitle: context.screen?.name || 'Меню'
   });
   const layout = buildRenderLayout(model, lines);
-  const { menu: menuLayer, entity: entityLayer, announcement: announcementLayer } = sceneLayers.ensureCore();
+  const {
+    environment: environmentLayer,
+    menu: menuLayer,
+    entity: entityLayer,
+    brand: brandLayer,
+    announcement: announcementLayer
+  } = sceneLayers.ensureCore();
   const menuSvg = buildTableSvg(model, lines, layout);
   const renderMode = playerMenuRenderMode(context);
   menuLayer.dataset.renderMode = renderMode;
@@ -414,7 +422,9 @@ function renderPlayerContext(context) {
   playerStage.style.backgroundColor = model.settings.background_color || '#101828';
   const background = sameOriginAsset(model.settings.background_image_url);
   playerStage.style.backgroundImage = background ? `url(${JSON.stringify(background)})` : 'none';
+  renderAquariumLayer(environmentLayer, context.aquarium, { allowIntro: true });
   renderSceneEntity(playerStage, context.entity, { editable: false });
+  renderBrandTitleLayer(brandLayer, context.brand);
   renderAnnouncementLayer(announcementLayer, context.announcement);
   gpuSceneRuntime.render({
     enabled: renderMode === 'flat-gpu',
