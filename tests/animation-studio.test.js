@@ -5,6 +5,7 @@ import { animationSettingsInput } from '../src/contracts/animation.js';
 import { announcementInput } from '../src/contracts/announcement.js';
 import { brandTitleInput } from '../src/contracts/brand-title.js';
 import { environmentInput, environmentFromLegacyAquarium } from '../src/contracts/environment.js';
+import { completeScenePlaylist, scenePlaylistInput, MAX_PLAYLIST_SCENES } from '../src/contracts/scene-playlist.js';
 import { completeAnimationProfile, DEFAULT_ANIMATION_PROFILE } from '../src/shared/animation-profile.js';
 
 const root = new URL('../src/web/admin-ui/public/', import.meta.url);
@@ -29,7 +30,8 @@ test('canonical profile keeps static menu text, static background and smooth pro
     profile: DEFAULT_ANIMATION_PROFILE,
     announcement: {},
     brand: {},
-    environment: {}
+    environment: {},
+    scene_playlist: {}
   });
   assert.equal(parsed.preset_id, 'cinematic-live-menu');
   assert.equal(parsed.profile.price_effect, 'none');
@@ -37,6 +39,40 @@ test('canonical profile keeps static menu text, static background and smooth pro
   assert.equal(parsed.brand.text, '');
   assert.equal(parsed.environment.enabled, false);
   assert.equal(parsed.environment.effect, 'none');
+  assert.deepEqual(parsed.scene_playlist, { enabled: false, menu_duration_seconds: 40, scenes: [] });
+});
+
+test('Scene Playlist keeps MenuScene implicit and validates temporary scene semantics before canonicalization', () => {
+  assert.deepEqual(completeScenePlaylist(), { enabled: false, menu_duration_seconds: 40, scenes: [] });
+
+  const parsed = scenePlaylistInput({
+    enabled: true,
+    menu_duration_seconds: 42,
+    scenes: [
+      { id: 'promo-1', type: 'promo', enabled: true, mode: 'overlay', duration_seconds: 8, title: 'Акция', body: '' },
+      { id: 'content-1', type: 'content', enabled: true, mode: 'split', duration_seconds: 12, title: '', body: 'Информация' },
+      { id: 'object-1', type: 'object-story', enabled: true, mode: 'fullscreen', duration_seconds: 10, title: '', body: '' }
+    ]
+  });
+  assert.equal(parsed.enabled, true);
+  assert.equal(parsed.menu_duration_seconds, 42);
+  assert.deepEqual(parsed.scenes.map(({ type, mode }) => ({ type, mode })), [
+    { type: 'promo', mode: 'overlay' },
+    { type: 'content', mode: 'split' },
+    { type: 'object-story', mode: 'fullscreen' }
+  ]);
+  assert.equal(parsed.scenes.some((scene) => scene.type === 'menu'), false);
+
+  assert.equal(completeScenePlaylist({ menu_duration_seconds: 1 }).menu_duration_seconds, 5);
+  assert.equal(completeScenePlaylist({ menu_duration_seconds: 999 }).menu_duration_seconds, 300);
+  assert.equal(completeScenePlaylist({ scenes: [{ duration_seconds: 1 }] }).scenes[0].duration_seconds, 2);
+  assert.equal(completeScenePlaylist({ scenes: [{ duration_seconds: 999 }] }).scenes[0].duration_seconds, 120);
+  assert.throws(() => scenePlaylistInput({ scenes: 'promo' }), /должен быть массивом/);
+  assert.throws(() => scenePlaylistInput({ scenes: [{ type: 'menu' }] }), /неподдерживаемый тип/);
+  assert.throws(() => scenePlaylistInput({ scenes: [{ type: 'promo', mode: 'picture-in-picture', title: 'x' }] }), /неподдерживаемый режим/);
+  assert.throws(() => scenePlaylistInput({ scenes: [{ id: 'same', title: '1' }, { id: 'same', title: '2' }] }), /повторяющиеся идентификаторы/);
+  assert.throws(() => scenePlaylistInput({ enabled: true, scenes: [{ type: 'content', title: '', body: '' }] }), /заголовок или текст/);
+  assert.throws(() => scenePlaylistInput({ scenes: Array.from({ length: MAX_PLAYLIST_SCENES + 1 }, (_, index) => ({ id: `s-${index}`, title: 'x' })) }), /не более/);
 });
 
 test('announcement contract validates font, vertical stretch and independent row glow', () => {
@@ -136,9 +172,9 @@ test('stored v3 bounce/pop settings are canonicalized instead of reintroducing j
   assert.equal(migrated.promotion_travel_px, 0);
 });
 
-test('Motion Studio exposes generic scene layers, Aquarium environment effect and Video Entity v2', async () => {
-  const [html, page, profileEditor, motionPlan, domAdapter, liveMotion, previewCss, announcement, overlays, brandCss, environment] = await Promise.all([
-    read('animation.html'), read('js/pages/animation.js'), read('js/motion/profile-editor.js'),
+test('Playlist Studio owns previous motion controls and the Scene Playlist UI in one workspace', async () => {
+  const [html, page, playlistEditor, profileEditor, motionPlan, domAdapter, liveMotion, previewCss, announcement, overlays, brandCss, environment] = await Promise.all([
+    read('playlist.html'), read('js/pages/playlist.js'), read('js/motion/scene-playlist-editor.js'), read('js/motion/profile-editor.js'),
     read('js/motion/motion-plan.js'), read('js/motion/dom-scene-adapter.js'), read('js/motion/live-menu-motion.js'),
     read('css/pages/animation-screen-preview.css'), read('js/motion/announcement.js'), read('css/motion-overlays.css'),
     read('css/brand-motion-v2.css'), read('js/motion/environment.js')
@@ -154,13 +190,17 @@ test('Motion Studio exposes generic scene layers, Aquarium environment effect an
   ]) assert.match(html, new RegExp(`id="${id}"`));
 
   assert.doesNotMatch(html, /id="animation-price-effect"/);
-  assert.match(html, /MIRA WASM MOTION/);
-  assert.match(html, /ФОН · БЕЗ ИЗМЕНЕНИЙ/);
-  assert.match(html, /PROMO GLOW PULSE/);
-  assert.match(html, /ENVIRONMENT · AQUARIUM/);
-  assert.match(html, /Отдельного архитектурного слоя Aquarium нет/);
-  assert.match(html, /BRAND ENTITY/);
-  assert.match(html, /video\/mp4,video\/webm/);
+  assert.match(page, /PLAYLIST STUDIO/);
+  assert.match(page, /data-animation-inspector-tab="playlist"/);
+  assert.match(page, /new ScenePlaylistEditor/);
+  assert.match(page, /scene_playlist:\s*scenePlaylistEditor/);
+  assert.match(page, /scenePlaylistEditor\?\.set\(saved\.scene_playlist\)/);
+  assert.match(page, /scenePlaylistEditor\?\.set\(settings\?\.scene_playlist\)/);
+  assert.match(playlistEditor, /playlist-scene-strip/);
+  assert.match(playlistEditor, /MenuScene/);
+  assert.match(playlistEditor, /PromoScene/);
+  assert.match(playlistEditor, /ContentScene/);
+  assert.match(playlistEditor, /Object Story/);
   assert.match(page, /renderEnvironmentLayer/);
   assert.match(page, /environment:\s*aquariumEnvironment/);
   assert.match(page, /resetEnvironmentIntro/);
