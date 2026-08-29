@@ -30,8 +30,8 @@ async function initialisePage(name) {
       return initialiseSftpSettings();
     }
     case 'animation': {
-      const { initialiseAnimationStudio } = await import('./pages/animation.js');
-      return initialiseAnimationStudio();
+      const { initialisePlaylistStudio } = await import('./pages/playlist.js');
+      return initialisePlaylistStudio();
     }
     case 'events': {
       const { initialiseEvents } = await import('./pages/events.js');
