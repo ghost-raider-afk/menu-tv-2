@@ -9,8 +9,11 @@ test('player is public while TV connection page remains admin protected', async 
   const [server, playerHtml, connectHtml] = await Promise.all([
     read('src/server.js'), read('src/web/admin-ui/public/player.html'), read('src/web/admin-ui/public/connect-tv.html')
   ]);
-  assert.match(server, /'\/connect-tv\.html'/);
-  assert.doesNotMatch(server.match(/const protectedPages = \[[\s\S]*?\];/)?.[0] || '', /player/);
+  const protectedPages = server.match(/const AUTHENTICATED_PAGES = Object\.freeze\(\[[\s\S]*?\]\);/)?.[0] || '';
+  assert.match(protectedPages, /path:\s*'\/connect-tv'/);
+  assert.match(protectedPages, /path:\s*'\/playlist'/);
+  assert.doesNotMatch(protectedPages, /path:\s*'\/player'/);
+  assert.match(server, /app\.get\('\/player'/);
   assert.match(server, /app\.use\('\/api\/device', createDevicePublicRouter/);
   assert.match(server, /app\.use\('\/api\/device-admin', createDeviceAdminRouter/);
   assert.match(playerHtml, /data-activation-view/);
@@ -19,22 +22,23 @@ test('player is public while TV connection page remains admin protected', async 
 });
 
 test('real TV player owns all scene layers from one player context and keeps required assets offline', async () => {
-  const [worker, player, playerHtml, gpuRuntime, layerComposer, publicRoutes, playerCss] = await Promise.all([
+  const [worker, player, playerHtml, gpuRuntime, layerComposer, publicRoutes, playerCss, playlistCss] = await Promise.all([
     read('src/web/admin-ui/public/player-sw.js'),
     read('src/web/admin-ui/public/js/player/player.js'),
     read('src/web/admin-ui/public/player.html'),
     read('src/web/admin-ui/public/js/player/gpu-scene-runtime.js'),
     read('src/web/admin-ui/public/js/player/scene-layer-composer.js'),
     read('src/api/device/public-routes.js'),
-    read('src/web/admin-ui/public/css/player.css')
+    read('src/web/admin-ui/public/css/player.css'),
+    read('src/web/admin-ui/public/css/scene-playlist.css')
   ]);
-  assert.match(worker, /mira-tv-player-shell-v\d+/);
+  assert.match(worker, /mira-tv-player-shell-v15/);
   for (const asset of [
-    '/css/brand-motion-v2.css','/css/motion-overlays.css',
+    '/css/brand-motion-v2.css','/css/motion-overlays.css','/css/scene-playlist.css',
     '/js/editor/renderer.js','/js/editor/renderer-model.js','/js/editor/renderer-svg.js',
     '/js/player/flat-menu-renderer.js','/js/player/scene-layer-composer.js','/js/player/gpu-scene-runtime.js',
     '/js/player/entity-runtime.js','/js/motion/environment.js','/js/motion/brand-title.js','/js/motion/announcement.js',
-    '/js/motion/entity-behavior.js','/js/motion/dom-scene-adapter.js','/js/motion/scene-graph.js',
+    '/js/motion/scene-playlist-runtime.js','/js/motion/entity-behavior.js','/js/motion/dom-scene-adapter.js','/js/motion/scene-graph.js',
     '/js/motion/scene-composer.js','/js/motion/scene-runtime.js','/js/motion/timeline.js','/js/motion/drivers/waapi-driver.js'
   ]) assert.ok(worker.includes(`'${asset}'`), `offline shell is missing ${asset}`);
   for (const retiredAsset of [
@@ -43,22 +47,31 @@ test('real TV player owns all scene layers from one player context and keeps req
   ]) assert.ok(!worker.includes(`'${retiredAsset}'`), `TV offline shell still contains ${retiredAsset}`);
 
   assert.match(playerHtml, /\/css\/brand-motion-v2\.css/);
+  assert.match(playerHtml, /\/css\/scene-playlist\.css/);
   assert.doesNotMatch(playerHtml, /overlay-runtime\.js/);
   assert.match(player, /new GpuSceneRuntime\(playerStage/);
   assert.match(player, /new PlayerSceneLayerComposer\(playerStage\)/);
   assert.match(player, /renderEnvironmentLayer\(environmentLayer, context\.environment/);
   assert.match(player, /renderBrandTitleLayer\(brandLayer, context\.brand\)/);
   assert.match(player, /renderAnnouncementLayer\(announcementLayer, context\.announcement\)/);
+  assert.match(player, /scenePlaylistRuntime\.render\(context\.scene_playlist/);
   assert.match(player, /playerMenuRenderMode\(context\)/);
   assert.match(player, /profile:\s*context\.animation\?\.profile/);
   assert.match(player, /sameOriginAsset\(context\?\.entity\?\.asset_url\)/);
   assert.doesNotMatch(player, /LiveMenuMotion|WasmMotionDriver|MutationObserver/);
   assert.match(gpuRuntime, /effect\.animate\(/);
+  assert.match(gpuRuntime, /mira:scene-playlist-mode/);
+  assert.match(gpuRuntime, /animation\.pause\(\)/);
   assert.doesNotMatch(gpuRuntime, /requestAnimationFrame|style\.filter|drop-shadow/);
+  assert.match(playlistCss, /data-scene-playlist-fullscreen/);
+  assert.match(playlistCss, /tv-player-entity-layer/);
+  assert.match(playlistCss, /tv-player-brand-layer/);
+  assert.match(playlistCss, /tv-player-announcement-layer/);
   for (const layer of ['environment','menu','fx','content','entity','brand','announcement']) {
     assert.match(layerComposer, new RegExp(`'${layer}'`));
   }
   assert.match(publicRoutes, /animation:\s*\{/);
+  assert.match(publicRoutes, /scene_playlist:\s*animationSettings\?\.scene_playlist \|\| null/);
   assert.match(publicRoutes, /store\.getScreenAnimationSettings\(session\.screen_id\)/);
   assert.doesNotMatch(publicRoutes, /store\.getAnimationSettings\(\)/);
   assert.match(publicRoutes, /enabled: animationSettings\?\.enabled === true/);
@@ -123,7 +136,7 @@ test('admin connection flow is mobile-first and diagnoses iOS camera/decoder fai
     read('src/web/admin-ui/public/js/pages/connect-tv.js'), read('src/web/admin-ui/public/connect-tv.html'),
     read('src/web/admin-ui/public/css/connect-tv.css')
   ]);
-  assert.match(navigation, /\['Подключить ТВ', '\/connect-tv\.html'\]/);
+  assert.match(navigation, /\['Подключить ТВ', '\/connect-tv'\]/);
   assert.match(application, /case 'connect-tv'/);
   assert.match(page, /selectedLocationId/);
   assert.match(page, /selectedScreenId/);
