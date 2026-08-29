@@ -99,7 +99,7 @@ test('Entity media upload streams to disk and has an independent env-controlled 
 
 test('Entity Editor renders image or video on a layer independent from menu and background', async () => {
   const [html, page, preview, editor, animationContract, db, migration] = await Promise.all([
-    read('web/admin-ui/public/animation.html'), read('web/admin-ui/public/js/pages/animation.js'),
+    read('web/admin-ui/public/playlist.html'), read('web/admin-ui/public/js/pages/playlist.js'),
     read('web/admin-ui/public/js/motion/screen-preview.js'), read('web/admin-ui/public/js/motion/entity-editor.js'),
     read('contracts/animation.js'), read('db/settings.js'), read('db/migrations/scene-entity.js')
   ]);
