@@ -29,5 +29,8 @@ export const API = Object.freeze({
 });
 
 export function pageName() {
-  return document.body?.dataset?.page || '';
+  const declared = document.body?.dataset?.page || '';
+  const pathname = window.location.pathname;
+  if ((pathname === '/playlist' || pathname === '/playlist.html' || pathname === '/animation' || pathname === '/animation.html') && declared === 'animation') return 'playlist';
+  return declared;
 }
