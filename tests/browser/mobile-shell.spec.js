@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 async function login(page) {
-  await page.goto('/signin.html');
+  await page.goto('/signin');
   await page.getByLabel('Логин').fill('admin');
   await page.getByLabel('Пароль').fill(process.env.E2E_ADMIN_PASSWORD || 'Browser-CI-Password1!');
   await Promise.all([
@@ -40,7 +40,7 @@ test.describe('mobile application shell', () => {
     expect(Math.abs((railBox.y + railBox.height) - 844)).toBeLessThanOrEqual(1);
 
     await rail.getByLabel('Настройки').click();
-    await expect(page).toHaveURL(/\/settings\.html$/);
+    await expect(page).toHaveURL(/\/settings$/);
     await expect(page.locator('.ui-context')).toHaveClass(/is-collapsed/);
 
     const trigger = page.locator('[data-mobile-context-trigger]');
@@ -52,12 +52,12 @@ test.describe('mobile application shell', () => {
     await expect(page.locator('body')).toHaveClass(/ui-context-open/);
 
     await page.getByRole('link', { name: /^Журнал событий/ }).click();
-    await expect(page).toHaveURL(/\/events\.html$/);
+    await expect(page).toHaveURL(/\/events$/);
     await expect(page.locator('.ui-context')).toHaveClass(/is-collapsed/);
     await expect(page.locator('body')).not.toHaveClass(/ui-context-open/);
 
     await page.locator('.ui-rail').getByLabel('Плейлист').click();
-    await expect(page).toHaveURL(/\/playlist\.html$/);
+    await expect(page).toHaveURL(/\/playlist$/);
     await expect(page.locator('.ui-context')).toHaveClass(/is-collapsed/);
     await expectNoPageOverflow(page);
   });
@@ -65,12 +65,12 @@ test.describe('mobile application shell', () => {
   test('keeps core pages inside the viewport and touch controls usable', async ({ page }, testInfo) => {
     await login(page);
     const routes = [
-      '/screens.html',
-      '/catalog.html',
-      '/settings.html',
-      '/events.html',
-      '/connect-tv.html',
-      '/playlist.html'
+      '/screens',
+      '/catalog',
+      '/settings',
+      '/events',
+      '/connect-tv',
+      '/playlist'
     ];
 
     for (const route of routes) {
@@ -79,10 +79,10 @@ test.describe('mobile application shell', () => {
       await expect(page.locator('.ui-rail')).toBeVisible();
       await expectNoPageOverflow(page);
       const image = await page.screenshot({ fullPage: true });
-      await testInfo.attach(`mobile-${route.replace(/^\//, '').replace(/\.html$/, '') || 'overview'}`, { body: image, contentType: 'image/png' });
+      await testInfo.attach(`mobile-${route.replace(/^\//, '') || 'overview'}`, { body: image, contentType: 'image/png' });
     }
 
-    await page.goto('/settings.html');
+    await page.goto('/settings');
     const input = page.locator('#site-app-name');
     await expect(input).toBeVisible();
     const inputMetrics = await input.evaluate((node) => {
@@ -104,6 +104,6 @@ test('mobile shell remains usable at 360px width', async ({ page }) => {
   await expect(page.locator('.ui-rail-button')).toHaveCount(5);
   await expectNoPageOverflow(page);
   await page.locator('.ui-rail-button[aria-label="Каталог"]').click();
-  await expect(page).toHaveURL(/\/catalog\.html$/);
+  await expect(page).toHaveURL(/\/catalog$/);
   await expectNoPageOverflow(page);
 });
