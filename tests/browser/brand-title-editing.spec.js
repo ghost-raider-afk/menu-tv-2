@@ -13,7 +13,7 @@ async function login(page) {
 async function getSettings(page) {
   return page.evaluate(async () => {
     const response = await fetch('/api/settings/animation', { credentials: 'same-origin', cache: 'no-store' });
-    if (!response.ok) throw new Error(`GET animation settings failed: ${response.status}`);
+    if (!response.ok) throw new Error(`GET playlist settings failed: ${response.status}`);
     return response.json();
   });
 }
@@ -23,7 +23,7 @@ async function putSettings(page, payload) {
     const response = await fetch('/api/settings/animation', {
       method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     });
-    if (!response.ok) throw new Error(`PUT animation settings failed: ${response.status}`);
+    if (!response.ok) throw new Error(`PUT playlist settings failed: ${response.status}`);
     return response.json();
   }, payload);
 }
@@ -55,12 +55,12 @@ async function removePreviewScreen(page, fixture) {
   }, fixture);
 }
 
-test('Brand Entity is user-owned and can be cleared, replaced and persisted independently of MIRA-TV branding', async ({ page }) => {
+test('Brand Entity is user-owned inside Playlist Studio and persists independently of MIRA-TV branding', async ({ page }) => {
   await login(page);
   const fixture = await createPreviewScreen(page);
   const original = await getSettings(page);
   try {
-    await page.goto(`/animation.html?screen=${fixture.screenId}`);
+    await page.goto(`/playlist.html?screen=${fixture.screenId}`);
     const textTab = page.locator('[data-animation-inspector-tab="text"]');
     await textTab.click();
     await expect(textTab).toHaveClass(/active/);
@@ -86,7 +86,7 @@ test('Brand Entity is user-owned and can be cleared, replaced and persisted inde
     const saved = await getSettings(page);
     expect(saved.brand.text).toBe('БАР\nСЕВЕР');
     expect(saved.brand.enabled).toBe(true);
-    await expect(page).toHaveTitle('MIRA-TV — Анимация');
+    await expect(page).toHaveTitle('MIRA-TV — Плейлист');
   } finally {
     await putSettings(page, {
       enabled: original.enabled,
@@ -95,7 +95,8 @@ test('Brand Entity is user-owned and can be cleared, replaced and persisted inde
       entity: original.entity,
       announcement: original.announcement,
       brand: original.brand,
-      aquarium: original.aquarium
+      environment: original.environment,
+      scene_playlist: original.scene_playlist
     });
     await removePreviewScreen(page, fixture);
   }
