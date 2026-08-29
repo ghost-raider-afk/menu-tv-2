@@ -44,6 +44,10 @@ export function normaliseScenePlaylist(value = {}) {
   };
 }
 
+function playbackSignature(playlist, entity) {
+  return JSON.stringify({ playlist, entity: sourceObject(entity) });
+}
+
 function typeLabel(type) {
   if (type === 'promo') return 'PROMO SCENE';
   if (type === 'object-story') return 'OBJECT STORY';
@@ -138,26 +142,46 @@ export class ScenePlaylistRuntime {
     this.layers = null;
     this.entity = null;
     this.sceneIndex = 0;
+    this.signature = null;
+    this.playbackActive = false;
   }
 
   destroy() {
     this.generation += 1;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    this.playbackActive = false;
     this.showMenu();
     this.layers = null;
+    this.entity = null;
+    this.signature = null;
   }
 
   render(value, { menuLayer, contentLayer, fxLayer, entity = null, autoplay = true } = {}) {
+    const nextPlaylist = normaliseScenePlaylist(value);
+    const nextLayers = { menuLayer, contentLayer, fxLayer };
+    const nextSignature = playbackSignature(nextPlaylist, entity);
+    const sameLayers = this.layers?.menuLayer === menuLayer
+      && this.layers?.contentLayer === contentLayer
+      && this.layers?.fxLayer === fxLayer;
+
+    if (autoplay && this.playbackActive && sameLayers && this.signature === nextSignature) {
+      this.playlist = nextPlaylist;
+      this.entity = entity;
+      return this.playlist;
+    }
+
     this.generation += 1;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
-    this.playlist = normaliseScenePlaylist(value);
-    this.layers = { menuLayer, contentLayer, fxLayer };
+    this.playlist = nextPlaylist;
+    this.layers = nextLayers;
     this.entity = entity;
     this.sceneIndex = 0;
+    this.signature = nextSignature;
     this.showMenu();
-    if (!autoplay || !this.playlist.enabled || !this.activeScenes().length) return this.playlist;
+    this.playbackActive = autoplay && this.playlist.enabled && this.activeScenes().length > 0;
+    if (!this.playbackActive) return this.playlist;
     this.scheduleMenu(this.playlist.menu_duration_seconds * 1000);
     return this.playlist;
   }
@@ -172,14 +196,19 @@ export class ScenePlaylistRuntime {
     if (!normalised || !this.layers) return;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    this.playbackActive = false;
     this.showScene(normalised, false);
   }
 
   resume() {
     if (!this.layers) return;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    this.generation += 1;
     this.sceneIndex = 0;
     this.showMenu();
-    if (this.playlist.enabled && this.activeScenes().length) this.scheduleMenu(this.playlist.menu_duration_seconds * 1000);
+    this.playbackActive = this.playlist.enabled && this.activeScenes().length > 0;
+    if (this.playbackActive) this.scheduleMenu(this.playlist.menu_duration_seconds * 1000);
   }
 
   scheduleMenu(delay) {
@@ -187,7 +216,10 @@ export class ScenePlaylistRuntime {
     this.timer = setTimeout(() => {
       if (generation !== this.generation) return;
       const scenes = this.activeScenes();
-      if (!scenes.length) return this.showMenu();
+      if (!scenes.length) {
+        this.playbackActive = false;
+        return this.showMenu();
+      }
       const scene = scenes[this.sceneIndex % scenes.length];
       this.showScene(scene, true);
     }, Math.max(0, delay));
