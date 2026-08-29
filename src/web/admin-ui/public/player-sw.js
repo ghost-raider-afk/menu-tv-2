@@ -1,5 +1,5 @@
-const SHELL_CACHE = 'mira-tv-player-shell-v14';
-const DATA_CACHE = 'mira-tv-player-data-v14';
+const SHELL_CACHE = 'mira-tv-player-shell-v15';
+const DATA_CACHE = 'mira-tv-player-data-v15';
 const PLAYER_CONTEXT = '/api/device/player-context';
 const SHELL_ASSETS = [
   '/player.html',
