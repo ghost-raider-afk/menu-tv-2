@@ -11,7 +11,7 @@ test('settings navigation exposes one unified event journal', async () => {
     read('src/web/admin-ui/public/events.html'),
     read('src/web/admin-ui/public/js/components/notifications.js')
   ]);
-  assert.match(navigation, /\['Журнал событий', '\/events\.html'\]/);
+  assert.match(navigation, /\['Журнал событий', '\/events'\]/);
   assert.match(navigation, /page: 'events'/);
   assert.doesNotMatch(navigation, /Журнал ошибок|error-log\.html|Журнал действий/);
   assert.match(application, /case 'events'/);
@@ -19,7 +19,7 @@ test('settings navigation exposes one unified event journal', async () => {
   assert.doesNotMatch(application, /case 'error-log'|pages\/error-log/);
   assert.match(page, /data-page="events"/);
   assert.match(page, />Журнал событий<\/h1>/);
-  assert.match(bell, /href="\/events\.html"/);
+  assert.match(bell, /href="\/events"/);
   await assert.rejects(access(new URL('../src/web/admin-ui/public/error-log.html', import.meta.url)));
 });
 
