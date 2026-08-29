@@ -14,6 +14,7 @@ import { createSessionResolver } from './services/session-service.js';
 import { siteSettingsResponse } from './services/site-assets-service.js';
 import { migrateLegacyBackgroundAssets } from './services/legacy-background-migration.js';
 import { SftpService } from './sftp/index.js';
+import { AUTHENTICATED_PAGES, LEGACY_PAGE_REDIRECTS, canonicalRedirectTarget } from './web/admin-ui/routes.js';
 import { createAuthRouter } from './api/auth/routes.js';
 import { createSessionRouter } from './api/session/routes.js';
 import { createOverviewRouter } from './api/overview/routes.js';
@@ -30,37 +31,6 @@ import { createDeviceAdminRouter } from './api/device/admin-routes.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, 'web', 'admin-ui', 'public');
 const nodeModulesDir = path.resolve(__dirname, '..', 'node_modules');
-
-const AUTHENTICATED_PAGES = Object.freeze([
-  Object.freeze({ path: '/', file: 'index.html' }),
-  Object.freeze({ path: '/locations', file: 'locations.html' }),
-  Object.freeze({ path: '/screens', file: 'screens.html' }),
-  Object.freeze({ path: '/catalog', file: 'catalog.html' }),
-  Object.freeze({ path: '/screen-editor', file: 'screen-editor.html' }),
-  Object.freeze({ path: '/profile', file: 'profile.html' }),
-  Object.freeze({ path: '/settings', file: 'settings.html' }),
-  Object.freeze({ path: '/sftp-settings', file: 'sftp-settings.html' }),
-  Object.freeze({ path: '/playlist', file: 'playlist.html' }),
-  Object.freeze({ path: '/events', file: 'events.html' }),
-  Object.freeze({ path: '/connect-tv', file: 'connect-tv.html' })
-]);
-
-const LEGACY_PAGE_REDIRECTS = Object.freeze(new Map([
-  ['/index.html', '/'],
-  ['/locations.html', '/locations'],
-  ['/screens.html', '/screens'],
-  ['/catalog.html', '/catalog'],
-  ['/screen-editor.html', '/screen-editor'],
-  ['/profile.html', '/profile'],
-  ['/settings.html', '/settings'],
-  ['/sftp-settings.html', '/sftp-settings'],
-  ['/playlist.html', '/playlist'],
-  ['/animation.html', '/playlist'],
-  ['/animation', '/playlist'],
-  ['/events.html', '/events'],
-  ['/connect-tv.html', '/connect-tv'],
-  ['/signin.html', '/signin']
-]));
 
 async function initialiseStore(store, config) {
   await store.init();
@@ -193,11 +163,6 @@ function sendHtmlFile(response, filename) {
 
 function isBrowserNavigation(request) {
   return request.get('sec-fetch-mode') === 'navigate' || request.get('sec-fetch-dest') === 'document';
-}
-
-function canonicalRedirectTarget(request, canonical) {
-  const queryIndex = request.originalUrl.indexOf('?');
-  return queryIndex >= 0 ? `${canonical}${request.originalUrl.slice(queryIndex)}` : canonical;
 }
 
 function mountFrontend(app, requirePageSession) {
