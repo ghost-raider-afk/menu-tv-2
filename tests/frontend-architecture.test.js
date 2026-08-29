@@ -26,7 +26,7 @@ test('templates frontend is physically absent', async () => {
 
 test('CSS architecture is compact and has one permanent entrypoint', async () => {
   const [entry, tokens] = await Promise.all([read('css/index.css'), read('css/tokens.css')]);
-  for (const required of ['./tokens.css','./base.css','./shell.css','./components.css','./forms.css','./tables.css','./pages/events.css','./connect-tv.css','./editor/editor.css','./auth/signin.css']) {
+  for (const required of ['./tokens.css','./base.css','./shell.css','./components.css','./forms.css','./tables.css','./pages/playlist.css','./pages/events.css','./connect-tv.css','./editor/editor.css','./auth/signin.css']) {
     assert.ok(entry.includes(required), required);
   }
   assert.doesNotMatch(entry, /tv1|templates\.css|error-log\.css/i);
@@ -46,12 +46,14 @@ test('shell remains modular and event journal exists only as its own route', asy
   assert.match(shell, /createContextPanel/);
   assert.match(shell, /createHeader/);
   assert.doesNotMatch(shell, /legacy|\.sidebar|\.topbar/i);
-  assert.match(navigation, /catalog:\s*Object\.freeze\(\[\['Продукция', '\/catalog\.html'\]\]\)/);
-  assert.match(navigation, /playlist:\s*Object\.freeze\(\[\['Плейлист', '\/playlist\.html'\]\]\)/);
-  assert.match(navigation, /\['Журнал событий', '\/events\.html'\]/);
-  assert.doesNotMatch(navigation, /\/animation\.html|Журнал ошибок|error-log\.html|Журнал действий/);
-  assert.doesNotMatch(settings, /Журнал событий|href="\/events\.html"|event-journal-link-title/);
-  assert.match(bell, /href="\/events\.html"/);
+  assert.match(navigation, /catalog:\s*Object\.freeze\(\[\['Продукция', '\/catalog'\]\]\)/);
+  assert.match(navigation, /playlist:\s*Object\.freeze\(\[\['Плейлист', '\/playlist'\]\]\)/);
+  assert.match(navigation, /\['Журнал событий', '\/events'\]/);
+  assert.match(navigation, /source\.endsWith\('\.html'\)/);
+  assert.match(navigation, /source === '\/animation\.html' \|\| source === '\/animation'/);
+  assert.doesNotMatch(navigation, /path:\s*'\/playlist\.html'/);
+  assert.doesNotMatch(settings, /Журнал событий|href="\/events(?:\.html)?"|event-journal-link-title/);
+  assert.match(bell, /href="\/events"/);
   assert.match(bell, /Открыть журнал событий/);
 });
 
@@ -79,13 +81,14 @@ test('authenticated page bootstrap uses one context API request', async () => {
   assert.doesNotMatch(session, /API\.userSettings|API\.siteSettings|Promise\.all/);
 });
 
-test('authenticated navigation uses one persistent client-side shell', async () => {
+test('authenticated navigation uses one persistent client-side shell and extensionless canonical URLs', async () => {
   const [application, router, shell, sidebar, context, header, screens, navigation] = await Promise.all([
     read('js/application.js'), read('js/core/router.js'), read('js/components/shell.js'), read('js/components/sidebar.js'),
     read('js/components/context-panel.js'), read('js/components/header.js'), read('js/pages/screens.js'), read('js/core/navigation.js')
   ]);
   assert.match(application, /createAppRouter/);
   assert.match(application, /case 'events'/);
+  assert.match(application, /case 'playlist'/);
   assert.match(application, /pages\/playlist\.js/);
   assert.match(application, /router\.start\(\)/);
   assert.doesNotMatch(application, /pages\/animation\.js|case 'error-log'|pages\/error-log/);
@@ -95,15 +98,18 @@ test('authenticated navigation uses one persistent client-side shell', async () 
   assert.match(router, /PREFETCH_ROUTE_PATHS/);
   assert.match(router, /canLeaveCurrentPage/);
   assert.match(router, /canonicalRoutePath/);
+  assert.match(router, /declaredPage/);
+  assert.match(router, /mira:route-dispose/);
   assert.match(navigation, /ROUTE_DEFINITIONS/);
-  assert.match(navigation, /\/playlist\.html/);
+  assert.match(navigation, /path:\s*'\/playlist',\s*page:\s*'playlist'/);
   assert.match(navigation, /PREFETCH_ROUTE_PATHS/);
   assert.match(shell, /refreshShellRoute/);
   assert.match(sidebar, /refreshSidebarActive/);
   assert.match(context, /refreshContextPanel/);
   assert.match(header, /refreshHeaderRoute/);
   assert.match(header, /document\.title = `\$\{appName\(\)\} — \$\{title\}`/);
-  assert.match(screens, /await navigate\(`\/screen-editor\.html\?id=\$\{screen\.id\}`\)/);
+  assert.match(screens, /await navigate\(`\/screen-editor\?id=\$\{screen\.id\}`\)/);
+  assert.doesNotMatch(screens, /screen-editor\.html/);
   assert.doesNotMatch(screens, /window\.location\.assign/);
 });
 
