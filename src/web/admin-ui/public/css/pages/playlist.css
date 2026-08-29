@@ -1,0 +1,16 @@
+body[data-page="animation"] .main-content.animation-content{visibility:hidden}
+.animation-inspector-tabs{grid-template-columns:repeat(4,minmax(0,1fr))}
+.scene-mode-fullscreen.scene-playlist-content{background:#070b13}
+.animation-stage[data-scene-playlist-fullscreen="true"] .animation-screen-entity-layer,
+.animation-stage[data-scene-playlist-fullscreen="true"] .animation-screen-brand-layer,
+.animation-stage[data-scene-playlist-fullscreen="true"] .animation-screen-announcement-layer,
+.tv-player-stage[data-scene-playlist-fullscreen="true"] .tv-player-entity-layer,
+.tv-player-stage[data-scene-playlist-fullscreen="true"] .tv-player-brand-layer,
+.tv-player-stage[data-scene-playlist-fullscreen="true"] .tv-player-announcement-layer,
+.tv-player-stage[data-scene-playlist-fullscreen="true"] [data-gpu-menu-fx-host]{opacity:0!important;visibility:hidden!important;pointer-events:none!important}
+.animation-stage[data-scene-playlist-fullscreen="true"] .scene-announcement-text,
+.tv-player-stage[data-scene-playlist-fullscreen="true"] .scene-announcement-text{animation-play-state:paused!important}
+.animation-screen-entity-layer,.animation-screen-brand-layer,.animation-screen-announcement-layer,
+.tv-player-entity-layer,.tv-player-brand-layer,.tv-player-announcement-layer,[data-gpu-menu-fx-host]{transition:opacity .26s ease}
+@media(max-width:760px){.animation-inspector-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(prefers-reduced-motion:reduce){.animation-screen-entity-layer,.animation-screen-brand-layer,.animation-screen-announcement-layer,.tv-player-entity-layer,.tv-player-brand-layer,.tv-player-announcement-layer,[data-gpu-menu-fx-host]{transition:none!important}}
