@@ -52,8 +52,10 @@ function setRouteMountState(main, mounting) {
 
 function currentViewSnapshot() {
   const main = currentMain();
+  const declaredPage = document.body.dataset.page || '';
   return {
-    page: routePageForPath(window.location.pathname, document.body.dataset.page || ''),
+    page: routePageForPath(window.location.pathname, declaredPage),
+    declaredPage,
     mainClassName: main.className,
     mainHtml: main.innerHTML,
     documentTitle: document.title
