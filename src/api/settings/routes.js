@@ -33,7 +33,7 @@ export function createSettingsRouter({ store, config }) {
   router.get('/animation', async (_request, response) => { response.json(await store.getAnimationSettings()); });
   router.put('/animation', async (request, response) => {
     const settings = await store.updateAnimationSettings({ ...animationSettingsInput(request.body), updated_by: request.session.sub });
-    await activity(store, request, { action: 'settings.animation.updated', entity_type: 'animation_settings', entity_id: settings.id, message: 'Сохранён рабочий пресет анимации.' }); response.json(settings);
+    await activity(store, request, { action: 'settings.animation.updated', entity_type: 'animation_settings', entity_id: settings.id, message: 'Сохранён рабочий плейлист.' }); response.json(settings);
   });
   router.put('/animation/apply', async (request, response) => {
     const screenIds = animationTargetScreenIds(request.body?.screen_ids);
@@ -46,7 +46,7 @@ export function createSettingsRouter({ store, config }) {
     });
     await activity(store, request, {
       action: 'settings.animation.applied', entity_type: 'screen_animation_settings', entity_id: result.applied_screen_ids.join(','),
-      message: `Анимация применена к мониторам: ${result.applied_screen_ids.join(', ')}.`
+      message: `Плейлист применён к мониторам: ${result.applied_screen_ids.join(', ')}.`
     });
     response.json(result);
   });

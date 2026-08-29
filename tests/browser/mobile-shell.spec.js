@@ -32,7 +32,7 @@ test.describe('mobile application shell', () => {
     await expect(rail.getByLabel('Обзор')).toBeVisible();
     await expect(rail.getByLabel('Мониторы')).toBeVisible();
     await expect(rail.getByLabel('Каталог')).toBeVisible();
-    await expect(rail.getByLabel('Анимация')).toBeVisible();
+    await expect(rail.getByLabel('Плейлист')).toBeVisible();
     await expect(rail.getByLabel('Настройки')).toBeVisible();
 
     const railBox = await rail.boundingBox();
@@ -56,8 +56,8 @@ test.describe('mobile application shell', () => {
     await expect(page.locator('.ui-context')).toHaveClass(/is-collapsed/);
     await expect(page.locator('body')).not.toHaveClass(/ui-context-open/);
 
-    await page.locator('.ui-rail').getByLabel('Анимация').click();
-    await expect(page).toHaveURL(/\/animation\.html$/);
+    await page.locator('.ui-rail').getByLabel('Плейлист').click();
+    await expect(page).toHaveURL(/\/playlist\.html$/);
     await expect(page.locator('.ui-context')).toHaveClass(/is-collapsed/);
     await expectNoPageOverflow(page);
   });
@@ -70,7 +70,7 @@ test.describe('mobile application shell', () => {
       '/settings.html',
       '/events.html',
       '/connect-tv.html',
-      '/animation.html'
+      '/playlist.html'
     ];
 
     for (const route of routes) {

@@ -7,6 +7,7 @@ import { normaliseAnnouncement, renderAnnouncementLayer } from '../motion/announ
 import { normaliseBrandTitle, renderBrandTitleLayer } from '../motion/brand-title.js';
 import { aquariumEnvironment, aquariumParameters, renderEnvironmentLayer, resetEnvironmentIntro } from '../motion/environment.js';
 import { renderAnimationScreenEmpty, renderAnimationScreenPreview } from '../motion/screen-preview.js';
+import { ScenePlaylistEditor } from '../motion/scene-playlist-editor.js';
 import {
   DEFAULT_LIVE_PROFILE,
   bindMotionProfileControls,
@@ -22,6 +23,7 @@ let currentBrand = normaliseBrandTitle();
 let currentAquarium = aquariumParameters();
 let player = null;
 let entityEditor = null;
+let scenePlaylistEditor = null;
 let previewFrame = null;
 let screenLoadSequence = 0;
 let availableScreens = [];
@@ -31,6 +33,24 @@ function number(id) { return Number(element(id)?.value ?? 0); }
 function checked(id) { return element(id)?.checked === true; }
 function value(id) { return element(id)?.value || ''; }
 function setValue(id, next) { const node = element(id); if (node) node.value = String(next); }
+
+function rebrandPlaylistPage() {
+  const heading = document.querySelector('.animation-heading');
+  const eyebrow = heading?.querySelector('.eyebrow');
+  const title = heading?.querySelector('h1');
+  const description = heading?.querySelector('p:not(.eyebrow)');
+  if (eyebrow) eyebrow.textContent = 'PLAYLIST STUDIO';
+  if (title) title.textContent = 'Плейлист';
+  if (description) description.textContent = 'Соберите последовательность сцен для телевизора. MenuScene остаётся постоянной базой, а PromoScene, ContentScene и Object Story включаются по порядку и возвращают меню.';
+
+  const master = document.querySelector('.animation-master-toggle span');
+  if (master) master.innerHTML = '<strong>Движение MenuScene</strong><small>Эффекты базового меню одинаковы в Preview и на телевизоре.</small>';
+
+  const previewHeading = document.querySelector('.animation-player-card .card-heading h2');
+  const previewDescription = document.querySelector('.animation-player-card .card-heading p:not(.eyebrow)');
+  if (previewHeading) previewHeading.textContent = 'Предпросмотр плейлиста';
+  if (previewDescription) previewDescription.textContent = 'Тот же Player Context, те же слои и тот же Scene Playlist Runtime, которые работают на реальном ТВ.';
+}
 
 function renderAnnouncementPreview() {
   const layer = element('animation-stage')?.querySelector('[data-announcement-layer]');
@@ -432,6 +452,7 @@ async function loadScreenPreview(screenId) {
     renderAquariumPreview(false);
     setScreenStatus(`${bundle.screen.location_name || 'Без точки'} · ${bundle.screen.name} · ${bundle.screen.resolution}`);
     restartPreview();
+    scenePlaylistEditor?.rebindPreview();
   } catch (error) {
     if (sequence !== screenLoadSequence) return;
     renderAnimationScreenEmpty(stage, 'Не удалось загрузить выбранный монитор.');
@@ -453,6 +474,7 @@ async function loadScreenOptions() {
     renderAnimationScreenEmpty(stage);
     setScreenStatus('В проекте пока нет мониторов.');
     player?.destroy();
+    scenePlaylistEditor?.runtime?.destroy();
     return;
   }
   select.innerHTML = screens.map((screen) => `<option value="${screen.id}">${screenLabel(screen)}</option>`).join('');
@@ -511,23 +533,25 @@ function buildStudioWorkspace() {
   if (!(content instanceof HTMLElement) || !(previewCard instanceof HTMLElement) || content.querySelector('.animation-studio-workspace')) return;
 
   const workspace = document.createElement('section');
-  workspace.className = 'animation-studio-workspace';
+  workspace.className = 'animation-studio-workspace playlist-studio-workspace';
   const previewPane = document.createElement('div');
-  previewPane.className = 'animation-preview-pane';
+  previewPane.className = 'animation-preview-pane playlist-preview-pane';
   const inspector = document.createElement('aside');
-  inspector.className = 'animation-inspector';
-  inspector.setAttribute('aria-label', 'Панель настроек анимации');
+  inspector.className = 'animation-inspector playlist-inspector';
+  inspector.setAttribute('aria-label', 'Панель настроек плейлиста');
   inspector.innerHTML = `
-    <div class="animation-inspector-head"><div><p class="eyebrow">MOTION CONTROLS</p><h2>Настройки</h2></div><div id="animation-inspector-master"></div></div>
+    <div class="animation-inspector-head"><div><p class="eyebrow">SCENE CONTROLS</p><h2>Настройки</h2></div><div id="animation-inspector-master"></div></div>
     <div class="animation-inspector-tabs" role="tablist">
       <button type="button" class="active" data-animation-inspector-tab="menu">Меню</button>
       <button type="button" data-animation-inspector-tab="text">Текст</button>
       <button type="button" data-animation-inspector-tab="scene">Сцена</button>
+      <button type="button" data-animation-inspector-tab="playlist">Плейлист</button>
     </div>
     <div class="animation-inspector-panels">
       <div data-animation-inspector-panel="menu"></div>
       <div data-animation-inspector-panel="text" hidden></div>
       <div data-animation-inspector-panel="scene" hidden></div>
+      <div data-animation-inspector-panel="playlist" hidden></div>
     </div>
     <div class="animation-targets">
       <div class="animation-targets-head"><div><strong>Применить к мониторам</strong><small id="animation-target-summary">Мониторы не выбраны</small></div><div><button class="button button-secondary" id="animation-target-all" type="button">Все</button><button class="button button-secondary" id="animation-target-none" type="button">Снять</button></div></div>
@@ -555,7 +579,7 @@ function buildStudioWorkspace() {
   const master = content.querySelector('.animation-master-toggle');
   if (master) inspector.querySelector('#animation-inspector-master')?.append(master);
   const save = element('animation-save');
-  if (save) { save.textContent = 'Сохранить пресет'; inspector.querySelector('#animation-inspector-actions')?.append(save); }
+  if (save) { save.textContent = 'Сохранить плейлист'; inspector.querySelector('#animation-inspector-actions')?.append(save); }
   const apply = document.createElement('button');
   apply.className = 'button button-primary';
   apply.id = 'animation-apply-screens';
@@ -572,14 +596,15 @@ function buildStudioWorkspace() {
   setInspectorTab('menu');
 }
 
-function animationPayload() {
+function playlistPayload() {
   currentAnnouncement = announcementFromControls();
   currentBrand = brandFromControls();
   currentAquarium = aquariumFromControls();
   return {
     enabled: checked('animation-enabled'), preset_id: PROFILE_ID, profile: readMotionProfile(),
     entity: currentEntity, announcement: currentAnnouncement, brand: currentBrand,
-    environment: aquariumEnvironment(currentAquarium)
+    environment: aquariumEnvironment(currentAquarium),
+    scene_playlist: scenePlaylistEditor?.value() || { enabled: false, menu_duration_seconds: 40, scenes: [] }
   };
 }
 
@@ -591,6 +616,7 @@ function applySavedSettings(saved) {
   syncAnnouncementControls(currentAnnouncement);
   syncBrandControls(currentBrand);
   syncAquariumControls(currentAquarium);
+  scenePlaylistEditor?.set(saved.scene_playlist);
   applyEntity(saved.entity);
   renderAnnouncementPreview();
   renderBrandPreview();
@@ -603,9 +629,9 @@ async function applySettingsToScreens() {
   if (!screenIds.length) { setMessage('animation-message', 'Выберите хотя бы один монитор.', 'error'); return; }
   setPending(button, true, 'Применяем…');
   try {
-    const result = await api.put(API.animationApply, { screen_ids: screenIds, settings: animationPayload() });
+    const result = await api.put(API.animationApply, { screen_ids: screenIds, settings: playlistPayload() });
     applySavedSettings(result.settings);
-    setMessage('animation-message', `Анимация применена к мониторам: ${result.applied_screen_ids.length}.`, 'success');
+    setMessage('animation-message', `Плейлист применён к мониторам: ${result.applied_screen_ids.length}.`, 'success');
   } catch (error) { setMessage('animation-message', error.message); }
   finally { setPending(button, false, 'Применяем…'); updateTargetSummary(); }
 }
@@ -621,6 +647,7 @@ async function loadSettings() {
   syncAnnouncementControls(currentAnnouncement);
   syncBrandControls(currentBrand);
   syncAquariumControls(currentAquarium);
+  scenePlaylistEditor?.set(settings?.scene_playlist);
   applyEntity(settings?.entity);
   renderAnnouncementPreview();
   renderBrandPreview();
@@ -632,19 +659,21 @@ async function saveSettings() {
   const button = element('animation-save');
   setPending(button, true, 'Сохраняем…');
   try {
-    const saved = await api.put(API.animationSettings, animationPayload());
+    const saved = await api.put(API.animationSettings, playlistPayload());
     applySavedSettings(saved);
-    setMessage('animation-message', 'Пресет сохранён. Мониторы не изменены — используйте «Применить к выбранным».', 'success');
+    setMessage('animation-message', 'Плейлист сохранён. Мониторы не изменены — используйте «Применить к выбранным».', 'success');
   } catch (error) { setMessage('animation-message', error.message); }
   finally { setPending(button, false, 'Сохраняем…'); }
 }
 
-export function initialiseAnimationStudio() {
+export function initialisePlaylistStudio() {
   const stage = element('animation-stage');
   if (!stage) return;
+  rebrandPlaylistPage();
   buildStudioWorkspace();
   player?.destroy();
   entityEditor?.destroy();
+  scenePlaylistEditor?.destroy();
   player = new AnimationPreviewPlayer({
     stage, timeline: element('animation-timeline'), timeLabel: element('animation-time'),
     playButton: element('animation-play'), pauseButton: element('animation-pause'), replayButton: element('animation-replay')
@@ -652,8 +681,10 @@ export function initialiseAnimationStudio() {
   entityEditor = new SceneEntityEditor({
     stage,
     onChange(entity) { currentEntity = entity; syncEntityControls(entity); },
-    onCommit() { restartPreview(); }
+    onCommit() { restartPreview(); scenePlaylistEditor?.rebindPreview(); }
   });
+  scenePlaylistEditor = new ScenePlaylistEditor({ stage, getEntity: () => currentEntity });
+  scenePlaylistEditor.mount(document.querySelector('[data-animation-inspector-panel="playlist"]'));
   bindMotionProfileControls(() => restartPreview());
   bindAnnouncementControls();
   bindBrandControls();

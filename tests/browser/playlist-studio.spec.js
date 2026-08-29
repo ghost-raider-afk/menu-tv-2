@@ -23,7 +23,7 @@ async function login(page) {
 async function animationSettings(page) {
   return page.evaluate(async () => {
     const response = await fetch('/api/settings/animation', { credentials: 'same-origin', cache: 'no-store' });
-    if (!response.ok) throw new Error(`animation settings GET failed: ${response.status}`);
+    if (!response.ok) throw new Error(`playlist settings GET failed: ${response.status}`);
     return response.json();
   });
 }
@@ -33,10 +33,11 @@ async function restoreAnimationSettings(page, settings) {
     const response = await fetch('/api/settings/animation', {
       method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
     });
-    if (!response.ok) throw new Error(`animation settings restore failed: ${response.status}`);
+    if (!response.ok) throw new Error(`playlist settings restore failed: ${response.status}`);
   }, {
     enabled: settings.enabled, preset_id: settings.preset_id, profile: settings.profile,
-    entity: settings.entity, announcement: settings.announcement, brand: settings.brand, environment: settings.environment
+    entity: settings.entity, announcement: settings.announcement, brand: settings.brand, environment: settings.environment,
+    scene_playlist: settings.scene_playlist
   });
 }
 
@@ -55,11 +56,11 @@ async function createPreviewFixture(page) {
     const product = await request('/api/catalog/products', {
       method: 'POST',
       body: JSON.stringify({
-        name: `Animation product ${suffix}`, producer: '', characteristics: '', strength: '', price_primary: '240',
+        name: `Playlist product ${suffix}`, producer: '', characteristics: '', strength: '', price_primary: '240',
         alcoholic: false, beverage_color: 'none', filtration: 'none', active: true
       })
     });
-    const location = await request('/api/locations', { method: 'POST', body: JSON.stringify({ name: `Animation ${suffix}`, address: '', active: true }) });
+    const location = await request('/api/locations', { method: 'POST', body: JSON.stringify({ name: `Playlist ${suffix}`, address: '', active: true }) });
     const screen = await request(`/api/locations/${location.id}/screens`, { method: 'POST', body: '{}' });
     const editor = await request(`/api/screens/${screen.id}/editor`);
     await request(`/api/screens/${screen.id}/draft`, {
@@ -67,7 +68,7 @@ async function createPreviewFixture(page) {
       body: JSON.stringify({
         revision: editor.draft.revision,
         rows: [
-          { id: 'real-preview-section', kind: 'section', name: 'НАСТОЯЩИЙ ЭКРАН MOTION STUDIO', enabled: true },
+          { id: 'real-preview-section', kind: 'section', name: 'НАСТОЯЩИЙ ЭКРАН PLAYLIST STUDIO', enabled: true },
           { id: 'real-preview-item', kind: 'item', product_id: product.id, promotion: true, promotion_text: 'АКЦИЯ', enabled: true }
         ],
         settings: { background_color: '#123456', accent_color: '#F4C915', text_color: '#F8FAFC' }
@@ -85,14 +86,14 @@ async function removePreviewFixture(page, fixture) {
   }, fixture);
 }
 
-test('animation studio keeps glyphs fixed while light surfaces, promo glow and overlays move', async ({ page }) => {
+test('Playlist Studio keeps MenuScene stable and edits temporary scenes through one workspace', async ({ page }) => {
   await login(page);
   const fixture = await createPreviewFixture(page);
   const original = await animationSettings(page);
   try {
-    await page.goto(`/animation.html?screen=${fixture.screenId}`);
-    const previewPane = page.locator('.animation-preview-pane');
-    const inspector = page.locator('.animation-inspector');
+    await page.goto(`/playlist.html?screen=${fixture.screenId}`);
+    const previewPane = page.locator('.playlist-preview-pane');
+    const inspector = page.locator('.playlist-inspector');
     const [previewBox, inspectorBox] = await Promise.all([previewPane.boundingBox(), inspector.boundingBox()]);
     expect(previewBox).not.toBeNull();
     expect(inspectorBox).not.toBeNull();
@@ -100,13 +101,14 @@ test('animation studio keeps glyphs fixed while light surfaces, promo glow and o
     await expect(inspector.locator('.animation-inspector-tabs')).toContainText('Меню');
     await expect(inspector.locator('.animation-inspector-tabs')).toContainText('Текст');
     await expect(inspector.locator('.animation-inspector-tabs')).toContainText('Сцена');
+    await expect(inspector.locator('.animation-inspector-tabs')).toContainText('Плейлист');
     await expect(inspector.locator('.animation-inspector-actions #animation-save')).toBeVisible();
     await expect(inspector.locator('.animation-inspector-actions #animation-apply-screens')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Живое меню' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Плейлист', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: '«Акция»' })).toBeVisible();
     await expect(page.getByText('ФОН · БЕЗ ИЗМЕНЕНИЙ')).toBeVisible();
     await expect(page.locator('#animation-stage')).toHaveAttribute('data-screen-id', String(fixture.screenId));
-    await expect(page.locator('#animation-stage .section-title')).toHaveText('НАСТОЯЩИЙ ЭКРАН MOTION STUDIO');
+    await expect(page.locator('#animation-stage .section-title')).toHaveText('НАСТОЯЩИЙ ЭКРАН PLAYLIST STUDIO');
 
     if (!(await page.locator('#animation-enabled').isChecked())) await page.locator('#animation-enabled').check();
     await page.locator('#animation-item-effect').selectOption('cinematic');
@@ -173,6 +175,22 @@ test('animation studio keeps glyphs fixed while light surfaces, promo glow and o
     await expect(page.locator('#animation-stage .aquarium-fish')).toHaveCount(4);
     await expect(page.locator('#animation-stage .animation-screen-background')).toHaveCSS('background-color', 'rgb(18, 52, 86)');
 
+    const playlistTab = inspector.locator('[data-animation-inspector-tab="playlist"]');
+    await playlistTab.click();
+    await expect(playlistTab).toHaveClass(/active/);
+    const playlistPanel = inspector.locator('[data-animation-inspector-panel="playlist"]');
+    await expect(page.locator('.playlist-scene-strip')).toBeVisible();
+    await expect(page.locator('.playlist-scene-card-menu')).toContainText('MenuScene');
+    await playlistPanel.getByRole('button', { name: '+ PromoScene', exact: true }).click();
+    await expect(page.locator('.playlist-scene-card-promo').last()).toBeVisible();
+    await playlistPanel.getByLabel('Заголовок').fill('Пятничная акция');
+    await playlistPanel.getByLabel('Текст').fill('Скидка 15% до закрытия');
+    await playlistPanel.getByLabel('Режим показа').selectOption('fullscreen');
+    await playlistPanel.getByRole('button', { name: '▶ Preview', exact: true }).click();
+    await expect(page.locator('#animation-stage [data-scene-menu-layer]')).toHaveClass(/scene-menu-suppressed/);
+    await page.locator('.playlist-scene-card-menu').click();
+    await expect(page.locator('#animation-stage [data-scene-menu-layer]')).not.toHaveClass(/scene-menu-suppressed/);
+
     const responsePromise = page.waitForResponse((response) => response.url().endsWith('/api/settings/animation') && response.request().method() === 'PUT');
     await page.locator('#animation-save').click();
     expect((await responsePromise).ok()).toBeTruthy();
@@ -192,6 +210,8 @@ test('animation studio keeps glyphs fixed while light surfaces, promo glow and o
     expect(saved.environment.effect).toBe('aquarium');
     expect(saved.environment.parameters.style).toBe('neon');
     expect(saved.environment.parameters.fish_count).toBe(4);
+    expect(saved.scene_playlist.enabled).toBe(true);
+    expect(saved.scene_playlist.scenes.some((scene) => scene.type === 'promo' && scene.title === 'Пятничная акция' && scene.mode === 'fullscreen')).toBe(true);
   } finally {
     await restoreAnimationSettings(page, original);
     await removePreviewFixture(page, fixture);
@@ -200,7 +220,7 @@ test('animation studio keeps glyphs fixed while light surfaces, promo glow and o
 
 test('promotion badge and soft row glow are isolated from static row content', async ({ page }) => {
   await login(page);
-  await page.goto('/animation.html');
+  await page.goto('/playlist.html');
   const result = await page.evaluate(async (profile) => {
     const [{ renderAnimationScreenPreview }, { AnimationPreviewPlayer }] = await Promise.all([
       import('/js/motion/screen-preview.js'), import('/js/motion/preview-player.js')
@@ -249,7 +269,7 @@ test('promotion badge and soft row glow are isolated from static row content', a
 
 test('preview player rebinds scene targets after preview DOM replacement', async ({ page }) => {
   await login(page);
-  await page.goto('/animation.html');
+  await page.goto('/playlist.html');
   const result = await page.evaluate(async (profile) => {
     const [{ renderAnimationScreenPreview }, { AnimationPreviewPlayer }] = await Promise.all([
       import('/js/motion/screen-preview.js'), import('/js/motion/preview-player.js')

@@ -15,6 +15,7 @@ import { sceneEntityInput } from './scene-entity.js';
 import { announcementInput } from './announcement.js';
 import { brandTitleInput } from './brand-title.js';
 import { environmentInput } from './environment.js';
+import { scenePlaylistInput } from './scene-playlist.js';
 
 function enumValue(value, field, allowed) {
   if (typeof value !== 'string' || !allowed.includes(value)) throw new ValidationError(`Поле «${field}» содержит неподдерживаемое значение.`);
@@ -72,7 +73,8 @@ export function animationSettingsInput(body) {
     entity: sceneEntityInput(body.entity),
     announcement: announcementInput(body.announcement),
     brand: brandTitleInput(body.brand),
-    environment: environmentInput(body.environment)
+    environment: environmentInput(body.environment),
+    scene_playlist: scenePlaylistInput(body.scene_playlist)
   };
 }
 

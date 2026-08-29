@@ -231,6 +231,7 @@ export function createDevicePublicRouter({ store, config }) {
         profile: animationSettings?.profile || null
       },
       environment: animationSettings?.environment || null,
+      scene_playlist: animationSettings?.scene_playlist || null,
       entity: animationSettings?.entity || null,
       brand: animationSettings?.brand || null,
       announcement: animationSettings?.announcement || null,

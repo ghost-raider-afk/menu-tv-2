@@ -8,6 +8,7 @@ import { renderSceneEntity } from '../motion/entity-editor.js';
 import { renderAnnouncementLayer } from '../motion/announcement.js';
 import { renderBrandTitleLayer } from '../motion/brand-title.js';
 import { renderEnvironmentLayer } from '../motion/environment.js';
+import { ScenePlaylistRuntime } from '../motion/scene-playlist-runtime.js';
 import { FlatMenuRenderer, playerMenuRenderMode } from './flat-menu-renderer.js';
 import { GpuSceneRuntime } from './gpu-scene-runtime.js';
 import { PlayerSceneLayerComposer } from './scene-layer-composer.js';
@@ -30,6 +31,7 @@ const playerMessage = document.querySelector('[data-player-message]');
 const sceneLayers = new PlayerSceneLayerComposer(playerStage);
 const flatMenuRenderer = new FlatMenuRenderer();
 const gpuSceneRuntime = new GpuSceneRuntime(playerStage, { composer: sceneLayers });
+const scenePlaylistRuntime = new ScenePlaylistRuntime();
 
 let pollTimer = null;
 let expiryTimer = null;
@@ -186,6 +188,7 @@ async function enterImmersiveMode() {
 function showActivationScreen() {
   if (refreshTimer) clearTimeout(refreshTimer);
   refreshTimer = null;
+  scenePlaylistRuntime.destroy();
   gpuSceneRuntime.destroy();
   flatMenuRenderer.destroy();
   setHidden(player, true);
@@ -402,6 +405,8 @@ function renderPlayerContext(context) {
   const {
     environment: environmentLayer,
     menu: menuLayer,
+    fx: fxLayer,
+    content: contentLayer,
     entity: entityLayer,
     brand: brandLayer,
     announcement: announcementLayer
@@ -431,6 +436,13 @@ function renderPlayerContext(context) {
     profile: context.animation?.profile,
     viewport,
     settings: model.settings
+  });
+  scenePlaylistRuntime.render(context.scene_playlist, {
+    menuLayer,
+    contentLayer,
+    fxLayer,
+    entity: context.entity,
+    autoplay: true
   });
   entityLayer.setAttribute('aria-hidden', 'true');
   playerRefreshMs = Math.max(2000, Number(context.refresh_interval_ms) || 5000);

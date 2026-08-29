@@ -49,12 +49,12 @@ export function renderAnimationScreenPreview(stage, bundle) {
   stage.innerHTML = `
     <div class="animation-screen-background" data-motion-background></div>
     <div class="animation-screen-environment-layer" data-environment-layer aria-label="Фоновая сцена"></div>
-    <div class="animation-screen-canvas">${buildTableSvg(model, lines, layout)}</div>
+    <div class="animation-screen-canvas" data-scene-menu-layer>${buildTableSvg(model, lines, layout)}</div>
+    <div class="animation-screen-fx-layer" data-scene-fx-layer aria-hidden="true"></div>
+    <div class="animation-screen-content-layer" data-scene-content-layer aria-label="Scene Playlist"></div>
     <div class="animation-screen-entity-layer" data-motion-entity-layer aria-label="Объекты сцены"></div>
     <div class="animation-screen-brand-layer" data-brand-layer aria-label="Название бренда"></div>
-    <div class="animation-screen-announcement-layer" data-announcement-layer aria-label="Бегущая строка"></div>
-    <div class="animation-screen-vignette" aria-hidden="true"></div>
-    <div class="animation-screen-shimmer" aria-hidden="true"></div>`;
+    <div class="animation-screen-announcement-layer" data-announcement-layer aria-label="Бегущая строка"></div>`;
 
   backgroundStyle(stage.querySelector('.animation-screen-background'), model, layout.palette);
   applyTypography(stage, layout);

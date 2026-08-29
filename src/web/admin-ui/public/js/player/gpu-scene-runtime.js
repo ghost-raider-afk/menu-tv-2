@@ -24,6 +24,17 @@ function tableBounds(viewport = {}, settings = {}) {
   });
 }
 
+function ensureGpuHost(layer) {
+  let host = layer.querySelector(':scope > [data-gpu-menu-fx-host]');
+  if (!(host instanceof HTMLElement)) {
+    host = document.createElement('div');
+    host.className = 'tv-player-gpu-menu-fx-host';
+    host.dataset.gpuMenuFxHost = '';
+    layer.prepend(host);
+  }
+  return host;
+}
+
 function sweepFrames(direction, opacity) {
   if (direction === 'right-to-left') {
     return [
@@ -114,12 +125,14 @@ export class GpuSceneRuntime {
     this.stopAnimations();
     this.signature = '';
     const layer = this.composer.get('fx');
-    layer?.replaceChildren();
-    if (layer) layer.hidden = true;
+    const host = layer?.querySelector(':scope > [data-gpu-menu-fx-host]');
+    host?.replaceChildren();
+    if (host instanceof HTMLElement) host.hidden = true;
   }
 
   render({ enabled = false, profile = null, viewport = {}, settings = {} } = {}) {
     const layer = this.composer.ensure('fx', { ariaHidden: true });
+    const host = ensureGpuHost(layer);
     const signature = JSON.stringify({
       enabled: enabled === true && Boolean(profile),
       profile: enabled ? profile : null,
@@ -129,10 +142,10 @@ export class GpuSceneRuntime {
     if (signature === this.signature) return false;
     this.signature = signature;
     this.stopAnimations();
-    layer.replaceChildren();
+    host.replaceChildren();
 
     if (!enabled || !profile || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-      layer.hidden = true;
+      host.hidden = true;
       return true;
     }
 
@@ -146,8 +159,8 @@ export class GpuSceneRuntime {
     effect.className = `tv-player-gpu-effect is-${plan.kind}`;
     effect.dataset.gpuSceneEffect = plan.kind;
     container.append(effect);
-    layer.replaceChildren(container);
-    layer.hidden = false;
+    host.replaceChildren(container);
+    host.hidden = false;
 
     const animation = effect.animate(plan.keyframes, {
       duration: plan.duration,
