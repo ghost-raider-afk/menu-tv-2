@@ -6,10 +6,10 @@ const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
 test('player is public while TV connection page remains admin protected', async () => {
-  const [server, playerHtml, connectHtml] = await Promise.all([
-    read('src/server.js'), read('src/web/admin-ui/public/player.html'), read('src/web/admin-ui/public/connect-tv.html')
+  const [server, frontendRoutes, playerHtml, connectHtml] = await Promise.all([
+    read('src/server.js'), read('src/web/admin-ui/routes.js'), read('src/web/admin-ui/public/player.html'), read('src/web/admin-ui/public/connect-tv.html')
   ]);
-  const protectedPages = server.match(/const AUTHENTICATED_PAGES = Object\.freeze\(\[[\s\S]*?\]\);/)?.[0] || '';
+  const protectedPages = frontendRoutes.match(/export const AUTHENTICATED_PAGES = Object\.freeze\(\[[\s\S]*?\]\);/)?.[0] || '';
   assert.match(protectedPages, /path:\s*'\/connect-tv'/);
   assert.match(protectedPages, /path:\s*'\/playlist'/);
   assert.doesNotMatch(protectedPages, /path:\s*'\/player'/);

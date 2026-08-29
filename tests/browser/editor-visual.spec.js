@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 async function login(page) {
-  await page.goto('/signin.html');
+  await page.goto('/signin');
   await page.getByLabel('Логин').fill('admin');
   await page.getByLabel('Пароль').fill(process.env.E2E_ADMIN_PASSWORD || 'Browser-CI-Password1!');
   await Promise.all([page.waitForURL((url) => url.pathname === '/'), page.getByRole('button', { name: /войти/i }).click()]);
@@ -69,7 +69,7 @@ for (const viewport of [{ width: 1920, height: 1080 }, { width: 1366, height: 76
     await page.setViewportSize(viewport);
     await login(page);
     const { screen } = await createEditorFixture(page, { rows: 4 });
-    await page.goto(`/screen-editor.html?id=${screen.id}`);
+    await page.goto(`/screen-editor?id=${screen.id}`);
 
     const commandbar = page.locator('.editor-commandbar');
     await expect(commandbar).toBeVisible();
@@ -125,7 +125,7 @@ test('editor reflows at a 200% equivalent viewport without page-level horizontal
   await page.setViewportSize({ width: 960, height: 540 });
   await login(page);
   const { screen } = await createEditorFixture(page, { rows: 3 });
-  await page.goto(`/screen-editor.html?id=${screen.id}`);
+  await page.goto(`/screen-editor?id=${screen.id}`);
 
   const overflow = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
   expect(overflow.scroll).toBeLessThanOrEqual(overflow.client + 1);
@@ -155,7 +155,7 @@ test('reference density keeps TV Menu 1 two-line typography without overlap', as
   await page.setViewportSize({ width: 1920, height: 1080 });
   await login(page);
   const { screen } = await createReferenceDensityFixture(page);
-  await page.goto(`/screen-editor.html?id=${screen.id}`);
+  await page.goto(`/screen-editor?id=${screen.id}`);
   const preview = page.locator('#editor-menu-preview');
   const svg = preview.locator('svg.menu-table-svg');
   await expect(svg.locator('.table-section')).toHaveCount(3);
@@ -175,7 +175,7 @@ test('table settings move and resize the same canonical preview SVG', async ({ p
   await page.setViewportSize({ width: 1600, height: 900 });
   await login(page);
   const { screen } = await createEditorFixture(page, { rows: 3 });
-  await page.goto(`/screen-editor.html?id=${screen.id}`);
+  await page.goto(`/screen-editor?id=${screen.id}`);
   await openSettings(page, 'Таблица');
   const x = page.locator('#editor-table-x');
   const width = page.locator('#editor-table-width');
@@ -193,7 +193,7 @@ test('font selector changes preview through canonical renderer', async ({ page }
   await page.setViewportSize({ width: 1600, height: 900 });
   await login(page);
   const { screen } = await createEditorFixture(page, { rows: 3 });
-  await page.goto(`/screen-editor.html?id=${screen.id}`);
+  await page.goto(`/screen-editor?id=${screen.id}`);
   await openSettings(page, 'Таблица');
   const font = page.locator('#editor-font-family');
   await expect(font).toHaveValue('arial-narrow');
@@ -206,7 +206,7 @@ test('screen properties update preview and keep publication locked while dirty',
   await page.setViewportSize({ width: 1600, height: 900 });
   await login(page);
   const { screen } = await createEditorFixture(page, { rows: 3 });
-  await page.goto(`/screen-editor.html?id=${screen.id}`);
+  await page.goto(`/screen-editor?id=${screen.id}`);
   await openSettings(page, 'Монитор');
   const resolution = page.locator('#editor-resolution');
   await resolution.fill('1024×768');
@@ -219,7 +219,7 @@ test('screen properties update preview and keep publication locked while dirty',
 test('login composition follows TV Menu 1 and size 7 is the reference logo scale without flash', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await login(page);
-  await page.goto('/settings.html');
+  await page.goto('/settings');
   const size = page.locator('#site-signin-logo-size');
   await expect(size.locator('option')).toHaveCount(7);
   await size.selectOption('7');
@@ -233,8 +233,8 @@ test('login composition follows TV Menu 1 and size 7 is the reference logo scale
     await new Promise((resolve) => setTimeout(resolve, 250));
     await route.continue();
   });
-  await page.goto('/signin.html', { waitUntil: 'domcontentloaded' });
-  await expect(page).toHaveURL(/\/signin\.html$/);
+  await page.goto('/signin', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL(/\/signin$/);
   await expect(page.locator('html')).toHaveAttribute('data-signin-presentation', 'pending');
   await expect(page.locator('.signin-brand')).toHaveCSS('visibility', 'hidden');
   await expect(page.locator('html')).toHaveAttribute('data-signin-presentation', 'ready');
