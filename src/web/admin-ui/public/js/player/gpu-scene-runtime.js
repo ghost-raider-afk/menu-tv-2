@@ -114,6 +114,15 @@ export class GpuSceneRuntime {
     this.composer = composer || new PlayerSceneLayerComposer(stage);
     this.animations = [];
     this.signature = '';
+    this.fullscreenSuppressed = false;
+    this.handlePlaylistMode = (event) => {
+      this.fullscreenSuppressed = event.detail?.fullscreen === true;
+      for (const animation of this.animations) {
+        if (this.fullscreenSuppressed) animation.pause();
+        else animation.play();
+      }
+    };
+    this.stage.addEventListener('mira:scene-playlist-mode', this.handlePlaylistMode);
   }
 
   stopAnimations() {
@@ -167,6 +176,7 @@ export class GpuSceneRuntime {
       easing: plan.kind === 'pulse' ? 'ease-in-out' : 'linear',
       iterations: Infinity
     });
+    if (this.fullscreenSuppressed) animation.pause();
     this.animations.push(animation);
     return true;
   }
