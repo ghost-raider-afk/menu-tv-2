@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const root = new URL('../src/web/admin-ui/public/', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
-const htmlPages = ['index.html','locations.html','screens.html','screen-editor.html','catalog.html','settings.html','sftp-settings.html','animation.html','events.html','profile.html','signin.html'];
+const htmlPages = ['index.html','locations.html','screens.html','screen-editor.html','catalog.html','settings.html','sftp-settings.html','playlist.html','events.html','profile.html','signin.html'];
 
 test('all current pages use the single final CSS entrypoint', async () => {
   for (const page of htmlPages) {
@@ -47,8 +47,9 @@ test('shell remains modular and event journal exists only as its own route', asy
   assert.match(shell, /createHeader/);
   assert.doesNotMatch(shell, /legacy|\.sidebar|\.topbar/i);
   assert.match(navigation, /catalog:\s*Object\.freeze\(\[\['Продукция', '\/catalog\.html'\]\]\)/);
+  assert.match(navigation, /playlist:\s*Object\.freeze\(\[\['Плейлист', '\/playlist\.html'\]\]\)/);
   assert.match(navigation, /\['Журнал событий', '\/events\.html'\]/);
-  assert.doesNotMatch(navigation, /Журнал ошибок|error-log\.html|Журнал действий/);
+  assert.doesNotMatch(navigation, /\/animation\.html|Журнал ошибок|error-log\.html|Журнал действий/);
   assert.doesNotMatch(settings, /Журнал событий|href="\/events\.html"|event-journal-link-title/);
   assert.match(bell, /href="\/events\.html"/);
   assert.match(bell, /Открыть журнал событий/);
@@ -85,8 +86,9 @@ test('authenticated navigation uses one persistent client-side shell', async () 
   ]);
   assert.match(application, /createAppRouter/);
   assert.match(application, /case 'events'/);
+  assert.match(application, /pages\/playlist\.js/);
   assert.match(application, /router\.start\(\)/);
-  assert.doesNotMatch(application, /case 'error-log'|pages\/error-log/);
+  assert.doesNotMatch(application, /pages\/animation\.js|case 'error-log'|pages\/error-log/);
   assert.match(router, /history\.pushState/);
   assert.match(router, /addEventListener\('popstate'/);
   assert.match(router, /main\.innerHTML = view\.mainHtml/);
@@ -94,6 +96,7 @@ test('authenticated navigation uses one persistent client-side shell', async () 
   assert.match(router, /canLeaveCurrentPage/);
   assert.match(router, /canonicalRoutePath/);
   assert.match(navigation, /ROUTE_DEFINITIONS/);
+  assert.match(navigation, /\/playlist\.html/);
   assert.match(navigation, /PREFETCH_ROUTE_PATHS/);
   assert.match(shell, /refreshShellRoute/);
   assert.match(sidebar, /refreshSidebarActive/);
@@ -196,7 +199,7 @@ test('login uses the TV Menu 1 composition and seven logo sizes without a wrong 
 });
 
 test('legacy frontend files and duplicate diagnostic journals are physically absent', async () => {
-  for (const path of ['style.css','css/tv1.css','css/tv1/tokens.css','css/tv1/base.css','css/tv1/shell.css','css/tv1/pages.css','css/tv1/editor.css','css/tv1/auth.css','js/components/chrome.js','error-log.html','js/pages/error-log.js','css/pages/error-log.css']) {
+  for (const path of ['style.css','css/tv1.css','css/tv1/tokens.css','css/tv1/base.css','css/tv1/shell.css','css/tv1/pages.css','css/tv1/editor.css','css/tv1/auth.css','js/components/chrome.js','error-log.html','js/pages/error-log.js','css/pages/error-log.css','animation.html','js/pages/animation.js']) {
     await assert.rejects(access(new URL(path, root)), undefined, path);
   }
 });
