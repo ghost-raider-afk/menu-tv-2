@@ -56,8 +56,9 @@ test('SFTP administration is a dedicated settings page and not mixed into locati
   }
   assert.doesNotMatch(locationsHtml, /id="sftp-directory-form"|id="sftp-binding-form"/);
   assert.match(locationsHtml, /Настройки → SFTP/);
-  assert.match(navigation, /\/sftp-settings\.html/);
-  assert.match(navigation, /\['SFTP', '\/sftp-settings\.html'\]/);
+  assert.match(navigation, /path:\s*'\/sftp-settings'/);
+  assert.match(navigation, /\['SFTP', '\/sftp-settings'\]/);
+  assert.doesNotMatch(navigation, /path:\s*'\/sftp-settings\.html'/);
   assert.match(application, /initialiseSftpSettings/);
   assert.match(config, /sftpOverview:\s*'\/api\/sftp\/overview'/);
   assert.match(page, /\/files\/\$\{encodeURIComponent\(file\.name\)\}\/download/);
