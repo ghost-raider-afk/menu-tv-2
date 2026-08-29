@@ -30,11 +30,37 @@ import { createDeviceAdminRouter } from './api/device/admin-routes.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, 'web', 'admin-ui', 'public');
 const nodeModulesDir = path.resolve(__dirname, '..', 'node_modules');
-const protectedPages = [
-  '/', '/index.html', '/locations.html', '/screens.html', '/catalog.html',
-  '/screen-editor.html', '/profile.html', '/settings.html', '/sftp-settings.html',
-  '/animation.html', '/events.html', '/connect-tv.html'
-];
+
+const AUTHENTICATED_PAGES = Object.freeze([
+  Object.freeze({ path: '/', file: 'index.html' }),
+  Object.freeze({ path: '/locations', file: 'locations.html' }),
+  Object.freeze({ path: '/screens', file: 'screens.html' }),
+  Object.freeze({ path: '/catalog', file: 'catalog.html' }),
+  Object.freeze({ path: '/screen-editor', file: 'screen-editor.html' }),
+  Object.freeze({ path: '/profile', file: 'profile.html' }),
+  Object.freeze({ path: '/settings', file: 'settings.html' }),
+  Object.freeze({ path: '/sftp-settings', file: 'sftp-settings.html' }),
+  Object.freeze({ path: '/playlist', file: 'playlist.html' }),
+  Object.freeze({ path: '/events', file: 'events.html' }),
+  Object.freeze({ path: '/connect-tv', file: 'connect-tv.html' })
+]);
+
+const LEGACY_PAGE_REDIRECTS = Object.freeze(new Map([
+  ['/index.html', '/'],
+  ['/locations.html', '/locations'],
+  ['/screens.html', '/screens'],
+  ['/catalog.html', '/catalog'],
+  ['/screen-editor.html', '/screen-editor'],
+  ['/profile.html', '/profile'],
+  ['/settings.html', '/settings'],
+  ['/sftp-settings.html', '/sftp-settings'],
+  ['/playlist.html', '/playlist'],
+  ['/animation.html', '/playlist'],
+  ['/animation', '/playlist'],
+  ['/events.html', '/events'],
+  ['/connect-tv.html', '/connect-tv'],
+  ['/signin.html', '/signin']
+]));
 
 async function initialiseStore(store, config) {
   await store.init();
@@ -160,8 +186,23 @@ function mountProtectedApi(app, dependencies, requireApiSession) {
   app.use('/api', createSftpRouter(dependencies));
 }
 
+function sendHtmlFile(response, filename) {
+  response.setHeader('Cache-Control', 'no-store');
+  return response.sendFile(path.join(publicDir, filename));
+}
+
 function mountFrontend(app, requirePageSession) {
-  for (const page of protectedPages) app.get(page, requirePageSession, (_request, _response, next) => next());
+  for (const [legacy, canonical] of LEGACY_PAGE_REDIRECTS) {
+    app.get(legacy, (_request, response) => response.redirect(308, canonical));
+  }
+
+  app.get('/signin', (_request, response) => sendHtmlFile(response, 'signin.html'));
+  app.get('/player', (_request, response) => sendHtmlFile(response, 'player.html'));
+
+  for (const page of AUTHENTICATED_PAGES) {
+    app.get(page.path, requirePageSession, (_request, response) => sendHtmlFile(response, page.file));
+  }
+
   app.use('/vendor', express.static(path.join(nodeModulesDir, 'jsqr', 'dist'), {
     etag: true,
     maxAge: 0,
@@ -170,8 +211,7 @@ function mountFrontend(app, requirePageSession) {
     }
   }));
   app.use(express.static(publicDir, {
-    extensions: ['html'],
-    index: 'index.html',
+    index: false,
     etag: true,
     maxAge: 0,
     setHeaders(response, filename) {
