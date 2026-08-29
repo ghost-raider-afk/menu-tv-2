@@ -42,20 +42,27 @@ function fullPayload(settings, overrides = {}) {
   };
 }
 
-test('legacy html URLs canonicalize to extensionless authenticated routes', async ({ page }) => {
+test('legacy html URLs canonicalize to extensionless authenticated routes without losing query parameters', async ({ page }) => {
   await page.goto('/playlist.html');
   await expect(page).toHaveURL(/\/signin$/);
 
   await login(page);
-  await page.goto('/playlist.html');
-  await expect(page).toHaveURL(/\/playlist$/);
+  await page.goto('/playlist.html?audit=1');
+  expect(new URL(page.url()).pathname).toBe('/playlist');
+  expect(new URL(page.url()).search).toBe('?audit=1');
   await expect(page.getByRole('heading', { name: 'Плейлист', exact: true })).toBeVisible();
 
-  await page.goto('/screens.html');
-  await expect(page).toHaveURL(/\/screens$/);
+  await page.goto('/screens.html?audit=2');
+  expect(new URL(page.url()).pathname).toBe('/screens');
+  expect(new URL(page.url()).search).toBe('?audit=2');
 
-  await page.goto('/animation.html');
-  await expect(page).toHaveURL(/\/playlist$/);
+  await page.goto('/animation.html?audit=3');
+  expect(new URL(page.url()).pathname).toBe('/playlist');
+  expect(new URL(page.url()).search).toBe('?audit=3');
+
+  await page.goto('/player.html?audit=4');
+  expect(new URL(page.url()).pathname).toBe('/player');
+  expect(new URL(page.url()).search).toBe('?audit=4');
 });
 
 test('legacy settings PUT without scene_playlist preserves the current Scene Playlist', async ({ page }) => {
@@ -117,6 +124,7 @@ test('fullscreen Scene Playlist state suppresses base owners and returns cleanly
     const scene = { id: 'full-1', type: 'promo', enabled: true, mode: 'fullscreen', duration_seconds: 8, title: 'Fullscreen', body: '' };
     runtime.render({ enabled: true, menu_duration_seconds: 40, scenes: [scene] }, { menuLayer, contentLayer, fxLayer, autoplay: false });
     runtime.preview(scene);
+    await new Promise((resolve) => setTimeout(resolve, 320));
     const fullscreen = {
       state: stage.dataset.scenePlaylistFullscreen,
       menuSuppressed: menuLayer.classList.contains('scene-menu-suppressed'),
