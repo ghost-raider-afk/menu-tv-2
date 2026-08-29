@@ -14,6 +14,7 @@ import { createSessionResolver } from './services/session-service.js';
 import { siteSettingsResponse } from './services/site-assets-service.js';
 import { migrateLegacyBackgroundAssets } from './services/legacy-background-migration.js';
 import { SftpService } from './sftp/index.js';
+import { AUTHENTICATED_PAGES, LEGACY_PAGE_REDIRECTS, canonicalRedirectTarget } from './web/admin-ui/routes.js';
 import { createAuthRouter } from './api/auth/routes.js';
 import { createSessionRouter } from './api/session/routes.js';
 import { createOverviewRouter } from './api/overview/routes.js';
@@ -30,11 +31,6 @@ import { createDeviceAdminRouter } from './api/device/admin-routes.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, 'web', 'admin-ui', 'public');
 const nodeModulesDir = path.resolve(__dirname, '..', 'node_modules');
-const protectedPages = [
-  '/', '/index.html', '/locations.html', '/screens.html', '/catalog.html',
-  '/screen-editor.html', '/profile.html', '/settings.html', '/sftp-settings.html',
-  '/animation.html', '/events.html', '/connect-tv.html'
-];
 
 async function initialiseStore(store, config) {
   await store.init();
@@ -160,8 +156,31 @@ function mountProtectedApi(app, dependencies, requireApiSession) {
   app.use('/api', createSftpRouter(dependencies));
 }
 
+function sendHtmlFile(response, filename) {
+  response.setHeader('Cache-Control', 'no-store');
+  return response.sendFile(path.join(publicDir, filename));
+}
+
+function isBrowserNavigation(request) {
+  return request.get('sec-fetch-mode') === 'navigate' || request.get('sec-fetch-dest') === 'document';
+}
+
 function mountFrontend(app, requirePageSession) {
-  for (const page of protectedPages) app.get(page, requirePageSession, (_request, _response, next) => next());
+  for (const [legacy, canonical] of LEGACY_PAGE_REDIRECTS) {
+    app.get(legacy, (request, response) => response.redirect(308, canonicalRedirectTarget(request, canonical)));
+  }
+  app.get('/player.html', (request, response, next) => {
+    if (isBrowserNavigation(request)) return response.redirect(308, canonicalRedirectTarget(request, '/player'));
+    return next();
+  });
+
+  app.get('/signin', (_request, response) => sendHtmlFile(response, 'signin.html'));
+  app.get('/player', (_request, response) => sendHtmlFile(response, 'player.html'));
+
+  for (const page of AUTHENTICATED_PAGES) {
+    app.get(page.path, requirePageSession, (_request, response) => sendHtmlFile(response, page.file));
+  }
+
   app.use('/vendor', express.static(path.join(nodeModulesDir, 'jsqr', 'dist'), {
     etag: true,
     maxAge: 0,
@@ -170,8 +189,7 @@ function mountFrontend(app, requirePageSession) {
     }
   }));
   app.use(express.static(publicDir, {
-    extensions: ['html'],
-    index: 'index.html',
+    index: false,
     etag: true,
     maxAge: 0,
     setHeaders(response, filename) {

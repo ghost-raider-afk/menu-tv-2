@@ -38,7 +38,7 @@ async function cloneScreen(tx, sourceId, targetLocationId, config, updatedBy) {
   if (!saved) throw conflict('Не удалось создать независимую копию монитора.');
   if (sourceAnimation) {
     const applied = await tx.applyAnimationSettingsToScreens([created.id], sourceAnimation, updatedBy);
-    if (applied.length !== 1) throw conflict('Не удалось создать независимую копию анимации монитора.');
+    if (applied.length !== 1) throw conflict('Не удалось создать независимую копию плейлиста монитора.');
   }
   return tx.getScreen(created.id);
 }

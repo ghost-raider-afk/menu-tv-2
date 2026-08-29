@@ -26,6 +26,7 @@ let entityEditor = null;
 let scenePlaylistEditor = null;
 let previewFrame = null;
 let screenLoadSequence = 0;
+let studioGeneration = 0;
 let availableScreens = [];
 const selectedTargetScreenIds = new Set();
 
@@ -33,6 +34,7 @@ function number(id) { return Number(element(id)?.value ?? 0); }
 function checked(id) { return element(id)?.checked === true; }
 function value(id) { return element(id)?.value || ''; }
 function setValue(id, next) { const node = element(id); if (node) node.value = String(next); }
+function studioIsActive(generation) { return generation === studioGeneration && document.body.dataset.page !== 'signin'; }
 
 function rebrandPlaylistPage() {
   const heading = document.querySelector('.animation-heading');
@@ -44,12 +46,21 @@ function rebrandPlaylistPage() {
   if (description) description.textContent = 'Соберите последовательность сцен для телевизора. MenuScene остаётся постоянной базой, а PromoScene, ContentScene и Object Story включаются по порядку и возвращают меню.';
 
   const master = document.querySelector('.animation-master-toggle span');
-  if (master) master.innerHTML = '<strong>Движение MenuScene</strong><small>Эффекты базового меню одинаковы в Preview и на телевизоре.</small>';
+  if (master) {
+    const strong = document.createElement('strong');
+    strong.textContent = 'Движение MenuScene';
+    const small = document.createElement('small');
+    small.textContent = 'Эффекты базового меню одинаковы в Preview и на телевизоре.';
+    master.replaceChildren(strong, small);
+  }
 
-  const previewHeading = document.querySelector('.animation-player-card .card-heading h2');
-  const previewDescription = document.querySelector('.animation-player-card .card-heading p:not(.eyebrow)');
+  const previewCard = document.querySelector('.animation-player-card');
+  const previewHeading = previewCard?.querySelector('.card-heading h2');
+  const previewDescription = previewCard?.querySelector('.card-heading p:not(.eyebrow)');
+  if (previewCard) previewCard.setAttribute('aria-label', 'Предпросмотр плейлиста');
   if (previewHeading) previewHeading.textContent = 'Предпросмотр плейлиста';
   if (previewDescription) previewDescription.textContent = 'Тот же Player Context, те же слои и тот же Scene Playlist Runtime, которые работают на реальном ТВ.';
+  element('animation-stage')?.setAttribute('aria-label', 'Предпросмотр плейлиста');
 }
 
 function renderAnnouncementPreview() {
@@ -70,6 +81,7 @@ function renderAquariumPreview(allowIntro = false) {
 function restartPreview() {
   cancelAnimationFrame(previewFrame);
   previewFrame = requestAnimationFrame(() => {
+    if (!element('animation-stage')?.isConnected) return;
     entityEditor?.render();
     renderAnnouncementPreview();
     renderBrandPreview();
@@ -361,6 +373,7 @@ function applyEntity(entity) {
   syncEntityControls(currentEntity);
   entityEditor?.setEntity(currentEntity);
   restartPreview();
+  scenePlaylistEditor?.rebindPreview();
 }
 
 function patchEntity(patch) {
@@ -368,9 +381,10 @@ function patchEntity(patch) {
   syncEntityControls(currentEntity);
   entityEditor?.setEntity(currentEntity);
   restartPreview();
+  scenePlaylistEditor?.rebindPreview();
 }
 
-async function uploadEntityAsset(file) {
+async function uploadEntityAsset(file, generation = studioGeneration) {
   if (!(file instanceof Blob) || !ENTITY_MEDIA_TYPES.includes(file.type)) {
     setMessage('animation-message', 'Для Entity поддерживаются PNG, WebP, MP4 и WebM.', 'error');
     return;
@@ -379,6 +393,7 @@ async function uploadEntityAsset(file) {
   setPending(button, true, 'Загружаем…');
   try {
     const saved = await api.put(API.animationEntityAsset, file, { headers: { 'Content-Type': file.type } });
+    if (!studioIsActive(generation)) return;
     applyEntity(saved.entity);
     const entity = normaliseSceneEntity(saved.entity);
     if (entity.asset_type === 'video' && !entity.has_alpha) {
@@ -387,9 +402,9 @@ async function uploadEntityAsset(file) {
       setMessage('animation-message', `${entity.asset_type === 'video' ? 'Видео' : 'Изображение'} Entity загружено. Разместите объект и сохраните настройки.`, 'success');
     }
   } catch (error) {
-    setMessage('animation-message', error.message);
+    if (studioIsActive(generation)) setMessage('animation-message', error.message);
   } finally {
-    setPending(button, false, 'Загружаем…');
+    if (studioIsActive(generation)) setPending(button, false, 'Загружаем…');
   }
 }
 
@@ -408,11 +423,11 @@ function alignEntity(mode) {
   patchEntity({ transform });
 }
 
-function bindEntityControls() {
+function bindEntityControls(generation) {
   element('animation-entity-upload')?.addEventListener('click', () => element('animation-entity-file')?.click());
   element('animation-entity-file')?.addEventListener('change', (event) => {
     const file = event.target.files?.[0];
-    if (file) void uploadEntityAsset(file);
+    if (file) void uploadEntityAsset(file, generation);
     event.target.value = '';
   });
   element('animation-entity-name')?.addEventListener('input', () => patchEntity({ name: value('animation-entity-name') || 'Бокал пива' }));
@@ -435,16 +450,16 @@ function setScreenStatus(text) { const node = element('animation-screen-status')
 function screenFromUrl(screens) { const candidate = Number(new URL(window.location.href).searchParams.get('screen')); return screens.find((screen) => Number(screen.id) === candidate) || screens[0] || null; }
 function rememberSelectedScreen(screenId) { const url = new URL(window.location.href); url.searchParams.set('screen', String(screenId)); history.replaceState(history.state, '', `${url.pathname}${url.search}${url.hash}`); }
 
-async function loadScreenPreview(screenId) {
+async function loadScreenPreview(screenId, generation = studioGeneration) {
   const stage = element('animation-stage');
   const select = element('animation-screen-select');
-  if (!stage || !screenId) return;
+  if (!stage || !screenId || !studioIsActive(generation)) return;
   const sequence = ++screenLoadSequence;
   if (select) select.disabled = true;
   setScreenStatus('Загружаем сохранённый экран…');
   try {
     const bundle = await api.get(`${API.screens}/${screenId}/editor`);
-    if (sequence !== screenLoadSequence) return;
+    if (!studioIsActive(generation) || sequence !== screenLoadSequence) return;
     renderAnimationScreenPreview(stage, bundle);
     entityEditor?.render();
     renderAnnouncementPreview();
@@ -454,36 +469,43 @@ async function loadScreenPreview(screenId) {
     restartPreview();
     scenePlaylistEditor?.rebindPreview();
   } catch (error) {
-    if (sequence !== screenLoadSequence) return;
+    if (!studioIsActive(generation) || sequence !== screenLoadSequence) return;
     renderAnimationScreenEmpty(stage, 'Не удалось загрузить выбранный монитор.');
     setScreenStatus(error.message);
   } finally {
-    if (sequence === screenLoadSequence && select) select.disabled = false;
+    if (studioIsActive(generation) && sequence === screenLoadSequence && select) select.disabled = false;
   }
 }
 
-async function loadScreenOptions() {
+async function loadScreenOptions(generation) {
   const stage = element('animation-stage');
   const select = element('animation-screen-select');
-  if (!stage || !(select instanceof HTMLSelectElement)) return;
+  if (!stage || !(select instanceof HTMLSelectElement) || !studioIsActive(generation)) return;
   const screens = await api.get(API.screens);
+  if (!studioIsActive(generation)) return;
   availableScreens = Array.isArray(screens) ? screens : [];
+  select.replaceChildren();
   if (!Array.isArray(screens) || screens.length === 0) {
-    select.innerHTML = '<option value="">Нет мониторов</option>';
+    select.add(new Option('Нет мониторов', ''));
     select.disabled = true;
-    renderAnimationScreenEmpty(stage);
+    renderAnimationScreenEmpty(stage, 'Создайте монитор, чтобы просматривать его плейлист.');
     setScreenStatus('В проекте пока нет мониторов.');
     player?.destroy();
     scenePlaylistEditor?.runtime?.destroy();
     return;
   }
-  select.innerHTML = screens.map((screen) => `<option value="${screen.id}">${screenLabel(screen)}</option>`).join('');
+  for (const screen of screens) select.add(new Option(screenLabel(screen), String(screen.id)));
   const selected = screenFromUrl(screens);
   if (selectedTargetScreenIds.size === 0 && selected?.id) selectedTargetScreenIds.add(Number(selected.id));
   renderTargetScreens();
   select.value = String(selected.id);
-  select.addEventListener('change', () => { const id = Number(select.value); if (!id) return; rememberSelectedScreen(id); void loadScreenPreview(id); });
-  await loadScreenPreview(selected.id);
+  select.addEventListener('change', () => {
+    const id = Number(select.value);
+    if (!id) return;
+    rememberSelectedScreen(id);
+    void loadScreenPreview(id, generation);
+  });
+  await loadScreenPreview(selected.id, generation);
 }
 
 function setInspectorTab(name) {
@@ -520,7 +542,11 @@ function renderTargetScreens() {
       updateTargetSummary();
     });
     const text = document.createElement('span');
-    text.innerHTML = `<strong>${screen.name}</strong><small>${screen.location_name || 'Без точки'}</small>`;
+    const name = document.createElement('strong');
+    name.textContent = screen.name;
+    const location = document.createElement('small');
+    location.textContent = screen.location_name || 'Без точки';
+    text.append(name, location);
     label.append(checkbox, text);
     list.append(label);
   }
@@ -616,28 +642,33 @@ function applySavedSettings(saved) {
   syncAnnouncementControls(currentAnnouncement);
   syncBrandControls(currentBrand);
   syncAquariumControls(currentAquarium);
-  scenePlaylistEditor?.set(saved.scene_playlist);
   applyEntity(saved.entity);
+  scenePlaylistEditor?.set(saved.scene_playlist);
   renderAnnouncementPreview();
   renderBrandPreview();
   renderAquariumPreview(false);
 }
 
-async function applySettingsToScreens() {
+async function applySettingsToScreens(generation) {
   const button = element('animation-apply-screens');
   const screenIds = targetScreenIds();
   if (!screenIds.length) { setMessage('animation-message', 'Выберите хотя бы один монитор.', 'error'); return; }
   setPending(button, true, 'Применяем…');
   try {
     const result = await api.put(API.animationApply, { screen_ids: screenIds, settings: playlistPayload() });
+    if (!studioIsActive(generation)) return;
     applySavedSettings(result.settings);
     setMessage('animation-message', `Плейлист применён к мониторам: ${result.applied_screen_ids.length}.`, 'success');
-  } catch (error) { setMessage('animation-message', error.message); }
-  finally { setPending(button, false, 'Применяем…'); updateTargetSummary(); }
+  } catch (error) {
+    if (studioIsActive(generation)) setMessage('animation-message', error.message);
+  } finally {
+    if (studioIsActive(generation)) { setPending(button, false, 'Применяем…'); updateTargetSummary(); }
+  }
 }
 
-async function loadSettings() {
+async function loadSettings(generation) {
   const settings = await api.get(API.animationSettings);
+  if (!studioIsActive(generation)) return;
   const enabled = element('animation-enabled');
   if (enabled) enabled.checked = settings?.enabled === true;
   writeMotionProfile(settings?.profile || DEFAULT_LIVE_PROFILE);
@@ -647,28 +678,49 @@ async function loadSettings() {
   syncAnnouncementControls(currentAnnouncement);
   syncBrandControls(currentBrand);
   syncAquariumControls(currentAquarium);
-  scenePlaylistEditor?.set(settings?.scene_playlist);
   applyEntity(settings?.entity);
+  scenePlaylistEditor?.set(settings?.scene_playlist);
   renderAnnouncementPreview();
   renderBrandPreview();
   renderAquariumPreview(false);
   restartPreview();
 }
 
-async function saveSettings() {
+async function saveSettings(generation) {
   const button = element('animation-save');
   setPending(button, true, 'Сохраняем…');
   try {
     const saved = await api.put(API.animationSettings, playlistPayload());
+    if (!studioIsActive(generation)) return;
     applySavedSettings(saved);
     setMessage('animation-message', 'Плейлист сохранён. Мониторы не изменены — используйте «Применить к выбранным».', 'success');
-  } catch (error) { setMessage('animation-message', error.message); }
-  finally { setPending(button, false, 'Сохраняем…'); }
+  } catch (error) {
+    if (studioIsActive(generation)) setMessage('animation-message', error.message);
+  } finally {
+    if (studioIsActive(generation)) setPending(button, false, 'Сохраняем…');
+  }
+}
+
+function disposePlaylistStudio(generation) {
+  if (generation !== studioGeneration) return;
+  studioGeneration += 1;
+  screenLoadSequence += 1;
+  cancelAnimationFrame(previewFrame);
+  previewFrame = null;
+  player?.destroy();
+  entityEditor?.destroy();
+  scenePlaylistEditor?.destroy();
+  player = null;
+  entityEditor = null;
+  scenePlaylistEditor = null;
+  availableScreens = [];
+  selectedTargetScreenIds.clear();
 }
 
 export function initialisePlaylistStudio() {
   const stage = element('animation-stage');
   if (!stage) return;
+  const generation = ++studioGeneration;
   rebrandPlaylistPage();
   buildStudioWorkspace();
   player?.destroy();
@@ -689,13 +741,16 @@ export function initialisePlaylistStudio() {
   bindAnnouncementControls();
   bindBrandControls();
   bindAquariumControls();
-  bindEntityControls();
+  bindEntityControls(generation);
   element('animation-enabled')?.addEventListener('change', () => restartPreview());
   syncEntityControls();
   syncAnnouncementControls();
   syncBrandControls();
   syncAquariumControls();
-  element('animation-save')?.addEventListener('click', () => { void saveSettings(); });
-  element('animation-apply-screens')?.addEventListener('click', () => { void applySettingsToScreens(); });
-  void Promise.all([loadSettings(), loadScreenOptions()]).catch((error) => setMessage('animation-message', error.message));
+  element('animation-save')?.addEventListener('click', () => { void saveSettings(generation); });
+  element('animation-apply-screens')?.addEventListener('click', () => { void applySettingsToScreens(generation); });
+  void Promise.all([loadSettings(generation), loadScreenOptions(generation)]).catch((error) => {
+    if (studioIsActive(generation)) setMessage('animation-message', error.message);
+  });
+  return { dispose: () => disposePlaylistStudio(generation) };
 }

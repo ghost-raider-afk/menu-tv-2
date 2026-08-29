@@ -7,7 +7,7 @@ const read = (path) => readFile(new URL(path, publicRoot), 'utf8');
 
 test('context submenu uses one section-independent collapse policy', async () => {
   const [shell, navigation] = await Promise.all([read('js/components/shell.js'), read('js/core/navigation.js')]);
-  assert.match(navigation, /catalog:\s*Object\.freeze\(\[\['Продукция', '\/catalog\.html'\]\]\)/);
+  assert.match(navigation, /catalog:\s*Object\.freeze\(\[\['Продукция', '\/catalog'\]\]\)/);
   assert.doesNotMatch(navigation, /\['Тара',|#packaging-list|#products-list/);
   assert.match(shell, /context\.addEventListener\('click'/);
   assert.match(shell, /context\.addEventListener\('pointerleave'/);

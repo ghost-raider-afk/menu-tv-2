@@ -29,6 +29,9 @@ export class AnimationPreviewPlayer {
     this.entity = null;
     this.scene = null;
     this.plan = null;
+    this.disposed = false;
+    this.handleRouteDispose = () => this.destroy();
+    window.addEventListener('mira:route-dispose', this.handleRouteDispose);
     this.bindControls();
   }
 
@@ -46,7 +49,7 @@ export class AnimationPreviewPlayer {
   setScene(scene) { this.scene = scene || null; }
 
   sceneIsCurrent() {
-    if (!this.scene || this.scene.root !== this.stage || !this.scene.nodes.length) return false;
+    if (!this.scene || !this.stage || this.scene.root !== this.stage || !this.scene.nodes.length) return false;
     return this.scene.nodes.every((node) => {
       const target = node?.target;
       return target && typeof target === 'object' && 'nodeType' in target && this.stage.contains(target);
@@ -54,16 +57,27 @@ export class AnimationPreviewPlayer {
   }
 
   destroy() {
+    if (this.disposed) return;
+    this.disposed = true;
+    window.removeEventListener('mira:route-dispose', this.handleRouteDispose);
     cancelAnimationFrame(this.raf);
+    this.raf = null;
     this.runtime.destroy();
     this.scene = null;
     this.plan = null;
     this.total = 0;
-    delete this.stage.dataset.motionMode;
+    if (this.stage) delete this.stage.dataset.motionMode;
     this.renderProgress(0);
+    this.stage = null;
+    this.timeline = null;
+    this.timeLabel = null;
+    this.playButton = null;
+    this.pauseButton = null;
+    this.replayButton = null;
   }
 
   restart(profile, entity = null, enabled = true) {
+    if (this.disposed || !this.stage) return;
     this.profile = { ...profile };
     this.entity = entity ? { ...entity, transform: { ...(entity.transform || {}) } } : null;
     const intensity = clamp(Number(profile.intensity) || 0, 0, 100);
@@ -89,23 +103,25 @@ export class AnimationPreviewPlayer {
   }
 
   play() {
-    if (!this.plan) return;
+    if (!this.plan || this.disposed) return;
     this.runtime.play();
     this.updateProgress();
   }
 
   pause() {
+    if (this.disposed) return;
     this.runtime.pause();
     this.updateProgress();
   }
 
   replay() {
-    if (!this.plan) return;
+    if (!this.plan || this.disposed) return;
     this.runtime.replay();
     this.updateProgress();
   }
 
   seek(milliseconds) {
+    if (this.disposed) return;
     const time = this.runtime.seek(milliseconds);
     this.runtime.pause();
     this.renderProgress(time);
@@ -121,7 +137,7 @@ export class AnimationPreviewPlayer {
   updateProgress() {
     cancelAnimationFrame(this.raf);
     const tick = () => {
-      if (!this.plan) return;
+      if (!this.plan || this.disposed || !this.stage?.isConnected) return;
       this.renderProgress(this.runtime.currentTime());
       if (this.runtime.playState() === 'running') this.raf = requestAnimationFrame(tick);
     };

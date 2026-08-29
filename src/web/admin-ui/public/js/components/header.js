@@ -23,7 +23,7 @@ function appName() {
 function accountControl() {
   const wrap = document.createElement('div');
   wrap.className = 'header-account';
-  wrap.innerHTML = `<button class="header-account-trigger" type="button" aria-expanded="false" aria-haspopup="menu"><span class="profile-avatar" data-profile-initials>TV</span><span class="header-account-name" data-profile-name></span></button><div class="header-account-menu is-hidden" role="menu"><a href="/profile.html" role="menuitem">Профиль</a><button type="button" data-logout role="menuitem">Выйти</button></div>`;
+  wrap.innerHTML = `<button class="header-account-trigger" type="button" aria-expanded="false" aria-haspopup="menu"><span class="profile-avatar" data-profile-initials>TV</span><span class="header-account-name" data-profile-name></span></button><div class="header-account-menu is-hidden" role="menu"><a href="/profile" role="menuitem">Профиль</a><button type="button" data-logout role="menuitem">Выйти</button></div>`;
   return wrap;
 }
 
@@ -88,7 +88,7 @@ async function toggleTheme() {
 
 async function logout() {
   try { await api.post(API.logout); }
-  finally { window.location.replace('/signin.html'); }
+  finally { window.location.replace('/signin'); }
 }
 
 export function initialiseHeader() {

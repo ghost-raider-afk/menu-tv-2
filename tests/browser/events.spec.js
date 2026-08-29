@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 async function login(page) {
-  await page.goto('/signin.html');
+  await page.goto('/signin');
   await page.getByLabel('Логин').fill('admin');
   await page.getByLabel('Пароль').fill(process.env.E2E_ADMIN_PASSWORD || 'Browser-CI-Password1!');
   await Promise.all([
@@ -13,7 +13,7 @@ async function login(page) {
 
 test('user message appears once at top, reaches bell and persists in event journal', async ({ page }) => {
   await login(page);
-  await page.goto('/settings.html');
+  await page.goto('/settings');
   await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
 
   const marker = `toast-${Date.now()}`;
@@ -39,7 +39,7 @@ test('user message appears once at top, reaches bell and persists in event journ
   await expect(notificationPanel.locator('[data-notification-list] .event-row').filter({ hasText: marker })).toBeVisible();
 
   await notificationPanel.getByRole('link', { name: 'Открыть журнал событий' }).click();
-  await expect(page).toHaveURL(/\/events\.html$/);
+  await expect(page).toHaveURL(/\/events$/);
   await page.locator('#event-filter-severity').selectOption('warning');
   await page.locator('#event-filter-category').selectOption('settings');
   await page.locator('#event-filter-query').fill(marker);
@@ -63,7 +63,7 @@ test('unhandled browser failure is persisted as an interface error in the same j
     return body.items.some((item) => item.message.includes(marker) && item.action === 'frontend.unhandledrejection');
   }).toBe(true);
 
-  await page.goto('/events.html');
+  await page.goto('/events');
   await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
   await page.locator('#event-filter-severity').selectOption('error');
   await page.locator('#event-filter-category').selectOption('interface');
@@ -76,7 +76,7 @@ test('unhandled browser failure is persisted as an interface error in the same j
 
 test('catalog duplicate event identifies the exact conflicting product', async ({ page }) => {
   await login(page);
-  await page.goto('/catalog.html');
+  await page.goto('/catalog');
   await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
 
   const marker = `Дубликат-${Date.now()}`;
@@ -107,7 +107,7 @@ test('event journal can be cleared with confirmation and keeps one audit record'
   });
   expect(created.ok()).toBeTruthy();
 
-  await page.goto('/events.html');
+  await page.goto('/events');
   await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
   await expect(page.getByRole('button', { name: 'Очистить журнал' })).toBeVisible();
 

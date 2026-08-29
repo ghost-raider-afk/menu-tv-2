@@ -74,7 +74,7 @@ function renderScreens() {
       row.className = 'screen-location-item';
       row.classList.toggle('has-tv-binding', Boolean(binding));
       const link = document.createElement('a');
-      link.href = `/screen-editor.html?id=${screen.id}`;
+      link.href = `/screen-editor?id=${screen.id}`;
       const name = document.createElement('strong');
       name.textContent = screen.name;
       const info = document.createElement('span');
@@ -136,7 +136,7 @@ async function createScreenAtLocation(location, sourceId) {
   try {
     const payload = sourceId ? { source_screen_id: Number(sourceId) } : {};
     const screen = await api.post(`${API.locations}/${location.id}/screens`, payload);
-    await navigate(`/screen-editor.html?id=${screen.id}`);
+    await navigate(`/screen-editor?id=${screen.id}`);
   } catch (error) {
     setMessage('screens-message', error.message);
   }

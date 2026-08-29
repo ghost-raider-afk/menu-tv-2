@@ -17,6 +17,7 @@
 @import url('./motion-overlays.css');
 @import url('./brand-motion-v2.css');
 @import url('./scene-playlist.css');
+@import url('./pages/playlist.css');
 @import url('./pages/events.css');
 @import url('./connect-tv.css');
 @import url('./editor/editor.css');

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 async function login(page) {
-  await page.goto('/signin.html');
+  await page.goto('/signin');
   await page.getByLabel('Логин').fill('admin');
   await page.getByLabel('Пароль').fill(process.env.E2E_ADMIN_PASSWORD || 'Browser-CI-Password1!');
   await Promise.all([
@@ -20,17 +20,17 @@ test('main menu and context submenu navigate inside one persistent document', as
   });
 
   await page.locator('.ui-rail-button[aria-label="Мониторы"]').click();
-  await expect(page).toHaveURL(/\/screens\.html$/);
+  await expect(page).toHaveURL(/\/screens$/);
   await expect(page.locator('[data-screen-hierarchy]')).toBeVisible();
   expect(await page.evaluate(() => window.__tvMenuSpaSentinel)).toBe(sentinel);
 
   await page.getByRole('link', { name: /Торговые точки/ }).click();
-  await expect(page).toHaveURL(/\/locations\.html$/);
+  await expect(page).toHaveURL(/\/locations$/);
   await expect(page.locator('#location-form')).toBeVisible();
   expect(await page.evaluate(() => window.__tvMenuSpaSentinel)).toBe(sentinel);
 
   await page.locator('.ui-rail-button[aria-label="Каталог"]').click();
-  await expect(page).toHaveURL(/\/catalog\.html$/);
+  await expect(page).toHaveURL(/\/catalog$/);
   await expect(page.locator('#product-form')).toBeVisible();
   expect(await page.evaluate(() => window.__tvMenuSpaSentinel)).toBe(sentinel);
   await expect(page.locator('.ui-context-body .app-route-link')).toHaveCount(1);
@@ -38,18 +38,18 @@ test('main menu and context submenu navigate inside one persistent document', as
   await expect(page.locator('.ui-context')).not.toHaveClass(/is-collapsed/);
 
   await page.locator('.ui-context-body .app-route-link', { hasText: 'Продукция' }).click();
-  await expect(page).toHaveURL(/\/catalog\.html$/);
+  await expect(page).toHaveURL(/\/catalog$/);
   await expect(page.locator('.ui-context')).toHaveClass(/is-collapsed/);
   expect(await page.evaluate(() => window.__tvMenuSpaSentinel)).toBe(sentinel);
 
   await page.locator('.ui-rail-button[aria-label="Настройки"]').click();
-  await expect(page).toHaveURL(/\/settings\.html$/);
+  await expect(page).toHaveURL(/\/settings$/);
   await expect(page.locator('#site-settings-form')).toBeVisible();
   await expect(page.locator('.ui-context')).not.toHaveClass(/is-collapsed/);
   expect(await page.evaluate(() => window.__tvMenuSpaSentinel)).toBe(sentinel);
 
   await page.getByRole('link', { name: /^SFTP$/ }).click();
-  await expect(page).toHaveURL(/\/sftp-settings\.html$/);
+  await expect(page).toHaveURL(/\/sftp-settings$/);
   await expect(page.locator('#sftp-directory-form')).toBeVisible();
   await expect(page.locator('#sftp-file-list')).toBeAttached();
   await expect(page.locator('.ui-context')).toHaveClass(/is-collapsed/);
@@ -84,7 +84,7 @@ test('context submenu auto-collapses consistently and responsive state is not pe
 test('saved application name immediately controls browser tab title on every route', async ({ page }) => {
   await login(page);
   await page.locator('.ui-rail-button[aria-label="Настройки"]').click();
-  await expect(page).toHaveURL(/\/settings\.html$/);
+  await expect(page).toHaveURL(/\/settings$/);
   const original = await page.evaluate(async () => (await fetch('/api/settings/site', { credentials: 'same-origin' })).json());
   const nextName = `TV MENU TITLE ${Date.now()}`;
 
@@ -95,7 +95,7 @@ test('saved application name immediately controls browser tab title on every rou
     await expect(page).toHaveTitle(`${nextName} — Настройки сайта`);
 
     await page.locator('.ui-rail-button[aria-label="Каталог"]').click();
-    await expect(page).toHaveURL(/\/catalog\.html$/);
+    await expect(page).toHaveURL(/\/catalog$/);
     await expect(page).toHaveTitle(`${nextName} — Каталог`);
   } finally {
     await page.evaluate(async (site) => {
@@ -122,17 +122,17 @@ test('browser back and forward keep the same application document', async ({ pag
   const sentinel = await page.evaluate(() => window.__tvMenuSpaHistorySentinel);
 
   await page.locator('.ui-rail-button[aria-label="Каталог"]').click();
-  await expect(page).toHaveURL(/\/catalog\.html$/);
+  await expect(page).toHaveURL(/\/catalog$/);
   await page.locator('.ui-rail-button[aria-label="Настройки"]').click();
-  await expect(page).toHaveURL(/\/settings\.html$/);
+  await expect(page).toHaveURL(/\/settings$/);
 
   await page.goBack();
-  await expect(page).toHaveURL(/\/catalog\.html$/);
+  await expect(page).toHaveURL(/\/catalog$/);
   await expect(page.locator('#product-form')).toBeVisible();
   expect(await page.evaluate(() => window.__tvMenuSpaHistorySentinel)).toBe(sentinel);
 
   await page.goForward();
-  await expect(page).toHaveURL(/\/settings\.html$/);
+  await expect(page).toHaveURL(/\/settings$/);
   await expect(page.locator('#site-settings-form')).toBeVisible();
   expect(await page.evaluate(() => window.__tvMenuSpaHistorySentinel)).toBe(sentinel);
 });

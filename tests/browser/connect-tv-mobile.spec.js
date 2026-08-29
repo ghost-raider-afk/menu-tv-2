@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 async function login(page) {
-  await page.goto('/signin.html');
+  await page.goto('/signin');
   await page.getByLabel('Логин').fill('admin');
   await page.getByLabel('Пароль').fill(process.env.E2E_ADMIN_PASSWORD || 'Browser-CI-Password1!');
   await Promise.all([
@@ -23,7 +23,7 @@ test('mobile TV pairing is styled after SPA navigation and keeps one active step
   await expect(sectionTrigger).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.ui-context')).not.toHaveClass(/is-collapsed/);
   await page.locator('.ui-context-body .app-route-link', { hasText: 'Подключить ТВ' }).click();
-  await expect(page).toHaveURL(/\/connect-tv\.html$/);
+  await expect(page).toHaveURL(/\/connect-tv$/);
   await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
   await expect(page.locator('.ui-context')).toHaveClass(/is-collapsed/);
   await expect.poll(() => page.evaluate(() => typeof window.jsQR)).toBe('function');
@@ -48,13 +48,13 @@ test('mobile TV pairing is styled after SPA navigation and keeps one active step
 
   await sectionTrigger.click();
   await expect(sectionTrigger).toHaveAttribute('aria-expanded', 'true');
-  await page.locator('.ui-context-body .app-route-link[href="/screens.html"]').click();
-  await expect(page).toHaveURL(/\/screens\.html$/);
+  await page.locator('.ui-context-body .app-route-link[href="/screens"]').click();
+  await expect(page).toHaveURL(/\/screens$/);
   const returnTrigger = page.locator('[data-mobile-context-trigger]');
   await returnTrigger.click();
   await expect(returnTrigger).toHaveAttribute('aria-expanded', 'true');
-  await page.locator('.ui-context-body .app-route-link[href="/connect-tv.html"]').click();
-  await expect(page).toHaveURL(/\/connect-tv\.html$/);
+  await page.locator('.ui-context-body .app-route-link[href="/connect-tv"]').click();
+  await expect(page).toHaveURL(/\/connect-tv$/);
   await expect(page.locator('.main-content')).toHaveAttribute('data-route-state', 'ready');
   await page.getByRole('button', { name: /ввести код/i }).first().click();
   await expect(page.getByLabel('6-значный резервный код')).toBeVisible();

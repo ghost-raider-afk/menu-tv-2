@@ -1,4 +1,4 @@
-import { canonicalRoutePath, isAppRoutePath, PREFETCH_ROUTE_PATHS } from './navigation.js';
+import { canonicalRoutePath, isAppRoutePath, PREFETCH_ROUTE_PATHS, routePageForPath } from './navigation.js';
 
 let activeRouter = null;
 
@@ -52,8 +52,10 @@ function setRouteMountState(main, mounting) {
 
 function currentViewSnapshot() {
   const main = currentMain();
+  const declaredPage = document.body.dataset.page || '';
   return {
-    page: document.body.dataset.page || '',
+    page: routePageForPath(window.location.pathname, declaredPage),
+    declaredPage,
     mainClassName: main.className,
     mainHtml: main.innerHTML,
     documentTitle: document.title
@@ -62,15 +64,18 @@ function currentViewSnapshot() {
 
 function parseViewDocument(html, responseUrl) {
   const parsed = new DOMParser().parseFromString(html, 'text/html');
-  const page = parsed.body?.dataset?.page || '';
+  const responsePath = new URL(responseUrl, window.location.origin).pathname;
+  const declaredPage = parsed.body?.dataset?.page || '';
+  const page = routePageForPath(responsePath, declaredPage);
   if (page === 'signin') {
-    window.location.replace('/signin.html');
+    window.location.replace('/signin');
     return null;
   }
   const main = parsed.querySelector('.main-content');
   if (!main || !page) throw new Error(`Маршрут ${responseUrl} не содержит рабочую область.`);
   return {
     page,
+    declaredPage,
     mainClassName: main.className,
     mainHtml: main.innerHTML,
     documentTitle: parsed.title || document.title
@@ -107,8 +112,8 @@ export function createAppRouter({ mountPage, syncShell }) {
       headers: { 'X-TV-Menu-View': '1' }
     });
 
-    if (response.redirected && canonicalUrl(response.url).pathname === '/signin.html') {
-      window.location.replace('/signin.html');
+    if (response.redirected && new URL(response.url).pathname === '/signin') {
+      window.location.replace('/signin');
       return null;
     }
     if (!response.ok) throw new Error(`Не удалось открыть раздел (${response.status}).`);
@@ -124,6 +129,7 @@ export function createAppRouter({ mountPage, syncShell }) {
   }
 
   async function disposeCurrentPage() {
+    window.dispatchEvent(new CustomEvent('mira:route-dispose'));
     if (typeof lifecycle?.dispose === 'function') await lifecycle.dispose();
     lifecycle = null;
   }
@@ -152,7 +158,7 @@ export function createAppRouter({ mountPage, syncShell }) {
       else window.history.pushState({ tvMenu: true }, '', href);
     }
 
-    document.body.dataset.page = view.page;
+    document.body.dataset.page = view.declaredPage || view.page;
     const main = currentMain();
     main.className = view.mainClassName;
     main.innerHTML = view.mainHtml;
@@ -160,6 +166,8 @@ export function createAppRouter({ mountPage, syncShell }) {
 
     if (typeof syncShell === 'function') syncShell();
     await mountCurrentPage(view.page, main);
+    document.body.dataset.page = view.page;
+    if (typeof syncShell === 'function') syncShell();
     activeIdentity = routeIdentity(target);
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     return true;
@@ -224,8 +232,12 @@ export function createAppRouter({ mountPage, syncShell }) {
       if (started) return;
       started = true;
       activeRouter = router;
-      window.history.replaceState({ tvMenu: true }, '', routeIdentity(canonicalUrl(window.location.href)));
-      await mountCurrentPage(document.body.dataset.page || '');
+      const initialUrl = canonicalUrl(window.location.href);
+      const initialPage = routePageForPath(initialUrl.pathname, document.body.dataset.page || '');
+      window.history.replaceState({ tvMenu: true }, '', routeIdentity(initialUrl));
+      await mountCurrentPage(initialPage);
+      document.body.dataset.page = initialPage;
+      if (typeof syncShell === 'function') syncShell();
       document.addEventListener('click', onDocumentClick);
       window.addEventListener('popstate', onPopState);
       prefetch();

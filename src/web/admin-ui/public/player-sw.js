@@ -1,5 +1,5 @@
-const SHELL_CACHE = 'mira-tv-player-shell-v14';
-const DATA_CACHE = 'mira-tv-player-data-v14';
+const SHELL_CACHE = 'mira-tv-player-shell-v15';
+const DATA_CACHE = 'mira-tv-player-data-v15';
 const PLAYER_CONTEXT = '/api/device/player-context';
 const SHELL_ASSETS = [
   '/player.html',
@@ -142,7 +142,11 @@ async function videoRequest(request) {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || event.request.method !== 'GET') return;
-  if (event.request.mode === 'navigate' && (url.pathname === '/player' || url.pathname === '/player.html')) { event.respondWith(playerPage(event.request)); return; }
+  if (event.request.mode === 'navigate' && url.pathname === '/player.html') {
+    event.respondWith(Response.redirect(new URL('/player', self.location.origin).href, 308));
+    return;
+  }
+  if (event.request.mode === 'navigate' && url.pathname === '/player') { event.respondWith(playerPage(event.request)); return; }
   if (url.pathname === PLAYER_CONTEXT) { event.respondWith(playerContext(event.request)); return; }
   if (SHELL_ASSETS.includes(url.pathname)) { event.respondWith(networkFirstShell(event.request)); return; }
   if (/^\/site-assets\/entities\/.*\.(?:mp4|webm)$/i.test(url.pathname)) { event.respondWith(videoRequest(event.request)); return; }

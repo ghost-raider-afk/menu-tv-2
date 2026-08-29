@@ -112,15 +112,25 @@ export function renderSceneEntity(stage, source, { editable = true } = {}) {
 
 export class SceneEntityEditor {
   constructor({ stage, onChange, onCommit }) {
-    this.stage = stage; this.onChange = onChange; this.onCommit = onCommit; this.entity = normaliseSceneEntity(); this.pointer = null;
-    this.handlePointerDown = this.handlePointerDown.bind(this); this.handlePointerMove = this.handlePointerMove.bind(this); this.handlePointerUp = this.handlePointerUp.bind(this);
+    this.stage = stage;
+    this.onChange = onChange;
+    this.onCommit = onCommit;
+    this.entity = normaliseSceneEntity();
+    this.pointer = null;
+    this.disposed = false;
+    this.handlePointerDown = this.handlePointerDown.bind(this);
+    this.handlePointerMove = this.handlePointerMove.bind(this);
+    this.handlePointerUp = this.handlePointerUp.bind(this);
+    this.handleRouteDispose = () => this.destroy();
     stage?.addEventListener('pointerdown', this.handlePointerDown);
+    window.addEventListener('mira:route-dispose', this.handleRouteDispose);
   }
-  setEntity(value) { this.entity = normaliseSceneEntity(value); this.render(); }
+  setEntity(value) { if (this.disposed) return; this.entity = normaliseSceneEntity(value); this.render(); }
   getEntity() { return normaliseSceneEntity(this.entity); }
-  update(patch) { this.entity = normaliseSceneEntity({ ...this.entity, ...patch, transform: { ...this.entity.transform, ...(patch.transform || {}) } }); this.render(); this.onChange?.(this.getEntity()); }
-  render() { renderSceneEntity(this.stage, this.entity, { editable: true }); }
+  update(patch) { if (this.disposed) return; this.entity = normaliseSceneEntity({ ...this.entity, ...patch, transform: { ...this.entity.transform, ...(patch.transform || {}) } }); this.render(); this.onChange?.(this.getEntity()); }
+  render() { if (!this.disposed) renderSceneEntity(this.stage, this.entity, { editable: true }); }
   handlePointerDown(event) {
+    if (this.disposed) return;
     const resize = event.target.closest?.('[data-entity-resize="true"]'); const drag = event.target.closest?.('[data-entity-drag="true"]');
     if (!resize && !drag) return; const rect = this.stage.getBoundingClientRect(); if (!rect.width || !rect.height) return;
     event.preventDefault(); const target = resize || drag; target.setPointerCapture?.(event.pointerId);
@@ -138,5 +148,17 @@ export class SceneEntityEditor {
     if (!this.pointer || event.pointerId !== this.pointer.pointerId) return; this.pointer = null;
     window.removeEventListener('pointermove', this.handlePointerMove); window.removeEventListener('pointerup', this.handlePointerUp); window.removeEventListener('pointercancel', this.handlePointerUp); this.onCommit?.(this.getEntity());
   }
-  destroy() { this.stage?.removeEventListener('pointerdown', this.handlePointerDown); window.removeEventListener('pointermove', this.handlePointerMove); window.removeEventListener('pointerup', this.handlePointerUp); window.removeEventListener('pointercancel', this.handlePointerUp); this.pointer = null; }
+  destroy() {
+    if (this.disposed) return;
+    this.disposed = true;
+    window.removeEventListener('mira:route-dispose', this.handleRouteDispose);
+    this.stage?.removeEventListener('pointerdown', this.handlePointerDown);
+    window.removeEventListener('pointermove', this.handlePointerMove);
+    window.removeEventListener('pointerup', this.handlePointerUp);
+    window.removeEventListener('pointercancel', this.handlePointerUp);
+    this.pointer = null;
+    this.stage = null;
+    this.onChange = null;
+    this.onCommit = null;
+  }
 }

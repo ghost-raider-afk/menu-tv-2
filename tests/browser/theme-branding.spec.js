@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 async function login(page) {
-  await page.goto('/signin.html');
+  await page.goto('/signin');
   await page.getByLabel('Логин').fill('admin');
   await page.getByLabel('Пароль').fill(process.env.E2E_ADMIN_PASSWORD || 'Browser-CI-Password1!');
   await Promise.all([
@@ -22,7 +22,7 @@ async function forceLightTheme(page) {
 
 test('site name updates the persistent application shell immediately after save', async ({ page }) => {
   await login(page);
-  await page.goto('/settings.html');
+  await page.goto('/settings');
   await waitForRouteReady(page);
   const input = page.locator('#site-app-name');
   await expect(input).not.toHaveValue('');
@@ -38,14 +38,14 @@ test('site name updates the persistent application shell immediately after save'
   const sentinel = `branding-${Math.random()}`;
   await page.evaluate((value) => { window.__brandingSentinel = value; }, sentinel);
   await page.locator('.ui-rail-button[aria-label="Мониторы"]').click();
-  await expect(page).toHaveURL(/\/screens\.html$/);
+  await expect(page).toHaveURL(/\/screens$/);
   await waitForRouteReady(page);
   await expect(page.locator('.app-header [data-app-name]')).toHaveText(changed);
   await expect(page).toHaveTitle(`${changed} — Мониторы`);
   expect(await page.evaluate(() => window.__brandingSentinel)).toBe(sentinel);
 
   await page.locator('.ui-rail-button[aria-label="Настройки"]').click();
-  await expect(page).toHaveURL(/\/settings\.html$/);
+  await expect(page).toHaveURL(/\/settings$/);
   await waitForRouteReady(page);
   await expect(page.locator('#site-app-name')).toHaveValue(changed);
   await page.locator('#site-app-name').fill(original);
@@ -67,7 +67,7 @@ test('light theme uses light semantic chrome and editor surfaces', async ({ page
   expect(screenResponse.status()).toBe(201);
   const screen = await screenResponse.json();
 
-  await page.goto(`/screen-editor.html?id=${screen.id}`);
+  await page.goto(`/screen-editor?id=${screen.id}`);
   await waitForRouteReady(page);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await expect(page.locator('.editor-commandbar')).toBeVisible();
