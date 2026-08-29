@@ -1,5 +1,6 @@
 import { ScenePlaylistRuntime, normaliseScenePlaylist } from './scene-playlist-runtime.js';
 
+const MAX_SCENES = 20;
 const TYPE_LABELS = Object.freeze({ promo: 'PromoScene', content: 'ContentScene', 'object-story': 'Object Story' });
 const TYPE_SHORT = Object.freeze({ promo: 'PROMO', content: 'CONTENT', 'object-story': 'OBJECT' });
 const MODE_LABELS = Object.freeze({ overlay: 'Overlay', split: 'Split', fullscreen: 'Fullscreen' });
@@ -57,9 +58,17 @@ export class ScenePlaylistEditor {
     this.menuDurationOutput = null;
     this.summary = null;
     this.selectedIndex = null;
+    this.disposed = false;
+    this.rebindRevision = 0;
+    this.handleRouteDispose = () => this.destroy();
+    window.addEventListener('mira:route-dispose', this.handleRouteDispose);
   }
 
   destroy() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.rebindRevision += 1;
+    window.removeEventListener('mira:route-dispose', this.handleRouteDispose);
     this.runtime.destroy();
     this.root?.remove();
     this.stripRoot?.remove();
@@ -67,10 +76,16 @@ export class ScenePlaylistEditor {
     this.stripRoot = null;
     this.stripTrack = null;
     this.details = null;
+    this.enabled = null;
+    this.menuDuration = null;
+    this.menuDurationOutput = null;
+    this.summary = null;
+    this.stage = null;
+    this.getEntity = () => null;
   }
 
   mount(container) {
-    if (!(container instanceof Element)) return;
+    if (this.disposed || !(container instanceof Element)) return;
     if (this.root?.isConnected) return;
 
     const root = document.createElement('section');
@@ -157,10 +172,14 @@ export class ScenePlaylistEditor {
   }
 
   set(value) {
+    if (this.disposed) return;
     this.playlist = normaliseScenePlaylist(value);
     if (this.selectedIndex !== null && !this.playlist.scenes[this.selectedIndex]) this.selectedIndex = null;
     this.renderControls();
-    this.rebindPreview();
+    const revision = ++this.rebindRevision;
+    queueMicrotask(() => {
+      if (!this.disposed && revision === this.rebindRevision) this.rebindPreview();
+    });
   }
 
   patchPlaylist(patch) {
@@ -170,6 +189,7 @@ export class ScenePlaylistEditor {
   }
 
   addScene(type) {
+    if (this.playlist.scenes.length >= MAX_SCENES) return;
     const scenes = [...this.playlist.scenes];
     const next = sceneSeed(type, scenes.length);
     next.id = uniqueId(type, scenes);
@@ -188,6 +208,7 @@ export class ScenePlaylistEditor {
       this.renderSummary();
       this.renderStrip();
     }
+    if (this.selectedIndex === index) this.previewScene(index);
   }
 
   moveScene(index, delta) {
@@ -198,6 +219,7 @@ export class ScenePlaylistEditor {
     this.playlist = normaliseScenePlaylist({ ...this.playlist, scenes });
     this.selectedIndex = target;
     this.renderControls();
+    this.previewScene(target);
   }
 
   removeScene(index) {
@@ -212,6 +234,7 @@ export class ScenePlaylistEditor {
   selectMenu() {
     this.selectedIndex = null;
     this.renderControls();
+    this.rebindPreview({ autoplay: false });
     this.runtime.resume();
   }
 
@@ -226,7 +249,17 @@ export class ScenePlaylistEditor {
     if (this.enabled) this.enabled.checked = this.playlist.enabled;
     if (this.menuDuration) this.menuDuration.value = String(this.playlist.menu_duration_seconds);
     if (this.menuDurationOutput) this.menuDurationOutput.textContent = `${this.playlist.menu_duration_seconds} с`;
-    if (this.summary) this.summary.textContent = `${this.playlist.scenes.length + 1} сцен · ${this.playlist.scenes.length} временных`;
+    if (this.summary) {
+      const atLimit = this.playlist.scenes.length >= MAX_SCENES;
+      this.summary.textContent = atLimit
+        ? `${this.playlist.scenes.length + 1} сцен · лимит ${MAX_SCENES} временных`
+        : `${this.playlist.scenes.length + 1} сцен · ${this.playlist.scenes.length} временных`;
+    }
+    const atLimit = this.playlist.scenes.length >= MAX_SCENES;
+    this.root?.querySelectorAll('[data-add-scene]').forEach((control) => {
+      control.disabled = atLimit;
+      control.title = atLimit ? `Достигнут лимит: ${MAX_SCENES} временных сцен` : '';
+    });
   }
 
   renderControls() {
@@ -240,7 +273,17 @@ export class ScenePlaylistEditor {
     this.stripTrack.replaceChildren();
 
     const menu = button('', 'playlist-scene-card playlist-scene-card-menu');
-    menu.innerHTML = `<span class="playlist-scene-card-index">01</span><span class="playlist-scene-card-copy"><strong>MenuScene</strong><small>${this.playlist.menu_duration_seconds} с · база</small></span>`;
+    const menuIndex = document.createElement('span');
+    menuIndex.className = 'playlist-scene-card-index';
+    menuIndex.textContent = '01';
+    const menuCopy = document.createElement('span');
+    menuCopy.className = 'playlist-scene-card-copy';
+    const menuTitle = document.createElement('strong');
+    menuTitle.textContent = 'MenuScene';
+    const menuMeta = document.createElement('small');
+    menuMeta.textContent = `${this.playlist.menu_duration_seconds} с · база`;
+    menuCopy.append(menuTitle, menuMeta);
+    menu.append(menuIndex, menuCopy);
     menu.classList.toggle('active', this.selectedIndex === null);
     menu.addEventListener('click', () => this.selectMenu());
     this.stripTrack.append(menu);
@@ -255,7 +298,17 @@ export class ScenePlaylistEditor {
       card.dataset.sceneId = scene.id;
       card.classList.toggle('active', this.selectedIndex === index);
       card.classList.toggle('is-disabled', !scene.enabled);
-      card.innerHTML = `<span class="playlist-scene-card-index">${String(index + 2).padStart(2, '0')}</span><span class="playlist-scene-card-copy"><strong>${TYPE_SHORT[scene.type]}</strong><small>${scene.duration_seconds} с · ${MODE_LABELS[scene.mode]}</small></span>`;
+      const cardIndex = document.createElement('span');
+      cardIndex.className = 'playlist-scene-card-index';
+      cardIndex.textContent = String(index + 2).padStart(2, '0');
+      const cardCopy = document.createElement('span');
+      cardCopy.className = 'playlist-scene-card-copy';
+      const cardTitle = document.createElement('strong');
+      cardTitle.textContent = TYPE_SHORT[scene.type];
+      const cardMeta = document.createElement('small');
+      cardMeta.textContent = `${scene.duration_seconds} с · ${MODE_LABELS[scene.mode]}`;
+      cardCopy.append(cardTitle, cardMeta);
+      card.append(cardIndex, cardCopy);
       card.addEventListener('click', () => this.selectScene(index, { preview: true }));
       this.stripTrack.append(card);
     });
@@ -268,10 +321,18 @@ export class ScenePlaylistEditor {
     if (this.selectedIndex === null) {
       const menu = document.createElement('div');
       menu.className = 'playlist-scene-menu-details';
-      menu.innerHTML = `<div><p class="eyebrow">BASE SCENE</p><h4>MenuScene</h4><p>Постоянная сцена меню. Она не удаляется из плейлиста и автоматически возвращается после каждой временной сцены.</p></div>`;
+      const copy = document.createElement('div');
+      const eyebrow = document.createElement('p');
+      eyebrow.className = 'eyebrow';
+      eyebrow.textContent = 'BASE SCENE';
+      const title = document.createElement('h4');
+      title.textContent = 'MenuScene';
+      const description = document.createElement('p');
+      description.textContent = 'Постоянная сцена меню. Она не удаляется из плейлиста и автоматически возвращается после каждой временной сцены.';
+      copy.append(eyebrow, title, description);
       const preview = button('Показать MenuScene');
-      preview.addEventListener('click', () => this.runtime.resume());
-      menu.append(preview);
+      preview.addEventListener('click', () => this.selectMenu());
+      menu.append(copy, preview);
       this.details.append(menu);
       return;
     }
@@ -281,7 +342,15 @@ export class ScenePlaylistEditor {
     const index = this.selectedIndex;
     const head = document.createElement('div');
     head.className = 'playlist-scene-details-head';
-    head.innerHTML = `<div><p class="eyebrow">${TYPE_SHORT[scene.type]}</p><h4>${TYPE_LABELS[scene.type]}</h4><small>${scene.id}</small></div>`;
+    const headCopy = document.createElement('div');
+    const eyebrow = document.createElement('p');
+    eyebrow.className = 'eyebrow';
+    eyebrow.textContent = TYPE_SHORT[scene.type];
+    const heading = document.createElement('h4');
+    heading.textContent = TYPE_LABELS[scene.type];
+    const identifier = document.createElement('small');
+    identifier.textContent = scene.id;
+    headCopy.append(eyebrow, heading, identifier);
     const actions = document.createElement('div');
     actions.className = 'playlist-scene-details-actions';
     const preview = button('▶ Preview');
@@ -297,7 +366,7 @@ export class ScenePlaylistEditor {
     const remove = button('Удалить');
     remove.addEventListener('click', () => this.removeScene(index));
     actions.append(preview, up, down, remove);
-    head.append(actions);
+    head.append(headCopy, actions);
 
     const grid = document.createElement('div');
     grid.className = 'playlist-scene-details-grid';
@@ -341,7 +410,7 @@ export class ScenePlaylistEditor {
   }
 
   previewLayers() {
-    if (!(this.stage instanceof Element)) return null;
+    if (this.disposed || !(this.stage instanceof Element)) return null;
     const menuLayer = this.stage.querySelector('[data-scene-menu-layer]');
     const contentLayer = this.stage.querySelector('[data-scene-content-layer]');
     const fxLayer = this.stage.querySelector('[data-scene-fx-layer]');
@@ -357,7 +426,7 @@ export class ScenePlaylistEditor {
 
   previewScene(index) {
     const scene = this.playlist.scenes[index];
-    if (!scene) return;
+    if (!scene || this.disposed) return;
     this.rebindPreview({ autoplay: false });
     this.runtime.preview(scene);
   }
