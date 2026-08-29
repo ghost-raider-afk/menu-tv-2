@@ -166,6 +166,7 @@ test('Playlist editor destroys its timer and DOM ownership on route disposal', a
     const editor = new ScenePlaylistEditor({ stage });
     editor.mount(mount);
     editor.set({ enabled: true, menu_duration_seconds: 40, scenes: [{ id: 'audit', type: 'promo', enabled: true, mode: 'overlay', duration_seconds: 8, title: 'Audit', body: '' }] });
+    editor.rebindPreview();
     const timerBefore = editor.runtime.timer !== null;
     window.dispatchEvent(new CustomEvent('mira:route-dispose'));
     const snapshot = {
