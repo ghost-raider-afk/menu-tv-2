@@ -13,7 +13,7 @@ export function createSessionMiddleware(resolveSession) {
   const requirePageSession = async (request, response, next) => {
     try {
       const session = await resolveSession(request);
-      if (!session) return response.redirect(302, '/signin');
+      if (!session) return response.redirect(302, '/signin.html');
       request.session = session;
       return next();
     } catch (error) {
