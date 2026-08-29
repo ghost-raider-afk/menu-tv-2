@@ -1,3 +1,5 @@
+import { createEntityMedia, normaliseSceneEntity } from './entity-editor.js';
+
 const SCENE_TYPES = Object.freeze(['promo', 'content', 'object-story']);
 const SCENE_MODES = Object.freeze(['overlay', 'split', 'fullscreen']);
 
@@ -21,6 +23,11 @@ function ensurePlaylistFxHost(layer) {
     layer.append(host);
   }
   return host;
+}
+
+function commonStage(menuLayer, contentLayer, fxLayer) {
+  const stage = menuLayer?.parentElement;
+  return stage instanceof HTMLElement && contentLayer?.parentElement === stage && fxLayer?.parentElement === stage ? stage : null;
 }
 
 export function normaliseScenePlaylist(value = {}) {
@@ -55,25 +62,12 @@ function typeLabel(type) {
 }
 
 function entityMedia(entity) {
-  const source = sourceObject(entity);
-  const url = String(source.asset_url || '').trim();
-  if (!url) return null;
-  if (source.asset_type === 'video') {
-    const video = document.createElement('video');
-    video.src = url;
-    video.autoplay = true;
-    video.loop = source.loop !== false;
-    video.muted = source.muted !== false;
-    video.playsInline = true;
-    video.playbackRate = clamp(source.playback_rate, 1, 0.25, 4);
-    video.setAttribute('aria-hidden', 'true');
-    return video;
-  }
-  const image = document.createElement('img');
-  image.src = url;
-  image.alt = '';
-  image.decoding = 'async';
-  return image;
+  const current = normaliseSceneEntity(entity);
+  if (!current.asset_url) return null;
+  const media = createEntityMedia(current);
+  media.setAttribute('aria-hidden', 'true');
+  if (media instanceof HTMLImageElement) media.alt = '';
+  return media;
 }
 
 function buildSceneContent(scene, entity) {
@@ -125,13 +119,27 @@ function buildSceneFx(scene) {
   return fx;
 }
 
+function reducedMotion() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+}
+
 function animateEntrance(node, mode) {
-  if (!(node instanceof Element) || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  if (!(node instanceof Element) || reducedMotion()) return;
   const x = mode === 'split' ? '3.5%' : '0';
   node.animate(
     [{ opacity: 0, transform: `translate3d(${x},2.5%,0) scale(.985)` }, { opacity: 1, transform: 'translate3d(0,0,0) scale(1)' }],
     { duration: 520, easing: 'cubic-bezier(.2,.72,.22,1)', fill: 'both' }
   );
+}
+
+function animateExit(node, mode) {
+  if (!(node instanceof Element) || reducedMotion()) return Promise.resolve();
+  const x = mode === 'split' ? '2.5%' : '0';
+  const animation = node.animate(
+    [{ opacity: 1, transform: 'translate3d(0,0,0) scale(1)' }, { opacity: 0, transform: `translate3d(${x},-1.5%,0) scale(.99)` }],
+    { duration: 260, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'both' }
+  );
+  return animation.finished.catch(() => undefined);
 }
 
 export class ScenePlaylistRuntime {
@@ -140,10 +148,18 @@ export class ScenePlaylistRuntime {
     this.generation = 0;
     this.playlist = DEFAULT_SCENE_PLAYLIST;
     this.layers = null;
+    this.stage = null;
     this.entity = null;
     this.sceneIndex = 0;
     this.signature = null;
     this.playbackActive = false;
+  }
+
+  setFullscreen(fullscreen) {
+    if (!(this.stage instanceof HTMLElement)) return;
+    if (fullscreen) this.stage.dataset.scenePlaylistFullscreen = 'true';
+    else delete this.stage.dataset.scenePlaylistFullscreen;
+    this.stage.dispatchEvent(new CustomEvent('mira:scene-playlist-mode', { detail: { fullscreen } }));
   }
 
   destroy() {
@@ -153,6 +169,7 @@ export class ScenePlaylistRuntime {
     this.playbackActive = false;
     this.showMenu();
     this.layers = null;
+    this.stage = null;
     this.entity = null;
     this.signature = null;
   }
@@ -176,6 +193,7 @@ export class ScenePlaylistRuntime {
     this.timer = null;
     this.playlist = nextPlaylist;
     this.layers = nextLayers;
+    this.stage = commonStage(menuLayer, contentLayer, fxLayer);
     this.entity = entity;
     this.sceneIndex = 0;
     this.signature = nextSignature;
@@ -225,28 +243,38 @@ export class ScenePlaylistRuntime {
     }, Math.max(0, delay));
   }
 
+  async returnToMenu(scene, generation) {
+    const { contentLayer, fxLayer } = this.layers || {};
+    const fxHost = fxLayer instanceof Element ? fxLayer.querySelector(':scope > [data-scene-playlist-fx-host]') : null;
+    await Promise.all([
+      animateExit(contentLayer?.firstElementChild, scene.mode),
+      animateExit(fxHost?.firstElementChild, scene.mode)
+    ]);
+    if (generation !== this.generation) return;
+    this.sceneIndex += 1;
+    this.showMenu();
+    this.scheduleMenu(this.playlist.menu_duration_seconds * 1000);
+  }
+
   showScene(scene, scheduleReturn) {
     try {
       const { menuLayer, contentLayer, fxLayer } = this.layers || {};
-      if (!(contentLayer instanceof Element) || !(fxLayer instanceof Element)) return this.showMenu();
+      if (!(contentLayer instanceof Element) || !(fxLayer instanceof Element)) throw new Error('Scene Playlist layers are unavailable.');
       const fxHost = ensurePlaylistFxHost(fxLayer);
       contentLayer.replaceChildren(buildSceneContent(scene, this.entity));
       fxHost.replaceChildren(buildSceneFx(scene));
       contentLayer.dataset.scenePlaylistMode = scene.mode;
       fxHost.dataset.scenePlaylistMode = scene.mode;
       if (menuLayer instanceof HTMLElement) menuLayer.classList.toggle('scene-menu-suppressed', scene.mode === 'fullscreen');
+      this.setFullscreen(scene.mode === 'fullscreen');
       animateEntrance(contentLayer.firstElementChild, scene.mode);
       animateEntrance(fxHost.firstElementChild, scene.mode);
       if (!scheduleReturn) return;
       const generation = this.generation;
-      this.timer = setTimeout(() => {
-        if (generation !== this.generation) return;
-        this.sceneIndex += 1;
-        this.showMenu();
-        this.scheduleMenu(this.playlist.menu_duration_seconds * 1000);
-      }, scene.duration_seconds * 1000);
+      this.timer = setTimeout(() => void this.returnToMenu(scene, generation), scene.duration_seconds * 1000);
     } catch (error) {
       console.error('Scene Playlist could not render scene', error);
+      this.sceneIndex += 1;
       this.showMenu();
       if (scheduleReturn) this.scheduleMenu(this.playlist.menu_duration_seconds * 1000);
     }
@@ -254,6 +282,7 @@ export class ScenePlaylistRuntime {
 
   showMenu() {
     const { menuLayer, contentLayer, fxLayer } = this.layers || {};
+    this.setFullscreen(false);
     if (menuLayer instanceof HTMLElement) menuLayer.classList.remove('scene-menu-suppressed');
     if (contentLayer instanceof Element) {
       contentLayer.replaceChildren();
