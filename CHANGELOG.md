@@ -1,3 +1,25 @@
+## [1.9.1] - 2026-08-29
+
+### Playlist Studio
+- Пользовательская страница «Анимация» заменена Playlist Studio: MenuScene остаётся базовой сценой, временные PromoScene, ContentScene и Object Story управляются единым плейлистом с режимами overlay / split / fullscreen.
+- Исправлена атомарная синхронизация Entity с Object Story; сохранённый или изменённый Entity больше не может отрисоваться из устаревшего состояния.
+- Добавлен корректный SPA lifecycle: уход со страницы освобождает Preview RAF, Scene Playlist timers, Entity pointer listeners и ссылки на старый DOM.
+
+### Маршруты и совместимость
+- Канонические URL админки и TV Player больше не содержат `.html`: `/playlist`, `/screens`, `/catalog`, `/settings`, `/events`, `/connect-tv`, `/player` и другие маршруты работают напрямую.
+- Старые `.html` ссылки остаются совместимыми через 308 redirect с сохранением query-параметров; `/animation` и `/animation.html` канонически ведут на `/playlist`.
+- `/playlist` обслуживается только через page-session guard; legacy PUT без `scene_playlist` больше не стирает уже сохранённый плейлист.
+
+### TV Player / fullscreen
+- Fullscreen Scene Playlist явно подавляет базовые Menu, Entity, Brand, Announcement и GPU menu FX, а после завершения чисто возвращает MenuScene.
+- Preview и TV используют общий Scene Playlist runtime/CSS и одинаковую fullscreen-семантику; offline Player cache поднят до v15.
+- Object Story использует канонический Entity media renderer вместо отдельной упрощённой реализации.
+
+### Надёжность и интерфейс
+- Названия мониторов и торговых точек строятся безопасным DOM API без `innerHTML`.
+- UI корректно блокирует добавление более 20 временных сцен и отображает четыре вкладки inspector без переноса на лишнюю строку.
+- Добавлены API, architecture и Chromium-регрессии для extensionless routes, legacy PUT preservation, fullscreen ownership и SPA lifecycle.
+
 ## [1.9.0] - 2026-08-28
 
 ### TV Player / производительность
