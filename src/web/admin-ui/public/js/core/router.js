@@ -1,4 +1,4 @@
-import { canonicalRoutePath, isAppRoutePath, PREFETCH_ROUTE_PATHS } from './navigation.js';
+import { canonicalRoutePath, isAppRoutePath, PREFETCH_ROUTE_PATHS, routePageForPath } from './navigation.js';
 
 let activeRouter = null;
 
@@ -53,7 +53,7 @@ function setRouteMountState(main, mounting) {
 function currentViewSnapshot() {
   const main = currentMain();
   return {
-    page: document.body.dataset.page || '',
+    page: routePageForPath(window.location.pathname, document.body.dataset.page || ''),
     mainClassName: main.className,
     mainHtml: main.innerHTML,
     documentTitle: document.title
@@ -62,9 +62,10 @@ function currentViewSnapshot() {
 
 function parseViewDocument(html, responseUrl) {
   const parsed = new DOMParser().parseFromString(html, 'text/html');
-  const page = parsed.body?.dataset?.page || '';
+  const responsePath = new URL(responseUrl, window.location.origin).pathname;
+  const page = routePageForPath(responsePath, parsed.body?.dataset?.page || '');
   if (page === 'signin') {
-    window.location.replace('/signin.html');
+    window.location.replace('/signin');
     return null;
   }
   const main = parsed.querySelector('.main-content');
@@ -107,8 +108,8 @@ export function createAppRouter({ mountPage, syncShell }) {
       headers: { 'X-TV-Menu-View': '1' }
     });
 
-    if (response.redirected && canonicalUrl(response.url).pathname === '/signin.html') {
-      window.location.replace('/signin.html');
+    if (response.redirected && new URL(response.url).pathname === '/signin') {
+      window.location.replace('/signin');
       return null;
     }
     if (!response.ok) throw new Error(`Не удалось открыть раздел (${response.status}).`);
@@ -124,6 +125,7 @@ export function createAppRouter({ mountPage, syncShell }) {
   }
 
   async function disposeCurrentPage() {
+    window.dispatchEvent(new CustomEvent('mira:route-dispose'));
     if (typeof lifecycle?.dispose === 'function') await lifecycle.dispose();
     lifecycle = null;
   }
@@ -224,8 +226,11 @@ export function createAppRouter({ mountPage, syncShell }) {
       if (started) return;
       started = true;
       activeRouter = router;
-      window.history.replaceState({ tvMenu: true }, '', routeIdentity(canonicalUrl(window.location.href)));
-      await mountCurrentPage(document.body.dataset.page || '');
+      const initialUrl = canonicalUrl(window.location.href);
+      const initialPage = routePageForPath(initialUrl.pathname, document.body.dataset.page || '');
+      document.body.dataset.page = initialPage;
+      window.history.replaceState({ tvMenu: true }, '', routeIdentity(initialUrl));
+      await mountCurrentPage(initialPage);
       document.addEventListener('click', onDocumentClick);
       window.addEventListener('popstate', onPopState);
       prefetch();
