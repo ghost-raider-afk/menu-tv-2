@@ -8,6 +8,15 @@ import { issueSession, sessionCookie, themeCookie } from '../../services/session
 import { replaceSiteImage, siteSettingsResponse } from '../../services/site-assets-service.js';
 import { replaceEntityAssetStream } from '../../services/entity-assets-service.js';
 
+async function animationInputPreservingPlaylist(store, body) {
+  const current = await store.getAnimationSettings();
+  const source = body && typeof body === 'object' && !Array.isArray(body) ? body : body;
+  return animationSettingsInput({
+    ...source,
+    scene_playlist: source?.scene_playlist ?? current?.scene_playlist
+  });
+}
+
 export function createSettingsRouter({ store, config }) {
   const router = express.Router();
   router.get('/user', async (request, response) => response.json(await store.getUserPreferences(request.session.sub)));
@@ -32,13 +41,14 @@ export function createSettingsRouter({ store, config }) {
   });
   router.get('/animation', async (_request, response) => { response.json(await store.getAnimationSettings()); });
   router.put('/animation', async (request, response) => {
-    const settings = await store.updateAnimationSettings({ ...animationSettingsInput(request.body), updated_by: request.session.sub });
+    const input = await animationInputPreservingPlaylist(store, request.body);
+    const settings = await store.updateAnimationSettings({ ...input, updated_by: request.session.sub });
     await activity(store, request, { action: 'settings.animation.updated', entity_type: 'animation_settings', entity_id: settings.id, message: 'Сохранён рабочий плейлист.' }); response.json(settings);
   });
   router.put('/animation/apply', async (request, response) => {
     const screenIds = animationTargetScreenIds(request.body?.screen_ids);
-    const input = animationSettingsInput(request.body?.settings);
     const result = await store.transaction(async (tx) => {
+      const input = await animationInputPreservingPlaylist(tx, request.body?.settings);
       const settings = await tx.updateAnimationSettings({ ...input, updated_by: request.session.sub });
       const appliedScreenIds = await tx.applyAnimationSettingsToScreens(screenIds, settings, request.session.sub);
       if (appliedScreenIds.length !== screenIds.length) throw new ValidationError('Один или несколько выбранных мониторов больше не существуют. Обновите список и повторите применение.');
