@@ -41,7 +41,7 @@ export function createLocationsRouter({ store, config }) {
         if (!saved) throw conflict('Не удалось создать независимую копию мониторов торговой точки.');
         if (sourceAnimation) {
           const applied = await tx.applyAnimationSettingsToScreens([cloned.id], sourceAnimation, request.session.sub);
-          if (applied.length !== 1) throw conflict('Не удалось скопировать анимацию монитора торговой точки.');
+          if (applied.length !== 1) throw conflict('Не удалось скопировать плейлист монитора торговой точки.');
         }
       }
       return tx.getLocation(created.id);
