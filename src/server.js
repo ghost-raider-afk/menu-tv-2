@@ -195,12 +195,17 @@ function isBrowserNavigation(request) {
   return request.get('sec-fetch-mode') === 'navigate' || request.get('sec-fetch-dest') === 'document';
 }
 
+function canonicalRedirectTarget(request, canonical) {
+  const queryIndex = request.originalUrl.indexOf('?');
+  return queryIndex >= 0 ? `${canonical}${request.originalUrl.slice(queryIndex)}` : canonical;
+}
+
 function mountFrontend(app, requirePageSession) {
   for (const [legacy, canonical] of LEGACY_PAGE_REDIRECTS) {
-    app.get(legacy, (_request, response) => response.redirect(308, canonical));
+    app.get(legacy, (request, response) => response.redirect(308, canonicalRedirectTarget(request, canonical)));
   }
   app.get('/player.html', (request, response, next) => {
-    if (isBrowserNavigation(request)) return response.redirect(308, '/player');
+    if (isBrowserNavigation(request)) return response.redirect(308, canonicalRedirectTarget(request, '/player'));
     return next();
   });
 
