@@ -29,6 +29,7 @@ async function initialisePage(name) {
       const { initialiseSftpSettings } = await import('./pages/sftp-settings.js');
       return initialiseSftpSettings();
     }
+    case 'playlist':
     case 'animation': {
       const { initialisePlaylistStudio } = await import('./pages/playlist.js');
       return initialisePlaylistStudio();
@@ -84,7 +85,7 @@ async function initialiseApplication() {
   } catch (error) {
     reportFrontendError(error, { type: 'application', source: 'application.js' });
     console.error('Application initialization failed', error);
-    window.location.replace('/signin.html');
+    window.location.replace('/signin');
   }
 }
 
