@@ -63,7 +63,8 @@ function currentViewSnapshot() {
 function parseViewDocument(html, responseUrl) {
   const parsed = new DOMParser().parseFromString(html, 'text/html');
   const responsePath = new URL(responseUrl, window.location.origin).pathname;
-  const page = routePageForPath(responsePath, parsed.body?.dataset?.page || '');
+  const declaredPage = parsed.body?.dataset?.page || '';
+  const page = routePageForPath(responsePath, declaredPage);
   if (page === 'signin') {
     window.location.replace('/signin');
     return null;
@@ -72,6 +73,7 @@ function parseViewDocument(html, responseUrl) {
   if (!main || !page) throw new Error(`Маршрут ${responseUrl} не содержит рабочую область.`);
   return {
     page,
+    declaredPage,
     mainClassName: main.className,
     mainHtml: main.innerHTML,
     documentTitle: parsed.title || document.title
@@ -154,7 +156,7 @@ export function createAppRouter({ mountPage, syncShell }) {
       else window.history.pushState({ tvMenu: true }, '', href);
     }
 
-    document.body.dataset.page = view.page;
+    document.body.dataset.page = view.declaredPage || view.page;
     const main = currentMain();
     main.className = view.mainClassName;
     main.innerHTML = view.mainHtml;
@@ -162,6 +164,8 @@ export function createAppRouter({ mountPage, syncShell }) {
 
     if (typeof syncShell === 'function') syncShell();
     await mountCurrentPage(view.page, main);
+    document.body.dataset.page = view.page;
+    if (typeof syncShell === 'function') syncShell();
     activeIdentity = routeIdentity(target);
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     return true;
@@ -228,9 +232,10 @@ export function createAppRouter({ mountPage, syncShell }) {
       activeRouter = router;
       const initialUrl = canonicalUrl(window.location.href);
       const initialPage = routePageForPath(initialUrl.pathname, document.body.dataset.page || '');
-      document.body.dataset.page = initialPage;
       window.history.replaceState({ tvMenu: true }, '', routeIdentity(initialUrl));
       await mountCurrentPage(initialPage);
+      document.body.dataset.page = initialPage;
+      if (typeof syncShell === 'function') syncShell();
       document.addEventListener('click', onDocumentClick);
       window.addEventListener('popstate', onPopState);
       prefetch();
