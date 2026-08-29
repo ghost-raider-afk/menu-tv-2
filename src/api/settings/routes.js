@@ -9,12 +9,10 @@ import { replaceSiteImage, siteSettingsResponse } from '../../services/site-asse
 import { replaceEntityAssetStream } from '../../services/entity-assets-service.js';
 
 async function animationInputPreservingPlaylist(store, body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return animationSettingsInput(body);
+  if (Object.hasOwn(body, 'scene_playlist')) return animationSettingsInput(body);
   const current = await store.getAnimationSettings();
-  const source = body && typeof body === 'object' && !Array.isArray(body) ? body : body;
-  return animationSettingsInput({
-    ...source,
-    scene_playlist: source?.scene_playlist ?? current?.scene_playlist
-  });
+  return animationSettingsInput({ ...body, scene_playlist: current?.scene_playlist });
 }
 
 export function createSettingsRouter({ store, config }) {
