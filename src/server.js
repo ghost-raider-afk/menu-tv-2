@@ -191,10 +191,18 @@ function sendHtmlFile(response, filename) {
   return response.sendFile(path.join(publicDir, filename));
 }
 
+function isBrowserNavigation(request) {
+  return request.get('sec-fetch-mode') === 'navigate' || request.get('sec-fetch-dest') === 'document';
+}
+
 function mountFrontend(app, requirePageSession) {
   for (const [legacy, canonical] of LEGACY_PAGE_REDIRECTS) {
     app.get(legacy, (_request, response) => response.redirect(308, canonical));
   }
+  app.get('/player.html', (request, response, next) => {
+    if (isBrowserNavigation(request)) return response.redirect(308, '/player');
+    return next();
+  });
 
   app.get('/signin', (_request, response) => sendHtmlFile(response, 'signin.html'));
   app.get('/player', (_request, response) => sendHtmlFile(response, 'player.html'));
